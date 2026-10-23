@@ -572,7 +572,9 @@ async function generateExams(apiKeys: string[], notes: string): Promise<Generate
         content:
           `${materialBlock(notes)}\n\n` +
           "Create 3 exam-style short-answer questions that ask the student to explain, compare, or apply ideas from the material. Each is worth 4-8 marks. " +
-          "Include a strong model answer and a marking guide whose bullet points add up to the available marks. " +
+          "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
+          "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
+          "Include a full-mark model answer that hits each bullet. " +
           'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
       },
     ],
@@ -731,6 +733,131 @@ export const processStudySet = action({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Exam marking
+// ---------------------------------------------------------------------------
+
+/**
+ * Examiner persona. The rules below follow how published UK mark schemes work
+ * (AQA, Edexcel, OCR, Cambridge): point-marked, whole marks only, no benefit of
+ * the doubt, and contradictions cancelling a point. The goal is a mark a real
+ * examiner would defend, not an encouraging estimate.
+ */
+const EXAMINER_SYSTEM_PROMPT =
+  "You are a senior examiner marking a written exam answer against an official past-paper mark scheme. " +
+  "You are rigorous and ungenerous: a mark is only earned by evidence in the answer. " +
+  "Answer with strict JSON only, no markdown fences, no commentary.";
+
+function examinerRules(marksAvailable: number): string {
+  return (
+    "MARK EXACTLY AS A REAL EXAMINER WOULD:\n" +
+    "1. Mark point by point against the marking guide above. A point scores only when the student states it explicitly. " +
+    "If you have to infer it, finish their sentence, or give benefit of the doubt, it scores 0.\n" +
+    "2. Accept wording that carries the same meaning. Do not accept a vague generality, a topic name with no explanation, " +
+    "or a partly correct version of the point.\n" +
+    "3. No marks for restating the question, for repeating one idea in different words, or for content the question did not ask for.\n" +
+    "4. A contradiction cancels the mark for that point even if it was stated correctly elsewhere. " +
+    "Wrong extra detail earns no credit and no leniency.\n" +
+    `5. The model answer is a reference for you, not a second mark scheme. Credit only what the marking guide lists.\n` +
+    `6. Award whole marks only. Total = the marks you award per point, capped at ${marksAvailable}. Never round up.\n` +
+    "7. Calibrate against a real cohort: a thin or 'on topic' answer scores 0-2 even if it sounds confident; " +
+    `full marks require every creditable point; ${Math.ceil(marksAvailable / 2)} out of ${marksAvailable} is a strong answer.\n` +
+    "8. Do not reward effort, length, structure, or enthusiasm. Report marked evidence only."
+  );
+}
+
+const EXAMINER_OUTPUT_SHAPE =
+  'Return JSON exactly like: {"pointChecks":[{"point":"the mark scheme bullet","marks":1,"awarded":0,"evidence":"exact student words or empty string"}],' +
+  '"awardedMarks":0,"feedback":"terse examiner note"}. ' +
+  "Include one pointCheck per marking-guide bullet, in order. awardedMarks must equal the sum of the awarded fields. " +
+  "The feedback is at most 90 words and names what was credited and exactly which marks were lost — no praise, no encouragement.";
+
+type PointCheck = { point: string; marks: number; awarded: number };
+
+/**
+ * Sends one answer to NVIDIA for marking and reconciles the model's totals with
+ * its own point ledger. The ledger acts as a ceiling: an answer cannot be
+ * awarded more marks than the credits it can point to.
+ */
+async function markExamAnswer(
+  apiKeys: string[],
+  exam: {
+    question: string;
+    marks: number;
+    modelAnswer: string;
+    markingGuide: string[];
+  },
+  response: string,
+): Promise<{ awardedMarks: number; feedback: string }> {
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: EXAMINER_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `<question>${exam.question}</question>\n` +
+          `<marks_available>${exam.marks}</marks_available>\n` +
+          `<marking_guide>\n${exam.markingGuide.join("\n")}\n</marking_guide>\n` +
+          `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
+          `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
+          `${examinerRules(exam.marks)}\n\n` +
+          EXAMINER_OUTPUT_SHAPE,
+      },
+    ],
+    // Point-by-point marking plus the note needs more room than a bare score,
+    // and a decisive temperature keeps the same answer scoring the same way.
+    maxTokens: 1400,
+    temperature: 0,
+    disableThinking: true,
+  });
+
+  const parsed = parseModelJson<{
+    awardedMarks?: number;
+    feedback?: string;
+    pointChecks?: unknown;
+  }>(raw);
+
+  const checks: PointCheck[] = Array.isArray(parsed.pointChecks)
+    ? parsed.pointChecks
+        .map((entry) => {
+          const row = entry as { point?: unknown; marks?: unknown; awarded?: unknown };
+          const point = asText(row.point, 400);
+          const marks = Math.max(1, Math.min(4, Math.round(Number(row.marks) || 1)));
+          const awarded = Math.max(0, Math.min(marks, Math.floor(Number(row.awarded) || 0)));
+          return point ? { point, marks, awarded } : null;
+        })
+        .filter((check): check is PointCheck => check !== null)
+    : [];
+
+  const ledgerTotal = checks.reduce((sum, check) => sum + check.awarded, 0);
+  const claimed = Number(parsed.awardedMarks);
+  const reported = Number.isFinite(claimed) ? Math.round(claimed) : ledgerTotal;
+  // Take the stricter of the reported total and the ledger, then the paper limit.
+  const awardedMarks = Math.max(
+    0,
+    Math.min(exam.marks, checks.length > 0 ? Math.min(reported, ledgerTotal) : reported),
+  );
+
+  const credited = checks.filter((check) => check.awarded > 0).map((check) => check.point);
+  const missed = checks.filter((check) => check.awarded === 0).map((check) => check.point);
+  const fallbackFeedback = [
+    credited.length > 0
+      ? `Credited: ${credited.join("; ")}`
+      : "No mark-scheme points were credited in this answer.",
+    missed.length > 0 ? `Marks lost: ${missed.join("; ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const feedback = asText(parsed.feedback, 2500) || fallbackFeedback;
+  if (!feedback) {
+    throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
+  }
+
+  return { awardedMarks, feedback };
+}
+
 /** AI-marks one written exam answer against the stored marking guide. */
 export const gradeExamAnswer = action({
   args: {
@@ -754,36 +881,8 @@ export const gradeExamAnswer = action({
 
     const apiKeys = resolveNvidiaKeys();
     const { exam } = data;
+    const { awardedMarks, feedback } = await markExamAnswer(apiKeys, exam, response);
 
-    const raw = await nvidiaChat(apiKeys, {
-      model: NVIDIA_TEXT_MODEL,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content:
-            `<question>${exam.question}</question>\n` +
-            `<marks_available>${exam.marks}</marks_available>\n` +
-            `<marking_guide>${exam.markingGuide.join("\n")}</marking_guide>\n` +
-            `<model_answer>${exam.modelAnswer}</model_answer>\n` +
-            `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
-            "Mark the student's answer strictly but fairly. Award whole marks only for ideas that are actually present. " +
-            'Return JSON exactly like: {"awardedMarks": 4, "feedback": "..."} where feedback is under 120 words and names what earned marks and what is missing.',
-        },
-      ],
-      maxTokens: 700,
-      temperature: 0.2,
-      disableThinking: true,
-    });
-
-    const parsed = parseModelJson<{ awardedMarks?: number; feedback?: string }>(raw);
-    const awardedRaw = Number(parsed.awardedMarks);
-    const feedback = asText(parsed.feedback, 2500);
-    if (!Number.isFinite(awardedRaw) || !feedback) {
-      throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
-    }
-
-    const awardedMarks = Math.max(0, Math.min(exam.marks, Math.round(awardedRaw)));
     await ctx.runMutation(internal.studySets.saveExamResult, {
       examId,
       answer: response,
