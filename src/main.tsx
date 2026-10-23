@@ -12,6 +12,8 @@ import "./index.css";
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const StudySet = lazy(() => import("./pages/StudySet.tsx"));
+const Setup = lazy(() => import("./pages/Setup.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -126,8 +128,33 @@ createRoot(document.getElementById("root")!).render(
               <Route
                 path="/dashboard"
                 element={
-                  <RequireAuth>
+                  <RequireAuth
+                    title="Sign in to see your study sets"
+                    description="Your sets, progress and quiz scores live in your account."
+                  >
                     <Dashboard />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/sets/:setId"
+                element={
+                  <RequireAuth
+                    title="Sign in to open this study set"
+                    description="Study sets are private to the account that created them."
+                  >
+                    <StudySet />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/setup"
+                element={
+                  <RequireAuth
+                    title="Sign in to set up AI"
+                    description="The NVIDIA connection is shared by everyone using this app."
+                  >
+                    <Setup />
                   </RequireAuth>
                 }
               />

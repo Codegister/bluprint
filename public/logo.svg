@@ -1,1 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 96.81 96.81"><rect width="96.81" height="96.81" rx="18"/><g fill="#fff"><rect x="24.67" y="24.67" width="47.47" height="11.87"/><rect x="24.67" y="36.54" width="11.87" height="35.61"/><rect x="40.06" y="39.98" width="23.74" height="11.87"/><rect x="40.06" y="51.85" width="11.87" height="20.3"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Pipnote">
+  <rect width="64" height="64" rx="16" fill="#211d35" />
+  <g stroke="#faf6ec" stroke-width="2.4" stroke-linejoin="round">
+    <path d="M22 28 L13 20 L20 30" fill="#ff7b9c" />
+    <path d="M20 35 L10 32 L20 39" fill="#f4507a" />
+    <path d="M22 42 L14 48 L23 45" fill="#ff7b9c" />
+    <path d="M42 28 L51 20 L44 30" fill="#ff7b9c" />
+    <path d="M44 35 L54 32 L44 39" fill="#f4507a" />
+    <path d="M42 42 L50 48 L41 45" fill="#ff7b9c" />
+    <path d="M22 36 L25 24 L32 20 L39 24 L42 36 L38 46 L32 50 L26 46 Z" fill="#ff9db4" />
+    <ellipse cx="28.5" cy="33" rx="2.6" ry="3.2" fill="#211d35" stroke="none" />
+    <ellipse cx="35.5" cy="33" rx="2.6" ry="3.2" fill="#211d35" stroke="none" />
+    <path d="M29.5 41 Q32 43 34.5 41" fill="none" stroke="#211d35" stroke-width="2" stroke-linecap="round" />
+  </g>
+</svg>
