@@ -45,6 +45,9 @@ const schema = defineSchema(
         v.literal("video"),
       ),
       sourceLabel: v.optional(v.string()),
+      // Free-text course label picked when the set is created (e.g. "Biology").
+      // Used to group and filter decks the way StudySmarter and Gizmo do.
+      course: v.optional(v.string()),
       // Photos (or video frames) are kept in Convex file storage so the
       // original material can be revisited from the set page.
       sourceImageIds: v.array(v.id("_storage")),
@@ -84,6 +87,11 @@ const schema = defineSchema(
       status: v.union(v.literal("new"), v.literal("known"), v.literal("again")),
       reviewCount: v.number(),
       lastReviewedAt: v.optional(v.number()),
+      // Lightweight SM-2 scheduling. Missing values mean "due now", which is
+      // how cards created before scheduling existed are treated.
+      dueAt: v.optional(v.number()),
+      intervalDays: v.optional(v.number()),
+      ease: v.optional(v.number()),
     }).index("by_set", ["setId"]),
 
     quizQuestions: defineTable({
@@ -119,6 +127,15 @@ const schema = defineSchema(
       total: v.number(),
       completedAt: v.number(),
     }).index("by_set", ["setId"]),
+
+    // One row per person per calendar day (UTC) so the dashboard can show a
+    // daily review goal and a streak without storing every review event.
+    studyDays: defineTable({
+      userId: v.id("users"),
+      day: v.string(),
+      cardsReviewed: v.number(),
+      updatedAt: v.number(),
+    }).index("by_user_day", ["userId", "day"]),
 
     // add other tables here
 

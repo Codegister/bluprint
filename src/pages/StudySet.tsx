@@ -448,6 +448,11 @@ export default function StudySet() {
         ) : (
           <>
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
+              {set.course && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3ECFF] px-3 py-1.5 text-[0.75rem] font-semibold text-[#5B3DF5]">
+                  {set.course}
+                </span>
+              )}
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EAFBF0] px-3 py-1.5 text-[0.75rem] font-semibold text-[#128A4C]">
                 <span className="size-1.5 rounded-full bg-[#22A06B]" />
                 Ready to study

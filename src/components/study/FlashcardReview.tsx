@@ -6,8 +6,8 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, RotateCcw, Sparkles, X } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Check, Clock, RotateCcw, Sparkles, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export function FlashcardReview({
@@ -23,8 +23,19 @@ export function FlashcardReview({
   const [finished, setFinished] = useState(false);
   const [session, setSession] = useState({ known: 0, again: 0 });
 
-  const current = cards[index];
-  const mastered = cards.filter((card) => card.status === "known").length;
+  // Spaced repetition first: cards come back when they are due, oldest due
+  // first, and everything else keeps its authored order.
+  const queue = useMemo(
+    () => [...cards].sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0) || a.order - b.order),
+    [cards],
+  );
+  const dueCount = useMemo(() => {
+    const now = Date.now();
+    return queue.filter((card) => (card.dueAt ?? 0) <= now).length;
+  }, [queue]);
+
+  const current = queue[index];
+  const mastered = queue.filter((card) => card.status === "known").length;
   const answered = session.known + session.again;
 
   const handleOutcome = (outcome: "known" | "again") => {
@@ -39,7 +50,7 @@ export function FlashcardReview({
     }));
     setFlipped(false);
 
-    if (index + 1 >= cards.length) {
+    if (index + 1 >= queue.length) {
       setFinished(true);
     } else {
       setIndex((value) => value + 1);
@@ -53,7 +64,7 @@ export function FlashcardReview({
     setSession({ known: 0, again: 0 });
   };
 
-  if (cards.length === 0) {
+  if (queue.length === 0) {
     return (
       <div className="gizmo-card p-10 text-center">
         <p className="text-sm text-muted-foreground">
@@ -103,7 +114,7 @@ export function FlashcardReview({
         </div>
 
         <p className="mt-4 text-xs font-medium text-muted-foreground">
-          Overall mastery: {mastered} of {cards.length} cards
+          Overall mastery: {mastered} of {queue.length} cards
         </p>
 
         <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
@@ -133,16 +144,24 @@ export function FlashcardReview({
     <div className="mx-auto w-full max-w-2xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm font-semibold text-brand-ink">
-          Card {index + 1} of {cards.length}
+          Card {index + 1} of {queue.length}
         </p>
-        <p className="text-xs font-medium text-muted-foreground">
-          {mastered} of {cards.length} known
-        </p>
+        <div className="flex items-center gap-2">
+          {dueCount > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF3E8] px-2.5 py-1 text-[0.7rem] font-semibold text-[#C2660F]">
+              <Clock className="size-3" />
+              {dueCount} due now
+            </span>
+          )}
+          <p className="text-xs font-medium text-muted-foreground">
+            {mastered} of {queue.length} known
+          </p>
+        </div>
       </div>
       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[#E7E7EF]">
         <div
           className="h-full rounded-full bg-brand-pink transition-all duration-300"
-          style={{ width: `${Math.max(4, ((index + 1) / cards.length) * 100)}%` }}
+          style={{ width: `${Math.max(4, ((index + 1) / queue.length) * 100)}%` }}
         />
       </div>
 

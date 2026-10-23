@@ -34,12 +34,32 @@ assets.
    with marking guides.
 3. **Study** — flip and self-rate flashcards, take the quiz, and answer exam questions
    that are marked against the guide with feedback and a model answer.
-4. **Persist** — study sets, extracted notes, uploads, card progress, and quiz scores stay
-   saved between sessions, scoped to the account that created them.
+4. **Organise** — tag a set with a course when you create it, then filter and search your
+   decks by course on the dashboard.
+5. **Review on a schedule** — flashcards use a simplified SM-2 schedule: a card you miss
+   returns in ten minutes, a card you recall returns tomorrow and then at widening
+   intervals (×2.5 ease, capped at 180 days). Each deck shows how many cards are due.
+6. **Keep a habit** — the dashboard shows a daily goal of 10 reviewed cards and a streak.
+7. **Persist** — study sets, extracted notes, uploads, card progress, due dates, and quiz
+   scores stay saved between sessions, scoped to the account that created them.
 
 After signing in, the main screen is the **Home** dashboard: a study prompt, quick ways to
-add material, the decks you were last working on, your saved sets with card mastery and
-quiz averages, and delete controls.
+add material, your daily goal and streak, courses you can filter by, the decks you were
+last working on, saved sets with due counts, card mastery and quiz averages, and delete
+controls.
+
+## Assumptions
+
+- **Course is free text with presets.** StudySmarter asks for an education system and Gizmo
+  links a school; both are heavier than this app needs. A course label per set is enough to
+  group decks, and it stays optional.
+- **Days are UTC.** The daily goal and streak use UTC calendar days so two friends in
+  different time zones see consistent numbers. A 4 a.m. local cut-off, as Anki uses, is not
+  implemented.
+- **Ten cards a day is the goal.** It is a display target, not a hard limit: any number of
+  reviews counts and nothing is blocked.
+- **A card you mark "again" comes back in ten minutes**, not the next day, so a study
+  session can repair a gap immediately.
 
 ## Run it
 

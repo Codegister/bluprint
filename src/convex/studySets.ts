@@ -40,6 +40,52 @@ function byOrder<T extends { order: number }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => a.order - b.order);
 }
 
+// ---------------------------------------------------------------------------
+// Review scheduling
+// ---------------------------------------------------------------------------
+
+/**
+ * Simplified SM-2, the schedule family Anki, RemNote and Gizmo use: a failed
+ * card returns in ten minutes, a recalled card is pushed out by its ease factor
+ * (starting at 1 day). Two ratings only, because that is what the UI offers.
+ */
+const DAY_MS = 86_400_000;
+const AGAIN_DELAY_MS = 10 * 60 * 1000;
+const STARTING_EASE = 2.5;
+const MAX_INTERVAL_DAYS = 180;
+
+/** Cards per day that count towards the streak, matching RemNote's default. */
+export const DAILY_CARD_GOAL = 10;
+
+/** Calendar day key in UTC, so a streak never depends on the viewer's clock. */
+function dayKey(timestamp: number): string {
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function isDue(card: { dueAt?: number }, now: number): boolean {
+  return card.dueAt === undefined || card.dueAt <= now;
+}
+
+/**
+ * Streak rule: today counts once anything has been reviewed; otherwise a streak
+ * stays alive if yesterday was studied. Days are UTC keys.
+ */
+function streakFrom(
+  reviewed: Map<string, number>,
+  now: number,
+): { todayCount: number; streak: number } {
+  const todayCount = reviewed.get(dayKey(now)) ?? 0;
+  let cursor = todayCount > 0 ? now : now - DAY_MS;
+  let streak = 0;
+  while ((reviewed.get(dayKey(cursor)) ?? 0) > 0) {
+    streak += 1;
+    cursor -= DAY_MS;
+    // Guard against a clock skew producing an endless loop.
+    if (streak > 4000) break;
+  }
+  return { todayCount, streak };
+}
+
 async function deleteStudySetContent(ctx: MutationCtx, setId: Id<"studySets">) {
   const sets: Array<"flashcards" | "quizQuestions" | "examQuestions" | "quizAttempts"> = [
     "flashcards",
@@ -71,24 +117,52 @@ export const listMine = query({
       .order("desc")
       .collect();
 
-    // Leave the (potentially long) notes on the server for the list view.
-    return sets.map((set) => ({
-      _id: set._id,
-      title: set.title,
-      sourceType: set.sourceType,
-      sourceLabel: set.sourceLabel,
-      status: set.status,
-      progress: set.progress,
-      errorMessage: set.errorMessage,
-      cardCount: set.cardCount,
-      quizCount: set.quizCount,
-      examCount: set.examCount,
-      knownCount: set.knownCount,
-      updatedAt: set.updatedAt,
-      lastStudiedAt: set.lastStudiedAt,
-      lastQuizScore: set.lastQuizScore,
-      lastQuizTotal: set.lastQuizTotal,
-    }));
+    const now = Date.now();
+
+    // Leave the (potentially long) notes on the server for the list view. Due
+    // counts are computed here so the dashboard can offer "study what's due"
+    // without downloading every card.
+    return await Promise.all(
+      sets.map(async (set) => {
+        const cards = await ctx.db
+          .query("flashcards")
+          .withIndex("by_set", (q) => q.eq("setId", set._id))
+          .collect();
+        return {
+          _id: set._id,
+          title: set.title,
+          course: set.course,
+          sourceType: set.sourceType,
+          sourceLabel: set.sourceLabel,
+          status: set.status,
+          progress: set.progress,
+          errorMessage: set.errorMessage,
+          cardCount: set.cardCount,
+          quizCount: set.quizCount,
+          examCount: set.examCount,
+          knownCount: set.knownCount,
+          updatedAt: set.updatedAt,
+          lastStudiedAt: set.lastStudiedAt,
+          lastQuizScore: set.lastQuizScore,
+          lastQuizTotal: set.lastQuizTotal,
+          dueCount: cards.filter((card) => isDue(card, now)).length,
+        };
+      }),
+    );
+  },
+});
+
+/** Daily review progress used by the dashboard goal card and streak. */
+export const studyStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const days = await ctx.db
+      .query("studyDays")
+      .withIndex("by_user_day", (q) => q.eq("userId", userId))
+      .collect();
+    const reviewed = new Map(days.map((day) => [day.day, day.cardsReviewed]));
+    return { ...streakFrom(reviewed, Date.now()), goal: DAILY_CARD_GOAL };
   },
 });
 
@@ -156,6 +230,7 @@ export const create = mutation({
     notes: v.string(),
     sourceType,
     sourceLabel: v.optional(v.string()),
+    course: v.optional(v.string()),
     sourceImageIds: v.array(v.id("_storage")),
   },
   handler: async (ctx, args) => {
@@ -179,6 +254,7 @@ export const create = mutation({
       notes,
       sourceType: args.sourceType,
       sourceLabel: args.sourceLabel?.slice(0, 120),
+      course: args.course?.trim().slice(0, 60) || undefined,
       sourceImageIds: args.sourceImageIds.slice(0, 10),
       status: "queued",
       progress: "Queued",
@@ -206,24 +282,46 @@ export const remove = mutation({
   },
 });
 
-/** Saves a self-rated flashcard review and keeps the set's mastery count in sync. */
-export const reviewCard = mutation({
-  args: {
-    cardId: v.id("flashcards"),
-    outcome: v.union(v.literal("known"), v.literal("again")),
-  },
-  handler: async (ctx, { cardId, outcome }) => {
-    const userId = await requireUserId(ctx);
+/**
+ * Applies one self-rated review: schedules the next showing, keeps the set's
+ * mastery count in sync and bumps the daily counter. Kept separate from the
+ * mutation so the schedule can be exercised directly.
+ */
+async function applyReview(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  cardId: Id<"flashcards">,
+  outcome: "known" | "again",
+) {
     const card = await ctx.db.get(cardId);
     if (!card || card.userId !== userId) throw new Error("Flashcard not found.");
     const set = await ctx.db.get(card.setId);
     if (!set || set.userId !== userId) throw new Error("Study set not found.");
 
     const now = Date.now();
+    const ease = card.ease ?? STARTING_EASE;
+
+    // Fail: back in ten minutes, ease trimmed. Recall: interval grows by the
+    // ease factor, starting at one day, and ease slowly rises.
+    const intervalDays =
+      outcome === "again"
+        ? 0
+        : card.intervalDays && card.intervalDays > 0
+          ? Math.min(MAX_INTERVAL_DAYS, Math.max(1, Math.round(card.intervalDays * ease)))
+          : 1;
+    const dueAt =
+      outcome === "again" ? now + AGAIN_DELAY_MS : now + intervalDays * DAY_MS;
+
     await ctx.db.patch(cardId, {
       status: outcome,
       reviewCount: card.reviewCount + 1,
       lastReviewedAt: now,
+      dueAt,
+      intervalDays,
+      ease:
+        outcome === "again"
+          ? Math.max(1.3, Math.round((ease - 0.2) * 100) / 100)
+          : Math.min(3, Math.round((ease + 0.1) * 100) / 100),
     });
 
     let knownCount = set.knownCount;
@@ -235,6 +333,37 @@ export const reviewCard = mutation({
       lastStudiedAt: now,
       updatedAt: now,
     });
+
+    // One counters row per day powers the daily goal and streak.
+    const day = dayKey(now);
+    const today = await ctx.db
+      .query("studyDays")
+      .withIndex("by_user_day", (q) => q.eq("userId", userId).eq("day", day))
+      .first();
+    if (today) {
+      await ctx.db.patch(today._id, {
+        cardsReviewed: today.cardsReviewed + 1,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("studyDays", {
+        userId,
+        day,
+        cardsReviewed: 1,
+        updatedAt: now,
+      });
+    }
+}
+
+/** Saves a self-rated flashcard review and keeps the set's mastery count in sync. */
+export const reviewCard = mutation({
+  args: {
+    cardId: v.id("flashcards"),
+    outcome: v.union(v.literal("known"), v.literal("again")),
+  },
+  handler: async (ctx, { cardId, outcome }) => {
+    const userId = await requireUserId(ctx);
+    return await applyReview(ctx, userId, cardId, outcome);
   },
 });
 
@@ -358,6 +487,10 @@ export const completeGeneration = internalMutation({
         order: index,
         status: "new",
         reviewCount: 0,
+        // New cards are due immediately.
+        dueAt: now,
+        intervalDays: 0,
+        ease: STARTING_EASE,
       });
     }
     for (const [index, question] of quiz.entries()) {
@@ -447,4 +580,3 @@ export const saveExamResult = internalMutation({
     await ctx.db.patch(set._id, { lastStudiedAt: now, updatedAt: now });
   },
 });
-

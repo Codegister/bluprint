@@ -36,6 +36,23 @@ type Mode = "photos" | "video" | "text";
 
 const MAX_PHOTOS = 8;
 
+// Presets keep course entry to one tap; "Other" opens a free-text field for
+// anything the list misses (e.g. "A-Level Biology" or a university module).
+const COURSE_PRESETS = [
+  "Biology",
+  "Chemistry",
+  "Physics",
+  "Maths",
+  "Computer Science",
+  "Economics",
+  "History",
+  "Geography",
+  "English",
+  "Psychology",
+  "Business",
+  "Medicine",
+];
+
 function fileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -62,6 +79,9 @@ export function CreateSetDialog({
 
   const [mode, setMode] = useState<Mode>("photos");
   const [title, setTitle] = useState("");
+  const [course, setCourse] = useState("");
+  const [customCourse, setCustomCourse] = useState("");
+  const [customCourseOpen, setCustomCourseOpen] = useState(false);
   const [images, setImages] = useState<ImageDraft[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [text, setText] = useState("");
@@ -88,6 +108,9 @@ export function CreateSetDialog({
     clearMedia();
     setTitle("");
     setText("");
+    setCourse("");
+    setCustomCourse("");
+    setCustomCourseOpen(false);
     setMode("photos");
     setStep("");
     setError(null);
@@ -218,6 +241,7 @@ export function CreateSetDialog({
         notes,
         sourceType,
         sourceLabel,
+        course: (customCourseOpen ? customCourse : course).trim() || undefined,
         sourceImageIds,
       });
 
@@ -280,6 +304,65 @@ export function CreateSetDialog({
               className="mt-2 h-11 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
               disabled={isLoading}
             />
+          </div>
+
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-brand-ink">
+              Course <span className="font-normal text-muted-foreground">(optional)</span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {COURSE_PRESETS.map((preset) => {
+                const selected = !customCourseOpen && course === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={isLoading}
+                    onClick={() => {
+                      setCourse(selected ? "" : preset);
+                      setCustomCourseOpen(false);
+                    }}
+                    className={cn(
+                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                      selected
+                        ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
+                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                    )}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                aria-pressed={customCourseOpen}
+                disabled={isLoading}
+                onClick={() => {
+                  setCustomCourseOpen((open) => !open);
+                  setCourse("");
+                }}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+                  customCourseOpen
+                    ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
+                    : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                )}
+              >
+                Other
+              </button>
+            </div>
+            {customCourseOpen && (
+              <Input
+                value={customCourse}
+                onChange={(event) => setCustomCourse(event.target.value)}
+                placeholder="e.g. A-Level Biology, or ECON 201"
+                maxLength={60}
+                disabled={isLoading}
+                aria-label="Custom course"
+                className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+              />
+            )}
           </div>
 
           <Tabs
