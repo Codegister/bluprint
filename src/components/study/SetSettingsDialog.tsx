@@ -1,0 +1,259 @@
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { api } from "@/convex/_generated/api";
+import type { Doc } from "@/convex/_generated/dataModel";
+import { readableError } from "@/lib/errors";
+import { EXAM_BOARDS, STUDY_LEVELS, qualificationLabel } from "@/lib/examBoards";
+import { cn } from "@/lib/utils";
+import { useAction, useMutation } from "convex/react";
+import { Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+/**
+ * Edits a set's name, course and exam context after it exists.
+ *
+ * The metadata alone does not change already-generated questions, so the
+ * second action saves and rebuilds in one step. That is the only way to make
+ * an existing set use a new board's mark-scheme conventions.
+ */
+export function SetSettingsDialog({
+  set,
+  open,
+  onOpenChange,
+}: {
+  set: Doc<"studySets">;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const updateDetails = useMutation(api.studySets.updateDetails);
+  const processSet = useAction(api.ai.processStudySet);
+
+  const [title, setTitle] = useState(set.title);
+  const [course, setCourse] = useState(set.course ?? "");
+  const [examBoard, setExamBoard] = useState(set.examBoard ?? "");
+  const [level, setLevel] = useState(set.level ?? "");
+  const [saving, setSaving] = useState<"save" | "rebuild" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-sync every time the dialog opens so a cancelled edit is discarded.
+  useEffect(() => {
+    if (!open) return;
+    setTitle(set.title);
+    setCourse(set.course ?? "");
+    setExamBoard(set.examBoard ?? "");
+    setLevel(set.level ?? "");
+    setError(null);
+  }, [open, set.title, set.course, set.examBoard, set.level]);
+
+  const save = async (rebuild: boolean) => {
+    if (title.trim().length < 2) {
+      setError("Give the set a name first.");
+      return;
+    }
+    setSaving(rebuild ? "rebuild" : "save");
+    setError(null);
+    try {
+      await updateDetails({
+        setId: set._id,
+        title: title.trim(),
+        course: course.trim() || undefined,
+        examBoard: examBoard || undefined,
+        level: level || undefined,
+      });
+
+      if (rebuild) {
+        // The rebuild is a long action. Start it, close the dialog, and let the
+        // set page show live progress and any error panel.
+        void processSet({ setId: set._id }).catch((rebuildError) => {
+          toast.error(
+            readableError(rebuildError, "The rebuild stopped. Open the set to retry."),
+          );
+        });
+        toast.success("Rebuilding with the new exam context.");
+      } else {
+        toast.success("Set details saved.");
+      }
+      onOpenChange(false);
+    } catch (saveError) {
+      const message = readableError(saveError, "Could not save those changes.");
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const qualification = qualificationLabel({ examBoard, level, course });
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (saving) return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto rounded-3xl border-border bg-card p-0 shadow-none sm:max-w-xl">
+        <div className="px-6 pb-4 pt-6 sm:px-7">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl font-bold text-brand-ink">
+              Set details
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
+              Keep the name current and tell Bluprint which board and level this set is
+              for, so exam questions and marking match that paper.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        <div className="px-6 pb-6 sm:px-7">
+          <div>
+            <label htmlFor="set-settings-title" className="text-xs font-semibold text-brand-ink">
+              Set name
+            </label>
+            <Input
+              id="set-settings-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={80}
+              disabled={saving !== null}
+              className="mt-2 h-11 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+            />
+          </div>
+
+          <div className="mt-4">
+            <label htmlFor="set-settings-course" className="text-xs font-semibold text-brand-ink">
+              Course <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <Input
+              id="set-settings-course"
+              value={course}
+              onChange={(event) => setCourse(event.target.value)}
+              placeholder="e.g. Biology"
+              maxLength={60}
+              disabled={saving !== null}
+              className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+            />
+          </div>
+
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-brand-ink">
+              Exam board <span className="font-normal text-muted-foreground">(optional)</span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {EXAM_BOARDS.map((board) => {
+                const selected = examBoard === board;
+                return (
+                  <button
+                    key={board}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={saving !== null}
+                    onClick={() => setExamBoard(selected ? "" : board)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
+                      selected
+                        ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
+                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                    )}
+                  >
+                    {board}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <p className="text-xs font-semibold text-brand-ink">
+              Level <span className="font-normal text-muted-foreground">(optional)</span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {STUDY_LEVELS.map((option) => {
+                const selected = level === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={saving !== null}
+                    onClick={() => setLevel(selected ? "" : option)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
+                      selected
+                        ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
+                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                    )}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {qualification && (
+            <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-3 py-1.5 text-[0.75rem] font-semibold text-brand-ink/70">
+              <Sparkles className="size-3.5 text-[#7C5CFF]" />
+              {qualification}
+            </p>
+          )}
+
+          {error && (
+            <p className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
+              {error}
+            </p>
+          )}
+
+          <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
+            Rebuilding replaces the summary, flashcards, quiz and exam questions with
+            versions written for the new board. Your notes and uploads are kept.
+          </p>
+
+          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving !== null}
+              onClick={() => onOpenChange(false)}
+              className="h-11 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving !== null}
+              onClick={() => void save(false)}
+              className="h-11 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+            >
+              {saving === "save" ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save
+            </Button>
+            <Button
+              type="button"
+              disabled={saving !== null}
+              onClick={() => void save(true)}
+              className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E]"
+            >
+              {saving === "rebuild" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              Save and rebuild
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

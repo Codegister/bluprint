@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
+import { qualificationLabel } from "@/lib/examBoards";
 import { displayName, percent, relativeDate, sourceLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -120,7 +121,7 @@ function SetCard({ set }: { set: SetSummary }) {
               {set.title}
             </h3>
             <p className="mt-1 text-[0.78rem] text-muted-foreground">
-              {set.course ?? sourceLabel(set.sourceType)} · {set.cardCount} cards
+              {qualificationLabel(set) || sourceLabel(set.sourceType)} · {set.cardCount} cards
             </p>
           </div>
         </div>
@@ -303,8 +304,9 @@ export default function Dashboard() {
         courseFilter === "all" || set.course === courseFilter;
       const matchesSearch =
         !query ||
-        set.title.toLowerCase().includes(query) ||
-        (set.course ?? "").toLowerCase().includes(query);
+        [set.title, set.course ?? "", set.examBoard ?? "", set.level ?? ""].some(
+          (value) => value.toLowerCase().includes(query),
+        );
       return matchesCourse && matchesSearch;
     });
   }, [sets, search, courseFilter]);
@@ -608,7 +610,7 @@ export default function Dashboard() {
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search sets or courses"
+                  placeholder="Search sets, courses or boards"
                   aria-label="Search study sets"
                   className="h-10 rounded-full border-border bg-white pl-9 text-sm shadow-none placeholder:text-muted-foreground/60"
                 />

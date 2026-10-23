@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
+import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import { compressImage, extractVideoFrames } from "@/lib/media";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -82,6 +83,8 @@ export function CreateSetDialog({
   const [course, setCourse] = useState("");
   const [customCourse, setCustomCourse] = useState("");
   const [customCourseOpen, setCustomCourseOpen] = useState(false);
+  const [examBoard, setExamBoard] = useState("");
+  const [level, setLevel] = useState("");
   const [images, setImages] = useState<ImageDraft[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [text, setText] = useState("");
@@ -111,6 +114,8 @@ export function CreateSetDialog({
     setCourse("");
     setCustomCourse("");
     setCustomCourseOpen(false);
+    setExamBoard("");
+    setLevel("");
     setMode("photos");
     setStep("");
     setError(null);
@@ -242,6 +247,8 @@ export function CreateSetDialog({
         sourceType,
         sourceLabel,
         course: (customCourseOpen ? customCourse : course).trim() || undefined,
+        examBoard: examBoard || undefined,
+        level: level || undefined,
         sourceImageIds,
       });
 
@@ -363,6 +370,66 @@ export function CreateSetDialog({
                 className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
               />
             )}
+          </div>
+
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-brand-ink">
+              Exam board <span className="font-normal text-muted-foreground">(optional)</span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {EXAM_BOARDS.map((board) => {
+                const selected = examBoard === board;
+                return (
+                  <button
+                    key={board}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={isLoading}
+                    onClick={() => setExamBoard(selected ? "" : board)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
+                      selected
+                        ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
+                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                    )}
+                  >
+                    {board}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <p className="text-xs font-semibold text-brand-ink">
+              Level <span className="font-normal text-muted-foreground">(optional)</span>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {STUDY_LEVELS.map((option) => {
+                const selected = level === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={selected}
+                    disabled={isLoading}
+                    onClick={() => setLevel(selected ? "" : option)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
+                      selected
+                        ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
+                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                    )}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+              The board and level steer how exam questions are written and marked.
+              Leave them blank if you are not studying for a specific paper.
+            </p>
           </div>
 
           <Tabs

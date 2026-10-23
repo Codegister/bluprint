@@ -16,7 +16,13 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
-export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
+export function ExamPractice({
+  exams,
+  qualification,
+}: {
+  exams: Doc<"examQuestions">[];
+  qualification?: string;
+}) {
   const gradeAnswer = useAction(api.ai.gradeExamAnswer);
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(exams.map((exam) => [exam._id, exam.userAnswer ?? ""])),
@@ -69,6 +75,9 @@ export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
             Exam practice, marked by AI
           </p>
           <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            {qualification
+              ? `Written and marked using ${qualification} conventions. `
+              : ""}
             Write a full answer. Bluprint marks it against the guide and saves the
             result — model answers unlock after grading.
           </p>

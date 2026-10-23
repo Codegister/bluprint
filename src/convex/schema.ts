@@ -48,6 +48,10 @@ const schema = defineSchema(
       // Free-text course label picked when the set is created (e.g. "Biology").
       // Used to group and filter decks the way StudySmarter and Gizmo do.
       course: v.optional(v.string()),
+      // Exam context picked alongside the course. The board and level steer
+      // how exam questions are phrased and how written answers are marked.
+      examBoard: v.optional(v.string()),
+      level: v.optional(v.string()),
       // Photos (or video frames) are kept in Convex file storage so the
       // original material can be revisited from the set page.
       sourceImageIds: v.array(v.id("_storage")),
@@ -128,6 +132,16 @@ const schema = defineSchema(
       completedAt: v.number(),
     }).index("by_set", ["setId"]),
 
+    // Saved AI tutor conversation for one set. Replayed as context so a
+    // follow-up question still makes sense after a reload or a new session.
+    tutorMessages: defineTable({
+      setId: v.id("studySets"),
+      userId: v.id("users"),
+      role: v.union(v.literal("user"), v.literal("assistant")),
+      content: v.string(),
+      createdAt: v.number(),
+    }).index("by_set", ["setId"]),
+
     // One row per person per calendar day (UTC) so the dashboard can show a
     // daily review goal and a streak without storing every review event.
     studyDays: defineTable({
@@ -137,7 +151,6 @@ const schema = defineSchema(
       updatedAt: v.number(),
     }).index("by_user_day", ["userId", "day"]),
 
-    // add other tables here
 
     // tableName: defineTable({
     //   ...

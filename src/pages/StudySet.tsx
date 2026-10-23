@@ -3,6 +3,8 @@ import { DeckGlyph, Mascot } from "@/components/Mascot";
 import { ExamPractice } from "@/components/study/ExamPractice";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { QuizRunner } from "@/components/study/QuizRunner";
+import { SetSettingsDialog } from "@/components/study/SetSettingsDialog";
+import { TutorChat } from "@/components/study/TutorChat";
 import { Button } from "@/components/ui/button";
 import {
   Tabs,
@@ -13,6 +15,7 @@ import {
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
+import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
@@ -26,7 +29,9 @@ import {
   ListChecks,
   Loader2,
   Lock,
+  MessagesSquare,
   PenLine,
+  Pencil,
   RotateCcw,
   Sparkles,
   Target,
@@ -36,7 +41,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 
-type Tab = "summary" | "cards" | "quiz" | "exam";
+type Tab = "summary" | "cards" | "quiz" | "exam" | "tutor";
 
 const sourceIcons = {
   text: FileText,
@@ -49,6 +54,7 @@ const tabItems: Array<{ value: Tab; label: string; icon: typeof BookOpen }> = [
   { value: "cards", label: "Flashcards", icon: Layers },
   { value: "quiz", label: "Quiz", icon: ListChecks },
   { value: "exam", label: "Exam", icon: PenLine },
+  { value: "tutor", label: "Tutor", icon: MessagesSquare },
 ];
 
 const pipelineStages = ["Read", "Summary", "Cards", "Quiz", "Exam"] as const;
@@ -370,6 +376,7 @@ export default function StudySet() {
   const processSet = useAction(api.ai.processStudySet);
   const [tab, setTab] = useState<Tab>("summary");
   const [retrying, setRetrying] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const triggered = useRef<string | null>(null);
 
   useEffect(() => {
@@ -402,6 +409,7 @@ export default function StudySet() {
     const set = details.set;
     const SourceIcon = sourceIcons[set.sourceType];
     const mastery = percent(set.knownCount, set.cardCount);
+    const qualification = qualificationLabel(set);
 
     return (
       <>
@@ -413,10 +421,22 @@ export default function StudySet() {
           >
             <ArrowLeft className="size-4" />
           </Link>
-          <div className="min-w-0">
-            <h1 className="truncate font-display text-[1.5rem] font-bold leading-tight text-brand-ink sm:text-[1.8rem]">
-              {set.title}
-            </h1>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h1 className="min-w-0 truncate font-display text-[1.5rem] font-bold leading-tight text-brand-ink sm:text-[1.8rem]">
+                {set.title}
+              </h1>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Edit set details"
+                title="Edit set details"
+                onClick={() => setSettingsOpen(true)}
+                className="shrink-0 rounded-full text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+            </div>
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <SourceIcon className="size-3.5" />
@@ -448,11 +468,19 @@ export default function StudySet() {
         ) : (
           <>
             <div className="mt-6 flex flex-wrap items-center gap-2.5">
-              {set.course && (
+              {qualification && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3ECFF] px-3 py-1.5 text-[0.75rem] font-semibold text-[#5B3DF5]">
-                  {set.course}
+                  {qualification}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => setTab("tutor")}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#D8CCFF] bg-[#F7F3FF] px-3 py-1.5 text-[0.75rem] font-semibold text-[#5B3DF5] transition-colors hover:bg-[#F3ECFF]"
+              >
+                <MessagesSquare className="size-3.5" />
+                Ask the tutor
+              </button>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EAFBF0] px-3 py-1.5 text-[0.75rem] font-semibold text-[#128A4C]">
                 <span className="size-1.5 rounded-full bg-[#22A06B]" />
                 Ready to study
@@ -521,9 +549,22 @@ export default function StudySet() {
                 />
               </TabsContent>
               <TabsContent value="exam" className="mt-1">
-                <ExamPractice exams={details.exams} />
+                <ExamPractice exams={details.exams} qualification={qualification} />
+              </TabsContent>
+              <TabsContent value="tutor" className="mt-1">
+                <TutorChat
+                  setId={set._id}
+                  title={set.title}
+                  qualification={qualification}
+                />
               </TabsContent>
             </Tabs>
+
+            <SetSettingsDialog
+              set={set}
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+            />
           </>
         )}
       </>

@@ -1,8 +1,9 @@
 # Bluprint
 
-Bluprint is a private revision compiler. Upload photos of your notes, sample a video, or
-paste text, and it builds a summary, flashcards, a multiple-choice quiz, and exam-style
-questions with AI marking.
+Bluprint is a private revision compiler and tutor. Upload photos of your notes, sample a
+video, or paste text, and it builds a summary, flashcards, a multiple-choice quiz, and
+exam-style questions with AI marking. Pick your exam board and level, then ask the AI tutor
+about anything in the set.
 
 Version 1 is built for a small group of friends. Each person signs in separately and gets
 their own dashboard containing only the study sets they created.
@@ -34,19 +35,31 @@ assets.
    with marking guides.
 3. **Study** — flip and self-rate flashcards, take the quiz, and answer exam questions
    that are marked against the guide with feedback and a model answer.
-4. **Organise** — tag a set with a course when you create it, then filter and search your
-   decks by course on the dashboard.
+4. **Set the exam context** — tag a set with a course, an exam board (AQA, Pearson
+   Edexcel, OCR, WJEC / Eduqas, Cambridge International, IB, SQA, College Board AP), and a
+   level (GCSE, A-Level, IB, AP, Undergraduate). Board and level steer the summary's exam
+   focus, the phrasing of exam questions, and how written answers are marked. Course,
+   board, and level are filterable and searchable on the dashboard.
 5. **Review on a schedule** — flashcards use a simplified SM-2 schedule: a card you miss
    returns in ten minutes, a card you recall returns tomorrow and then at widening
    intervals (×2.5 ease, capped at 180 days). Each deck shows how many cards are due.
 6. **Keep a habit** — the dashboard shows a daily goal of 10 reviewed cards and a streak.
-7. **Persist** — study sets, extracted notes, uploads, card progress, due dates, and quiz
-   scores stay saved between sessions, scoped to the account that created them.
+7. **Ask the tutor** — every set has an AI tutor tab. It answers using that set's notes,
+   knows the course, board, and level, and keeps the conversation saved so you can come
+   back to it. Suggested first questions get you started; exam practice is one question at
+   a time.
+8. **Edit and rebuild** — the pencil next to a set's title changes its name, course,
+   board, or level. "Save and rebuild" regenerates the summary, cards, quiz, and exam
+   questions so the new board conventions apply; your notes and uploads are kept.
+9. **Persist** — study sets, extracted notes, uploads, card progress, due dates, quiz
+   scores, and tutor conversations stay saved between sessions, scoped to the account that
+   created them.
 
 After signing in, the main screen is the **Home** dashboard: a study prompt, quick ways to
 add material, your daily goal and streak, courses you can filter by, the decks you were
 last working on, saved sets with due counts, card mastery and quiz averages, and delete
-controls.
+controls. Opening a set gives you five tabs — Summary, Flashcards, Quiz, Exam, and Tutor —
+plus an **Ask the tutor** shortcut in the header.
 
 ## Assumptions
 
@@ -60,6 +73,17 @@ controls.
   reviews counts and nothing is blocked.
 - **A card you mark "again" comes back in ten minutes**, not the next day, so a study
   session can repair a gap immediately.
+- **Board conventions are prompt guidance, not official mark schemes.** Real past papers
+  and mark schemes are copyrighted, so questions are original and the AI imitates each
+  board's published wording and marking style rather than reproducing a paper. Cambridge
+  International answers use B1/M1/A1 points, IB extended answers use markband
+  descriptors, and AQA, Edexcel, OCR, WJEC, and SQA answers earn one mark per creditable
+  bullet.
+- **The tutor is set-scoped.** It reads the current set's notes (up to 12,000 characters)
+  and the last ten saved turns, has no web access, and is not a general-purpose chatbot.
+  That keeps answers aligned with your material and keeps token cost predictable.
+- **Tutor history is saved in the database**, one thread per set and account. There is no
+  clear-thread button yet; deleting the set deletes its conversation with it.
 
 ## Run it
 
@@ -150,6 +174,11 @@ exhausted, the set is paused with a clear message so you can retry after the coo
 Convex actions can run for several minutes, so generation continues if the page is closed.
 Reopening the set shows the saved result.
 
+Tutor questions are a single NVIDIA request each: the set's notes, its course/board/level,
+and the last ten turns are sent, and the question and answer are saved only after a usable
+reply comes back. A failed call leaves the previous conversation untouched and shows the
+same rate-limit messages as the rest of the app.
+
 ## Project structure
 
 ```
@@ -158,20 +187,24 @@ src/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
     Dashboard.tsx        "My study sets" (the main signed-in screen)
-    StudySet.tsx         set detail, compile progress, and the four study tabs
+    StudySet.tsx         set detail, compile progress, and the five study tabs
   components/
     AppShell.tsx         sidebar / mobile navigation for signed-in pages
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
-    study/               flashcard review, quiz runner, exam practice
+    study/               flashcard review, quiz runner, exam practice, tutor chat,
+                         set settings
   convex/
-    schema.ts            studySets, flashcards, quizQuestions, examQuestions
+    schema.ts            studySets, flashcards, quizQuestions, examQuestions, tutorMessages
     studySets.ts         ownership-checked queries/mutations + internal compile writes
+    tutor.ts             saved tutor threads and the context the action reads
     ai.ts                "use node" NVIDIA calls, key rotation, OCR, JSON validation, marking
     settings.ts          environment key-pool status for the UI
     lib/nvidiaConfig.ts  API URL, model IDs, key parsing, notes limit
-  lib/media.ts           image compression and video frame sampling
+  lib/
+    media.ts             image compression and video frame sampling
+    examBoards.ts        exam board and level choices, qualification labels
 ```
 
 ## Assumptions made for version 1
@@ -191,8 +224,7 @@ src/
   is no in-app key entry, so friends cannot add or change keys from the browser.
 - **English prompts and defaults**, with at most 60,000 characters of pasted notes stored
   (12,000 characters sent to the model per generation call).
-- **No spaced-repetition scheduling.** Cards are self-rated and mastery is tracked, which
-  is enough for focused revision without a second scheduling system.
+
 
 ## Troubleshooting
 

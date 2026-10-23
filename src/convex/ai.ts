@@ -495,7 +495,66 @@ function materialBlock(notes: string): string {
   }`;
 }
 
-async function summariseNotes(apiKeys: string[], notes: string): Promise<Summary> {
+// ---------------------------------------------------------------------------
+// Exam-board context
+// ---------------------------------------------------------------------------
+
+/** The qualification fields a study set carries, when it has any. */
+type StudyContext = {
+  course?: string;
+  examBoard?: string;
+  level?: string;
+};
+
+/** "AQA · A-Level · Biology", or an empty string when nothing is set. */
+function qualificationText(context?: StudyContext): string {
+  if (!context) return "";
+  return [context.examBoard, context.level, context.course]
+    .filter((part): part is string => Boolean(part && part.trim()))
+    .join(" · ");
+}
+
+/**
+ * Each board writes and marks papers differently. These notes are appended to
+ * the generation and marking prompts so a Cambridge answer is credited with
+ * B1/M1/A1 points while an AQA answer is credited one mark per bullet, and an
+ * IB extended response is judged against markbands instead of a checklist.
+ */
+function markSchemeStyle(board?: string): string {
+  const value = (board ?? "").toLowerCase();
+  if (value.includes("aqa")) {
+    return "AQA conventions: point-mark each creditable idea as '1 mark: ...', use AQA command words precisely (describe, explain, evaluate, justify), and add 'accept ...' notes where equivalent wording earns the mark.";
+  }
+  if (value.includes("edexcel") || value.includes("pearson")) {
+    return "Pearson Edexcel conventions: point-mark each creditable idea as '1 mark: ...', and distinguish AO1 knowledge, AO2 application and AO3 analysis where the question rewards them.";
+  }
+  if (value.includes("ocr")) {
+    return "OCR conventions: point-mark short answers as '1 mark: ...', reference the assessment objective the point satisfies, and use levels of response descriptors for extended writing.";
+  }
+  if (value.includes("wjec") || value.includes("eduqas")) {
+    return "WJEC / Eduqas conventions: point-mark each creditable idea as '1 mark: ...' with short 'accept ...' notes and no holistic wording.";
+  }
+  if (value.includes("cambridge") || value.includes("cie") || value.includes("caie")) {
+    return "Cambridge International conventions: use B1 for a correct statement, M1 for a valid method or point and A1 for a correct final answer, with 'allow ...' notes for acceptable alternatives.";
+  }
+  if (value.startsWith("ib") || value.includes("baccalaureate")) {
+    return "IB conventions: respect the command term's demand, point-mark short answers, and spell out 1-5 markband descriptors when the question needs an extended response.";
+  }
+  if (value.includes("sqa")) {
+    return "SQA conventions: write marking instructions as '1 mark' bullets with explicit 'Accept ...' alternatives for equivalent answers.";
+  }
+  if (value.includes("college board") || value === "ap") {
+    return "College Board AP conventions: point-mark each required short-answer element, and use explicit earned points if a free-response rubric is needed.";
+  }
+  return "Point-mark every creditable idea, one mark per bullet, and add 'accept ...' notes where equivalent wording earns the same mark.";
+}
+
+async function summariseNotes(
+  apiKeys: string[],
+  notes: string,
+  context?: StudyContext,
+): Promise<Summary> {
+  const qualification = qualificationText(context);
   const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
@@ -504,6 +563,9 @@ async function summariseNotes(apiKeys: string[], notes: string): Promise<Summary
         role: "user",
         content:
           `${materialBlock(notes)}\n\n` +
+          (qualification
+            ? `This material is for ${qualification}. Angle the exam focus at that qualification and use its command words.\n`
+            : "") +
           "Create a revision summary of the material. Return JSON shaped exactly like:\n" +
           '{"overview":"3-5 sentence overview","keyPoints":["6-10 specific points worth remembering"],"examFocus":["3-5 likely exam angles or things to memorise"]}\n' +
           "Be concrete and faithful to the material. No markdown inside values.",
@@ -562,7 +624,12 @@ async function generateQuiz(apiKeys: string[], notes: string): Promise<Generated
   return parseQuiz(raw);
 }
 
-async function generateExams(apiKeys: string[], notes: string): Promise<GeneratedExam[]> {
+async function generateExams(
+  apiKeys: string[],
+  notes: string,
+  context?: StudyContext,
+): Promise<GeneratedExam[]> {
+  const qualification = qualificationText(context);
   const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
@@ -571,8 +638,10 @@ async function generateExams(apiKeys: string[], notes: string): Promise<Generate
         role: "user",
         content:
           `${materialBlock(notes)}\n\n` +
+          (qualification ? `This set is for ${qualification}.\n` : "") +
           "Create 3 exam-style short-answer questions that ask the student to explain, compare, or apply ideas from the material. Each is worth 4-8 marks. " +
           "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
+          `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
           "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
           "Include a full-mark model answer that hits each bullet. " +
           'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
@@ -690,11 +759,17 @@ export const processStudySet = action({
         );
       }
 
+      const context: StudyContext = {
+        course: existing.course,
+        examBoard: existing.examBoard,
+        level: existing.level,
+      };
+
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: "Writing your summary…",
       });
-      const summary = await summariseNotes(apiKeys, notes);
+      const summary = await summariseNotes(apiKeys, notes, context);
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
@@ -712,7 +787,7 @@ export const processStudySet = action({
         setId,
         progress: "Drafting exam questions…",
       });
-      const exams = await generateExams(apiKeys, notes);
+      const exams = await generateExams(apiKeys, notes, context);
 
       await ctx.runMutation(internal.studySets.completeGeneration, {
         setId,
@@ -788,7 +863,9 @@ async function markExamAnswer(
     markingGuide: string[];
   },
   response: string,
+  context?: StudyContext,
 ): Promise<{ awardedMarks: number; feedback: string }> {
+  const qualification = qualificationText(context);
   const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
@@ -796,12 +873,14 @@ async function markExamAnswer(
       {
         role: "user",
         content:
+          `<qualification>${qualification || "Not specified"}</qualification>\n` +
           `<question>${exam.question}</question>\n` +
           `<marks_available>${exam.marks}</marks_available>\n` +
           `<marking_guide>\n${exam.markingGuide.join("\n")}\n</marking_guide>\n` +
           `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
           `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
           `${examinerRules(exam.marks)}\n\n` +
+          `BOARD CONVENTIONS — apply these when deciding whether a point is creditable:\n${markSchemeStyle(context?.examBoard)}\n\n` +
           EXAMINER_OUTPUT_SHAPE,
       },
     ],
@@ -880,8 +959,12 @@ export const gradeExamAnswer = action({
     }
 
     const apiKeys = resolveNvidiaKeys();
-    const { exam } = data;
-    const { awardedMarks, feedback } = await markExamAnswer(apiKeys, exam, response);
+    const { exam, set } = data;
+    const { awardedMarks, feedback } = await markExamAnswer(apiKeys, exam, response, {
+      course: set.course,
+      examBoard: set.examBoard,
+      level: set.level,
+    });
 
     await ctx.runMutation(internal.studySets.saveExamResult, {
       examId,
@@ -891,5 +974,108 @@ export const gradeExamAnswer = action({
     });
 
     return { awardedMarks, marks: exam.marks, feedback };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// AI tutor
+// ---------------------------------------------------------------------------
+
+/**
+ * The tutor teaches instead of only answering: it explains the reasoning, ties
+ * the idea back to the set's notes, and speaks in the command words of the
+ * student's exam board. Plain text keeps the chat rendering simple.
+ */
+const TUTOR_SYSTEM_PROMPT =
+  "You are Bluprint's AI tutor: a patient, precise subject teacher working one-to-one with a student. " +
+  "Explain the reasoning rather than only the conclusion, and use a concrete example when it helps. " +
+  "Use the student's notes as the primary source. If the notes do not cover something, say so plainly before giving the standard explanation, and never invent content and attribute it to the notes. " +
+  "Answer in plain text with short paragraphs and hyphen bullets. No markdown headings, tables, or code fences. " +
+  "Be direct and warm, not effusive. Keep answers under 250 words unless the student asks for a model answer or a step-by-step walkthrough.";
+
+async function answerAsTutor(
+  apiKeys: string[],
+  context: {
+    set: {
+      title: string;
+      notes: string;
+      course?: string;
+      examBoard?: string;
+      level?: string;
+    };
+    messages: Array<{ role: string; content: string }>;
+  },
+  question: string,
+): Promise<string> {
+  const qualification = qualificationText(context.set);
+  const history = context.messages
+    .map(
+      (message) =>
+        `${message.role === "user" ? "Student" : "Tutor"}: ${message.content.slice(0, 1200)}`,
+    )
+    .join("\n\n");
+
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: TUTOR_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `${materialBlock(context.set.notes)}\n\n` +
+          `<set_title>${context.set.title}</set_title>\n` +
+          `<qualification>${qualification || "Not specified"}</qualification>\n` +
+          (context.set.examBoard
+            ? `<mark_scheme_style>${markSchemeStyle(context.set.examBoard)}</mark_scheme_style>\n`
+            : "") +
+          (context.set.level
+            ? `Pitch the explanation at ${context.set.level} depth and use that qualification's command words when discussing exam technique.\n`
+            : "") +
+          `<conversation>\n${history || "(this is the student's first question)"}\n</conversation>\n\n` +
+          `<student_question>${question}</student_question>\n\n` +
+          "Answer as the tutor. If the student asks for exam practice, give one question at a time and wait for their answer before marking it.",
+      },
+    ],
+    maxTokens: 1500,
+    temperature: 0.3,
+    disableThinking: true,
+  });
+
+  return stripReasoning(raw).trim();
+}
+
+/**
+ * Answers one tutor question using the set's notes and recent saved turns,
+ * then stores the exchange. The key never leaves this action.
+ */
+export const askTutor = action({
+  args: { setId: v.id("studySets"), question: v.string() },
+  handler: async (ctx, { setId, question }): Promise<{ reply: string }> => {
+    const userId = await requireUserId(ctx);
+    const text = question.trim();
+    if (text.length < 3) {
+      throw new Error("Write a question for the tutor first.");
+    }
+    if (text.length > 1200) {
+      throw new Error("Keep the question under 1,200 characters.");
+    }
+
+    const context = await ctx.runQuery(internal.tutor.getTutorContext, {
+      setId,
+      userId,
+    });
+    if (!context) throw new Error("Study set not found.");
+
+    const apiKeys = resolveNvidiaKeys();
+    const reply = await answerAsTutor(apiKeys, context, text);
+
+    await ctx.runMutation(internal.tutor.saveExchange, {
+      setId,
+      userId,
+      question: text,
+      answer: reply,
+    });
+
+    return { reply };
   },
 });

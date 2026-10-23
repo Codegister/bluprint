@@ -132,6 +132,8 @@ export const listMine = query({
           _id: set._id,
           title: set.title,
           course: set.course,
+          examBoard: set.examBoard,
+          level: set.level,
           sourceType: set.sourceType,
           sourceLabel: set.sourceLabel,
           status: set.status,
@@ -231,6 +233,8 @@ export const create = mutation({
     sourceType,
     sourceLabel: v.optional(v.string()),
     course: v.optional(v.string()),
+    examBoard: v.optional(v.string()),
+    level: v.optional(v.string()),
     sourceImageIds: v.array(v.id("_storage")),
   },
   handler: async (ctx, args) => {
@@ -255,6 +259,8 @@ export const create = mutation({
       sourceType: args.sourceType,
       sourceLabel: args.sourceLabel?.slice(0, 120),
       course: args.course?.trim().slice(0, 60) || undefined,
+      examBoard: args.examBoard?.trim().slice(0, 60) || undefined,
+      level: args.level?.trim().slice(0, 40) || undefined,
       sourceImageIds: args.sourceImageIds.slice(0, 10),
       status: "queued",
       progress: "Queued",
@@ -267,6 +273,37 @@ export const create = mutation({
   },
 });
 
+/**
+ * Renames a set or changes its course / exam context. The generated material
+ * is left alone; the set page offers a rebuild when the new board should be
+ * reflected in the questions and marking.
+ */
+export const updateDetails = mutation({
+  args: {
+    setId: v.id("studySets"),
+    title: v.string(),
+    course: v.optional(v.string()),
+    examBoard: v.optional(v.string()),
+    level: v.optional(v.string()),
+  },
+  handler: async (ctx, { setId, title, course, examBoard, level }) => {
+    const userId = await requireUserId(ctx);
+    const set = await ctx.db.get(setId);
+    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+
+    const nextTitle = title.trim().slice(0, 80);
+    if (nextTitle.length < 2) throw new Error("Give the set a name first.");
+
+    await ctx.db.patch(setId, {
+      title: nextTitle,
+      course: course?.trim().slice(0, 60) || undefined,
+      examBoard: examBoard?.trim().slice(0, 60) || undefined,
+      level: level?.trim().slice(0, 40) || undefined,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const remove = mutation({
   args: { setId: v.id("studySets") },
   handler: async (ctx, { setId }) => {
@@ -275,6 +312,15 @@ export const remove = mutation({
     if (!set || set.userId !== userId) throw new Error("Study set not found.");
 
     await deleteStudySetContent(ctx, setId);
+
+    // Tutor conversations are owned by the set, so they go with it. A rebuild
+    // keeps them; only deleting the set removes the thread.
+    const tutorRows = await ctx.db
+      .query("tutorMessages")
+      .withIndex("by_set", (q) => q.eq("setId", setId))
+      .collect();
+    for (const row of tutorRows) await ctx.db.delete(row._id);
+
     for (const imageId of set.sourceImageIds) {
       await ctx.storage.delete(imageId);
     }
