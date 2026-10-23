@@ -120,14 +120,6 @@ const schema = defineSchema(
       completedAt: v.number(),
     }).index("by_set", ["setId"]),
 
-    // Server-only key/value settings. The NVIDIA key may be stored here when
-    // NVIDIA_API_KEY is not present in the deployment environment; no public
-    // query ever returns `value`.
-    appSettings: defineTable({
-      key: v.string(),
-      value: v.string(),
-    }).index("by_key", ["key"]),
-
     // add other tables here
 
     // tableName: defineTable({

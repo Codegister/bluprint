@@ -25,7 +25,6 @@ import {
   CheckCircle2,
   Clock,
   FileText,
-  KeyRound,
   Layers,
   ListChecks,
   Loader2,
@@ -232,16 +231,6 @@ function ErrorPanel({
                 <RotateCcw className="size-3.5" />
               )}
               Retry build
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="h-9 rounded-md border-border bg-transparent font-mono text-[10.5px] tracking-wide"
-            >
-              <Link to="/setup">
-                <KeyRound className="size-3.5" />
-                Check API access
-              </Link>
             </Button>
           </div>
 

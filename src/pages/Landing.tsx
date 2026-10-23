@@ -708,7 +708,7 @@ export default function Landing() {
                   MODEL ACCESS
                 </p>
                 <p className="mt-1 font-mono text-[10.5px] text-brand-pink">
-                  NVIDIA_API_KEY · server only
+                  NVIDIA_API_KEY · rotated server-side
                 </p>
               </div>
             </div>
@@ -747,8 +747,8 @@ export default function Landing() {
                   a: "Only you. Sign-in uses an email one-time code, and every query checks ownership before returning a set, card, quiz or score.",
                 },
                 {
-                  q: "Where does the NVIDIA API key live?",
-                  a: "On the server, in NVIDIA_API_KEY. Bluprint can also verify and store a fallback key from the API access screen. Neither path returns the key to the browser.",
+                  q: "Where do the NVIDIA API keys live?",
+                  a: "Only in the server environment, under NVIDIA_API_KEY. You can supply several keys in that value; Bluprint rotates through them on each request and never sends one to the browser.",
                 },
                 {
                   q: "What happens when a build fails?",

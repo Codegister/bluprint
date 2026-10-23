@@ -44,7 +44,7 @@ and quiz averages, with search and delete.
 ### In this Freebuff environment
 
 The Vite dev server and Convex deployment are already managed. Open the preview, add the
-NVIDIA key (below), and use the app. No terminal process needs to be started.
+NVIDIA keys (below), and use the app. No terminal process needs to be started.
 
 ### Locally
 
@@ -72,41 +72,31 @@ bun tsc -b --noEmit     # frontend + Convex types
 bun run lint            # ESLint (the template's UI primitives have pre-existing findings)
 ```
 
-## Supply the NVIDIA key
+## Supply the NVIDIA keys
 
-The key must never be committed or shipped to the browser. It is read only on the Convex
-server, by server actions for model calls and by a status query that checks whether it
-exists. The environment variable is named **`NVIDIA_API_KEY`** everywhere in the code,
-comments, and configuration.
+Keys must never be committed or shipped to the browser. They are read only on the Convex
+server, by the AI actions. The environment variable is named **`NVIDIA_API_KEY`**
+everywhere in the code, comments, and configuration.
 
-### Option A — environment variable (preferred)
-
-Set it on the Convex deployment:
+`NVIDIA_API_KEY` may contain a single key or a pool of keys separated by commas,
+semicolons, or newlines:
 
 ```bash
-npx convex env set NVIDIA_API_KEY nvapi-your-key-here
+npx convex env set NVIDIA_API_KEY "nvapi-key-one,nvapi-key-two,nvapi-key-three"
 ```
 
-On Freebuff, add `NVIDIA_API_KEY` in the project's **Keys** tab instead. Convex functions
-read it as `process.env.NVIDIA_API_KEY`.
+On Freebuff, add `NVIDIA_API_KEY` in the project's **Keys** tab and paste the keys as a
+comma-separated value. Convex functions read it as `process.env.NVIDIA_API_KEY`.
 
-This is the shared key for the whole app. Friends do not need their own NVIDIA accounts,
-and usage bills to whoever owns the key.
+Every NVIDIA request rotates to the next key in the pool. A key that returns HTTP 429 is
+cooled down for 45 seconds and the request immediately moves to the next key. A key
+rejected with 401 or 403 is dropped from rotation for the life of the server process.
+There is no key configuration screen and no key storage in the database.
 
-### Option B — the API access screen (fallback)
+This is a shared pool for the whole app. Friends do not need their own NVIDIA accounts,
+and usage bills to whoever owns the keys.
 
-If `NVIDIA_API_KEY` is not present in the environment, sign in and open **API access**
-(also linked from the dashboard warning). Paste the key there. Bluprint will:
-
-1. verify it with a small NVIDIA request,
-2. store it in a server-only Convex table,
-3. never return it from a query, log it, or write it to browser storage.
-
-The environment variable always wins over a saved fallback key. Open **API access** again
-to rotate a saved key. To remove it, delete the `appSettings` record for `NVIDIA_API_KEY`
-in the Convex dashboard.
-
-Get a key from [NVIDIA Build](https://build.nvidia.com/).
+Get keys from [NVIDIA Build](https://build.nvidia.com/).
 
 ### Optional model overrides
 
@@ -131,8 +121,9 @@ is the fix.
   exam questions. Progress messages are written to the set so the page updates live.
 - If anything fails, the set gets an **error** status, a readable message, and a retry
   button. Extracted notes and uploads are kept.
-- Rate limits (HTTP 429) and server errors are retried briefly with backoff, then reported
-  with a clear message. Authentication failures point at **API access**.
+- Rate limits (HTTP 429) rotate to the next key in the pool. If the whole pool is
+exhausted, the set is paused with a clear message so you can retry after the cooldown.
+  Rejected keys are skipped automatically.
 
 Convex actions can run for several minutes, so generation continues if the page is closed.
 Reopening the set shows the saved result.
@@ -146,7 +137,6 @@ src/
     Auth.tsx             email-code sign-in and guest sign-in
     Dashboard.tsx        "My study sets" (the main signed-in screen)
     StudySet.tsx         set detail, compile progress, and the four study tabs
-    Setup.tsx            NVIDIA_API_KEY status and configuration
   components/
     AppShell.tsx         sidebar / mobile navigation for signed-in pages
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
@@ -154,11 +144,11 @@ src/
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
     study/               flashcard review, quiz runner, exam practice
   convex/
-    schema.ts            studySets, flashcards, quizQuestions, examQuestions, appSettings
+    schema.ts            studySets, flashcards, quizQuestions, examQuestions
     studySets.ts         ownership-checked queries/mutations + internal compile writes
-    ai.ts                "use node" NVIDIA calls, OCR, JSON validation, marking
-    settings.ts          key status, server-only key storage
-    lib/nvidiaConfig.ts  API URL, model IDs, key name, notes limit
+    ai.ts                "use node" NVIDIA calls, key rotation, OCR, JSON validation, marking
+    settings.ts          environment key-pool status for the UI
+    lib/nvidiaConfig.ts  API URL, model IDs, key parsing, notes limit
   lib/media.ts           image compression and video frame sampling
 ```
 
@@ -170,13 +160,13 @@ src/
 - **Up to 8 photos per set**, compressed to a 1600px JPEG before upload. There is no PDF
   input, which keeps the browser upload path dependable.
 - **Fixed amounts**: 10 flashcards, 5 quiz questions, and 3 exam questions. Fixed counts
-  make generation predictable and affordable on a shared key.
+  make generation predictable and affordable on a shared key pool.
 - **Accounts use email codes, not passwords.** Guest sign-in exists for quick demos, but
   guest sets only survive that browser session. Use email to keep sets recoverable.
 - **Sets are private.** There is no sharing or group folder in version 1; friends have
   separate accounts and separate libraries.
-- **One shared NVIDIA key** per deployment. Any signed-in friend can update the saved
-  fallback key from **API access**.
+- **One shared key pool** per deployment, configured only through `NVIDIA_API_KEY`. There
+  is no in-app key entry, so friends cannot add or change keys from the browser.
 - **English prompts and defaults**, with at most 60,000 characters of pasted notes stored
   (12,000 characters sent to the model per generation call).
 - **No spaced-repetition scheduling.** Cards are self-rated and mastery is tracked, which
@@ -184,12 +174,11 @@ src/
 
 ## Troubleshooting
 
-- **"NVIDIA_API_KEY is not set"** — add it in **API access** or on the Convex deployment.
-- **401 / 403** — NVIDIA rejected the key. Replace it in **API access**.
-- **429** — rate-limited. Wait about a minute, then retry the set.
+- **"NVIDIA_API_KEY is not set"** — add it to the Convex deployment environment.
+- **401 / 403** — every key in the pool was rejected. Replace `NVIDIA_API_KEY` on the
+  deployment.
+- **429** — the whole pool is cooling down. Wait about a minute, then retry the set.
 - **404 / 410 model not available** — NVIDIA retired that model. Set
   `NVIDIA_TEXT_MODEL` / `NVIDIA_VISION_MODEL` to a model currently listed on NVIDIA Build.
-- **The key verifies but generation fails** — verification only proves the key works. A
-  retired model still produces the 410 message above.
 - **Poor OCR** — use straighter, brighter photos; dark handwriting or blurry frames are
   the usual cause. Pasted text is the most reliable input.

@@ -333,15 +333,10 @@ export default function Dashboard() {
           <div className="min-w-0 flex-1">
             <p className="mono-label text-brand-lime">MODEL ACCESS REQUIRED</p>
             <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-              Connect NVIDIA_API_KEY to compile new sets. Existing sets stay available.
+              Add NVIDIA_API_KEY to the deployment environment to compile new sets.
+              Existing sets stay available.
             </p>
           </div>
-          <Button
-            asChild
-            className="h-9 shrink-0 rounded-md border border-brand-lime/30 bg-brand-lime/10 px-3 font-mono text-[10px] tracking-wide text-brand-lime hover:bg-brand-lime/20"
-          >
-            <Link to="/setup">Configure</Link>
-          </Button>
         </div>
       )}
 

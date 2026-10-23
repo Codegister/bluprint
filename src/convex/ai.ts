@@ -3,9 +3,9 @@
 /**
  * All NVIDIA calls live in this Node action file.
  *
- * The key is read from the `NVIDIA_API_KEY` environment variable (or a saved
- * server-only fallback) and is never returned, logged, or sent to the browser.
- * Keep it that way when extending this file.
+ * Keys are read from the `NVIDIA_API_KEY` environment variable, which may hold
+ * a comma- or newline-separated pool. They are never returned, logged, or sent
+ * to the browser. Keep it that way when extending this file.
  */
 
 import { v } from "convex/values";
@@ -19,6 +19,7 @@ import {
   NVIDIA_CHAT_URL,
   NVIDIA_TEXT_MODEL,
   NVIDIA_VISION_MODEL,
+  readNvidiaKeys,
 } from "./lib/nvidiaConfig";
 
 type TextPart = { type: "text"; text: string };
@@ -53,20 +54,48 @@ type GeneratedExam = {
 // Key resolution
 // ---------------------------------------------------------------------------
 
+function resolveNvidiaKeys(): string[] {
+  const keys = readNvidiaKeys();
+  if (keys.length === 0) {
+    throw new Error(
+      "NVIDIA_API_KEY is not set on this deployment. Add one or more keys to the server environment and retry.",
+    );
+  }
+  return keys;
+}
+
+// ---------------------------------------------------------------------------
+// Key rotation
+// ---------------------------------------------------------------------------
+
+/** Keep a rate-limited key out of rotation briefly before trying it again. */
+const KEY_COOLDOWN_MS = 45_000;
+
+// These live in the action's process only. They hold key values, so never log
+// or return them; they exist purely so bad or throttled keys are skipped.
+const rejectedKeys = new Set<string>();
+const coolingKeys = new Map<string, number>();
+let keyCursor = 0;
+
 /**
- * Prefer the deployment environment variable, then fall back to the value the
- * user saved from the AI setup screen (stored in a server-only Convex table).
+ * Picks the next usable key, advancing round-robin so back-to-back requests
+ * are spread across the pool instead of exhausting one key at a time.
  */
-async function resolveNvidiaKey(ctx: ActionCtx): Promise<string> {
-  const envKey = (process.env.NVIDIA_API_KEY ?? "").trim();
-  if (envKey) return envKey;
+function nextApiKey(keys: string[]): string {
+  const active = keys.filter((key) => !rejectedKeys.has(key));
+  if (active.length === 0) {
+    throw new Error(
+      "All NVIDIA_API_KEY values on this deployment were rejected. Update the server environment and retry.",
+    );
+  }
 
-  const saved = await ctx.runQuery(internal.settings.getSavedKey, {});
-  if (saved) return saved;
-
-  throw new Error(
-    "NVIDIA_API_KEY is not set. Open AI setup and add your NVIDIA API key to start generating study material.",
-  );
+  const now = Date.now();
+  const ready = active.filter((key) => (coolingKeys.get(key) ?? 0) <= now);
+  // If every key is cooling down, try the pool again rather than fail early.
+  const pool = ready.length > 0 ? ready : active;
+  const key = pool[keyCursor % pool.length]!;
+  keyCursor = (keyCursor + 1) % 10_000;
+  return key;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,10 +106,10 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function friendlyHttpError(status: number): string {
   if (status === 401 || status === 403) {
-    return "NVIDIA rejected the API key. Open AI setup and check that NVIDIA_API_KEY is valid.";
+    return "NVIDIA rejected the API key pool. Check NVIDIA_API_KEY on the deployment.";
   }
   if (status === 400) {
-    return "NVIDIA rejected the request. Retry once, then check NVIDIA_TEXT_MODEL in AI setup if it persists.";
+    return "NVIDIA rejected the request. Retry once, then check NVIDIA_TEXT_MODEL on the deployment if it persists.";
   }
   if (status === 402) {
     return "Your NVIDIA account has no available credits for this request.";
@@ -92,7 +121,7 @@ function friendlyHttpError(status: number): string {
     return "This NVIDIA model has reached end of life. Set NVIDIA_TEXT_MODEL or NVIDIA_VISION_MODEL to a model from build.nvidia.com and retry.";
   }
   if (status === 429) {
-    return "NVIDIA is rate-limiting requests right now. Wait about a minute, then retry.";
+    return "The available NVIDIA API keys are rate-limited right now. Wait about a minute, then retry.";
   }
   if (status >= 500) {
     return "NVIDIA's service is having trouble right now. Try again in a moment.";
@@ -102,30 +131,35 @@ function friendlyHttpError(status: number): string {
 
 /**
  * Small OpenAI-compatible wrapper around NVIDIA's chat completions endpoint.
- * Retries throttling and server errors with a short backoff, and converts every
- * failure into a message that is safe and useful to show in the UI.
+ * Each attempt takes the next key from the pool. A 429 cools that key down and
+ * moves on immediately; rejected keys are removed from rotation. Server and
+ * network errors get a short backoff, and every failure becomes a message that
+ * is safe and useful to show in the UI.
  */
 async function nvidiaChat(
-  apiKey: string,
+  apiKeys: string[],
   options: {
     model: string;
     messages: ChatMessage[];
     maxTokens: number;
     temperature?: number;
     retries?: number;
-    /** Key verification only needs a successful HTTP response. */
-    allowEmpty?: boolean;
   },
 ): Promise<string> {
   const retries = options.retries ?? 2;
+  // Try every key at least once, with a small cap so a large pool does not
+  // hold one study set open indefinitely.
+  const maxAttempts = Math.max(retries + 1, Math.min(apiKeys.length, 6));
+  let lastStatus: number | null = null;
 
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const apiKey = nextApiKey(apiKeys);
     let response: Response;
     try {
       response = await fetch(NVIDIA_CHAT_URL, {
         method: "POST",
         headers: {
-          // The key only ever exists in this process memory / header.
+          // Each key only exists in this process memory / request header.
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
@@ -141,8 +175,8 @@ async function nvidiaChat(
       });
     } catch (error) {
       // Never include the request object: it contains the Authorization header.
-      if (attempt < retries) {
-        await sleep(1500 * (attempt + 1));
+      if (attempt < maxAttempts - 1) {
+        await sleep(1200 * (attempt + 1));
         continue;
       }
       const reason =
@@ -157,24 +191,36 @@ async function nvidiaChat(
         choices?: Array<{ message?: { content?: string } }>;
       };
       const content = payload.choices?.[0]?.message?.content;
-      if (typeof content !== "string") {
-        if (options.allowEmpty) return "";
-        throw new Error("NVIDIA returned an empty response. Please retry.");
-      }
-      if (content.trim().length === 0 && !options.allowEmpty) {
+      if (typeof content !== "string" || content.trim().length === 0) {
         throw new Error("NVIDIA returned an empty response. Please retry.");
       }
       return content;
     }
 
-    const retryable = response.status === 429 || response.status >= 500;
-    if (retryable && attempt < retries) {
-      await sleep(response.status === 429 ? 4000 * (attempt + 1) : 1500 * (attempt + 1));
-      continue;
+    lastStatus = response.status;
+
+    if (response.status === 429) {
+      // Throttled: park this key briefly and try the next one straight away.
+      coolingKeys.set(apiKey, Date.now() + KEY_COOLDOWN_MS);
+      if (attempt < maxAttempts - 1) {
+        await sleep(400 * (attempt + 1));
+        continue;
+      }
+    } else if (response.status === 401 || response.status === 403) {
+      // Rejected: never use this key again in this process.
+      rejectedKeys.add(apiKey);
+      if (attempt < maxAttempts - 1) continue;
+    } else if (response.status >= 500) {
+      if (attempt < maxAttempts - 1) {
+        await sleep(1200 * (attempt + 1));
+        continue;
+      }
+    } else {
+      throw new Error(friendlyHttpError(response.status));
     }
-    throw new Error(friendlyHttpError(response.status));
   }
 
+  if (lastStatus !== null) throw new Error(friendlyHttpError(lastStatus));
   throw new Error("NVIDIA could not complete the request. Please retry.");
 }
 
@@ -328,8 +374,8 @@ function materialBlock(notes: string): string {
   }`;
 }
 
-async function summariseNotes(apiKey: string, notes: string): Promise<Summary> {
-  const raw = await nvidiaChat(apiKey, {
+async function summariseNotes(apiKeys: string[], notes: string): Promise<Summary> {
+  const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -348,8 +394,8 @@ async function summariseNotes(apiKey: string, notes: string): Promise<Summary> {
   return parseSummary(raw);
 }
 
-async function generateCards(apiKey: string, notes: string): Promise<GeneratedCard[]> {
-  const raw = await nvidiaChat(apiKey, {
+async function generateCards(apiKeys: string[], notes: string): Promise<GeneratedCard[]> {
+  const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -367,8 +413,8 @@ async function generateCards(apiKey: string, notes: string): Promise<GeneratedCa
   return parseCards(raw);
 }
 
-async function generateQuiz(apiKey: string, notes: string): Promise<GeneratedQuiz[]> {
-  const raw = await nvidiaChat(apiKey, {
+async function generateQuiz(apiKeys: string[], notes: string): Promise<GeneratedQuiz[]> {
+  const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -386,8 +432,8 @@ async function generateQuiz(apiKey: string, notes: string): Promise<GeneratedQui
   return parseQuiz(raw);
 }
 
-async function generateExams(apiKey: string, notes: string): Promise<GeneratedExam[]> {
-  const raw = await nvidiaChat(apiKey, {
+async function generateExams(apiKeys: string[], notes: string): Promise<GeneratedExam[]> {
+  const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -411,7 +457,7 @@ async function generateExams(apiKey: string, notes: string): Promise<GeneratedEx
 // ---------------------------------------------------------------------------
 
 async function transcribeImages(
-  apiKey: string,
+  apiKeys: string[],
   images: Array<{ dataUrl: string }>,
 ): Promise<string> {
   const parts: ContentPart[] = [
@@ -428,7 +474,7 @@ async function transcribeImages(
     })),
   ];
 
-  const raw = await nvidiaChat(apiKey, {
+  const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_VISION_MODEL,
     messages: [{ role: "user", content: parts }],
     maxTokens: 2200,
@@ -444,7 +490,7 @@ async function transcribeImages(
  */
 async function readSourceImages(
   ctx: ActionCtx,
-  apiKey: string,
+  apiKeys: string[],
   imageIds: Id<"_storage">[],
 ): Promise<string> {
   const sections: string[] = [];
@@ -453,7 +499,7 @@ async function readSourceImages(
     if (!blob) continue;
     const buffer = Buffer.from(await blob.arrayBuffer());
     const mime = blob.type?.startsWith("image/") ? blob.type : "image/jpeg";
-    const text = await transcribeImages(apiKey, [
+    const text = await transcribeImages(apiKeys, [
       { dataUrl: `data:${mime};base64,${buffer.toString("base64")}` },
     ]);
     if (text) sections.push(text);
@@ -486,7 +532,7 @@ export const processStudySet = action({
     }
 
     try {
-      const apiKey = await resolveNvidiaKey(ctx);
+      const apiKeys = resolveNvidiaKeys();
       let notes = existing.notes.trim();
 
       if (existing.sourceImageIds.length > 0) {
@@ -494,7 +540,7 @@ export const processStudySet = action({
           setId,
           progress: "Reading the text in your uploads…",
         });
-        const extracted = await readSourceImages(ctx, apiKey, existing.sourceImageIds);
+        const extracted = await readSourceImages(ctx, apiKeys, existing.sourceImageIds);
         if (extracted.trim().length > notes.length) {
           notes = extracted.trim();
           await ctx.runMutation(internal.studySets.saveExtractedNotes, {
@@ -514,25 +560,25 @@ export const processStudySet = action({
         setId,
         progress: "Writing your summary…",
       });
-      const summary = await summariseNotes(apiKey, notes);
+      const summary = await summariseNotes(apiKeys, notes);
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: "Building flashcards…",
       });
-      const cards = await generateCards(apiKey, notes);
+      const cards = await generateCards(apiKeys, notes);
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: "Writing quiz questions…",
       });
-      const quiz = await generateQuiz(apiKey, notes);
+      const quiz = await generateQuiz(apiKeys, notes);
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: "Drafting exam questions…",
       });
-      const exams = await generateExams(apiKey, notes);
+      const exams = await generateExams(apiKeys, notes);
 
       await ctx.runMutation(internal.studySets.completeGeneration, {
         setId,
@@ -550,36 +596,6 @@ export const processStudySet = action({
       await ctx.runMutation(internal.studySets.failGeneration, { setId, message });
       throw new Error(message);
     }
-  },
-});
-
-/**
- * Verifies and saves a key pasted into the AI setup screen. The key is checked
- * with a tiny NVIDIA request before it is stored server-side.
- */
-export const saveNvidiaKey = action({
-  args: { key: v.string() },
-  handler: async (ctx, { key }) => {
-    await requireUserId(ctx);
-    const candidate = key.trim();
-    if (candidate.length < 20 || /\s/.test(candidate)) {
-      throw new Error("That doesn't look like a valid NVIDIA API key. Copy the whole key and try again.");
-    }
-
-    // Actually generate a few tokens: NVIDIA's model-listing route can answer
-    // without validating the key, so a real completion is the reliable check.
-    // The error messages from nvidiaChat are already user-safe.
-    await nvidiaChat(candidate, {
-      model: NVIDIA_TEXT_MODEL,
-      messages: [{ role: "user", content: "Reply with exactly: OK" }],
-      maxTokens: 8,
-      temperature: 0,
-      retries: 0,
-      allowEmpty: true,
-    });
-
-    await ctx.runMutation(internal.settings.saveKey, { value: candidate });
-    return { ok: true };
   },
 });
 
@@ -604,10 +620,10 @@ export const gradeExamAnswer = action({
       throw new Error("Exam question not found.");
     }
 
-    const apiKey = await resolveNvidiaKey(ctx);
+    const apiKeys = resolveNvidiaKeys();
     const { exam } = data;
 
-    const raw = await nvidiaChat(apiKey, {
+    const raw = await nvidiaChat(apiKeys, {
       model: NVIDIA_TEXT_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },

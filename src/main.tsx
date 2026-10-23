@@ -13,7 +13,6 @@ const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const StudySet = lazy(() => import("./pages/StudySet.tsx"));
-const Setup = lazy(() => import("./pages/Setup.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -144,17 +143,6 @@ createRoot(document.getElementById("root")!).render(
                     description="Study sets are private to the account that created them."
                   >
                     <StudySet />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/setup"
-                element={
-                  <RequireAuth
-                    title="Sign in to configure model access"
-                    description="The NVIDIA connection is shared by everyone using Bluprint."
-                  >
-                    <Setup />
                   </RequireAuth>
                 }
               />

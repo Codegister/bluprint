@@ -28,7 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type ImageDraft = { file: File; preview: string };
@@ -155,7 +155,7 @@ export function CreateSetDialog({
     setError(null);
 
     if (ai?.configured === false) {
-      setError("NVIDIA_API_KEY isn't configured. Open API access before compiling a set.");
+      setError("NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace owner to add it before compiling a set.");
       return;
     }
     if (mode === "photos" && images.length === 0) {
@@ -256,11 +256,8 @@ export function CreateSetDialog({
             <div className="mb-4 flex items-start gap-2.5 rounded-md border border-brand-lime/25 bg-brand-lime/[0.06] p-3">
               <KeyRound className="mt-0.5 size-3.5 shrink-0 text-brand-lime" />
               <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-                NVIDIA_API_KEY isn't configured yet.{" "}
-                <Link to="/setup" className="font-medium text-brand-lime underline underline-offset-2">
-                  Open API access
-                </Link>{" "}
-                to connect a model. You can still prepare a set.
+                NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace owner
+                to add it before compiling a set.
               </p>
             </div>
           )}
@@ -444,14 +441,7 @@ export function CreateSetDialog({
           {error && (
             <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-[11.5px] leading-relaxed text-destructive">
               <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-              <span>
-                {error}{" "}
-                {error.includes("NVIDIA") && (
-                  <Link to="/setup" className="font-medium underline underline-offset-2">
-                    Open API access
-                  </Link>
-                )}
-              </span>
+              <span>{error}</span>
             </div>
           )}
 

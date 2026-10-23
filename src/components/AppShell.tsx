@@ -13,8 +13,6 @@ import { displayName, initialFor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
-  ArrowUpRight,
-  KeyRound,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -100,25 +98,15 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         >
           DASHBOARD
         </NavItem>
-        <NavItem
-          to="/setup"
-          active={location.pathname === "/setup"}
-          icon={<KeyRound />}
-          onClick={onNavigate}
-        >
-          API ACCESS
-        </NavItem>
       </nav>
 
       <div className="mt-auto flex flex-col gap-3">
-        <Link
-          to="/setup"
-          onClick={onNavigate}
+        <div
           className={cn(
-            "group rounded-lg border p-3 transition-colors",
+            "rounded-lg border p-3",
             ai?.configured
-              ? "border-brand-mint/20 bg-brand-mint/[0.06] hover:border-brand-mint/35"
-              : "border-brand-lime/25 bg-brand-lime/[0.06] hover:border-brand-lime/40",
+              ? "border-brand-mint/20 bg-brand-mint/[0.06]"
+              : "border-brand-lime/25 bg-brand-lime/[0.06]",
           )}
         >
           <div className="flex items-start gap-2">
@@ -148,13 +136,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               </p>
               <p className="mt-0.5 font-mono text-[9.5px] leading-relaxed text-muted-foreground">
                 {ai?.configured
-                  ? "NVIDIA_API_KEY connected"
-                  : "Connect NVIDIA to compile sets"}
+                  ? ai.keyCount > 1
+                    ? `${ai.keyCount} keys rotating`
+                    : "NVIDIA_API_KEY connected"
+                  : "Set NVIDIA_API_KEY on the deployment"}
               </p>
             </div>
-            <ArrowUpRight className="size-3 shrink-0 text-muted-foreground/50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
           </div>
-        </Link>
+        </div>
 
         <div className="flex items-center gap-2.5 border-t border-border pt-3">
           <span className="grid size-8 shrink-0 place-items-center rounded-md border border-brand-pink/25 bg-brand-pink/10 font-mono text-[11px] font-medium text-brand-pink">
