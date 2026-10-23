@@ -20,8 +20,8 @@ import {
   Camera,
   FileText,
   ImagePlus,
-  KeyRound,
   Loader2,
+  Sparkles,
   Trash2,
   Upload,
   Video,
@@ -44,6 +44,9 @@ function fileSize(bytes: number): string {
 function titleFromFile(name: string): string {
   return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 60).trim();
 }
+
+const dropzoneClass =
+  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-[#D8CCFF] bg-[#FAF8FF] px-5 py-9 text-center transition-colors hover:border-[#B9A6FF] hover:bg-[#F5F1FF]";
 
 export function CreateSetDialog({
   open,
@@ -237,27 +240,26 @@ export function CreateSetDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-xl border-border bg-card p-0 shadow-none sm:max-w-2xl">
-        <div className="border-b border-border bg-brand-panel px-5 py-5 sm:px-6">
+      <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto rounded-3xl border-border bg-card p-0 shadow-none sm:max-w-2xl">
+        <div className="px-6 pb-4 pt-6 sm:px-7">
           <DialogHeader>
-            <p className="mono-label text-brand-pink">COMPILE / NEW SET</p>
-            <DialogTitle className="mt-1.5 font-display text-xl font-semibold">
-              Add source material
+            <DialogTitle className="font-display text-xl font-bold text-brand-ink">
+              Add study material
             </DialogTitle>
-            <DialogDescription className="text-[12px] leading-relaxed text-muted-foreground">
-              One upload. Bluprint extracts the text and generates a summary, cards, quiz
-              and exam practice in a single run.
+            <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
+              One upload. Bluprint reads it, then builds a summary, flashcards, a quiz
+              and exam practice.
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <div className="px-5 py-5 sm:px-6">
+        <div className="px-6 pb-6 sm:px-7">
           {ai?.configured === false && (
-            <div className="mb-4 flex items-start gap-2.5 rounded-md border border-brand-lime/25 bg-brand-lime/[0.06] p-3">
-              <KeyRound className="mt-0.5 size-3.5 shrink-0 text-brand-lime" />
-              <p className="text-[11.5px] leading-relaxed text-muted-foreground">
-                NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace owner
-                to add it before compiling a set.
+            <div className="mb-4 flex items-start gap-2.5 rounded-2xl bg-[#FFF6E5] px-3.5 py-3">
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#B47700]" />
+              <p className="text-xs leading-relaxed text-[#8A5D00]">
+                NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace
+                owner to add it before compiling a set.
               </p>
             </div>
           )}
@@ -265,9 +267,9 @@ export function CreateSetDialog({
           <div>
             <label
               htmlFor="set-title"
-              className="mono-label text-muted-foreground"
+              className="text-xs font-semibold text-brand-ink"
             >
-              SET NAME / OPTIONAL
+              Set name <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <Input
               id="set-title"
@@ -275,7 +277,7 @@ export function CreateSetDialog({
               onChange={(event) => setTitle(event.target.value)}
               placeholder="e.g. Cell biology — Unit 2"
               maxLength={80}
-              className="mt-2 h-10 rounded-md border-border bg-brand-panel text-sm text-brand-ink placeholder:text-muted-foreground/60"
+              className="mt-2 h-11 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
               disabled={isLoading}
             />
           </div>
@@ -288,17 +290,17 @@ export function CreateSetDialog({
             }}
             className="mt-5 gap-4"
           >
-            <TabsList className="grid h-auto w-full grid-cols-3 rounded-md border border-border bg-background p-1">
+            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-full bg-brand-panel p-1">
               {[
-                { value: "photos", label: "PHOTOS", icon: <Camera className="size-3.5" /> },
-                { value: "video", label: "VIDEO", icon: <Video className="size-3.5" /> },
-                { value: "text", label: "TEXT", icon: <FileText className="size-3.5" /> },
+                { value: "photos", label: "Photos", icon: <Camera className="size-4" /> },
+                { value: "video", label: "Video", icon: <Video className="size-4" /> },
+                { value: "text", label: "Paste", icon: <FileText className="size-4" /> },
               ].map((tab) => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
                   disabled={isLoading}
-                  className="h-8 rounded font-mono text-[10px] tracking-wide text-muted-foreground data-[state=active]:border data-[state=active]:border-brand-pink/25 data-[state=active]:bg-brand-pink/10 data-[state=active]:text-brand-pink data-[state=active]:shadow-none"
+                  className="h-9 gap-2 rounded-full text-sm font-semibold text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm"
                 >
                   {tab.icon}
                   {tab.label}
@@ -307,21 +309,16 @@ export function CreateSetDialog({
             </TabsList>
 
             <TabsContent value="photos" className="mt-0">
-              <label
-                className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-brand-panel/50 px-4 py-7 text-center transition-colors hover:border-brand-pink/40 hover:bg-brand-panel",
-                  isLoading && "pointer-events-none opacity-60",
-                )}
-              >
-                <span className="grid size-10 place-items-center rounded-md border border-brand-pink/25 bg-brand-pink/10 text-brand-pink">
-                  <ImagePlus className="size-4" />
+              <label className={cn(dropzoneClass, isLoading && "pointer-events-none opacity-60")}>
+                <span className="grid size-11 place-items-center rounded-2xl bg-[#F3ECFF] text-[#5B3DF5]">
+                  <ImagePlus className="size-5" />
                 </span>
-                <span className="font-mono text-[10.5px] tracking-wide text-brand-ink">
-                  SELECT PHOTOS
+                <span className="font-display text-base font-bold text-brand-ink">
+                  Drop photos here
                 </span>
-                <span className="max-w-xs text-[10.5px] leading-relaxed text-muted-foreground">
-                  Printed or handwritten pages, up to {MAX_PHOTOS}. Images are compressed in
-                  the browser before upload.
+                <span className="max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  Printed or handwritten pages, up to {MAX_PHOTOS}. Images are compressed
+                  in the browser before upload.
                 </span>
                 <input
                   type="file"
@@ -337,11 +334,11 @@ export function CreateSetDialog({
               </label>
 
               {images.length > 0 && (
-                <div className="mt-3 grid grid-cols-4 gap-2">
+                <div className="mt-3 grid grid-cols-4 gap-2.5">
                   {images.map((image) => (
                     <div
                       key={image.preview}
-                      className="group relative aspect-square overflow-hidden rounded-md border border-border bg-brand-panel"
+                      className="group relative aspect-square overflow-hidden rounded-2xl border border-border bg-brand-panel"
                     >
                       <img
                         src={image.preview}
@@ -352,9 +349,9 @@ export function CreateSetDialog({
                         type="button"
                         aria-label={`Remove ${image.file.name}`}
                         onClick={() => removePhoto(image.preview)}
-                        className="absolute right-1 top-1 grid size-5 place-items-center rounded border border-border bg-background/90 text-muted-foreground transition hover:text-brand-peach"
+                        className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-white/95 text-muted-foreground shadow-sm transition hover:text-[#C93C49]"
                       >
-                        <X className="size-2.5" />
+                        <X className="size-3" />
                       </button>
                     </div>
                   ))}
@@ -363,21 +360,16 @@ export function CreateSetDialog({
             </TabsContent>
 
             <TabsContent value="video" className="mt-0">
-              <label
-                className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-brand-panel/50 px-4 py-7 text-center transition-colors hover:border-brand-pink/40 hover:bg-brand-panel",
-                  isLoading && "pointer-events-none opacity-60",
-                )}
-              >
-                <span className="grid size-10 place-items-center rounded-md border border-brand-sky/25 bg-brand-sky/10 text-brand-sky">
-                  <Upload className="size-4" />
+              <label className={cn(dropzoneClass, isLoading && "pointer-events-none opacity-60")}>
+                <span className="grid size-11 place-items-center rounded-2xl bg-[#E9F0FF] text-[#3B82F6]">
+                  <Upload className="size-5" />
                 </span>
-                <span className="font-mono text-[10.5px] tracking-wide text-brand-ink">
-                  SELECT VIDEO
+                <span className="font-display text-base font-bold text-brand-ink">
+                  Upload a video
                 </span>
-                <span className="max-w-sm text-[10.5px] leading-relaxed text-muted-foreground">
-                  Six frames are sampled in the browser, so the video stays on your device.
-                  Best for slides, whiteboards or pages you pan over.
+                <span className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+                  Six frames are sampled in the browser, so the video stays on your
+                  device. Best for slides, whiteboards or pages you pan over.
                 </span>
                 <input
                   type="file"
@@ -394,16 +386,16 @@ export function CreateSetDialog({
               </label>
 
               {videoFile && (
-                <div className="mt-3 flex items-center gap-3 rounded-md border border-border bg-brand-panel p-3">
-                  <span className="grid size-8 shrink-0 place-items-center rounded border border-brand-sky/25 bg-brand-sky/10 text-brand-sky">
-                    <Video className="size-3.5" />
+                <div className="mt-3 flex items-center gap-3 rounded-2xl bg-brand-panel p-3.5">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#E9F0FF] text-[#3B82F6]">
+                    <Video className="size-4" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[11.5px] font-medium text-brand-ink">
+                    <p className="truncate text-sm font-semibold text-brand-ink">
                       {videoFile.name}
                     </p>
-                    <p className="mt-0.5 font-mono text-[9px] tracking-wide text-muted-foreground">
-                      {fileSize(videoFile.size)} / 6 FRAMES
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {fileSize(videoFile.size)} · 6 frames sampled
                     </p>
                   </div>
                   <Button
@@ -411,11 +403,11 @@ export function CreateSetDialog({
                     variant="ghost"
                     size="icon-sm"
                     aria-label="Remove video"
-                    className="text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+                    className="rounded-full text-muted-foreground hover:bg-white hover:text-brand-ink"
                     onClick={() => setVideoFile(null)}
                     disabled={isLoading}
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2 className="size-4" />
                   </Button>
                 </div>
               )}
@@ -429,42 +421,42 @@ export function CreateSetDialog({
                 maxLength={20_000}
                 rows={8}
                 disabled={isLoading}
-                className="min-h-[180px] resize-y rounded-md border-border bg-brand-panel text-[13px] leading-relaxed text-brand-ink placeholder:text-muted-foreground/60"
+                className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
               />
-              <div className="mt-1.5 flex items-center justify-between font-mono text-[9px] tracking-wide text-muted-foreground">
-                <span>AT LEAST A FEW SENTENCES WORKS BEST</span>
+              <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
+                <span>A few sentences is enough to start</span>
                 <span>{text.length.toLocaleString()} / 20,000</span>
               </div>
             </TabsContent>
           </Tabs>
 
           {error && (
-            <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-[11.5px] leading-relaxed text-destructive">
-              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+            <div className="mt-4 flex items-start gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#C93C49]">
+              <AlertCircle className="mt-0.5 size-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {isLoading && step && (
-            <p className="mt-4 flex items-center gap-2 rounded-md border border-border bg-brand-panel px-3 py-2 font-mono text-[9.5px] tracking-wide text-muted-foreground">
-              <Loader2 className="size-3 shrink-0 animate-spin" />
-              {step.toUpperCase()}
+            <p className="mt-4 flex items-center gap-2 rounded-2xl bg-brand-panel px-3.5 py-2.5 text-xs font-medium text-muted-foreground">
+              <Loader2 className="size-3.5 shrink-0 animate-spin" />
+              {step}
             </p>
           )}
 
-          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-mono text-[9px] leading-relaxed tracking-wide text-muted-foreground/70">
+          <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-relaxed text-muted-foreground">
               {mode === "photos"
-                ? "CLEAR, STRAIGHT-ON PHOTOS TRANSCRIBE BEST"
+                ? "Clear, straight-on photos transcribe best"
                 : mode === "video"
-                  ? "SLIDES AND PRINTED PAGES WORK BEST"
-                  : "PASTED NOTES ARE STORED WITH THE SET"}
+                  ? "Slides and printed pages work best"
+                  : "Pasted notes are saved with the set"}
             </p>
             <div className="flex gap-2 sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
-                className="h-9 flex-1 rounded-md border-border bg-transparent font-mono text-[10px] tracking-wide sm:flex-none"
+                className="h-11 flex-1 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel sm:flex-none"
                 onClick={() => handleClose(false)}
                 disabled={isLoading}
               >
@@ -474,17 +466,17 @@ export function CreateSetDialog({
                 type="button"
                 onClick={handleSubmit}
                 disabled={isLoading}
-                className="h-9 flex-1 rounded-md bg-brand-pink font-mono text-[10.5px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep sm:flex-none"
+                className="h-11 flex-1 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E] sm:flex-none"
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <Loader2 className="size-4 animate-spin" />
                     Working…
                   </>
                 ) : (
                   <>
-                    Compile set
-                    <ArrowRightIcon />
+                    <Sparkles className="size-4" />
+                    Build study set
                   </>
                 )}
               </Button>
@@ -493,23 +485,5 @@ export function CreateSetDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function ArrowRightIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
   );
 }

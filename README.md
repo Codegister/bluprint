@@ -20,9 +20,10 @@ their own dashboard containing only the study sets they created.
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
 actions.
 
-The visual direction is deliberately dark, technical, and developer-facing: blueprint
-grids, mono labels, schematic line work, and a restrained cyan / amber / lime accent
-palette.
+The visual direction is a light, friendly study workspace: a white sidebar with the deck
+list, soft rounded cards on a pale grey canvas, a violet accent with pastel icon tints, and
+Poppins headings. The little violet axolotl is drawn in SVG, so the app needs no image
+assets.
 
 ## What version 1 does
 
@@ -36,8 +37,9 @@ palette.
 4. **Persist** — study sets, extracted notes, uploads, card progress, and quiz scores stay
    saved between sessions, scoped to the account that created them.
 
-After signing in, the main screen is **My study sets**. It shows saved sets, card mastery,
-and quiz averages, with search and delete.
+After signing in, the main screen is the **Home** dashboard: a study prompt, quick ways to
+add material, the decks you were last working on, your saved sets with card mastery and
+quiz averages, and delete controls.
 
 ## Run it
 

@@ -41,9 +41,9 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Bluprint palette — deep surfaces, cool light, terminal accents. */
+  /* Bluprint palette — a light, friendly study workspace. */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --color-brand-ink: var(--brand-ink);
   --color-brand-cream: var(--brand-cream);
@@ -56,62 +56,66 @@
   --color-brand-lime: var(--brand-lime);
   --color-brand-sky: var(--brand-sky);
   --color-brand-peach: var(--brand-peach);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-pink2: var(--brand-pink2);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-violet: var(--brand-violet);
 }
 
-/* CHANGE VALUES FOR THEME — Bluprint is dark by default. */
+/* CHANGE VALUES FOR THEME — light surfaces, ink text, one playful accent. */
 :root {
-  --radius: 0.75rem;
+  --radius: 1rem;
 
-  --brand-ink: #e6edf3;
-  --brand-cream: #070b10;
-  --brand-panel: #0b1219;
-  --brand-panel-2: #101a23;
-  --brand-void: #03070b;
+  --brand-ink: #16181f;
+  --brand-cream: #f6f6f8;
+  --brand-panel: #f1f1f5;
+  --brand-panel-2: #ffffff;
+  --brand-void: #ffffff;
 
-  --brand-pink: #22d3ee;
-  --brand-pink-deep: #67e8f9;
-  --brand-mint: #4ade80;
-  --brand-lime: #facc15;
-  --brand-sky: #60a5fa;
-  --brand-peach: #fb7185;
+  --brand-pink: #7c5cff;
+  --brand-pink-deep: #6847f2;
+  --brand-mint: #22a06b;
+  --brand-lime: #e8a317;
+  --brand-sky: #3b82f6;
+  --brand-peach: #ef5f6b;
+  --brand-teal: #12b8a6;
+  --brand-pink2: #f472b6;
+  --brand-orange: #fb923c;
+  --brand-violet: #a78bfa;
 
-  --background: #070b10;
-  --foreground: #e6edf3;
-  --card: #0b1219;
-  --card-foreground: #e6edf3;
-  --popover: #0d151d;
-  --popover-foreground: #e6edf3;
-  --primary: #22d3ee;
-  --primary-foreground: #031017;
-  --secondary: #111c25;
-  --secondary-foreground: #e6edf3;
-  --muted: #0e161e;
-  --muted-foreground: #8b9aa8;
-  --accent: #12232d;
-  --accent-foreground: #e6edf3;
-  --destructive: #f87171;
-  --border: rgba(230, 237, 243, 0.1);
-  --input: rgba(230, 237, 243, 0.12);
-  --ring: #22d3ee;
-  --chart-1: #22d3ee;
-  --chart-2: #4ade80;
-  --chart-3: #facc15;
-  --chart-4: #60a5fa;
-  --chart-5: #fb7185;
-  --sidebar: #080d13;
-  --sidebar-foreground: #e6edf3;
-  --sidebar-primary: #22d3ee;
-  --sidebar-primary-foreground: #031017;
-  --sidebar-accent: #101a23;
-  --sidebar-accent-foreground: #e6edf3;
-  --sidebar-border: rgba(230, 237, 243, 0.09);
-  --sidebar-ring: #22d3ee;
+  --background: #f6f6f8;
+  --foreground: #16181f;
+  --card: #ffffff;
+  --card-foreground: #16181f;
+  --popover: #ffffff;
+  --popover-foreground: #16181f;
+  --primary: #191b27;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f1f5;
+  --secondary-foreground: #16181f;
+  --muted: #f1f1f5;
+  --muted-foreground: #6f7284;
+  --accent: #efedff;
+  --accent-foreground: #4a32c9;
+  --destructive: #e2495a;
+  --border: #e8e8ef;
+  --input: #e3e3ec;
+  --ring: #7c5cff;
+  --chart-1: #7c5cff;
+  --chart-2: #22a06b;
+  --chart-3: #e8a317;
+  --chart-4: #3b82f6;
+  --chart-5: #ef5f6b;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #16181f;
+  --sidebar-primary: #191b27;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f1f1f5;
+  --sidebar-accent-foreground: #16181f;
+  --sidebar-border: #ececf2;
+  --sidebar-ring: #7c5cff;
 
-  color-scheme: dark;
-}
-
-.dark {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 @layer base {
@@ -130,15 +134,16 @@
   h3,
   h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.025em;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
   button:not([disabled]),
   [role="button"]:not([disabled]) {
     cursor: pointer;
   }
   ::selection {
-    background: rgba(34, 211, 238, 0.3);
-    color: #e6edf3;
+    background: rgba(124, 92, 255, 0.22);
+    color: #16181f;
   }
   code,
   kbd,
@@ -148,78 +153,50 @@
 }
 
 @layer utilities {
-  /* Blueprint drafting grid used behind hero and empty states. */
-  .blueprint-grid {
-    background-image:
-      linear-gradient(to right, rgba(34, 211, 238, 0.07) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(34, 211, 238, 0.07) 1px, transparent 1px);
-    background-size: 36px 36px;
+  /* Soft white surface used by every card in the app. */
+  .gizmo-card {
+    @apply rounded-3xl border border-border bg-card;
+    box-shadow: 0 1px 2px rgba(22, 24, 31, 0.04),
+      0 12px 28px -20px rgba(22, 24, 31, 0.28);
   }
 
-  .blueprint-grid-fine {
-    background-image:
-      linear-gradient(to right, rgba(230, 237, 243, 0.045) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(230, 237, 243, 0.045) 1px, transparent 1px);
-    background-size: 18px 18px;
+  .soft-shadow {
+    box-shadow: 0 1px 2px rgba(22, 24, 31, 0.05),
+      0 10px 24px -18px rgba(22, 24, 31, 0.3);
   }
 
-  .dot-grid {
-    background-image: radial-gradient(
-      circle,
-      rgba(230, 237, 243, 0.13) 1px,
-      transparent 1px
-    );
-    background-size: 20px 20px;
+  .ring-shadow {
+    box-shadow: 0 0 0 1px rgba(22, 24, 31, 0.04),
+      0 18px 40px -26px rgba(22, 24, 31, 0.45);
   }
 
-  .paper-dots {
-    background-image: radial-gradient(
-      circle,
-      rgba(230, 237, 243, 0.1) 1px,
-      transparent 1px
-    );
-    background-size: 20px 20px;
+  /* Sidebar / settings rows. */
+  .gizmo-row {
+    @apply flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-[0.95rem] font-medium text-brand-ink/80 transition-colors;
+  }
+  .gizmo-row:hover {
+    @apply bg-brand-panel text-brand-ink;
+  }
+  .gizmo-row-active {
+    @apply bg-brand-panel font-semibold text-brand-ink;
   }
 
-  .paper-grid {
-    background-image:
-      linear-gradient(to right, rgba(230, 237, 243, 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(230, 237, 243, 0.05) 1px, transparent 1px);
-    background-size: 32px 32px;
-  }
-
+  /* Tiny all-caps label, kept for metadata but softened to match the theme. */
   .mono-label {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    font-weight: 500;
-    letter-spacing: 0.14em;
+    font-family: var(--font-sans);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 
   .display-tight {
     font-family: var(--font-display);
-    letter-spacing: -0.035em;
+    letter-spacing: -0.03em;
   }
 
   .ink-edge {
-    border: 1px solid rgba(230, 237, 243, 0.1);
-  }
-
-  .panel-highlight {
-    position: relative;
-  }
-  .panel-highlight::before {
-    content: "";
-    position: absolute;
-    inset-inline: 0;
-    top: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(34, 211, 238, 0.55),
-      transparent
-    );
+    border: 1px solid var(--border);
   }
 
   .no-scrollbar {
@@ -229,11 +206,41 @@
     display: none;
   }
 
+  .gizmo-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #d6d6e0 transparent;
+  }
+  .gizmo-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  .gizmo-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #d6d6e0;
+  }
+  .gizmo-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Kept so existing screens still render paper-ish backgrounds. */
+  .blueprint-grid,
+  .dot-grid,
+  .paper-grid,
+  .blueprint-grid-fine,
+  .paper-dots {
+    background-image: radial-gradient(
+      circle,
+      rgba(22, 24, 31, 0.06) 1px,
+      transparent 1px
+    );
+    background-size: 22px 22px;
+  }
+
   .flip-scene {
     perspective: 1400px;
   }
   .flip-inner {
     transform-style: preserve-3d;
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
   }
   .flip-face {
     backface-visibility: hidden;
@@ -246,6 +253,35 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  .mascot-float {
+    animation: mascot-float 6s ease-in-out infinite;
+  }
+}
+
+@keyframes mascot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes soft-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-soft-pop {
+  animation: soft-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes caret-blink {
@@ -262,26 +298,14 @@
   }
 }
 
-@keyframes scan-line {
-  0% {
-    transform: translateY(-100%);
-  }
-  100% {
-    transform: translateY(600%);
-  }
-}
-
 .animate-caret {
   animation: caret-blink 1.2s steps(1) infinite;
 }
 
-.animate-scan {
-  animation: scan-line 5s linear infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
+  .mascot-float,
   .animate-caret,
-  .animate-scan {
+  .animate-soft-pop {
     animation: none;
   }
 }

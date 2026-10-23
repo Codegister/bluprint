@@ -1,8 +1,10 @@
-import { BlueprintMark } from "@/components/BlueprintMark";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 
-/** Bluprint wordmark used in the nav, sidebar, auth screen and footer. */
+/**
+ * Bluprint wordmark. The mark is a rounded violet tile with a white
+ * page-and-spark glyph; the wordmark is heavy, tight and lowercase.
+ */
 export function Brand({
   className,
   markOnly = false,
@@ -19,16 +21,29 @@ export function Brand({
       to={to}
       aria-label="Bluprint home"
       onClick={onNavigate}
-      className={cn("group flex items-center gap-2.5", className)}
+      className={cn("group inline-flex items-center gap-2.5", className)}
     >
-      <span className="relative grid size-9 place-items-center rounded-lg border border-brand-pink/30 bg-brand-panel text-brand-pink transition-colors group-hover:border-brand-pink/60 group-hover:bg-brand-pink/10">
-        <BlueprintMark size={25} />
-        <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-brand-lime" />
+      <span className="grid size-9 place-items-center rounded-[0.7rem] bg-[#191B27] text-white">
+        <svg
+          viewBox="0 0 24 24"
+          className="size-[18px]"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M6.5 4.5h6.2a3.8 3.8 0 0 1 0 7.6H6.5V4.5Z"
+            fill="#FFFFFF"
+          />
+          <path
+            d="M6.5 12.1h7a3.9 3.9 0 1 1 0 7.9h-7v-7.9Z"
+            fill="#A78BFA"
+          />
+          <circle cx="18.5" cy="5.5" r="1.9" fill="#F472B6" />
+        </svg>
       </span>
       {!markOnly && (
-        <span className="font-display text-[1.3rem] font-semibold leading-none tracking-tight text-brand-ink">
+        <span className="font-display text-[1.5rem] font-extrabold leading-none tracking-[-0.045em] text-brand-ink">
           bluprint
-          <span className="text-brand-pink">.</span>
         </span>
       )}
     </Link>

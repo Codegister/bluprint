@@ -1,8 +1,8 @@
 import { Brand } from "@/components/Brand";
-import { BlueprintGlyph } from "@/components/BlueprintMark";
+import { Mascot } from "@/components/Mascot";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowRight, Loader2, Lock } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
 
@@ -31,9 +31,7 @@ export function RequireAuth({
   if (isLoading) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
-        <div className="grid size-16 place-items-center rounded-lg border border-border bg-brand-panel">
-          <BlueprintGlyph size={56} className="opacity-80" />
-        </div>
+        <Mascot size={112} />
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
       </main>
     );
@@ -54,46 +52,42 @@ export function RequireAuth({
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="font-mono text-[9.5px] tracking-wide text-muted-foreground hover:text-brand-ink"
+            className="rounded-full px-3 py-1.5 text-[0.85rem] font-semibold text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
           >
-            ← HOME
+            ← Home
           </button>
         </header>
 
         <main className="flex items-center justify-center px-4 pb-20 pt-10">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-7 text-center sm:p-8">
-            <div className="relative mx-auto grid size-24 place-items-center rounded-lg border border-border bg-brand-panel">
-              <BlueprintGlyph size={84} className="opacity-80" />
-              <span className="absolute -bottom-2 -right-2 grid size-8 place-items-center rounded-md border border-brand-pink/30 bg-brand-pink/10">
-                <Lock className="size-3.5 text-brand-pink" />
-              </span>
+          <div className="gizmo-card w-full max-w-md p-7 text-center sm:p-9">
+            <div className="flex justify-center">
+              <Mascot size={150} />
             </div>
 
-            <p className="mt-5 mono-label text-brand-pink">AUTH REQUIRED</p>
-            <h1 className="mt-2 font-display text-2xl font-semibold leading-tight">
+            <h1 className="mt-3 text-[1.6rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
               {title}
             </h1>
-            <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 text-[0.92rem] leading-relaxed text-muted-foreground">
               {description}
             </p>
-            <p className="mt-2 font-mono text-[9px] tracking-wide text-muted-foreground/70">
-              YOU'LL RETURN TO THIS PAGE AFTER SIGN-IN
+            <p className="mt-3 rounded-full bg-brand-panel px-3 py-1.5 text-[0.78rem] font-medium text-muted-foreground">
+              You'll come back to this page after signing in
             </p>
 
             <div className="mt-6 flex flex-col gap-2">
               <Button
                 onClick={() => navigate(signInHref)}
-                className="h-10 w-full rounded-md bg-brand-pink font-mono text-[10.5px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep"
+                className="h-12 w-full rounded-full bg-[#191B27] text-[0.95rem] font-semibold text-white hover:bg-[#2A2D3E]"
               >
-                SIGN IN WITH EMAIL
-                <ArrowRight className="size-3.5" />
+                Sign in with email
+                <ArrowRight className="size-4" />
               </Button>
               <Button
                 variant="ghost"
-                className="h-9 w-full rounded-md font-mono text-[10px] tracking-wide text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+                className="h-11 w-full rounded-full text-[0.9rem] font-semibold text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
                 onClick={() => navigate("/")}
               >
-                BACK TO HOME
+                Back to home
               </Button>
             </div>
           </div>
