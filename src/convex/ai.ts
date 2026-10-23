@@ -143,6 +143,13 @@ async function nvidiaChat(
     messages: ChatMessage[];
     maxTokens: number;
     temperature?: number;
+    topP?: number;
+    /**
+     * Turn off chain-of-thought. Reasoning models otherwise spend most of
+     * `maxTokens` on hidden thinking and can return an empty answer, which is
+     * what was breaking the build pipeline.
+     */
+    disableThinking?: boolean;
     retries?: number;
   },
 ): Promise<string> {
@@ -151,6 +158,9 @@ async function nvidiaChat(
   // hold one study set open indefinitely.
   const maxAttempts = Math.max(retries + 1, Math.min(apiKeys.length, 6));
   let lastStatus: number | null = null;
+  // Flipped off once if the configured model does not understand the flag, so
+  // a strict model can still answer instead of failing the whole build.
+  let thinkingDisabled = options.disableThinking ?? false;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const apiKey = nextApiKey(apiKeys);
@@ -170,6 +180,11 @@ async function nvidiaChat(
           top_p: options.topP ?? 1,
           max_tokens: options.maxTokens,
           stream: false,
+          // Nemotron reads this from its chat template. Plain models ignore the
+          // template, so the 400 fallback below covers them.
+          ...(thinkingDisabled
+            ? { chat_template_kwargs: { enable_thinking: false } }
+            : {}),
         }),
         signal: AbortSignal.timeout(120_000),
       });
@@ -188,13 +203,30 @@ async function nvidiaChat(
 
     if (response.ok) {
       const payload = (await response.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
+        choices?: Array<{
+          message?: {
+            content?: string;
+            reasoning_content?: string;
+            reasoning?: string;
+          };
+        }>;
       };
-      const content = payload.choices?.[0]?.message?.content;
-      if (typeof content !== "string" || content.trim().length === 0) {
-        throw new Error("NVIDIA returned an empty response. Please retry.");
-      }
-      return content;
+      const message = payload.choices?.[0]?.message;
+      const content = typeof message?.content === "string" ? message.content : "";
+      if (content.trim().length > 0) return content;
+
+      // Salvage a run that spent its budget thinking: some providers return the
+      // visible answer in the reasoning field, or reasoning text that still
+      // contains the JSON we asked for.
+      const fallback = [message?.reasoning_content, message?.reasoning].find(
+        (value): value is string =>
+          typeof value === "string" && value.trim().length > 0,
+      );
+      if (fallback) return fallback;
+
+      throw new Error(
+        "NVIDIA sent back an empty answer, which usually means the model used its whole token budget on reasoning. Retry the build.",
+      );
     }
 
     lastStatus = response.status;
@@ -215,6 +247,12 @@ async function nvidiaChat(
         await sleep(1200 * (attempt + 1));
         continue;
       }
+    } else if (response.status === 400 && thinkingDisabled) {
+      // The configured model doesn't take chat_template_kwargs. Drop the flag
+      // and retry the same request once.
+      thinkingDisabled = false;
+      if (attempt < maxAttempts - 1) continue;
+      throw new Error(friendlyHttpError(response.status));
     } else {
       throw new Error(friendlyHttpError(response.status));
     }
@@ -228,8 +266,19 @@ async function nvidiaChat(
 // JSON parsing / validation
 // ---------------------------------------------------------------------------
 
+/**
+ * Some models still print their reasoning inline when thinking can't be turned
+ * off. Drop those blocks so JSON extraction looks at the answer only.
+ */
+function stripReasoning(raw: string): string {
+  return raw
+    .replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "");
+}
+
 function parseModelJson<T>(raw: string): T {
-  const withoutFences = raw
+  const withoutFences = stripReasoning(raw)
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
@@ -364,7 +413,8 @@ function parseExams(raw: string): GeneratedExam[] {
 // ---------------------------------------------------------------------------
 
 const SYSTEM_PROMPT =
-  "You are Bluprint, a study assistant. Respond with strict JSON and no markdown fences, commentary, or extra keys. Do not add keys that are not asked for.";
+  "You are Bluprint, a study assistant. Answer directly with strict JSON and no markdown fences, commentary, or extra keys. " +
+  "Do not plan, reason step by step, or narrate your thinking. Do not add keys that are not asked for.";
 
 function materialBlock(notes: string): string {
   const clipped = notes.slice(0, MAX_NOTES_CHARS);
@@ -390,6 +440,7 @@ async function summariseNotes(apiKeys: string[], notes: string): Promise<Summary
     maxTokens: 2200,
     temperature: 0.15,
     topP: 1.0,
+    disableThinking: true,
   });
   return parseSummary(raw);
 }
@@ -410,6 +461,7 @@ async function generateCards(apiKeys: string[], notes: string): Promise<Generate
     maxTokens: 2600,
     temperature: 0.15,
     topP: 1.0,
+    disableThinking: true,
   });
   return parseCards(raw);
 }
@@ -430,6 +482,7 @@ async function generateQuiz(apiKeys: string[], notes: string): Promise<Generated
     maxTokens: 2800,
     temperature: 0.15,
     topP: 1.0,
+    disableThinking: true,
   });
   return parseQuiz(raw);
 }
@@ -451,6 +504,7 @@ async function generateExams(apiKeys: string[], notes: string): Promise<Generate
     maxTokens: 3000,
     temperature: 0.15,
     topP: 1.0,
+    disableThinking: true,
   });
   return parseExams(raw);
 }
@@ -494,7 +548,7 @@ async function transcribeImages(
 async function readSourceImages(
   ctx: ActionCtx,
   apiKeys: string[],
-  imageIds: Id<"studySets">[],
+  imageIds: Id<"_storage">[],
 ): Promise<string> {
   const sections: string[] = [];
   for (const imageId of imageIds) {
@@ -509,39 +563,6 @@ async function readSourceImages(
   }
   return sections.join("\n\n---\n\n");
 }
-
-  `<question>${exam.question}</question>\n` +
-            `<marks_available>${exam.marks}</marks_available>\n` +
-            `<marking_guide>${exam.markingGuide.join("\n")}</marking_guide>\n` +
-            `<model_answer>${exam.modelAnswer}</model_answer>\n` +
-            `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
-            "Mark the student's answer strictly but fairly. Award whole marks only for ideas that are actually present. " +
-            'Return JSON exactly like: {"awardedMarks": 4, "feedback": "..."} where feedback is under 120 words and names what earned marks and what is missing.',
-    },
-  ],
-  maxTokens: 700,
-  temperature: 0.15,
-  topP: 1.0,
-});
-
-const parsed = parseModelJson<{ awardedMarks?: number; feedback?: string }>(raw);
-    const awardedRaw = Number(parsed.awardedMarks);
-    const feedback = asText(parsed.feedback, 2500);
-    if (!Number.isFinite(awardedRaw) || !feedback) {
-      throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
-    }
-
-    const awardedMarks = Math.max(0, Math.min(exam.marks, Math.round(awardedRaw)));
-    await ctx.runMutation(internal.studySets.saveExamResult, {
-      examId,
-      answer: response,
-      awardedMarks,
-      feedback,
-    });
-
-    return { awardedMarks, marks: exam.marks, feedback };
-  },
-});
 
 // ---------------------------------------------------------------------------
 // Public actions
@@ -677,6 +698,7 @@ export const gradeExamAnswer = action({
       ],
       maxTokens: 700,
       temperature: 0.2,
+      disableThinking: true,
     });
 
     const parsed = parseModelJson<{ awardedMarks?: number; feedback?: string }>(raw);
