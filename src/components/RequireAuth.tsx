@@ -16,7 +16,7 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 export function RequireAuth({
   children,
   title = "Sign in to continue",
-  description = "This page is only available to signed-in users.",
+  description = "This page is restricted to signed-in accounts.",
   redirectImmediately = false,
 }: {
   children: ReactNode;
