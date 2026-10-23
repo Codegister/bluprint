@@ -166,8 +166,8 @@ async function nvidiaChat(
         body: JSON.stringify({
           model: options.model,
           messages: options.messages,
-          temperature: options.temperature ?? 0.4,
-          top_p: 0.9,
+          temperature: options.temperature ?? 0,
+          top_p: options.topP ?? 1,
           max_tokens: options.maxTokens,
           stream: false,
         }),
@@ -364,8 +364,7 @@ function parseExams(raw: string): GeneratedExam[] {
 // ---------------------------------------------------------------------------
 
 const SYSTEM_PROMPT =
-  "You are Bluprint, a precise study assistant for university students. " +
-  "You only use the supplied study material. Respond with strict JSON and no markdown fences, commentary, or extra keys.";
+  "You are Bluprint, a study assistant. Respond with strict JSON and no markdown fences, commentary, or extra keys. Do not add keys that are not asked for.";
 
 function materialBlock(notes: string): string {
   const clipped = notes.slice(0, MAX_NOTES_CHARS);
@@ -388,8 +387,9 @@ async function summariseNotes(apiKeys: string[], notes: string): Promise<Summary
           "Be concrete and faithful to the material. No markdown inside values.",
       },
     ],
-    maxTokens: 1000,
-    temperature: 0.3,
+    maxTokens: 2200,
+    temperature: 0.15,
+    topP: 1.0,
   });
   return parseSummary(raw);
 }
@@ -407,8 +407,9 @@ async function generateCards(apiKeys: string[], notes: string): Promise<Generate
           'Return JSON exactly like: {"cards":[{"front":"...","back":"..."}]}',
       },
     ],
-    maxTokens: 1800,
-    temperature: 0.4,
+    maxTokens: 2600,
+    temperature: 0.15,
+    topP: 1.0,
   });
   return parseCards(raw);
 }
@@ -426,8 +427,9 @@ async function generateQuiz(apiKeys: string[], notes: string): Promise<Generated
           'Return JSON exactly like: {"questions":[{"question":"...","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."}]}',
       },
     ],
-    maxTokens: 2200,
-    temperature: 0.4,
+    maxTokens: 2800,
+    temperature: 0.15,
+    topP: 1.0,
   });
   return parseQuiz(raw);
 }
@@ -446,8 +448,9 @@ async function generateExams(apiKeys: string[], notes: string): Promise<Generate
           'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
       },
     ],
-    maxTokens: 2600,
-    temperature: 0.45,
+    maxTokens: 3000,
+    temperature: 0.15,
+    topP: 1.0,
   });
   return parseExams(raw);
 }
@@ -491,7 +494,7 @@ async function transcribeImages(
 async function readSourceImages(
   ctx: ActionCtx,
   apiKeys: string[],
-  imageIds: Id<"_storage">[],
+  imageIds: Id<"studySets">[],
 ): Promise<string> {
   const sections: string[] = [];
   for (const imageId of imageIds) {
@@ -506,6 +509,39 @@ async function readSourceImages(
   }
   return sections.join("\n\n---\n\n");
 }
+
+  `<question>${exam.question}</question>\n` +
+            `<marks_available>${exam.marks}</marks_available>\n` +
+            `<marking_guide>${exam.markingGuide.join("\n")}</marking_guide>\n` +
+            `<model_answer>${exam.modelAnswer}</model_answer>\n` +
+            `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
+            "Mark the student's answer strictly but fairly. Award whole marks only for ideas that are actually present. " +
+            'Return JSON exactly like: {"awardedMarks": 4, "feedback": "..."} where feedback is under 120 words and names what earned marks and what is missing.',
+    },
+  ],
+  maxTokens: 700,
+  temperature: 0.15,
+  topP: 1.0,
+});
+
+const parsed = parseModelJson<{ awardedMarks?: number; feedback?: string }>(raw);
+    const awardedRaw = Number(parsed.awardedMarks);
+    const feedback = asText(parsed.feedback, 2500);
+    if (!Number.isFinite(awardedRaw) || !feedback) {
+      throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
+    }
+
+    const awardedMarks = Math.max(0, Math.min(exam.marks, Math.round(awardedRaw)));
+    await ctx.runMutation(internal.studySets.saveExamResult, {
+      examId,
+      answer: response,
+      awardedMarks,
+      feedback,
+    });
+
+    return { awardedMarks, marks: exam.marks, feedback };
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Public actions
