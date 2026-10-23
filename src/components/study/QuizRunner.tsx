@@ -1,4 +1,3 @@
-import { Pip } from "@/components/Pip";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -32,10 +31,8 @@ export function QuizRunner({
 
   if (quiz.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-brand-ink/15 bg-card p-10 text-center">
-        <p className="text-sm font-semibold text-brand-ink/60">
-          This set doesn't have a quiz yet.
-        </p>
+      <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
+        <p className="text-[12px] text-muted-foreground">This set has no quiz yet.</p>
       </div>
     );
   }
@@ -44,34 +41,35 @@ export function QuizRunner({
     const pct = result.total ? Math.round((result.score / result.total) * 100) : 0;
     return (
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mx-auto w-full max-w-2xl rounded-[28px] border border-brand-ink/12 bg-card p-6 text-center sm:p-10"
+        className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-card p-6 text-center sm:p-8"
       >
         <div
-          className="mx-auto grid size-32 place-items-center rounded-full p-2"
+          className="mx-auto grid size-28 place-items-center rounded-full p-1.5"
           style={{
-            background: `conic-gradient(var(--brand-mint) ${pct}%, var(--brand-cream) ${pct}% 100%)`,
+            background: `conic-gradient(var(--brand-mint) ${pct}%, rgba(230,237,243,0.09) ${pct}% 100%)`,
           }}
         >
-          <div className="grid size-full place-items-center rounded-full border border-brand-ink/10 bg-white">
+          <div className="grid size-full place-items-center rounded-full border border-border bg-brand-panel">
             <div>
-              <p className="font-display text-3xl font-bold leading-none text-brand-ink">
+              <p className="font-display text-3xl font-semibold leading-none text-brand-ink">
                 {result.score}/{result.total}
               </p>
-              <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-brand-ink/40">
+              <p className="mt-1 font-mono text-[9px] tracking-wide text-brand-mint">
                 {pct}%
               </p>
             </div>
           </div>
         </div>
 
-        <h3 className="mt-5 font-display text-2xl font-bold">
-          {pct >= 80 ? "That's a strong recall." : pct >= 50 ? "Solid start." : "Worth another pass."}
+        <p className="mt-4 mono-label text-brand-mint">QUIZ SAVED</p>
+        <h3 className="mt-2 font-display text-2xl font-semibold">
+          {pct >= 80 ? "Strong recall." : pct >= 50 ? "Useful baseline." : "Run it again."}
         </h3>
-        <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-brand-ink/55">
-          Your score is saved to this set. The explanations below every question are the
-          fastest way to close the gap.
+        <p className="mx-auto mt-2 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
+          Your score is attached to this set. Each explanation is the shortest path to
+          closing the gap.
         </p>
 
         <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
@@ -84,18 +82,18 @@ export function QuizRunner({
               setAnswers([]);
               setResult(null);
             }}
-            className="h-10 rounded-xl border-brand-ink/15 font-semibold"
+            className="h-9 rounded-md border-border bg-transparent font-mono text-[10px] tracking-wide"
           >
-            <RotateCcw className="size-4" />
-            Retake quiz
+            <RotateCcw className="size-3.5" />
+            RETAKE
           </Button>
           {onReviewCards && (
             <Button
               onClick={onReviewCards}
-              className="h-10 rounded-xl border-2 border-brand-ink bg-brand-ink font-bold text-brand-cream hover:bg-brand-pink hover:text-brand-ink"
+              className="h-9 rounded-md bg-brand-pink font-mono text-[10px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep"
             >
-              Review flashcards
-              <ArrowRight className="size-4" />
+              REVIEW CARDS
+              <ArrowRight className="size-3.5" />
             </Button>
           )}
         </div>
@@ -135,15 +133,16 @@ export function QuizRunner({
 
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <div className="flex items-center justify-between gap-3 text-[11px] font-semibold text-brand-ink/50">
+      <div className="flex items-center justify-between gap-3 font-mono text-[9.5px] tracking-wide text-muted-foreground">
         <span>
-          Question {index + 1} of {quiz.length}
+          QUESTION {String(index + 1).padStart(2, "0")} /{" "}
+          {String(quiz.length).padStart(2, "0")}
         </span>
-        <span className="rounded-full bg-brand-lime/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-ink">
-          Multiple choice
+        <span className="rounded border border-border bg-brand-panel px-1.5 py-0.5 text-[9px]">
+          MULTIPLE CHOICE
         </span>
       </div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-brand-ink/10">
+      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-border">
         <div
           className="h-full rounded-full bg-brand-mint transition-all duration-300"
           style={{ width: `${Math.max(4, progress)}%` }}
@@ -152,16 +151,16 @@ export function QuizRunner({
 
       <motion.div
         key={question._id}
-        initial={{ opacity: 0, y: 14 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28 }}
-        className="mt-4 rounded-[28px] border border-brand-ink/12 bg-card p-5 sm:p-7"
+        transition={{ duration: 0.25 }}
+        className="mt-3 rounded-xl border border-border bg-card p-5 sm:p-6"
       >
-        <p className="font-display text-xl font-semibold leading-snug text-brand-ink sm:text-[1.45rem]">
+        <p className="font-display text-lg font-medium leading-snug text-brand-ink sm:text-xl">
           {question.question}
         </p>
 
-        <div className="mt-5 space-y-2">
+        <div className="mt-4 space-y-1.5">
           {question.options.map((option, optionIndex) => {
             const isSelected = selected === optionIndex;
             const isCorrect = checked && optionIndex === question.correctIndex;
@@ -174,35 +173,35 @@ export function QuizRunner({
                 disabled={checked}
                 onClick={() => setSelected(optionIndex)}
                 className={cn(
-                  "flex w-full items-start gap-3 rounded-xl border p-3 text-left text-[13px] font-medium transition-colors sm:text-sm",
-                  !checked && "border-brand-ink/12 bg-brand-cream/40 hover:border-brand-ink/30 hover:bg-brand-cream",
-                  !checked && isSelected && "border-brand-ink bg-brand-lime/40",
-                  isCorrect && "border-brand-ink bg-brand-mint",
-                  isWrongChoice && "border-destructive/30 bg-brand-peach",
-                  checked && !isCorrect && !isWrongChoice && "border-brand-ink/10 bg-white opacity-60",
+                  "flex w-full items-start gap-2.5 rounded-md border p-2.5 text-left text-[12.5px] transition-colors",
+                  !checked && "border-border bg-brand-panel/50 text-brand-ink/75 hover:border-brand-pink/30 hover:bg-brand-panel",
+                  !checked && isSelected && "border-brand-pink/40 bg-brand-pink/10 text-brand-ink",
+                  isCorrect && "border-brand-mint/30 bg-brand-mint/10 text-brand-mint",
+                  isWrongChoice && "border-brand-peach/30 bg-brand-peach/10 text-brand-peach",
+                  checked && !isCorrect && !isWrongChoice && "border-border bg-brand-panel/30 text-muted-foreground/60",
                 )}
               >
                 <span
                   className={cn(
-                    "grid size-6 shrink-0 place-items-center rounded-lg border text-[10px] font-bold",
+                    "grid size-5 shrink-0 place-items-center rounded border font-mono text-[9px]",
                     isCorrect
-                      ? "border-brand-ink bg-brand-ink text-brand-cream"
+                      ? "border-brand-mint/40 bg-brand-mint/15 text-brand-mint"
                       : isWrongChoice
-                        ? "border-destructive/30 bg-destructive/10 text-destructive"
+                        ? "border-brand-peach/40 bg-brand-peach/15 text-brand-peach"
                         : isSelected
-                          ? "border-brand-ink bg-brand-ink text-brand-cream"
-                          : "border-brand-ink/15 bg-white text-brand-ink/50",
+                          ? "border-brand-pink/40 bg-brand-pink/15 text-brand-pink"
+                          : "border-border text-muted-foreground",
                   )}
                 >
                   {isCorrect ? (
-                    <Check className="size-3.5" />
+                    <Check className="size-3" />
                   ) : isWrongChoice ? (
-                    <X className="size-3.5" />
+                    <X className="size-3" />
                   ) : (
                     String.fromCharCode(65 + optionIndex)
                   )}
                 </span>
-                <span className="pt-0.5 text-brand-ink/80">{option}</span>
+                <span className="pt-0.5">{option}</span>
               </button>
             );
           })}
@@ -210,53 +209,61 @@ export function QuizRunner({
 
         {checked && (
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              "mt-4 rounded-xl border p-4",
+              "mt-3 rounded-md border p-3",
               correct
-                ? "border-brand-ink/10 bg-brand-mint/50"
-                : "border-brand-ink/10 bg-brand-peach/50",
+                ? "border-brand-mint/25 bg-brand-mint/[0.06]"
+                : "border-brand-peach/25 bg-brand-peach/[0.06]",
             )}
           >
-            <p className="flex items-center gap-1.5 text-[12px] font-bold text-brand-ink">
-              {correct ? <Check className="size-3.5" /> : <X className="size-3.5" />}
-              {correct ? "Correct" : `Not quite — the answer is ${String.fromCharCode(65 + question.correctIndex)}`}
+            <p
+              className={cn(
+                "flex items-center gap-1.5 font-mono text-[9.5px] tracking-wide",
+                correct ? "text-brand-mint" : "text-brand-peach",
+              )}
+            >
+              {correct ? <Check className="size-3" /> : <X className="size-3" />}
+              {correct
+                ? "CORRECT"
+                : `INCORRECT / ANSWER ${String.fromCharCode(65 + question.correctIndex)}`}
             </p>
-            <p className="mt-1.5 text-[12.5px] leading-relaxed text-brand-ink/65">
+            <p className="mt-1.5 text-[12px] leading-relaxed text-brand-ink/70">
               {question.explanation}
             </p>
           </motion.div>
         )}
 
-        <div className="mt-5">
+        <div className="mt-4">
           {!checked ? (
             <Button
               onClick={handleCheck}
               disabled={selected === null}
-              className="h-10 w-full rounded-xl border-2 border-brand-ink bg-brand-ink font-bold text-brand-cream hover:bg-brand-pink hover:text-brand-ink disabled:bg-brand-ink/30"
+              className="h-9 w-full rounded-md bg-brand-pink font-mono text-[10.5px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep disabled:bg-brand-pink/30"
             >
-              Check answer
+              CHECK ANSWER
             </Button>
           ) : (
             <Button
               onClick={handleNext}
               disabled={submitting}
-              className="h-10 w-full rounded-xl border-2 border-brand-ink bg-brand-pink font-bold text-brand-ink hover:bg-brand-pink-deep hover:text-brand-cream"
+              className="h-9 w-full rounded-md border border-brand-mint/30 bg-brand-mint/10 font-mono text-[10.5px] font-medium tracking-wide text-brand-mint hover:bg-brand-mint/15"
             >
-              {submitting ? "Saving…" : isLast ? "Finish and save score" : "Next question"}
-              {!submitting && <ArrowRight className="size-4" />}
+              {submitting
+                ? "SAVING…"
+                : isLast
+                  ? "FINISH AND SAVE SCORE"
+                  : "NEXT QUESTION"}
+              {!submitting && <ArrowRight className="size-3.5" />}
             </Button>
           )}
         </div>
       </motion.div>
 
-      <div className="mt-4 flex items-center justify-center gap-2">
-        <Pip size={34} mood="happy" />
-        <p className="text-[11px] text-brand-ink/40">
-          Every answer comes with a short reason — read it even when you're right.
-        </p>
-      </div>
+      <p className="mt-3 text-center font-mono text-[9px] tracking-wide text-muted-foreground/70">
+        EVERY ANSWER INCLUDES AN EXPLANATION
+      </p>
     </div>
   );
 }

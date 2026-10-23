@@ -1,4 +1,4 @@
-import { Pip } from "@/components/Pip";
+import { BlueprintGlyph } from "@/components/BlueprintMark";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
@@ -6,7 +6,7 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, RotateCcw, Sparkles, X } from "lucide-react";
+import { ArrowRight, Check, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -55,9 +55,9 @@ export function FlashcardReview({
 
   if (cards.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-brand-ink/15 bg-card p-10 text-center">
-        <p className="text-sm font-semibold text-brand-ink/60">
-          This set doesn't have any flashcards yet.
+      <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
+        <p className="text-[12px] text-muted-foreground">
+          This set has no flashcards yet.
         </p>
       </div>
     );
@@ -68,50 +68,59 @@ export function FlashcardReview({
     const recall = sessionTotal ? Math.round((session.known / sessionTotal) * 100) : 0;
     return (
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mx-auto w-full max-w-2xl rounded-[28px] border border-brand-ink/12 bg-card p-6 text-center sm:p-10"
+        className="mx-auto w-full max-w-2xl rounded-xl border border-border bg-card p-6 text-center sm:p-8"
       >
-        <div className="mx-auto grid size-28 place-items-center rounded-[28px] border-2 border-brand-ink bg-brand-lime">
-          <Pip size={94} cap />
+        <div className="mx-auto grid size-24 place-items-center rounded-lg border border-border bg-brand-panel">
+          <BlueprintGlyph size={84} className="opacity-80" />
         </div>
-        <h3 className="mt-5 font-display text-2xl font-bold">Session done.</h3>
-        <p className="mx-auto mt-1.5 max-w-sm text-[13px] leading-relaxed text-brand-ink/55">
-          You reviewed all {sessionTotal} cards. {recall}% felt solid this round — the ones you
-          flagged as “Again” will be waiting next time.
+        <p className="mt-4 mono-label text-brand-mint">RUN COMPLETE</p>
+        <h3 className="mt-2 font-display text-2xl font-semibold">Session closed.</h3>
+        <p className="mx-auto mt-2 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
+          You reviewed all {sessionTotal} cards. {recall}% were marked known this round;
+          anything flagged “Again” stays in the deck.
         </p>
 
-        <div className="mx-auto mt-6 grid max-w-sm grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-brand-ink/10 bg-brand-mint/50 p-4">
-            <p className="font-display text-2xl font-bold">{session.known}</p>
-            <p className="text-[11px] font-semibold text-brand-ink/55">Got it</p>
+        <div className="mx-auto mt-6 grid max-w-sm grid-cols-2 gap-2">
+          <div className="rounded-md border border-brand-mint/20 bg-brand-mint/[0.06] p-4">
+            <p className="font-display text-2xl font-semibold text-brand-mint">
+              {session.known}
+            </p>
+            <p className="mt-0.5 font-mono text-[9px] tracking-wide text-muted-foreground">
+              KNOWN
+            </p>
           </div>
-          <div className="rounded-2xl border border-brand-ink/10 bg-brand-peach/60 p-4">
-            <p className="font-display text-2xl font-bold">{session.again}</p>
-            <p className="text-[11px] font-semibold text-brand-ink/55">Again</p>
+          <div className="rounded-md border border-brand-peach/20 bg-brand-peach/[0.06] p-4">
+            <p className="font-display text-2xl font-semibold text-brand-peach">
+              {session.again}
+            </p>
+            <p className="mt-0.5 font-mono text-[9px] tracking-wide text-muted-foreground">
+              AGAIN
+            </p>
           </div>
         </div>
 
-        <p className="mt-4 text-[11px] text-brand-ink/40">
-          Overall mastery: {mastered} of {cards.length} cards marked known.
+        <p className="mt-4 font-mono text-[9.5px] tracking-wide text-muted-foreground">
+          OVERALL MASTERY: {mastered} / {cards.length} CARDS
         </p>
 
         <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
           <Button
             variant="outline"
             onClick={restart}
-            className="h-10 rounded-xl border-brand-ink/15 font-semibold"
+            className="h-9 rounded-md border-border bg-transparent font-mono text-[10px] tracking-wide"
           >
-            <RotateCcw className="size-4" />
-            Review again
+            <RotateCcw className="size-3.5" />
+            REVIEW AGAIN
           </Button>
           {onTakeQuiz && (
             <Button
               onClick={onTakeQuiz}
-              className="h-10 rounded-xl border-2 border-brand-ink bg-brand-ink font-bold text-brand-cream hover:bg-brand-pink hover:text-brand-ink"
+              className="h-9 rounded-md bg-brand-pink font-mono text-[10px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep"
             >
-              Take the quiz
-              <ArrowRight className="size-4" />
+              TAKE QUIZ
+              <ArrowRight className="size-3.5" />
             </Button>
           )}
         </div>
@@ -122,37 +131,37 @@ export function FlashcardReview({
   return (
     <div className="mx-auto w-full max-w-2xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[11px] font-semibold text-brand-ink/50">
-          <span className="grid size-6 place-items-center rounded-full bg-brand-pink/40 text-[10px] font-bold text-brand-ink">
-            {index + 1}
+        <div className="flex items-center gap-2 font-mono text-[9.5px] tracking-wide text-muted-foreground">
+          <span className="rounded border border-brand-pink/25 bg-brand-pink/10 px-1.5 py-0.5 text-brand-pink">
+            {String(index + 1).padStart(2, "0")}
           </span>
-          of {cards.length} cards
+          / {String(cards.length).padStart(2, "0")} CARDS
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {cards.map((card, dotIndex) => (
             <span
               key={card._id}
               className={cn(
-                "h-1.5 rounded-full transition-all",
-                dotIndex === index && "w-5 bg-brand-ink",
-                dotIndex !== index && card.status === "known" && "w-1.5 bg-brand-mint",
-                dotIndex !== index && card.status === "again" && "w-1.5 bg-brand-pink",
-                dotIndex !== index && card.status === "new" && "w-1.5 bg-brand-ink/15",
+                "h-1 rounded-full transition-all",
+                dotIndex === index && "w-4 bg-brand-pink",
+                dotIndex !== index && card.status === "known" && "w-1 bg-brand-mint",
+                dotIndex !== index && card.status === "again" && "w-1 bg-brand-peach",
+                dotIndex !== index && card.status === "new" && "w-1 bg-border",
               )}
             />
           ))}
         </div>
-        <span className="rounded-full bg-brand-cream px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-ink/50">
-          {mastered}/{cards.length} mastered
+        <span className="rounded border border-border bg-brand-panel px-2 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground">
+          {mastered}/{cards.length} KNOWN
         </span>
       </div>
 
       <motion.div
         key={current._id}
-        initial={{ opacity: 0, x: 24 }}
+        initial={{ opacity: 0, x: 18 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="flip-scene mt-4"
+        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        className="flip-scene mt-3"
       >
         <button
           type="button"
@@ -162,81 +171,79 @@ export function FlashcardReview({
         >
           <div
             className={cn(
-              "flip-inner relative h-[360px] transition-transform duration-500 sm:h-[400px]",
+              "flip-inner relative h-[340px] transition-transform duration-500 sm:h-[380px]",
               flipped && "[transform:rotateY(180deg)]",
             )}
           >
-            <div className="flip-face absolute inset-0 flex flex-col justify-between overflow-hidden rounded-[28px] border-2 border-brand-ink/12 bg-brand-cream p-6 sm:p-8">
-              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-brand-ink/40">
-                <span className="flex items-center gap-1.5">
-                  <Sparkles className="size-3" /> Prompt
-                </span>
-                <span className="normal-case tracking-normal">Tap to reveal</span>
+            <div className="flip-face absolute inset-0 flex flex-col justify-between overflow-hidden rounded-xl border border-border bg-brand-panel p-6 sm:p-7">
+              <div className="flex items-center justify-between font-mono text-[9px] tracking-[0.14em] text-muted-foreground">
+                <span className="text-brand-pink">PROMPT</span>
+                <span>CLICK TO REVEAL</span>
               </div>
-              <p className="overflow-y-auto py-4 font-display text-[1.55rem] font-semibold leading-snug text-brand-ink sm:text-[1.9rem]">
+              <p className="overflow-y-auto py-4 font-display text-[1.45rem] font-medium leading-snug text-brand-ink sm:text-[1.7rem]">
                 {current.front}
               </p>
-              <div className="flex items-center justify-between text-[11px] font-semibold text-brand-ink/40">
-                <span>Card {index + 1}</span>
-                <span className="rounded-full bg-white px-2.5 py-1">
+              <div className="flex items-center justify-between border-t border-border pt-3 font-mono text-[9px] tracking-wide text-muted-foreground">
+                <span>CARD {String(index + 1).padStart(2, "0")}</span>
+                <span>
                   {current.reviewCount > 0
-                    ? `Reviewed ${current.reviewCount}×`
-                    : "First look"}
+                    ? `REVIEWED ${current.reviewCount}×`
+                    : "FIRST PASS"}
                 </span>
               </div>
             </div>
 
-            <div className="flip-face flip-back absolute inset-0 flex flex-col justify-between overflow-hidden rounded-[28px] border-2 border-brand-ink/15 bg-brand-mint p-6 sm:p-8">
-              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-brand-ink/45">
-                <span>Answer</span>
-                <span className="normal-case tracking-normal">How did that feel?</span>
+            <div className="flip-face flip-back absolute inset-0 flex flex-col justify-between overflow-hidden rounded-xl border border-brand-mint/25 bg-[#0b1712] p-6 sm:p-7">
+              <div className="flex items-center justify-between font-mono text-[9px] tracking-[0.14em] text-brand-mint/80">
+                <span>ANSWER</span>
+                <span>SELF-ASSESS</span>
               </div>
-              <p className="overflow-y-auto py-4 text-[1.15rem] leading-relaxed text-brand-ink sm:text-[1.28rem]">
+              <p className="overflow-y-auto py-4 text-[1.05rem] leading-relaxed text-brand-ink/90 sm:text-[1.15rem]">
                 {current.back}
               </p>
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-ink/45">
-                <Check className="size-3.5" /> Compare against your own wording
+              <div className="flex items-center gap-1.5 border-t border-brand-mint/15 pt-3 font-mono text-[9px] tracking-wide text-brand-mint/70">
+                <Check className="size-3" /> COMPARE WITH YOUR OWN WORDING
               </div>
             </div>
           </div>
         </button>
       </motion.div>
 
-      <div className="mt-4">
+      <div className="mt-3">
         {!flipped ? (
           <Button
             onClick={() => setFlipped(true)}
-            className="h-11 w-full rounded-xl border-2 border-brand-ink bg-brand-ink font-bold text-brand-cream hover:bg-brand-pink hover:text-brand-ink"
+            className="h-10 w-full rounded-md bg-brand-pink font-mono text-[10.5px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep"
           >
-            Reveal answer
+            REVEAL ANSWER
           </Button>
         ) : (
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-2 gap-2.5"
+            className="grid grid-cols-2 gap-2"
           >
             <Button
               variant="outline"
               onClick={() => handleOutcome("again")}
-              className="h-11 rounded-xl border-brand-ink/20 bg-white font-bold text-brand-ink hover:bg-brand-peach"
+              className="h-10 rounded-md border-brand-peach/30 bg-brand-peach/[0.06] font-mono text-[10.5px] tracking-wide text-brand-peach hover:bg-brand-peach/10"
             >
-              <X className="size-4" />
-              Again
+              <X className="size-3.5" />
+              AGAIN
             </Button>
             <Button
               onClick={() => handleOutcome("known")}
-              className="h-11 rounded-xl border-2 border-brand-ink bg-brand-mint font-bold text-brand-ink hover:bg-brand-pink"
+              className="h-10 rounded-md border border-brand-mint/30 bg-brand-mint/10 font-mono text-[10.5px] font-medium tracking-wide text-brand-mint hover:bg-brand-mint/15"
             >
-              <Check className="size-4" />
-              Got it
+              <Check className="size-3.5" />
+              GOT IT
             </Button>
           </motion.div>
         )}
       </div>
 
-      <p className="mt-3 text-center text-[11px] text-brand-ink/35">
-        {answered} answered this session. Ratings are saved to your set.
+      <p className="mt-3 text-center font-mono text-[9px] tracking-wide text-muted-foreground/70">
+        {answered} ANSWERED THIS SESSION / RATINGS ARE SAVED
       </p>
     </div>
   );

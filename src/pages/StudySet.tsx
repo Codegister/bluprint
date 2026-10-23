@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/AppShell";
-import { Pip } from "@/components/Pip";
+import { BlueprintGlyph } from "@/components/BlueprintMark";
 import { ExamPractice } from "@/components/study/ExamPractice";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { QuizRunner } from "@/components/study/QuizRunner";
@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   BookOpen,
   Camera,
+  Check,
   CheckCircle2,
   Clock,
   FileText,
@@ -30,7 +31,6 @@ import {
   Loader2,
   PenLine,
   RotateCcw,
-  Sparkles,
   Target,
   Video,
 } from "lucide-react";
@@ -53,12 +53,25 @@ const tabItems: Array<{ value: Tab; label: string; icon: typeof BookOpen }> = [
   { value: "exam", label: "Exam", icon: PenLine },
 ];
 
+const pipelineStages = ["EXTRACT", "SUMMARY", "CARDS", "QUIZ", "EXAM"] as const;
+
+function currentStage(progress?: string): number {
+  const value = (progress ?? "").toLowerCase();
+  if (value.includes("exam")) return 4;
+  if (value.includes("quiz")) return 3;
+  if (value.includes("flash")) return 2;
+  if (value.includes("summar")) return 1;
+  return 0;
+}
+
 function LoadingCard() {
   return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-[26px] border border-brand-ink/10 bg-card">
+    <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-border bg-card">
       <div className="text-center">
-        <Loader2 className="mx-auto size-6 animate-spin text-brand-ink/35" />
-        <p className="mt-3 text-[12px] font-medium text-brand-ink/45">Opening your set…</p>
+        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
+        <p className="mt-3 font-mono text-[9.5px] tracking-wide text-muted-foreground">
+          LOADING SET…
+        </p>
       </div>
     </div>
   );
@@ -66,19 +79,22 @@ function LoadingCard() {
 
 function MissingCard() {
   return (
-    <div className="mx-auto mt-10 max-w-lg rounded-[26px] border border-brand-ink/12 bg-card p-8 text-center">
-      <div className="mx-auto grid size-24 place-items-center rounded-[26px] border-2 border-brand-ink bg-brand-peach">
-        <Pip size={80} mood="sleepy" />
+    <div className="mx-auto mt-10 max-w-lg rounded-xl border border-border bg-card p-8 text-center">
+      <div className="mx-auto grid size-24 place-items-center rounded-lg border border-border bg-brand-panel">
+        <BlueprintGlyph size={84} className="opacity-70" />
       </div>
-      <h1 className="mt-4 font-display text-2xl font-bold">This set isn't here.</h1>
-      <p className="mt-2 text-[13px] leading-relaxed text-brand-ink/55">
+      <p className="mt-4 mono-label text-brand-peach">404 / SET NOT FOUND</p>
+      <h1 className="mt-2 font-display text-2xl font-semibold">
+        This set isn't available.
+      </h1>
+      <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">
         It may have been deleted, or it belongs to a different account.
       </p>
       <Button
         asChild
-        className="mt-5 h-10 rounded-xl border-2 border-brand-ink bg-brand-ink px-5 font-bold text-brand-cream hover:bg-brand-pink hover:text-brand-ink"
+        className="mt-5 h-9 rounded-md bg-brand-pink px-4 font-mono text-[10.5px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep"
       >
-        <Link to="/dashboard">Back to my sets</Link>
+        <Link to="/dashboard">Back to dashboard</Link>
       </Button>
     </div>
   );
@@ -95,54 +111,81 @@ function BuildingPanel({
   onRetry: () => void;
   retrying: boolean;
 }) {
+  const activeStage = currentStage(set.progress);
+
   return (
-    <div className="relative mt-6 overflow-hidden rounded-[28px] border border-brand-ink/12 bg-card p-6 sm:p-10">
-      <div className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-brand-mint/50 blur-3xl" />
-      <div className="relative flex flex-col items-center gap-6 text-center sm:flex-row sm:text-left">
-        <div className="relative grid size-32 shrink-0 place-items-center rounded-[32px] border-2 border-brand-ink bg-brand-lime">
-          <Pip size={104} className="animate-pip-float" cap />
-          <span className="absolute -bottom-2 -right-2 flex items-center gap-1 rounded-full border-2 border-brand-ink bg-white px-2 py-1 text-[9px] font-bold uppercase tracking-wide">
-            <Loader2 className="size-2.5 animate-spin" /> Working
-          </span>
+    <div className="relative mt-6 overflow-hidden rounded-xl border border-border bg-card">
+      <div className="pointer-events-none absolute inset-0 blueprint-grid opacity-20" />
+      <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:p-7">
+        <div className="grid size-16 shrink-0 place-items-center rounded-lg border border-brand-pink/25 bg-brand-pink/[0.06]">
+          <Loader2 className="size-6 animate-spin text-brand-pink" />
         </div>
 
-        <div className="flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-ink/40">
-            {set.status === "queued" ? "Queued" : "Building your set"}
-          </p>
-          <h2 className="mt-2 font-display text-2xl font-bold">
-            Pip is reading, writing and checking.
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="mono-label text-brand-pink">COMPILING SET</p>
+            <span className="rounded border border-brand-lime/25 bg-brand-lime/10 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-brand-lime">
+              RUNNING
+            </span>
+          </div>
+          <h2 className="mt-2 font-display text-2xl font-semibold">
+            {set.status === "queued" ? "Queued for compilation." : "Building the revision set."}
           </h2>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-brand-ink/55">
-            {set.progress || "Getting started…"} This usually takes 20–60 seconds. You can
-            leave this page — generation continues in the background.
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+            {set.progress || "Starting the pipeline…"} This usually takes 20–60 seconds. You
+            can leave this page; the run continues on the server.
           </p>
 
-          <div className="mt-4 flex flex-wrap justify-center gap-1.5 sm:justify-start">
-            {["Read material", "Summary", "Flashcards", "Quiz", "Exam"].map((label) => (
-              <span
-                key={label}
-                className="rounded-full border border-brand-ink/10 bg-brand-cream px-2.5 py-1 text-[10px] font-semibold text-brand-ink/45"
-              >
-                {label}
-              </span>
-            ))}
+          <div className="mt-4 grid gap-1.5 sm:grid-cols-5">
+            {pipelineStages.map((stage, index) => {
+              const complete = index < activeStage;
+              const active = index === activeStage;
+              return (
+                <div
+                  key={stage}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded border px-2 py-1.5 font-mono text-[9px] tracking-wide",
+                    complete && "border-brand-mint/20 bg-brand-mint/[0.06] text-brand-mint",
+                    active && "border-brand-pink/30 bg-brand-pink/10 text-brand-pink",
+                    !complete && !active && "border-border bg-brand-panel text-muted-foreground/60",
+                  )}
+                >
+                  {complete ? (
+                    <Check className="size-2.5" />
+                  ) : active ? (
+                    <Loader2 className="size-2.5 animate-spin" />
+                  ) : (
+                    <span className="size-1 rounded-full bg-current opacity-40" />
+                  )}
+                  {stage}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 rounded-md border border-border bg-background px-3 py-2 font-mono text-[10px] leading-5 text-muted-foreground">
+            <span className="text-brand-pink">&gt;</span> {set.progress || "pipeline initialising"}
+            <span className="animate-caret ml-1 inline-block h-2.5 w-[5px] bg-brand-pink align-middle" />
           </div>
 
           {stale && (
-            <div className="mt-4 flex flex-col items-start gap-2 rounded-xl bg-brand-lime/50 p-3 text-left">
-              <p className="text-[11.5px] font-semibold text-brand-ink/70">
-                This is taking longer than expected. NVIDIA may be slow or the run was
+            <div className="mt-4 flex flex-col items-start gap-2 rounded-md border border-brand-lime/25 bg-brand-lime/[0.06] p-3">
+              <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+                This run is taking longer than expected. NVIDIA may be slow, or the run was
                 interrupted.
               </p>
               <Button
                 onClick={onRetry}
                 disabled={retrying}
                 variant="outline"
-                className="h-8 rounded-lg border-brand-ink/20 bg-white text-xs font-bold"
+                className="h-8 rounded-md border-border bg-transparent font-mono text-[9.5px] tracking-wide"
               >
-                {retrying ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
-                Retry generation
+                {retrying ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <RotateCcw className="size-3" />
+                )}
+                Retry build
               </Button>
             </div>
           )}
@@ -162,49 +205,48 @@ function ErrorPanel({
   retrying: boolean;
 }) {
   return (
-    <div className="mt-6 rounded-[28px] border border-brand-ink/12 bg-card p-6 sm:p-8">
+    <div className="mt-6 rounded-xl border border-border bg-card p-5 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <div className="grid size-14 shrink-0 place-items-center rounded-2xl border border-brand-ink/10 bg-brand-peach">
-          <AlertTriangle className="size-6 text-brand-ink" />
+        <div className="grid size-11 shrink-0 place-items-center rounded-md border border-brand-peach/25 bg-brand-peach/10">
+          <AlertTriangle className="size-5 text-brand-peach" />
         </div>
         <div className="flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-brand-ink/40">
-            Generation stopped
-          </p>
-          <h2 className="mt-1 font-display text-2xl font-bold">Pip hit a snag.</h2>
-          <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-brand-ink/60">
+          <p className="mono-label text-brand-peach">BUILD FAILED</p>
+          <h2 className="mt-1.5 font-display text-2xl font-semibold">
+            The pipeline stopped.
+          </h2>
+          <p className="mt-2 whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted-foreground">
             {set.errorMessage ??
-              "NVIDIA could not finish this set. Your uploaded notes are still saved — retry when you're ready."}
+              "NVIDIA could not finish this set. Your source is still saved; retry when you're ready."}
           </p>
 
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Button
               onClick={onRetry}
               disabled={retrying}
-              className="h-10 rounded-xl border-2 border-brand-ink bg-brand-ink font-bold text-brand-cream hover:bg-brand-pink hover:text-brand-ink"
+              className="h-9 rounded-md bg-brand-pink px-4 font-mono text-[10.5px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep"
             >
               {retrying ? (
-                <Loader2 className="size-4 animate-spin" />
+                <Loader2 className="size-3.5 animate-spin" />
               ) : (
-                <RotateCcw className="size-4" />
+                <RotateCcw className="size-3.5" />
               )}
-              Retry generation
+              Retry build
             </Button>
             <Button
               asChild
               variant="outline"
-              className="h-10 rounded-xl border-brand-ink/15 font-semibold"
+              className="h-9 rounded-md border-border bg-transparent font-mono text-[10.5px] tracking-wide"
             >
               <Link to="/setup">
-                <KeyRound className="size-4" />
-                Check AI setup
+                <KeyRound className="size-3.5" />
+                Check API access
               </Link>
             </Button>
           </div>
 
-          <p className="mt-3 text-[11px] text-brand-ink/40">
-            If NVIDIA is rate-limiting, wait about a minute before retrying. Nothing you
-            uploaded has been lost.
+          <p className="mt-3 font-mono text-[9px] leading-relaxed tracking-wide text-muted-foreground/70">
+            IF NVIDIA IS RATE-LIMITING, WAIT A MINUTE BEFORE RETRYING. YOUR UPLOAD IS SAVED.
           </p>
         </div>
       </div>
@@ -222,8 +264,8 @@ function SummaryTab({
   const summary = set.summary;
   if (!summary) {
     return (
-      <div className="rounded-2xl border border-dashed border-brand-ink/15 bg-card p-10 text-center text-sm text-brand-ink/55">
-        The summary is still being written.
+      <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center text-[12px] text-muted-foreground">
+        The summary has not been generated yet.
       </div>
     );
   }
@@ -231,36 +273,32 @@ function SummaryTab({
   return (
     <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
       <div className="space-y-4">
-        <section className="rounded-[26px] border border-brand-ink/12 bg-card p-5 sm:p-6">
+        <section className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-brand-mint">
-              <BookOpen className="size-3.5 text-brand-ink" />
+            <span className="grid size-7 place-items-center rounded border border-brand-pink/25 bg-brand-pink/10 text-brand-pink">
+              <BookOpen className="size-3.5" />
             </span>
-            <h2 className="font-display text-sm font-bold uppercase tracking-[0.1em] text-brand-ink/60">
-              The short version
-            </h2>
+            <h2 className="mono-label text-muted-foreground">OVERVIEW</h2>
           </div>
-          <p className="mt-3 whitespace-pre-wrap text-[14px] leading-relaxed text-brand-ink/75">
+          <p className="mt-3 whitespace-pre-wrap text-[13px] leading-relaxed text-brand-ink/80">
             {summary.overview}
           </p>
         </section>
 
-        <section className="rounded-[26px] border border-brand-ink/12 bg-card p-5 sm:p-6">
+        <section className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-brand-pink/40">
-              <Sparkles className="size-3.5 text-brand-ink" />
+            <span className="grid size-7 place-items-center rounded border border-brand-mint/25 bg-brand-mint/10 text-brand-mint">
+              <CheckCircle2 className="size-3.5" />
             </span>
-            <h2 className="font-display text-sm font-bold uppercase tracking-[0.1em] text-brand-ink/60">
-              Points worth remembering
-            </h2>
+            <h2 className="mono-label text-muted-foreground">KEY POINTS</h2>
           </div>
           <ol className="mt-4 space-y-3">
             {summary.keyPoints.map((point, index) => (
               <li key={point} className="flex items-start gap-3">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full border border-brand-ink/10 bg-brand-cream font-display text-[10px] font-bold text-brand-ink/60">
-                  {index + 1}
+                <span className="grid size-5 shrink-0 place-items-center rounded border border-border bg-brand-panel font-mono text-[9px] text-muted-foreground">
+                  {String(index + 1).padStart(2, "0")}
                 </span>
-                <p className="pt-0.5 text-[13px] leading-relaxed text-brand-ink/70">
+                <p className="pt-0.5 text-[12.5px] leading-relaxed text-brand-ink/75">
                   {point}
                 </p>
               </li>
@@ -270,36 +308,32 @@ function SummaryTab({
       </div>
 
       <aside className="space-y-4">
-        <section className="rounded-[26px] border border-brand-ink/12 bg-brand-lime/45 p-5">
+        <section className="rounded-xl border border-border bg-brand-lime/[0.04] p-5">
           <div className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg border border-brand-ink/10 bg-white/70">
-              <Target className="size-3.5 text-brand-ink" />
+            <span className="grid size-7 place-items-center rounded border border-brand-lime/25 bg-brand-lime/10 text-brand-lime">
+              <Target className="size-3.5" />
             </span>
-            <h2 className="font-display text-sm font-bold uppercase tracking-[0.1em] text-brand-ink/60">
-              Exam focus
-            </h2>
+            <h2 className="mono-label text-muted-foreground">EXAM FOCUS</h2>
           </div>
           <ul className="mt-3 space-y-2.5">
             {summary.examFocus.map((point) => (
               <li
                 key={point}
-                className="flex items-start gap-2 text-[12.5px] leading-relaxed text-brand-ink/70"
+                className="flex items-start gap-2 text-[12px] leading-relaxed text-brand-ink/70"
               >
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-ink/50" />
+                <span className="mt-1.5 size-1 shrink-0 rounded-full bg-brand-lime/70" />
                 {point}
               </li>
             ))}
           </ul>
         </section>
 
-        <section className="rounded-[26px] border border-brand-ink/12 bg-card p-5">
+        <section className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2">
-            <span className="grid size-7 place-items-center rounded-lg bg-brand-sky/70">
-              <FileText className="size-3.5 text-brand-ink" />
+            <span className="grid size-7 place-items-center rounded border border-brand-sky/25 bg-brand-sky/10 text-brand-sky">
+              <FileText className="size-3.5" />
             </span>
-            <h2 className="font-display text-sm font-bold uppercase tracking-[0.1em] text-brand-ink/60">
-              Original material
-            </h2>
+            <h2 className="mono-label text-muted-foreground">SOURCE</h2>
           </div>
 
           {sourceImages.length > 0 && (
@@ -310,11 +344,11 @@ function SummaryTab({
                   href={image.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="aspect-square overflow-hidden rounded-lg border border-brand-ink/10 bg-brand-cream transition hover:border-brand-ink/30"
+                  className="aspect-square overflow-hidden rounded border border-border bg-brand-panel transition-colors hover:border-brand-sky/40"
                 >
                   <img
                     src={image.url}
-                    alt="Uploaded study material"
+                    alt="Uploaded source material"
                     className="size-full object-cover"
                   />
                 </a>
@@ -323,15 +357,15 @@ function SummaryTab({
           )}
 
           <details className="group mt-3">
-            <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-brand-ink/10 bg-brand-cream/60 px-3 py-2 text-[11px] font-bold text-brand-ink/60">
-              View extracted notes
-              <span className="text-[10px] font-semibold text-brand-ink/35">
-                {set.notes.length.toLocaleString()} chars
+            <summary className="flex cursor-pointer list-none items-center justify-between rounded border border-border bg-brand-panel px-2.5 py-2 font-mono text-[9.5px] tracking-wide text-muted-foreground">
+              VIEW EXTRACTED TEXT
+              <span className="text-[9px] text-muted-foreground/60">
+                {set.notes.length.toLocaleString()} CHARS
               </span>
             </summary>
-            <div className="mt-2 max-h-72 overflow-y-auto rounded-xl border border-brand-ink/10 bg-brand-cream/40 p-3">
-              <p className="whitespace-pre-wrap text-[11.5px] leading-relaxed text-brand-ink/60">
-                {set.notes || "No text could be extracted from this upload."}
+            <div className="mt-2 max-h-72 overflow-y-auto rounded border border-border bg-background p-3">
+              <p className="whitespace-pre-wrap font-mono text-[10.5px] leading-relaxed text-muted-foreground">
+                {set.notes || "No text could be extracted from this source."}
               </p>
             </div>
           </details>
@@ -343,8 +377,6 @@ function SummaryTab({
 
 export default function StudySet() {
   const { setId } = useParams<{ setId: string }>();
-  // Guard the Convex arg validator so a hand-typed bad URL shows the friendly
-  // "not found" panel instead of a query error.
   const validId = Boolean(setId && /^[a-z0-9]{20,40}$/i.test(setId));
   const details = useQuery(
     api.studySets.getDetails,
@@ -355,8 +387,6 @@ export default function StudySet() {
   const [retrying, setRetrying] = useState(false);
   const triggered = useRef<string | null>(null);
 
-  // A set is created in the "queued" state. Opening it starts generation once;
-  // generation continues on the server even if the tab is closed.
   useEffect(() => {
     if (!details || details.set.status !== "queued") return;
     const id = details.set._id;
@@ -364,7 +394,7 @@ export default function StudySet() {
     triggered.current = id;
     processSet({ setId: id }).catch((error) => {
       toast.error(
-        readableError(error, "Pip could not finish this set. Open it again to retry."),
+        readableError(error, "The build stopped. Open the set to retry."),
       );
     });
   }, [details, processSet]);
@@ -375,7 +405,7 @@ export default function StudySet() {
     try {
       await processSet({ setId: details.set._id });
     } catch (error) {
-      toast.error(readableError(error, "Pip could not finish this set."));
+      toast.error(readableError(error, "The build could not be restarted."));
     } finally {
       setRetrying(false);
     }
@@ -393,64 +423,64 @@ export default function StudySet() {
       <>
         <Link
           to="/dashboard"
-          className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-brand-ink/45 transition-colors hover:text-brand-ink"
+          className="inline-flex items-center gap-1.5 font-mono text-[9.5px] tracking-wide text-muted-foreground transition-colors hover:text-brand-ink"
         >
-          <ArrowLeft className="size-3.5" />
-          All study sets
+          <ArrowLeft className="size-3" />
+          DASHBOARD / SET
         </Link>
 
         <header className="mt-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-ink/10 bg-white px-2.5 py-1 text-[10px] font-bold text-brand-ink/55">
+            <span className="inline-flex items-center gap-1.5 rounded border border-border bg-brand-panel px-2 py-1 font-mono text-[9px] tracking-wide text-muted-foreground">
               <SourceIcon className="size-3" />
               {set.sourceType === "text"
-                ? "Pasted notes"
-                : set.sourceLabel || sourceLabel(set.sourceType)}
+                ? "PASTED NOTES"
+                : (set.sourceLabel || sourceLabel(set.sourceType)).toUpperCase()}
             </span>
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border border-brand-ink/10 px-2.5 py-1 text-[10px] font-bold",
+                "inline-flex items-center gap-1.5 rounded border px-2 py-1 font-mono text-[9px] tracking-wide",
                 set.status === "ready"
-                  ? "bg-brand-mint text-brand-ink"
+                  ? "border-brand-mint/20 bg-brand-mint/[0.06] text-brand-mint"
                   : set.status === "error"
-                    ? "bg-brand-peach text-brand-ink"
-                    : "bg-brand-lime text-brand-ink",
+                    ? "border-brand-peach/25 bg-brand-peach/10 text-brand-peach"
+                    : "border-brand-lime/25 bg-brand-lime/10 text-brand-lime",
               )}
             >
               {set.status === "ready" ? (
-                <CheckCircle2 className="size-3" />
+                <span className="size-1.5 rounded-full bg-brand-mint" />
               ) : set.status === "error" ? (
-                <AlertTriangle className="size-3" />
+                <AlertTriangle className="size-2.5" />
               ) : (
-                <Loader2 className="size-3 animate-spin" />
+                <Loader2 className="size-2.5 animate-spin" />
               )}
               {set.status === "ready"
-                ? "Ready"
+                ? "READY"
                 : set.status === "error"
-                  ? "Needs retry"
+                  ? "FAILED"
                   : set.status === "processing"
-                    ? "Building"
-                    : "Queued"}
+                    ? "COMPILING"
+                    : "QUEUED"}
             </span>
             {set.lastStudiedAt && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-ink/35">
-                <Clock className="size-3" />
-                Studied {relativeDate(set.lastStudiedAt)}
+              <span className="inline-flex items-center gap-1 font-mono text-[9px] tracking-wide text-muted-foreground">
+                <Clock className="size-2.5" />
+                STUDIED {relativeDate(set.lastStudiedAt).toUpperCase()}
               </span>
             )}
             {set.lastQuizTotal ? (
-              <span className="rounded-full bg-brand-cream px-2.5 py-1 text-[10px] font-bold text-brand-ink/50">
-                Last quiz {set.lastQuizScore}/{set.lastQuizTotal}
+              <span className="rounded border border-border bg-brand-panel px-2 py-1 font-mono text-[9px] tracking-wide text-muted-foreground">
+                LAST QUIZ {set.lastQuizScore}/{set.lastQuizTotal}
               </span>
             ) : null}
           </div>
 
-          <h1 className="display-tight mt-2 max-w-3xl text-[2rem] font-bold leading-tight sm:text-[2.6rem]">
+          <h1 className="display-tight mt-2 max-w-3xl text-[1.9rem] font-semibold leading-tight sm:text-[2.4rem]">
             {set.title}
           </h1>
-          <p className="mt-2 text-[12px] text-brand-ink/45">
-            {set.cardCount} flashcards · {set.quizCount} quiz questions · {set.examCount} exam
-            questions · updated {relativeDate(set.updatedAt)}
+          <p className="mt-2 font-mono text-[9.5px] tracking-wide text-muted-foreground">
+            {set.cardCount} CARDS / {set.quizCount} QUIZ / {set.examCount} EXAM / UPDATED{" "}
+            {relativeDate(set.updatedAt).toUpperCase()}
           </p>
         </header>
 
@@ -469,7 +499,7 @@ export default function StudySet() {
             onValueChange={(value) => setTab(value as Tab)}
             className="mt-6 gap-4"
           >
-            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-2xl border border-brand-ink/10 bg-white p-1.5 sm:inline-flex sm:w-auto">
+            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-md border border-border bg-card p-1 sm:inline-flex sm:w-auto">
               {tabItems.map((item) => {
                 const Icon = item.icon;
                 const count =
@@ -484,12 +514,12 @@ export default function StudySet() {
                   <TabsTrigger
                     key={item.value}
                     value={item.value}
-                    className="h-9 gap-1.5 rounded-xl px-2 text-[11px] font-bold data-[state=active]:bg-brand-ink data-[state=active]:text-brand-cream data-[state=active]:shadow-none sm:px-3.5 sm:text-[12px]"
+                    className="h-8 gap-1.5 rounded font-mono text-[10px] tracking-wide text-muted-foreground data-[state=active]:border data-[state=active]:border-brand-pink/25 data-[state=active]:bg-brand-pink/10 data-[state=active]:text-brand-pink data-[state=active]:shadow-none sm:px-3"
                   >
                     <Icon className="size-3.5" />
-                    {item.label}
+                    {item.label.toUpperCase()}
                     {count !== null && (
-                      <span className="hidden rounded-full bg-brand-cream/20 px-1.5 text-[9px] font-bold sm:inline">
+                      <span className="hidden rounded bg-background px-1 text-[8px] text-muted-foreground sm:inline">
                         {count}
                       </span>
                     )}
@@ -502,10 +532,7 @@ export default function StudySet() {
               <SummaryTab set={set} sourceImages={details.sourceImages} />
             </TabsContent>
             <TabsContent value="cards" className="mt-1">
-              <FlashcardReview
-                cards={details.cards}
-                onTakeQuiz={() => setTab("quiz")}
-              />
+              <FlashcardReview cards={details.cards} onTakeQuiz={() => setTab("quiz")} />
             </TabsContent>
             <TabsContent value="quiz" className="mt-1">
               <QuizRunner

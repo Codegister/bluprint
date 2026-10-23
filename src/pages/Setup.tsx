@@ -1,5 +1,4 @@
 import { AppShell } from "@/components/AppShell";
-import { Pip } from "@/components/Pip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
@@ -10,6 +9,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
+  CheckCircle2,
   Copy,
   Cpu,
   ExternalLink,
@@ -20,7 +20,7 @@ import {
   LockKeyhole,
   Server,
   ShieldCheck,
-  Sparkles,
+  Terminal,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
@@ -38,7 +38,7 @@ export default function Setup() {
     event.preventDefault();
     const candidate = key.trim();
     if (candidate.length < 20) {
-      setError("Paste the full NVIDIA API key. It's usually a long string starting with nvapi-.");
+      setError("Paste the full NVIDIA API key. It usually starts with nvapi-.");
       return;
     }
     setSaving(true);
@@ -47,7 +47,7 @@ export default function Setup() {
       await saveKey({ key: candidate });
       setKey("");
       setShowKey(false);
-      toast.success("NVIDIA key verified and saved on the server.");
+      toast.success("NVIDIA key verified and stored on the server.");
     } catch (saveError) {
       setError(
         readableError(
@@ -67,7 +67,7 @@ export default function Setup() {
       );
       toast.success("Command copied. Replace <your-key> before running it.");
     } catch {
-      toast.error("Could not copy. You can select the command manually.");
+      toast.error("Could not copy. Select the command manually.");
     }
   };
 
@@ -77,94 +77,109 @@ export default function Setup() {
     <AppShell>
       <Link
         to="/dashboard"
-        className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-brand-ink/45 transition-colors hover:text-brand-ink"
+        className="inline-flex items-center gap-1.5 font-mono text-[9.5px] tracking-wide text-muted-foreground transition-colors hover:text-brand-ink"
       >
-        <ArrowLeft className="size-3.5" />
-        Back to my sets
+        <ArrowLeft className="size-3" />
+        DASHBOARD / API ACCESS
       </Link>
 
       <header className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-brand-ink/40">
-            <span className="size-1.5 rounded-full bg-brand-pink-deep" />
-            NVIDIA connection
+          <p className="mono-label flex items-center gap-2 text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-brand-pink" />
+            CONFIGURATION / MODEL ACCESS
           </p>
-          <h1 className="display-tight mt-2 text-[2rem] font-bold leading-none sm:text-[2.5rem]">
-            AI setup
+          <h1 className="display-tight mt-2.5 text-[2rem] font-semibold leading-none sm:text-[2.4rem]">
+            API access
           </h1>
-          <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-brand-ink/50">
-            Pipnote sends every AI request through NVIDIA. One key on the server serves
-            everyone in your group — nobody needs their own key.
+          <p className="mt-2 max-w-xl text-[12.5px] leading-relaxed text-muted-foreground">
+            All model calls run through NVIDIA on the server. One key serves the whole
+            workspace; friends do not need their own.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-2xl border border-brand-ink/10 bg-white px-3 py-2">
-          <Pip size={34} mood={ai?.configured ? "happy" : "sleepy"} />
+        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2">
+          <span
+            className={cn(
+              "grid size-8 place-items-center rounded border",
+              ai?.configured
+                ? "border-brand-mint/25 bg-brand-mint/10 text-brand-mint"
+                : "border-brand-lime/25 bg-brand-lime/10 text-brand-lime",
+            )}
+          >
+            {ai === undefined ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : ai.configured ? (
+              <CheckCircle2 className="size-3.5" />
+            ) : (
+              <AlertCircle className="size-3.5" />
+            )}
+          </span>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-brand-ink/40">
-              Pip status
-            </p>
-            <p className="text-[12px] font-bold text-brand-ink">
+            <p className="mono-label text-muted-foreground">PIPELINE</p>
+            <p className="mt-0.5 font-mono text-[10px] text-brand-ink">
               {ai === undefined
-                ? "Checking…"
+                ? "CHECKING"
                 : ai.configured
-                  ? "Ready to generate"
-                  : "Waiting for a key"}
+                  ? "OPERATIONAL"
+                  : "KEY REQUIRED"}
             </p>
           </div>
         </div>
       </header>
 
-      {/* Status */}
       <section
         className={cn(
-          "mt-6 rounded-[26px] border p-5 sm:p-6",
+          "mt-6 rounded-xl border p-5 sm:p-6",
           ai?.configured
-            ? "border-brand-mint bg-brand-mint/45"
-            : "border-brand-lime bg-brand-lime/45",
+            ? "border-brand-mint/20 bg-brand-mint/[0.04]"
+            : "border-brand-lime/25 bg-brand-lime/[0.04]",
         )}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <span
             className={cn(
-              "grid size-11 shrink-0 place-items-center rounded-2xl border border-brand-ink/10",
-              ai?.configured ? "bg-brand-mint" : "bg-brand-lime",
+              "grid size-10 shrink-0 place-items-center rounded-md border",
+              ai?.configured
+                ? "border-brand-mint/25 bg-brand-mint/10 text-brand-mint"
+                : "border-brand-lime/25 bg-brand-lime/10 text-brand-lime",
             )}
           >
             {ai === undefined ? (
-              <Loader2 className="size-5 animate-spin text-brand-ink/50" />
+              <Loader2 className="size-4 animate-spin" />
             ) : ai.configured ? (
-              <ShieldCheck className="size-5 text-brand-ink" />
+              <ShieldCheck className="size-4" />
             ) : (
-              <AlertCircle className="size-5 text-brand-ink" />
+              <AlertCircle className="size-4" />
             )}
           </span>
           <div className="flex-1">
-            <h2 className="font-display text-lg font-bold text-brand-ink">
+            <p className="mono-label text-muted-foreground">NVIDIA_API_KEY</p>
+            <h2 className="mt-1.5 font-display text-lg font-semibold text-brand-ink">
               {ai === undefined
-                ? "Checking NVIDIA_API_KEY…"
+                ? "Checking the deployment…"
                 : ai.configured
                   ? ai.source === "env"
-                    ? "Connected via the deployment environment"
-                    : "Connected via a saved server key"
-                  : "No NVIDIA key yet"}
+                    ? "Connected through the environment"
+                    : "Connected through a saved server key"
+                  : "No key configured"}
             </h2>
-            <p className="mt-1 max-w-2xl text-[12.5px] leading-relaxed text-brand-ink/60">
+            <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted-foreground">
               {ai === undefined
-                ? "Looking for the key on the Convex deployment."
+                ? "Looking for NVIDIA_API_KEY on the Convex deployment."
                 : ai.configured
                   ? ai.source === "env"
-                    ? "NVIDIA_API_KEY is set in the Convex deployment environment and takes priority over any saved key. It is only read by server actions."
+                    ? "NVIDIA_API_KEY is set in the deployment environment and takes priority over any saved fallback. It is only read by server functions."
                     : "A key is stored in a server-only Convex table. It is never returned by a query or sent to the browser."
-                  : "Add your NVIDIA API key below, or set NVIDIA_API_KEY in the deployment environment. Generation stays unavailable until one exists."}
+                  : "Add a key below, or set NVIDIA_API_KEY in the deployment environment. Set compilation stays paused until one is present."}
             </p>
 
             {ai?.configured && (
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-bold text-brand-ink/60">
-                  <Check className="size-3" /> Verified with NVIDIA
+              <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[9px] tracking-wide">
+                <span className="inline-flex items-center gap-1 rounded border border-brand-mint/20 bg-brand-mint/[0.06] px-1.5 py-0.5 text-brand-mint">
+                  <Check className="size-2.5" /> VERIFIED
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2.5 py-1 text-[10px] font-bold text-brand-ink/60">
-                  <LockKeyhole className="size-3" /> Never exposed to the frontend
+                <span className="inline-flex items-center gap-1 rounded border border-border bg-brand-panel px-1.5 py-0.5 text-muted-foreground">
+                  <LockKeyhole className="size-2.5" /> SERVER ONLY
                 </span>
               </div>
             )}
@@ -172,29 +187,26 @@ export default function Setup() {
         </div>
       </section>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
-        {/* Key form / instructions */}
-        <section className="rounded-[26px] border border-brand-ink/12 bg-card p-5 sm:p-6">
+      <div className="mt-3 grid gap-3 lg:grid-cols-[1.25fr_0.75fr]">
+        <section className="rounded-xl border border-border bg-card p-5 sm:p-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="font-display text-lg font-bold">
-                {envConfigured ? "Set in the environment" : "Add a key here"}
+              <p className="mono-label text-muted-foreground">CONFIGURATION</p>
+              <h2 className="mt-1.5 font-display text-lg font-semibold">
+                {envConfigured ? "Set by the environment" : "Save a fallback key"}
               </h2>
-              <p className="mt-1 text-[12px] leading-relaxed text-brand-ink/50">
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
                 {envConfigured
-                  ? "To change it, update NVIDIA_API_KEY in your Convex deployment. A saved key is ignored while the environment variable exists."
-                  : "The key is checked with a tiny NVIDIA request before it is stored. It stays on the server."}
+                  ? "To rotate it, update NVIDIA_API_KEY on the Convex deployment. A saved key is ignored while the environment variable exists."
+                  : "The key is verified with NVIDIA before it is stored. It stays on the server."}
               </p>
             </div>
-            <KeyRound className="size-5 shrink-0 text-brand-ink/30" />
+            <KeyRound className="size-4 shrink-0 text-muted-foreground" />
           </div>
 
           {!envConfigured ? (
             <form onSubmit={handleSubmit} className="mt-5">
-              <label
-                htmlFor="nvidia-key"
-                className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-ink/45"
-              >
+              <label htmlFor="nvidia-key" className="mono-label text-muted-foreground">
                 NVIDIA_API_KEY
               </label>
               <div className="mt-2 flex gap-2">
@@ -208,24 +220,24 @@ export default function Setup() {
                     autoComplete="off"
                     spellCheck={false}
                     disabled={saving}
-                    className="h-11 rounded-xl border-brand-ink/15 bg-brand-cream/40 pr-10 font-mono text-[12px]"
+                    className="h-10 rounded-md border-border bg-brand-panel pr-10 font-mono text-[11px] text-brand-ink placeholder:text-muted-foreground/60"
                   />
                   <button
                     type="button"
                     aria-label={showKey ? "Hide key" : "Show key"}
                     onClick={() => setShowKey((value) => !value)}
-                    className="absolute right-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-brand-ink/35 transition hover:bg-brand-ink/5 hover:text-brand-ink"
+                    className="absolute right-2 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-muted-foreground transition-colors hover:bg-background hover:text-brand-ink"
                   >
-                    {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    {showKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                   </button>
                 </div>
                 <Button
                   type="submit"
                   disabled={saving || key.trim().length === 0}
-                  className="h-11 shrink-0 rounded-xl border-2 border-brand-ink bg-brand-pink px-4 font-bold text-brand-ink hover:bg-brand-pink-deep hover:text-brand-cream"
+                  className="h-10 shrink-0 rounded-md bg-brand-pink px-4 font-mono text-[10px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep"
                 >
                   {saving ? (
-                    <Loader2 className="size-4 animate-spin" />
+                    <Loader2 className="size-3.5 animate-spin" />
                   ) : (
                     <>
                       Verify
@@ -236,135 +248,116 @@ export default function Setup() {
               </div>
 
               {error && (
-                <div className="mt-3 flex items-start gap-2 rounded-xl bg-destructive/10 px-3 py-2.5 text-[12px] font-medium text-destructive">
-                  <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-[11px] leading-relaxed text-destructive">
+                  <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <p className="mt-2 text-[11px] leading-relaxed text-brand-ink/35">
-                Stored in Convex, excluded from the public API. Nothing is printed to the
-                console or written to the browser's local storage.
+              <p className="mt-2 font-mono text-[9px] leading-relaxed tracking-wide text-muted-foreground/60">
+                STORED IN CONVEX / EXCLUDED FROM THE PUBLIC API / NEVER LOGGED
               </p>
             </form>
           ) : (
-            <div className="mt-5 rounded-xl border border-brand-ink/10 bg-brand-cream/50 p-4">
+            <div className="mt-5 rounded-md border border-border bg-brand-panel p-4">
               <div className="flex items-start gap-2">
-                <Server className="mt-0.5 size-4 shrink-0 text-brand-ink/50" />
+                <Server className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                 <div>
-                  <p className="text-[12px] font-bold text-brand-ink">
-                    Prefer the environment variable
+                  <p className="text-[11.5px] font-medium text-brand-ink">
+                    Environment variable preferred
                   </p>
-                  <p className="mt-0.5 text-[11.5px] leading-relaxed text-brand-ink/50">
+                  <p className="mt-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
                     Set NVIDIA_API_KEY once on the deployment, then share the app. Every
-                    partner account uses it automatically.
+                    account uses the same pipeline.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          <div className="mt-5 border-t border-brand-ink/10 pt-4">
-            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-ink/40">
-              Server environment
-            </p>
-            <div className="mt-2 flex items-center gap-2 rounded-xl border border-brand-ink/10 bg-brand-ink px-3 py-2.5">
-              <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-brand-cream/80">
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="mono-label text-muted-foreground">SERVER ENVIRONMENT</p>
+            <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2.5">
+              <Terminal className="size-3.5 shrink-0 text-brand-pink" />
+              <code className="min-w-0 flex-1 truncate font-mono text-[10px] text-brand-ink/70">
                 npx convex env set NVIDIA_API_KEY &lt;your-key&gt;
               </code>
               <button
                 type="button"
                 aria-label="Copy environment command"
                 onClick={copyCommand}
-                className="grid size-7 shrink-0 place-items-center rounded-md text-brand-cream/50 transition hover:bg-brand-cream/10 hover:text-brand-cream"
+                className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-brand-panel hover:text-brand-ink"
               >
-                <Copy className="size-3.5" />
+                <Copy className="size-3" />
               </button>
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-brand-ink/35">
-              The exact command depends on how you run Convex. On Freebuff, add
-              NVIDIA_API_KEY in the project's Keys tab instead.
+            <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/70">
+              Exact steps depend on how Convex is hosted. On Freebuff, add NVIDIA_API_KEY in
+              the project's Keys tab.
             </p>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-4">
             <Button
               asChild
               variant="outline"
-              className="h-10 w-full rounded-xl border-brand-ink/15 font-semibold"
+              className="h-9 w-full rounded-md border-border bg-transparent font-mono text-[10px] tracking-wide"
             >
               <a href="https://build.nvidia.com/" target="_blank" rel="noreferrer">
-                Get a key from NVIDIA Build
-                <ExternalLink className="size-3.5" />
+                GET A KEY FROM NVIDIA BUILD
+                <ExternalLink className="size-3" />
               </a>
             </Button>
           </div>
         </section>
 
-        {/* Side info */}
-        <aside className="space-y-4">
-          <section className="rounded-[26px] border border-brand-ink/12 bg-card p-5">
+        <aside className="space-y-3">
+          <section className="rounded-xl border border-border bg-card p-5">
             <div className="flex items-center gap-2">
-              <span className="grid size-7 place-items-center rounded-lg bg-brand-sky/70">
-                <Cpu className="size-3.5 text-brand-ink" />
-              </span>
-              <h2 className="font-display text-sm font-bold uppercase tracking-[0.1em] text-brand-ink/60">
-                Models in use
-              </h2>
+              <Cpu className="size-3.5 text-brand-sky" />
+              <h2 className="mono-label text-muted-foreground">MODELS IN USE</h2>
             </div>
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 space-y-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-brand-ink/35">
-                  Notes & generation
+                <p className="font-mono text-[9px] tracking-wide text-muted-foreground/70">
+                  NOTES / GENERATION
                 </p>
-                <p className="break-all font-mono text-[11px] text-brand-ink/65">
+                <p className="mt-0.5 break-all font-mono text-[10px] text-brand-ink/75">
                   {ai?.textModel ?? "nvidia/nemotron-3.5-lightning-30b-a3b"}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-brand-ink/35">
-                  Photo reading
+                <p className="font-mono text-[9px] tracking-wide text-muted-foreground/70">
+                  PHOTO READING
                 </p>
-                <p className="break-all font-mono text-[11px] text-brand-ink/65">
+                <p className="mt-0.5 break-all font-mono text-[10px] text-brand-ink/75">
                   {ai?.visionModel ?? "meta/llama-3.2-90b-vision-instruct"}
                 </p>
               </div>
             </div>
-            <p className="mt-3 text-[11px] leading-relaxed text-brand-ink/35">
-              Override with NVIDIA_TEXT_MODEL or NVIDIA_VISION_MODEL if NVIDIA retires a
-              model.
+            <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground/70">
+              Override with NVIDIA_TEXT_MODEL or NVIDIA_VISION_MODEL if a model is retired.
             </p>
           </section>
 
-          <section className="rounded-[26px] border border-brand-ink/12 bg-brand-lime/40 p-5">
+          <section className="rounded-xl border border-border bg-card p-5">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-brand-ink" />
-              <h2 className="font-display text-sm font-bold uppercase tracking-[0.1em] text-brand-ink/60">
-                Small-group notes
-              </h2>
+              <ShieldCheck className="size-3.5 text-brand-mint" />
+              <h2 className="mono-label text-muted-foreground">OPERATING NOTES</h2>
             </div>
-            <ul className="mt-3 space-y-2 text-[11.5px] leading-relaxed text-brand-ink/60">
-              <li className="flex items-start gap-2">
-                <Check className="mt-0.5 size-3.5 shrink-0" />
-                All usage bills to the NVIDIA account that owns the key.
-              </li>
-              <li className="flex items-start gap-2">
-                <Check className="mt-0.5 size-3.5 shrink-0" />
-                Friends sign in separately and only see their own sets.
-              </li>
-              <li className="flex items-start gap-2">
-                <Check className="mt-0.5 size-3.5 shrink-0" />
-                Rate limits are handled with clear retry messages.
-              </li>
+            <ul className="mt-3 space-y-2 text-[10.5px] leading-relaxed text-muted-foreground">
+              {[
+                "Usage bills to the NVIDIA account that owns the key.",
+                "Friends sign in separately and only see their own sets.",
+                "Rate limits are retried briefly, then reported per set.",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <Check className="mt-0.5 size-3 shrink-0 text-brand-mint" />
+                  {item}
+                </li>
+              ))}
             </ul>
           </section>
-
-          <div className="flex items-center gap-3 rounded-2xl border border-brand-ink/10 bg-white p-3">
-            <Pip size={48} />
-            <p className="text-[11px] font-medium leading-relaxed text-brand-ink/50">
-              Once the key is verified, head back and make your first set.
-            </p>
-          </div>
         </aside>
       </div>
     </AppShell>

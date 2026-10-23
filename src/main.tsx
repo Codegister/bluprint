@@ -151,8 +151,8 @@ createRoot(document.getElementById("root")!).render(
                 path="/setup"
                 element={
                   <RequireAuth
-                    title="Sign in to set up AI"
-                    description="The NVIDIA connection is shared by everyone using this app."
+                    title="Sign in to configure model access"
+                    description="The NVIDIA connection is shared by everyone using Bluprint."
                   >
                     <Setup />
                   </RequireAuth>

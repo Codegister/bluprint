@@ -225,7 +225,7 @@ function parseSummary(raw: string): Summary {
     ? parsed.examFocus.map((point) => asText(point, 500)).filter(Boolean).slice(0, 6)
     : [];
   if (!overview || keyPoints.length < 2) {
-    throw new Error("Pip could not build a useful summary from this material. Try a clearer photo or more notes.");
+    throw new Error("Bluprint could not build a useful summary from this material. Try a clearer photo or more notes.");
   }
   return { overview, keyPoints, examFocus };
 }
@@ -233,7 +233,7 @@ function parseSummary(raw: string): Summary {
 function parseCards(raw: string): GeneratedCard[] {
   const parsed = parseModelJson<{ cards?: unknown }>(raw);
   if (!Array.isArray(parsed.cards)) {
-    throw new Error("Pip couldn't read the flashcards it generated. Please retry.");
+    throw new Error("The model returned unreadable flashcards. Retry the build.");
   }
   const cards = parsed.cards
     .map((card) => {
@@ -243,7 +243,7 @@ function parseCards(raw: string): GeneratedCard[] {
     .filter((card) => card.front && card.back)
     .slice(0, 12);
   if (cards.length < 3) {
-    throw new Error("Pip couldn't generate enough flashcards from this material. Try adding more notes.");
+    throw new Error("Not enough flashcards could be generated from this material. Add more notes and retry.");
   }
   return cards;
 }
@@ -251,7 +251,7 @@ function parseCards(raw: string): GeneratedCard[] {
 function parseQuiz(raw: string): GeneratedQuiz[] {
   const parsed = parseModelJson<{ questions?: unknown }>(raw);
   if (!Array.isArray(parsed.questions)) {
-    throw new Error("Pip couldn't read the quiz it generated. Please retry.");
+    throw new Error("The model returned an unreadable quiz. Retry the build.");
   }
   const questions: GeneratedQuiz[] = [];
   for (const item of parsed.questions) {
@@ -276,7 +276,7 @@ function parseQuiz(raw: string): GeneratedQuiz[] {
   }
   const trimmed = questions.slice(0, 6);
   if (trimmed.length < 3) {
-    throw new Error("Pip couldn't generate enough quiz questions. Try retrying or adding more material.");
+    throw new Error("Not enough quiz questions could be generated. Retry the build or add more material.");
   }
   return trimmed;
 }
@@ -284,7 +284,7 @@ function parseQuiz(raw: string): GeneratedQuiz[] {
 function parseExams(raw: string): GeneratedExam[] {
   const parsed = parseModelJson<{ questions?: unknown }>(raw);
   if (!Array.isArray(parsed.questions)) {
-    throw new Error("Pip couldn't read the exam questions it generated. Please retry.");
+    throw new Error("The model returned unreadable exam questions. Retry the build.");
   }
   const questions: GeneratedExam[] = [];
   for (const item of parsed.questions) {
@@ -308,7 +308,7 @@ function parseExams(raw: string): GeneratedExam[] {
   }
   const trimmed = questions.slice(0, 4);
   if (trimmed.length === 0) {
-    throw new Error("Pip couldn't generate exam-style questions from this material. Please retry.");
+    throw new Error("No exam-style questions could be generated from this material. Retry or add more notes.");
   }
   return trimmed;
 }
@@ -318,7 +318,7 @@ function parseExams(raw: string): GeneratedExam[] {
 // ---------------------------------------------------------------------------
 
 const SYSTEM_PROMPT =
-  "You are Pip, a precise and encouraging study assistant for university students. " +
+  "You are Bluprint, a precise study assistant for university students. " +
   "You only use the supplied study material. Respond with strict JSON and no markdown fences, commentary, or extra keys.";
 
 function materialBlock(notes: string): string {
@@ -506,7 +506,7 @@ export const processStudySet = action({
 
       if (notes.length < 40) {
         throw new Error(
-          "Pip couldn't find enough readable text in this upload. Try brighter, closer photos or add a little pasted text.",
+          "Bluprint couldn't find enough readable text in this upload. Try brighter, closer photos or add a little pasted text.",
         );
       }
 
@@ -596,7 +596,7 @@ export const gradeExamAnswer = action({
     const userId = await requireUserId(ctx);
     const response = answer.trim();
     if (response.length < 15) {
-      throw new Error("Write a fuller answer before asking Pip to mark it.");
+      throw new Error("Write a fuller answer before sending it for grading.");
     }
 
     const data = await ctx.runQuery(internal.studySets.getExamForGrading, { examId });
@@ -631,7 +631,7 @@ export const gradeExamAnswer = action({
     const awardedRaw = Number(parsed.awardedMarks);
     const feedback = asText(parsed.feedback, 2500);
     if (!Number.isFinite(awardedRaw) || !feedback) {
-      throw new Error("Pip couldn't mark that answer cleanly. Please retry.");
+      throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
     }
 
     const awardedMarks = Math.max(0, Math.min(exam.marks, Math.round(awardedRaw)));

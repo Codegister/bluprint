@@ -162,7 +162,7 @@ export const create = mutation({
     const userId = await requireUserId(ctx);
     const notes = args.notes.trim();
     if (args.sourceType === "text" && notes.length < 40) {
-      throw new Error("Paste at least a few sentences so Pip has something to work with.");
+      throw new Error("Paste at least a few sentences so Bluprint has source material.");
     }
     if (notes.length > 60_000) {
       throw new Error("That's a lot of notes. Please use under 60,000 characters.");
@@ -181,7 +181,7 @@ export const create = mutation({
       sourceLabel: args.sourceLabel?.slice(0, 120),
       sourceImageIds: args.sourceImageIds.slice(0, 10),
       status: "queued",
-      progress: "Waiting for Pip…",
+      progress: "Queued",
       cardCount: 0,
       quizCount: 0,
       examCount: 0,

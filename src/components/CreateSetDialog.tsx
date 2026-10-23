@@ -67,7 +67,6 @@ export function CreateSetDialog({
   const [error, setError] = useState<string | null>(null);
   const previewsRef = useRef<string[]>([]);
 
-  // Object URLs must be released when the dialog goes away.
   useEffect(() => {
     return () => {
       previewsRef.current.forEach((preview) => URL.revokeObjectURL(preview));
@@ -102,13 +101,13 @@ export function CreateSetDialog({
     setError(null);
     const incoming = Array.from(files).filter((file) => file.type.startsWith("image/"));
     if (incoming.length === 0) {
-      setError("Those files don't look like images. Try JPG or PNG photos.");
+      setError("Those files aren't images. Use JPG or PNG photos.");
       return;
     }
     setImages((current) => {
       const room = MAX_PHOTOS - current.length;
       if (room <= 0) {
-        toast.error(`You can add up to ${MAX_PHOTOS} photos per set.`);
+        toast.error(`Maximum ${MAX_PHOTOS} photos per set.`);
         return current;
       }
       const accepted = incoming.slice(0, room).map((file) => {
@@ -137,7 +136,7 @@ export function CreateSetDialog({
       body: blob,
     });
     if (!response.ok) {
-      throw new Error("That upload didn't go through. Check your connection and try again.");
+      throw new Error("Upload failed. Check your connection and try again.");
     }
     const payload = (await response.json()) as { storageId: string };
     return payload.storageId as Id<"_storage">;
@@ -156,7 +155,7 @@ export function CreateSetDialog({
     setError(null);
 
     if (ai?.configured === false) {
-      setError("Pip needs an NVIDIA key before it can generate a set. Open AI setup to add one.");
+      setError("NVIDIA_API_KEY isn't configured. Open API access before compiling a set.");
       return;
     }
     if (mode === "photos" && images.length === 0) {
@@ -168,7 +167,7 @@ export function CreateSetDialog({
       return;
     }
     if (mode === "text" && text.trim().length < 40) {
-      setError("Paste at least a few sentences so Pip has something to work with.");
+      setError("Paste at least a few sentences so Bluprint has source material.");
       return;
     }
 
@@ -192,7 +191,7 @@ export function CreateSetDialog({
       }
 
       if (mode === "video" && videoFile) {
-        setStep("Sampling six frames from your video…");
+        setStep("Sampling six frames from the video…");
         const frames = await extractVideoFrames(videoFile, 6);
         sourceImageIds = await uploadFrames(frames);
         sourceLabel = videoFile.name.slice(0, 100);
@@ -210,23 +209,23 @@ export function CreateSetDialog({
             ? titleFromFile(images[0].file.name)
             : text.trim().split("\n")[0]?.slice(0, 60) ?? "Study set";
 
-      setStep("Saving your set…");
+      setStep("Saving set…");
       const setId = await createSet({
-        title: title.trim() || fallbackTitle || "New study set",
+        title: title.trim() || fallbackTitle || "New set",
         notes,
         sourceType,
         sourceLabel,
         sourceImageIds,
       });
 
-      toast.success("Set created — Pip is reading it now.");
+      toast.success("Set created. Bluprint is compiling it now.");
       reset();
       onOpenChange(false);
       navigate(`/sets/${setId}`);
     } catch (submitError) {
       const message = readableError(
         submitError,
-        "Could not create that set. Please try again.",
+        "Could not create that set. Try again.",
       );
       setError(message);
       toast.error(message);
@@ -238,29 +237,30 @@ export function CreateSetDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-[26px] border-brand-ink/15 p-0 shadow-none sm:max-w-2xl">
-        <div className="border-b border-brand-ink/10 bg-brand-cream/60 px-5 py-5 sm:px-6">
+      <DialogContent className="max-h-[92vh] overflow-y-auto rounded-xl border-border bg-card p-0 shadow-none sm:max-w-2xl">
+        <div className="border-b border-border bg-brand-panel px-5 py-5 sm:px-6">
           <DialogHeader>
-            <DialogTitle className="font-display text-2xl font-bold">
-              New study set
+            <p className="mono-label text-brand-pink">COMPILE / NEW SET</p>
+            <DialogTitle className="mt-1.5 font-display text-xl font-semibold">
+              Add source material
             </DialogTitle>
-            <DialogDescription className="text-[13px] text-brand-ink/55">
-              Give Pip something to read. It builds the summary, cards, quiz and exam
-              practice for you.
+            <DialogDescription className="text-[12px] leading-relaxed text-muted-foreground">
+              One upload. Bluprint extracts the text and generates a summary, cards, quiz
+              and exam practice in a single run.
             </DialogDescription>
           </DialogHeader>
         </div>
 
         <div className="px-5 py-5 sm:px-6">
           {ai?.configured === false && (
-            <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-brand-lime bg-brand-lime/40 p-3">
-              <KeyRound className="mt-0.5 size-4 shrink-0 text-brand-ink" />
-              <p className="text-[12px] leading-relaxed text-brand-ink/70">
-                NVIDIA_API_KEY isn't set yet.{" "}
-                <Link to="/setup" className="font-bold underline underline-offset-2">
-                  Open AI setup
+            <div className="mb-4 flex items-start gap-2.5 rounded-md border border-brand-lime/25 bg-brand-lime/[0.06] p-3">
+              <KeyRound className="mt-0.5 size-3.5 shrink-0 text-brand-lime" />
+              <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+                NVIDIA_API_KEY isn't configured yet.{" "}
+                <Link to="/setup" className="font-medium text-brand-lime underline underline-offset-2">
+                  Open API access
                 </Link>{" "}
-                first — you can still draft a set now.
+                to connect a model. You can still prepare a set.
               </p>
             </div>
           )}
@@ -268,9 +268,9 @@ export function CreateSetDialog({
           <div>
             <label
               htmlFor="set-title"
-              className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-ink/45"
+              className="mono-label text-muted-foreground"
             >
-              Set name <span className="font-medium normal-case tracking-normal">(optional)</span>
+              SET NAME / OPTIONAL
             </label>
             <Input
               id="set-title"
@@ -278,7 +278,7 @@ export function CreateSetDialog({
               onChange={(event) => setTitle(event.target.value)}
               placeholder="e.g. Cell biology — Unit 2"
               maxLength={80}
-              className="mt-2 h-10 rounded-xl border-brand-ink/15 bg-white text-sm"
+              className="mt-2 h-10 rounded-md border-border bg-brand-panel text-sm text-brand-ink placeholder:text-muted-foreground/60"
               disabled={isLoading}
             />
           </div>
@@ -291,17 +291,17 @@ export function CreateSetDialog({
             }}
             className="mt-5 gap-4"
           >
-            <TabsList className="grid h-auto w-full grid-cols-3 rounded-xl bg-brand-cream p-1">
+            <TabsList className="grid h-auto w-full grid-cols-3 rounded-md border border-border bg-background p-1">
               {[
-                { value: "photos", label: "Photos", icon: <Camera className="size-3.5" /> },
-                { value: "video", label: "Video", icon: <Video className="size-3.5" /> },
-                { value: "text", label: "Paste text", icon: <FileText className="size-3.5" /> },
+                { value: "photos", label: "PHOTOS", icon: <Camera className="size-3.5" /> },
+                { value: "video", label: "VIDEO", icon: <Video className="size-3.5" /> },
+                { value: "text", label: "TEXT", icon: <FileText className="size-3.5" /> },
               ].map((tab) => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
                   disabled={isLoading}
-                  className="h-9 rounded-lg px-2 text-[12px] font-semibold data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-none"
+                  className="h-8 rounded font-mono text-[10px] tracking-wide text-muted-foreground data-[state=active]:border data-[state=active]:border-brand-pink/25 data-[state=active]:bg-brand-pink/10 data-[state=active]:text-brand-pink data-[state=active]:shadow-none"
                 >
                   {tab.icon}
                   {tab.label}
@@ -312,19 +312,19 @@ export function CreateSetDialog({
             <TabsContent value="photos" className="mt-0">
               <label
                 className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-brand-ink/20 bg-brand-cream/40 px-4 py-7 text-center transition-colors hover:border-brand-ink/40 hover:bg-brand-cream/70",
+                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-brand-panel/50 px-4 py-7 text-center transition-colors hover:border-brand-pink/40 hover:bg-brand-panel",
                   isLoading && "pointer-events-none opacity-60",
                 )}
               >
-                <span className="grid size-11 place-items-center rounded-2xl border border-brand-ink/10 bg-white">
-                  <ImagePlus className="size-5 text-brand-ink" />
+                <span className="grid size-10 place-items-center rounded-md border border-brand-pink/25 bg-brand-pink/10 text-brand-pink">
+                  <ImagePlus className="size-4" />
                 </span>
-                <span className="text-sm font-bold text-brand-ink">
-                  Choose photos of your notes
+                <span className="font-mono text-[10.5px] tracking-wide text-brand-ink">
+                  SELECT PHOTOS
                 </span>
-                <span className="max-w-xs text-[11px] leading-relaxed text-brand-ink/45">
-                  Printed or handwritten pages, up to {MAX_PHOTOS}. Photos are compressed in
-                  your browser before upload.
+                <span className="max-w-xs text-[10.5px] leading-relaxed text-muted-foreground">
+                  Printed or handwritten pages, up to {MAX_PHOTOS}. Images are compressed in
+                  the browser before upload.
                 </span>
                 <input
                   type="file"
@@ -344,7 +344,7 @@ export function CreateSetDialog({
                   {images.map((image) => (
                     <div
                       key={image.preview}
-                      className="group relative aspect-square overflow-hidden rounded-xl border border-brand-ink/10 bg-white"
+                      className="group relative aspect-square overflow-hidden rounded-md border border-border bg-brand-panel"
                     >
                       <img
                         src={image.preview}
@@ -355,9 +355,9 @@ export function CreateSetDialog({
                         type="button"
                         aria-label={`Remove ${image.file.name}`}
                         onClick={() => removePhoto(image.preview)}
-                        className="absolute right-1 top-1 grid size-6 place-items-center rounded-full border border-brand-ink/15 bg-white/95 text-brand-ink transition hover:bg-brand-pink"
+                        className="absolute right-1 top-1 grid size-5 place-items-center rounded border border-border bg-background/90 text-muted-foreground transition hover:text-brand-peach"
                       >
-                        <X className="size-3" />
+                        <X className="size-2.5" />
                       </button>
                     </div>
                   ))}
@@ -368,19 +368,19 @@ export function CreateSetDialog({
             <TabsContent value="video" className="mt-0">
               <label
                 className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-brand-ink/20 bg-brand-cream/40 px-4 py-7 text-center transition-colors hover:border-brand-ink/40 hover:bg-brand-cream/70",
+                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-brand-panel/50 px-4 py-7 text-center transition-colors hover:border-brand-pink/40 hover:bg-brand-panel",
                   isLoading && "pointer-events-none opacity-60",
                 )}
               >
-                <span className="grid size-11 place-items-center rounded-2xl border border-brand-ink/10 bg-white">
-                  <Upload className="size-5 text-brand-ink" />
+                <span className="grid size-10 place-items-center rounded-md border border-brand-sky/25 bg-brand-sky/10 text-brand-sky">
+                  <Upload className="size-4" />
                 </span>
-                <span className="text-sm font-bold text-brand-ink">
-                  Choose a video of your notes
+                <span className="font-mono text-[10.5px] tracking-wide text-brand-ink">
+                  SELECT VIDEO
                 </span>
-                <span className="max-w-sm text-[11px] leading-relaxed text-brand-ink/45">
-                  We sample six frames in your browser, so the video itself stays on your
-                  device. Best for lecture slides, whiteboards or pages you're panning over.
+                <span className="max-w-sm text-[10.5px] leading-relaxed text-muted-foreground">
+                  Six frames are sampled in the browser, so the video stays on your device.
+                  Best for slides, whiteboards or pages you pan over.
                 </span>
                 <input
                   type="file"
@@ -397,16 +397,16 @@ export function CreateSetDialog({
               </label>
 
               {videoFile && (
-                <div className="mt-3 flex items-center gap-3 rounded-xl border border-brand-ink/10 bg-white p-3">
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-sky">
-                    <Video className="size-4 text-brand-ink" />
+                <div className="mt-3 flex items-center gap-3 rounded-md border border-border bg-brand-panel p-3">
+                  <span className="grid size-8 shrink-0 place-items-center rounded border border-brand-sky/25 bg-brand-sky/10 text-brand-sky">
+                    <Video className="size-3.5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-semibold text-brand-ink">
+                    <p className="truncate text-[11.5px] font-medium text-brand-ink">
                       {videoFile.name}
                     </p>
-                    <p className="text-[11px] text-brand-ink/45">
-                      {fileSize(videoFile.size)} · 6 frames will be sampled
+                    <p className="mt-0.5 font-mono text-[9px] tracking-wide text-muted-foreground">
+                      {fileSize(videoFile.size)} / 6 FRAMES
                     </p>
                   </div>
                   <Button
@@ -414,11 +414,11 @@ export function CreateSetDialog({
                     variant="ghost"
                     size="icon-sm"
                     aria-label="Remove video"
-                    className="text-brand-ink/40 hover:text-brand-ink"
+                    className="text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
                     onClick={() => setVideoFile(null)}
                     disabled={isLoading}
                   >
-                    <Trash2 className="size-4" />
+                    <Trash2 className="size-3.5" />
                   </Button>
                 </div>
               )}
@@ -428,27 +428,27 @@ export function CreateSetDialog({
               <Textarea
                 value={text}
                 onChange={(event) => setText(event.target.value)}
-                placeholder="Paste lecture notes, a textbook section or your own writing here…"
+                placeholder="Paste lecture notes, a textbook section or your own writing…"
                 maxLength={20_000}
                 rows={8}
                 disabled={isLoading}
-                className="min-h-[180px] resize-y rounded-xl border-brand-ink/15 bg-white text-sm leading-relaxed"
+                className="min-h-[180px] resize-y rounded-md border-border bg-brand-panel text-[13px] leading-relaxed text-brand-ink placeholder:text-muted-foreground/60"
               />
-              <div className="mt-1.5 flex items-center justify-between text-[11px] text-brand-ink/40">
-                <span>At least a few sentences works best.</span>
+              <div className="mt-1.5 flex items-center justify-between font-mono text-[9px] tracking-wide text-muted-foreground">
+                <span>AT LEAST A FEW SENTENCES WORKS BEST</span>
                 <span>{text.length.toLocaleString()} / 20,000</span>
               </div>
             </TabsContent>
           </Tabs>
 
           {error && (
-            <div className="mt-4 flex items-start gap-2 rounded-xl bg-destructive/10 px-3 py-2.5 text-[12px] font-medium text-destructive">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <div className="mt-4 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-[11.5px] leading-relaxed text-destructive">
+              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
               <span>
                 {error}{" "}
                 {error.includes("NVIDIA") && (
-                  <Link to="/setup" className="font-bold underline underline-offset-2">
-                    Open AI setup
+                  <Link to="/setup" className="font-medium underline underline-offset-2">
+                    Open API access
                   </Link>
                 )}
               </span>
@@ -456,25 +456,25 @@ export function CreateSetDialog({
           )}
 
           {isLoading && step && (
-            <p className="mt-4 flex items-center gap-2 rounded-xl bg-brand-cream/70 px-3 py-2 text-[11px] font-semibold text-brand-ink/55">
-              <Loader2 className="size-3.5 shrink-0 animate-spin" />
-              {step}
+            <p className="mt-4 flex items-center gap-2 rounded-md border border-border bg-brand-panel px-3 py-2 font-mono text-[9.5px] tracking-wide text-muted-foreground">
+              <Loader2 className="size-3 shrink-0 animate-spin" />
+              {step.toUpperCase()}
             </p>
           )}
 
-          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[11px] text-brand-ink/40">
+          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="font-mono text-[9px] leading-relaxed tracking-wide text-muted-foreground/70">
               {mode === "photos"
-                ? "Pip reads the text it can see. Clear, straight-on photos work best."
+                ? "CLEAR, STRAIGHT-ON PHOTOS TRANSCRIBE BEST"
                 : mode === "video"
-                  ? "Slides and printed pages transcribe best. Handwriting must be legible."
-                  : "Your pasted notes are saved with the set."}
+                  ? "SLIDES AND PRINTED PAGES WORK BEST"
+                  : "PASTED NOTES ARE STORED WITH THE SET"}
             </p>
             <div className="flex gap-2 sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
-                className="h-10 flex-1 rounded-xl border-brand-ink/15 font-semibold sm:flex-none"
+                className="h-9 flex-1 rounded-md border-border bg-transparent font-mono text-[10px] tracking-wide sm:flex-none"
                 onClick={() => handleClose(false)}
                 disabled={isLoading}
               >
@@ -484,17 +484,17 @@ export function CreateSetDialog({
                 type="button"
                 onClick={handleSubmit}
                 disabled={isLoading}
-                className="h-10 flex-1 rounded-xl border-2 border-brand-ink bg-brand-pink font-bold text-brand-ink hover:bg-brand-pink-deep hover:text-brand-cream sm:flex-none"
+                className="h-9 flex-1 rounded-md bg-brand-pink font-mono text-[10.5px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep sm:flex-none"
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="size-4 animate-spin" />
+                    <Loader2 className="size-3.5 animate-spin" />
                     Working…
                   </>
                 ) : (
                   <>
-                    Build my set
-                    <span aria-hidden>→</span>
+                    Compile set
+                    <ArrowRightIcon />
                   </>
                 )}
               </Button>
@@ -503,5 +503,23 @@ export function CreateSetDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ArrowRightIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
   );
 }

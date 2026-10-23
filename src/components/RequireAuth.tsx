@@ -1,8 +1,8 @@
 import { Brand } from "@/components/Brand";
-import { Pip } from "@/components/Pip";
+import { BlueprintGlyph } from "@/components/BlueprintMark";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Lock } from "lucide-react";
+import { ArrowRight, Loader2, Lock } from "lucide-react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
 
@@ -20,11 +20,8 @@ export function RequireAuth({
   redirectImmediately = false,
 }: {
   children: ReactNode;
-  /** Headline on the blocked screen. */
   title?: string;
-  /** Says what the visitor gets by signing in. */
   description?: string;
-  /** Skip the explanation and go straight to `/auth`. */
   redirectImmediately?: boolean;
 }) {
   const { isLoading, isAuthenticated } = useAuth();
@@ -33,11 +30,11 @@ export function RequireAuth({
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-brand-cream">
-        <div className="grid size-20 place-items-center rounded-[24px] border-2 border-brand-ink bg-brand-lime">
-          <Pip size={64} mood="sleepy" />
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
+        <div className="grid size-16 place-items-center rounded-lg border border-border bg-brand-panel">
+          <BlueprintGlyph size={56} className="opacity-80" />
         </div>
-        <Loader2 className="size-5 animate-spin text-brand-ink/35" />
+        <Loader2 className="size-4 animate-spin text-muted-foreground" />
       </main>
     );
   }
@@ -51,51 +48,52 @@ export function RequireAuth({
     }
 
     return (
-      <div className="min-h-screen bg-brand-cream">
-        <header className="mx-auto flex h-[68px] w-full max-w-6xl items-center justify-between px-4 sm:px-6">
+      <div className="min-h-screen bg-background">
+        <header className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
           <Brand />
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="text-[12px] font-semibold text-brand-ink/45 hover:text-brand-ink"
+            className="font-mono text-[9.5px] tracking-wide text-muted-foreground hover:text-brand-ink"
           >
-            Back home
+            ← HOME
           </button>
         </header>
 
         <main className="flex items-center justify-center px-4 pb-20 pt-10">
-          <div className="w-full max-w-md rounded-[30px] border border-brand-ink/12 bg-white p-7 text-center sm:p-9">
-            <div className="relative mx-auto w-fit">
-              <div className="grid size-28 place-items-center rounded-[30px] border-2 border-brand-ink bg-brand-mint">
-                <Pip size={96} cap />
-              </div>
-              <span className="absolute -bottom-2 -right-2 grid size-9 place-items-center rounded-full border-2 border-brand-ink bg-brand-lime">
-                <Lock className="size-4 text-brand-ink" />
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-7 text-center sm:p-8">
+            <div className="relative mx-auto grid size-24 place-items-center rounded-lg border border-border bg-brand-panel">
+              <BlueprintGlyph size={84} className="opacity-80" />
+              <span className="absolute -bottom-2 -right-2 grid size-8 place-items-center rounded-md border border-brand-pink/30 bg-brand-pink/10">
+                <Lock className="size-3.5 text-brand-pink" />
               </span>
             </div>
 
-            <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-brand-ink/40">
-              Private to your account
+            <p className="mt-5 mono-label text-brand-pink">AUTH REQUIRED</p>
+            <h1 className="mt-2 font-display text-2xl font-semibold leading-tight">
+              {title}
+            </h1>
+            <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">
+              {description}
             </p>
-            <h1 className="mt-2 font-display text-2xl font-bold leading-tight">{title}</h1>
-            <p className="mt-2 text-[13px] leading-relaxed text-brand-ink/55">{description}</p>
-            <p className="mt-2 text-[12px] text-brand-ink/40">
-              You'll come straight back to this page once you're signed in.
+            <p className="mt-2 font-mono text-[9px] tracking-wide text-muted-foreground/70">
+              YOU'LL RETURN TO THIS PAGE AFTER SIGN-IN
             </p>
 
             <div className="mt-6 flex flex-col gap-2">
               <Button
                 onClick={() => navigate(signInHref)}
-                className="h-11 w-full rounded-xl border-2 border-brand-ink bg-brand-pink font-bold text-brand-ink hover:bg-brand-pink-deep hover:text-brand-cream"
+                className="h-10 w-full rounded-md bg-brand-pink font-mono text-[10.5px] font-medium tracking-wide text-brand-void hover:bg-brand-pink-deep"
               >
-                Sign in with email
+                SIGN IN WITH EMAIL
+                <ArrowRight className="size-3.5" />
               </Button>
               <Button
                 variant="ghost"
-                className="h-10 w-full rounded-xl font-semibold text-brand-ink/55 hover:bg-brand-cream hover:text-brand-ink"
+                className="h-9 w-full rounded-md font-mono text-[10px] tracking-wide text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
                 onClick={() => navigate("/")}
               >
-                Back to home
+                BACK TO HOME
               </Button>
             </div>
           </div>

@@ -1,15 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Pipnote">
-  <rect width="64" height="64" rx="16" fill="#211d35" />
-  <g stroke="#faf6ec" stroke-width="2.4" stroke-linejoin="round">
-    <path d="M22 28 L13 20 L20 30" fill="#ff7b9c" />
-    <path d="M20 35 L10 32 L20 39" fill="#f4507a" />
-    <path d="M22 42 L14 48 L23 45" fill="#ff7b9c" />
-    <path d="M42 28 L51 20 L44 30" fill="#ff7b9c" />
-    <path d="M44 35 L54 32 L44 39" fill="#f4507a" />
-    <path d="M42 42 L50 48 L41 45" fill="#ff7b9c" />
-    <path d="M22 36 L25 24 L32 20 L39 24 L42 36 L38 46 L32 50 L26 46 Z" fill="#ff9db4" />
-    <ellipse cx="28.5" cy="33" rx="2.6" ry="3.2" fill="#211d35" stroke="none" />
-    <ellipse cx="35.5" cy="33" rx="2.6" ry="3.2" fill="#211d35" stroke="none" />
-    <path d="M29.5 41 Q32 43 34.5 41" fill="none" stroke="#211d35" stroke-width="2" stroke-linecap="round" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bluprint">
+  <rect width="64" height="64" rx="12" fill="#0B1219" />
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="11.25" stroke="#22D3EE" stroke-opacity="0.35" stroke-width="1.5" fill="none" />
+  <g stroke="#22D3EE" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M32 8 54 21v22L32 56 10 43V21L32 8Z" />
+    <path d="M32 8v23m0 0 22-10M32 31 10 21m22 10v25" stroke-width="1.2" opacity="0.65" />
+    <path d="M21 15 43 28v12L21 27V15Z" stroke-width="1.1" opacity="0.35" />
   </g>
+  <circle cx="32" cy="31" r="2.4" fill="#22D3EE" />
+  <circle cx="54" cy="21" r="1.8" fill="#FACC15" />
 </svg>

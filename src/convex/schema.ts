@@ -32,10 +32,9 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
-    // A study set is one uploaded bundle of notes plus everything Pip (our AI
-    // study assistant) generated from it. `notes` is the plain text extracted
-    // from photos/video or pasted directly, so the source material survives
-    // between sessions as well.
+    // A study set is one uploaded bundle of notes plus everything Bluprint
+    // generated from it. `notes` is the plain text extracted from photos/video
+    // or pasted directly, so the source material survives between sessions.
     studySets: defineTable({
       userId: v.id("users"),
       title: v.string(),

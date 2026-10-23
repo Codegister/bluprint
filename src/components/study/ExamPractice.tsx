@@ -26,9 +26,9 @@ export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
 
   if (exams.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-brand-ink/15 bg-card p-10 text-center">
-        <p className="text-sm font-semibold text-brand-ink/60">
-          This set doesn't have exam questions yet.
+      <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
+        <p className="text-[12px] text-muted-foreground">
+          This set has no exam questions yet.
         </p>
       </div>
     );
@@ -39,7 +39,7 @@ export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
     if (answer.length < 15) {
       setErrors((current) => ({
         ...current,
-        [exam._id]: "Write a fuller answer before asking Pip to mark it.",
+        [exam._id]: "Write a fuller answer before sending it for grading.",
       }));
       return;
     }
@@ -48,9 +48,9 @@ export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
     setGradingId(exam._id);
     try {
       const result = await gradeAnswer({ examId: exam._id, answer });
-      toast.success(`Marked: ${result.awardedMarks}/${result.marks}`);
+      toast.success(`Graded: ${result.awardedMarks}/${result.marks}`);
     } catch (error) {
-      const message = readableError(error, "Could not mark that answer.");
+      const message = readableError(error, "Could not grade that answer.");
       setErrors((current) => ({ ...current, [exam._id]: message }));
       toast.error(message);
     } finally {
@@ -59,18 +59,16 @@ export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4">
-      <div className="flex items-start gap-3 rounded-2xl border border-brand-ink/10 bg-brand-sky/40 p-4">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-brand-ink/10 bg-white">
-          <PenLine className="size-4 text-brand-ink" />
+    <div className="mx-auto w-full max-w-3xl space-y-3">
+      <div className="flex items-start gap-3 rounded-lg border border-border bg-card p-4">
+        <span className="grid size-8 shrink-0 place-items-center rounded border border-brand-sky/25 bg-brand-sky/10 text-brand-sky">
+          <PenLine className="size-3.5" />
         </span>
         <div>
-          <p className="text-[12.5px] font-bold text-brand-ink">
-            Write like it's the real exam.
-          </p>
-          <p className="mt-0.5 text-[11.5px] leading-relaxed text-brand-ink/55">
-            Pip marks each answer against the question's marking guide and saves the marks
-            to this set. Model answers stay hidden until after you've been marked.
+          <p className="mono-label text-brand-sky">EXAM PRACTICE / AI GRADED</p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+            Write a full answer. Bluprint grades it against the marking guide and saves the
+            result. Model answers unlock after grading.
           </p>
         </div>
       </div>
@@ -85,25 +83,25 @@ export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
         return (
           <article
             key={exam._id}
-            className="rounded-[26px] border border-brand-ink/12 bg-card p-5 sm:p-6"
+            className="rounded-xl border border-border bg-card p-5 sm:p-6"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand-ink/40">
-                Exam question {index + 1}
+              <span className="mono-label text-muted-foreground">
+                QUESTION {String(index + 1).padStart(2, "0")}
               </span>
               <div className="flex items-center gap-1.5">
-                <span className="rounded-full border border-brand-ink/10 bg-brand-cream px-2.5 py-1 text-[10px] font-bold text-brand-ink/60">
-                  {exam.marks} marks
+                <span className="rounded border border-border bg-brand-panel px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground">
+                  {exam.marks} MARKS
                 </span>
                 {graded && (
-                  <span className="rounded-full border border-brand-ink/10 bg-brand-mint px-2.5 py-1 text-[10px] font-bold text-brand-ink">
-                    Marked {score}/{exam.marks}
+                  <span className="rounded border border-brand-mint/20 bg-brand-mint/[0.06] px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-brand-mint">
+                    {score}/{exam.marks}
                   </span>
                 )}
               </div>
             </div>
 
-            <p className="mt-3 font-display text-[1.15rem] font-semibold leading-snug text-brand-ink sm:text-[1.3rem]">
+            <p className="mt-3 font-display text-[1.1rem] font-medium leading-snug text-brand-ink sm:text-[1.25rem]">
               {exam.question}
             </p>
 
@@ -112,43 +110,43 @@ export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
               onChange={(event) =>
                 setAnswers((current) => ({ ...current, [exam._id]: event.target.value }))
               }
-              placeholder="Plan it briefly, then write your answer here…"
+              placeholder="Write your answer here…"
               rows={6}
               maxLength={5000}
               disabled={isGrading}
-              className="mt-4 min-h-[130px] resize-y rounded-xl border-brand-ink/15 bg-brand-cream/40 text-[13px] leading-relaxed"
+              className="mt-4 min-h-[130px] resize-y rounded-md border-border bg-brand-panel text-[12.5px] leading-relaxed text-brand-ink placeholder:text-muted-foreground/60"
             />
 
             <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[11px] text-brand-ink/35">
-                {answer.trim().length} characters · aim for {exam.marks} clear points
+              <p className="font-mono text-[9px] tracking-wide text-muted-foreground/70">
+                {answer.trim().length} CHARS / AIM FOR {exam.marks} CLEAR POINTS
               </p>
               <Button
                 onClick={() => handleMark(exam)}
                 disabled={isGrading}
                 className={cn(
-                  "h-9 rounded-xl border-2 border-brand-ink px-4 text-xs font-bold",
+                  "h-9 rounded-md px-4 font-mono text-[10px] font-medium tracking-wide",
                   graded
-                    ? "bg-white text-brand-ink hover:bg-brand-lime"
-                    : "bg-brand-pink text-brand-ink hover:bg-brand-pink-deep hover:text-brand-cream",
+                    ? "border border-brand-mint/30 bg-brand-mint/10 text-brand-mint hover:bg-brand-mint/15"
+                    : "bg-brand-pink text-brand-void hover:bg-brand-pink-deep",
                 )}
               >
                 {isGrading ? (
                   <>
                     <Loader2 className="size-3.5 animate-spin" />
-                    Marking with NVIDIA…
+                    GRADING WITH NVIDIA…
                   </>
                 ) : (
                   <>
                     <Sparkles className="size-3.5" />
-                    {graded ? "Mark again" : "Mark my answer"}
+                    {graded ? "GRADE AGAIN" : "GRADE ANSWER"}
                   </>
                 )}
               </Button>
             </div>
 
             {errors[exam._id] && (
-              <p className="mt-3 flex items-start gap-2 rounded-xl bg-destructive/10 px-3 py-2 text-[11.5px] font-medium text-destructive">
+              <p className="mt-3 flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-[11px] leading-relaxed text-destructive">
                 <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
                 {errors[exam._id]}
               </p>
@@ -156,56 +154,54 @@ export function ExamPractice({ exams }: { exams: Doc<"examQuestions">[] }) {
 
             {graded && (
               <motion.div
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-4 rounded-2xl border border-brand-ink/10 bg-brand-cream/70 p-4"
+                className="mt-4 rounded-lg border border-border bg-brand-panel p-4"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand-ink/40">
-                      AI marking
-                    </p>
-                    <p className="font-display text-lg font-bold text-brand-ink">
+                    <p className="mono-label text-muted-foreground">AI GRADING</p>
+                    <p className="mt-1 font-display text-lg font-semibold text-brand-ink">
                       {score} / {exam.marks} marks
                     </p>
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-brand-ink/55">
+                  <span className="rounded border border-border bg-background px-2 py-0.5 font-mono text-[9px] tracking-wide text-muted-foreground">
                     {scorePercent}%
                   </span>
                 </div>
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-brand-ink/10">
+                <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-border">
                   <div
                     className="h-full rounded-full bg-brand-mint"
                     style={{ width: `${scorePercent}%` }}
                   />
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-[12.5px] leading-relaxed text-brand-ink/70">
+                <p className="mt-3 whitespace-pre-wrap text-[12px] leading-relaxed text-brand-ink/75">
                   {exam.feedback}
                 </p>
 
                 <div className="mt-4 space-y-2">
-                  <details className="group rounded-xl border border-brand-ink/10 bg-white p-3">
-                    <summary className="flex cursor-pointer list-none items-center justify-between text-[11.5px] font-bold text-brand-ink">
-                      Model answer
-                      <ChevronDown className="size-3.5 text-brand-ink/40 transition-transform group-open:rotate-180" />
+                  <details className="group rounded-md border border-border bg-background p-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between font-mono text-[9.5px] tracking-wide text-muted-foreground">
+                      MODEL ANSWER
+                      <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
                     </summary>
-                    <p className="mt-2 whitespace-pre-wrap text-[12px] leading-relaxed text-brand-ink/65">
+                    <p className="mt-2 whitespace-pre-wrap text-[11.5px] leading-relaxed text-brand-ink/70">
                       {exam.modelAnswer}
                     </p>
                   </details>
 
-                  <details className="group rounded-xl border border-brand-ink/10 bg-white p-3">
-                    <summary className="flex cursor-pointer list-none items-center justify-between text-[11.5px] font-bold text-brand-ink">
-                      Marking guide
-                      <ChevronDown className="size-3.5 text-brand-ink/40 transition-transform group-open:rotate-180" />
+                  <details className="group rounded-md border border-border bg-background p-3">
+                    <summary className="flex cursor-pointer list-none items-center justify-between font-mono text-[9.5px] tracking-wide text-muted-foreground">
+                      MARKING GUIDE
+                      <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
                     </summary>
                     <ul className="mt-2 space-y-1.5">
                       {exam.markingGuide.map((point) => (
                         <li
                           key={point}
-                          className="flex items-start gap-2 text-[12px] leading-relaxed text-brand-ink/65"
+                          className="flex items-start gap-2 text-[11.5px] leading-relaxed text-brand-ink/70"
                         >
-                          <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-pink-deep" />
+                          <span className="mt-1.5 size-1 shrink-0 rounded-full bg-brand-lime/70" />
                           {point}
                         </li>
                       ))}
