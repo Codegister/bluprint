@@ -277,7 +277,48 @@ function stripReasoning(raw: string): string {
     .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "");
 }
 
-function parseModelJson<T>(raw: string): T {
+/**
+ * Returns every complete {...} object found in the text, outermost and nested.
+ * A generation that runs out of tokens mid-array never closes its outer object,
+ * but the items that finished are still balanced, so they can be read this way.
+ */
+function parsedObjects(text: string): Array<Record<string, unknown>> {
+  const found: Array<{ start: number; value: Record<string, unknown> }> = [];
+  const starts: number[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === "{") {
+      starts.push(i);
+    } else if (char === "}") {
+      const start = starts.pop();
+      if (start === undefined) continue;
+      try {
+        const value = JSON.parse(text.slice(start, i + 1));
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          found.push({ start, value: value as Record<string, unknown> });
+        }
+      } catch {
+        // Not a complete object — keep scanning.
+      }
+    }
+  }
+
+  return found.sort((a, b) => a.start - b.start).map((entry) => entry.value);
+}
+
+/** Lenient JSON reader: handles fences, chatter around the JSON, and truncation. */
+function tryParseJson<T>(raw: string): T | null {
   const withoutFences = stripReasoning(raw)
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
@@ -303,6 +344,33 @@ function parseModelJson<T>(raw: string): T {
       // Try the next candidate.
     }
   }
+  return null;
+}
+
+function parseModelJson<T>(raw: string): T {
+  const parsed = tryParseJson<T>(raw);
+  if (parsed === null) {
+    throw new Error("NVIDIA returned a response we couldn't read. Please retry.");
+  }
+  return parsed;
+}
+
+/**
+ * Reads `key` as a list of items, falling back to the individually recovered
+ * objects when the outer JSON was cut off mid-stream. Without this, one lost
+ * question would fail the whole build step.
+ */
+function collectionItems(
+  raw: string,
+  key: string,
+  looksLikeItem: (row: Record<string, unknown>) => boolean,
+): unknown[] {
+  const parsed = tryParseJson<Record<string, unknown>>(raw);
+  const list = parsed?.[key];
+  if (Array.isArray(list)) return list;
+
+  const recovered = parsedObjects(stripReasoning(raw)).filter(looksLikeItem);
+  if (recovered.length > 0) return recovered;
   throw new Error("NVIDIA returned a response we couldn't read. Please retry.");
 }
 
@@ -311,7 +379,12 @@ function asText(value: unknown, maxLength = 2000): string {
 }
 
 function parseSummary(raw: string): Summary {
-  const parsed = parseModelJson<Partial<Summary>>(raw);
+  const parsed =
+    tryParseJson<Partial<Summary>>(raw) ??
+    (parsedObjects(stripReasoning(raw)).find((row) => "overview" in row) as
+      | Partial<Summary>
+      | undefined) ??
+    {};
   const overview = asText(parsed.overview, 2500);
   const keyPoints = Array.isArray(parsed.keyPoints)
     ? parsed.keyPoints.map((point) => asText(point, 500)).filter(Boolean).slice(0, 10)
@@ -326,11 +399,8 @@ function parseSummary(raw: string): Summary {
 }
 
 function parseCards(raw: string): GeneratedCard[] {
-  const parsed = parseModelJson<{ cards?: unknown }>(raw);
-  if (!Array.isArray(parsed.cards)) {
-    throw new Error("The model returned unreadable flashcards. Retry the build.");
-  }
-  const cards = parsed.cards
+  const items = collectionItems(raw, "cards", (row) => typeof row.front === "string");
+  const cards = items
     .map((card) => {
       const row = card as Partial<GeneratedCard>;
       return { front: asText(row.front, 400), back: asText(row.back, 1200) };
@@ -344,12 +414,13 @@ function parseCards(raw: string): GeneratedCard[] {
 }
 
 function parseQuiz(raw: string): GeneratedQuiz[] {
-  const parsed = parseModelJson<{ questions?: unknown }>(raw);
-  if (!Array.isArray(parsed.questions)) {
-    throw new Error("The model returned an unreadable quiz. Retry the build.");
-  }
+  const items = collectionItems(
+    raw,
+    "questions",
+    (row) => typeof row.question === "string" && Array.isArray(row.options),
+  );
   const questions: GeneratedQuiz[] = [];
-  for (const item of parsed.questions) {
+  for (const item of items) {
     const row = item as Partial<GeneratedQuiz>;
     const question = asText(row.question, 600);
     const options = Array.isArray(row.options)
@@ -377,12 +448,13 @@ function parseQuiz(raw: string): GeneratedQuiz[] {
 }
 
 function parseExams(raw: string): GeneratedExam[] {
-  const parsed = parseModelJson<{ questions?: unknown }>(raw);
-  if (!Array.isArray(parsed.questions)) {
-    throw new Error("The model returned unreadable exam questions. Retry the build.");
-  }
+  const items = collectionItems(
+    raw,
+    "questions",
+    (row) => typeof row.question === "string" && typeof row.modelAnswer === "string",
+  );
   const questions: GeneratedExam[] = [];
-  for (const item of parsed.questions) {
+  for (const item of items) {
     const row = item as Partial<GeneratedExam>;
     const question = asText(row.question, 800);
     const modelAnswer = asText(row.modelAnswer, 2500);
@@ -479,7 +551,10 @@ async function generateQuiz(apiKeys: string[], notes: string): Promise<Generated
           'Return JSON exactly like: {"questions":[{"question":"...","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."}]}',
       },
     ],
-    maxTokens: 2800,
+    // Five questions with explanations overflowed the old 2.8k budget, which
+    // truncated the JSON. Keep headroom; leftover truncation is recovered by
+    // collectionItems.
+    maxTokens: 4200,
     temperature: 0.15,
     topP: 1.0,
     disableThinking: true,
@@ -501,7 +576,7 @@ async function generateExams(apiKeys: string[], notes: string): Promise<Generate
           'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
       },
     ],
-    maxTokens: 3000,
+    maxTokens: 3800,
     temperature: 0.15,
     topP: 1.0,
     disableThinking: true,
