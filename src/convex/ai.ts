@@ -14,6 +14,7 @@ import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, internalAction } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
+import { fetchCognitoOutline } from "./lib/cognito";
 import {
   MAX_NOTES_CHARS,
   NVIDIA_CHAT_URL,
@@ -959,6 +960,7 @@ async function openRouterChat<T>(
   messages: ChatMessage[],
   maxTokens: number,
   parse: (raw: string) => T,
+  timeoutMs = 180_000,
 ): Promise<T> {
   const key = readOpenRouterKey();
   if (!key) {
@@ -991,7 +993,7 @@ async function openRouterChat<T>(
             ...(withReasoning ? { reasoning: { effort: "low" } } : {}),
           }),
           // A 16k-token pathway can take longer than a page summary.
-          signal: AbortSignal.timeout(180_000),
+          signal: AbortSignal.timeout(timeoutMs),
         });
       } catch (error) {
         lastError =
@@ -1045,6 +1047,524 @@ async function openRouterChat<T>(
   }
 
   throw new Error(lastError);
+}
+
+// ---------------------------------------------------------------------------
+// Two-pass pathway building
+// ---------------------------------------------------------------------------
+
+/**
+ * Pathways used to be one long generation, which is why topics went missing:
+ * a model recalling a whole specification from memory skips and merges
+ * headings, and a long JSON answer gets truncated.
+ *
+ * They are now built in two passes. The outline names every unit, topic and
+ * subtopic, read from Cognito's published page for the exact course (or, when
+ * Cognito has no page, written by a model as a bare list). The second pass
+ * writes the summary and key points for one unit at a time, so no answer is
+ * big enough to be cut off.
+ */
+type PathwayCourse = {
+  subject: string;
+  level: string;
+  examBoard: string;
+  tier?: string;
+  variant?: string;
+  poetryTheme?: string;
+};
+type OutlineTopic = { title: string; reference?: string; subtopics: string[] };
+type OutlineSection = { title: string; topics: OutlineTopic[] };
+type CourseOutline = { sections: OutlineSection[]; source: "cognito" | "model" };
+type TopicDetail = { summary: string; keyPoints: string[]; examSkill: string };
+type SectionDetail = { summary: string; topics: TopicDetail[] };
+
+/** Bounds that keep one huge anthology or specification manageable. */
+const MAX_OUTLINE_SECTIONS = 14;
+const MAX_OUTLINE_TOPICS = 18;
+const MAX_OUTLINE_SUBTOPICS = 30;
+const DETAIL_CONCURRENCY = 3;
+
+/** Runs `worker` over the list with a small concurrency cap, keeping order. */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await worker(items[index]!, index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
+function cleanTitle(value: unknown, max = 140): string {
+  return asText(value, max)
+    .replace(/\s+/g, " ")
+    .replace(/^[\s\-:\u2013\u2014]+/, "")
+    .trim();
+}
+
+/** Turns the Cognito page into the outline shape the detail pass expects. */
+function outlineFromPage(sections: Array<{
+  title: string;
+  topics: Array<{ title: string; reference?: string; subtopics: Array<{ title: string; reference?: string }> }>;
+}>): CourseOutline {
+  return {
+    source: "cognito",
+    sections: sections
+      .map((section) => ({
+        title: cleanTitle(section.title, 160),
+        topics: section.topics
+          .map((topic) => ({
+            title: cleanTitle(topic.title, 160),
+            ...(topic.reference ? { reference: topic.reference.slice(0, 20) } : {}),
+            subtopics: topic.subtopics
+              .map((sub) =>
+                [(sub.reference ?? "").trim(), cleanTitle(sub.title, 160)]
+                  .filter(Boolean)
+                  .join(" "),
+              )
+              .filter(Boolean)
+              .slice(0, MAX_OUTLINE_SUBTOPICS),
+          }))
+          .filter((topic) => topic.title.length > 1)
+          .slice(0, MAX_OUTLINE_TOPICS),
+      }))
+      .filter((section) => section.topics.length > 0)
+      .slice(0, MAX_OUTLINE_SECTIONS),
+  };
+}
+
+/** Reads a model-written outline, including one cut off mid-array. */
+function parseOutline(raw: string): CourseOutline {
+  const cleaned = stripReasoning(raw);
+  const parsed = tryParseJson<Record<string, unknown>>(cleaned);
+  let rawSections: unknown[] =
+    parsed && Array.isArray(parsed.sections) ? parsed.sections : [];
+  if (rawSections.length === 0) {
+    // A truncated outer object still leaves complete section objects behind.
+    rawSections = parsedObjects(cleaned).filter((row) => Array.isArray(row.topics));
+  }
+
+  const sections: OutlineSection[] = [];
+  for (const entry of rawSections.slice(0, MAX_OUTLINE_SECTIONS)) {
+    if (!entry || typeof entry !== "object") continue;
+    const row = entry as Record<string, unknown>;
+    const title = cleanTitle(row.title, 160);
+    const rawTopics = Array.isArray(row.topics) ? row.topics : [];
+    const topics: OutlineTopic[] = [];
+
+    for (const topicEntry of rawTopics.slice(0, MAX_OUTLINE_TOPICS)) {
+      if (!topicEntry || typeof topicEntry !== "object") continue;
+      const topic = topicEntry as Record<string, unknown>;
+      const topicTitle = cleanTitle(topic.title, 160);
+      if (!topicTitle) continue;
+      const subtopics = Array.isArray(topic.subtopics)
+        ? topic.subtopics
+            .map((sub) => cleanTitle(sub, 160))
+            .filter(Boolean)
+            .slice(0, MAX_OUTLINE_SUBTOPICS)
+        : [];
+      const reference = cleanTitle(topic.reference, 20);
+      topics.push({
+        title: topicTitle,
+        ...(reference ? { reference } : {}),
+        subtopics,
+      });
+    }
+
+    if (title && topics.length > 0) sections.push({ title, topics });
+  }
+
+  const topicCount = sections.reduce((sum, section) => sum + section.topics.length, 0);
+  if (sections.length === 0 || topicCount < 3) {
+    throw new Error("The pathway model returned an incomplete outline.");
+  }
+  return { source: "model", sections };
+}
+
+function outlinePrompt(course: PathwayCourse): string {
+  return (
+    "List the complete topic structure of this qualification, in the order the " +
+    "exam board publishes it. This is an index, not revision material.\n" +
+    `<course>${course.subject}</course>\n` +
+    `<qualification>${course.level}</qualification>\n` +
+    `<exam_board>${course.examBoard}</exam_board>\n` +
+    (course.level !== "GCSE" && course.variant ? `<route>${course.variant}</route>\n` : "") +
+    (course.tier ? `<tier>${course.tier}</tier>\n` : "") +
+    (course.poetryTheme ? `<poetry_theme>${course.poetryTheme}</poetry_theme>\n` : "") +
+    "\nRules:\n" +
+    "- Use the current specification for this exact board, route and tier.\n" +
+    "- One section per paper, module or set text, in specification order.\n" +
+    "- Every topic on the specification must appear exactly once. Do not merge, " +
+    "abbreviate or skip topics, and do not add topics from another board.\n" +
+    "- List the specification's own subtopics under each topic, using official names.\n" +
+    "- Keep titles under 14 words. No descriptions, no markdown, no commentary.\n\n" +
+    "Return strict JSON:\n" +
+    '{"sections":[{"title":"Paper 1 - ...","topics":[{"title":"...","reference":"1.2","subtopics":["...","..."]}]}]}'
+  );
+}
+
+/** Asks for a bare outline when Cognito does not publish the course. */
+async function modelOutline(course: PathwayCourse): Promise<CourseOutline | null> {
+  const system: ChatMessage = {
+    role: "system",
+    content:
+      "You are an examiner who knows current UK, IB and AP specifications by heart. " +
+      "Return strict JSON only, with no markdown fences or commentary.",
+  };
+  const messages: ChatMessage[] = [
+    system,
+    { role: "user", content: outlinePrompt(course) },
+  ];
+
+  if (readOpenRouterKey()) {
+    try {
+      return await openRouterChat(messages, 9_000, parseOutline, 120_000);
+    } catch {
+      // Fall through to NVIDIA.
+    }
+  }
+
+  const nvidiaKeys = readNvidiaKeys();
+  if (nvidiaKeys.length > 0) {
+    try {
+      const raw = await nvidiaChat(nvidiaKeys, {
+        model: NVIDIA_TEXT_MODEL,
+        messages,
+        maxTokens: 7_000,
+        temperature: 0.1,
+        disableThinking: true,
+        timeoutMs: 120_000,
+      });
+      return parseOutline(raw);
+    } catch {
+      // Fall through to the one-shot map below.
+    }
+  }
+  return null;
+}
+
+/**
+ * Detail for one unit. Every subtopic in the outline has to be named in a key
+ * point, which is what stops the model from quietly dropping one.
+ */
+function detailsPrompt(course: PathwayCourse, section: OutlineSection): string {
+  const topics = section.topics
+    .map((topic, index) => {
+      const subtopics = topic.subtopics.length > 0 ? topic.subtopics.join(" | ") : "none listed";
+      return `${index + 1}. ${topic.title}${topic.reference ? ` (spec ${topic.reference})` : ""}\n   subtopics: ${subtopics}`;
+    })
+    .join("\n");
+
+  return (
+    `Write revision detail for every topic in one unit of ${course.level} ${course.subject} ` +
+    `(${course.examBoard}).\n\n` +
+    `<unit>${section.title}</unit>\n<topics>\n${topics}\n</topics>\n\n` +
+    "Rules:\n" +
+    "- Return one object per topic above, in the same order, with the same titles. " +
+    "Do not add, merge or rename topics.\n" +
+    "- summary: 1-2 sentences (max 30 words) on what this topic covers.\n" +
+    "- keyPoints: 2 to 6 points. Every subtopic listed for a topic must be named in at " +
+    "least one point, with the precise detail an examiner would credit.\n" +
+    "- examSkill: one sentence (max 25 words) on how this topic is examined at this tier.\n" +
+    "- No markdown, no commentary, no extra keys. Strict JSON only.\n\n" +
+    '{"summary":"one sentence on the unit","topics":[{"title":"...","summary":"...","keyPoints":["..."],"examSkill":"..."}]}'
+  );
+}
+
+function normaliseTitle(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function parseSectionDetail(raw: string, section: OutlineSection): SectionDetail {
+  const parsed = tryParseJson<Record<string, unknown>>(stripReasoning(raw));
+  let rows: unknown[] = parsed && Array.isArray(parsed.topics) ? parsed.topics : [];
+  if (rows.length === 0) {
+    rows = parsedObjects(stripReasoning(raw)).filter((row) => Array.isArray(row.keyPoints));
+  }
+
+  const usable = rows.filter(
+    (row): row is Record<string, unknown> => Boolean(row) && typeof row === "object",
+  );
+  const byTitle = new Map<string, Record<string, unknown>>();
+  for (const row of usable) {
+    const key = normaliseTitle(asText(row.title, 160));
+    if (key) byTitle.set(key, row);
+  }
+
+  const topics = section.topics.map((topic, index) => {
+    const match =
+      byTitle.get(normaliseTitle(topic.title)) ??
+      usable[index] ??
+      usable.find((row) => {
+        const key = normaliseTitle(asText(row.title, 160));
+        return key.length > 0 && normaliseTitle(topic.title).includes(key);
+      });
+    const keyPoints = match && Array.isArray(match.keyPoints)
+      ? match.keyPoints.map((point) => asText(point, 320)).filter(Boolean).slice(0, 6)
+      : [];
+    if (!match || keyPoints.length === 0) return fallbackDetail(topic);
+    const summary = asText(match.summary, 600);
+    const examSkill = asText(match.examSkill, 400);
+    return {
+      summary: summary || fallbackDetail(topic).summary,
+      keyPoints,
+      examSkill: examSkill || fallbackDetail(topic).examSkill,
+    };
+  });
+
+  const summary = asText(parsed?.summary, 600);
+  return {
+    summary:
+      summary ||
+      `Covers ${section.topics.slice(0, 4).map((topic) => topic.title).join(", ")}.`,
+    topics,
+  };
+}
+
+/** Groups subtopics so every one is named without exceeding the point limit. */
+function subtopicPoints(subtopics: string[]): string[] {
+  if (subtopics.length === 0) return [];
+  const groups = Math.min(6, subtopics.length);
+  const points: string[] = [];
+  for (let index = 0; index < subtopics.length; index += 1) {
+    const bucket = Math.min(groups - 1, Math.floor((index * groups) / subtopics.length));
+    points[bucket] = points[bucket] ? `${points[bucket]}; ${subtopics[index]}` : subtopics[index]!;
+  }
+  return points;
+}
+
+/** Lowercase words, so subtopic names can be matched against written points. */
+function coverageWords(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/\b\d+(?:\.\d+)*\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((word) => word.length > 1 && !["and", "the", "of", "for", "to"].includes(word));
+}
+
+/**
+ * The detail prompt asks for every subtopic by name, but a model still trims a
+ * long list. Anything it left out is appended as its own point, so a topic's
+ * revision material always names the whole specification entry.
+ */
+function ensureSubtopicCoverage(detail: TopicDetail, topic: OutlineTopic): TopicDetail {
+  if (topic.subtopics.length === 0) return detail;
+  const written = new Set(coverageWords(detail.keyPoints.join(" ")));
+  const missing = topic.subtopics.filter((subtopic) => {
+    const words = coverageWords(subtopic);
+    if (words.length === 0) return false;
+    const absent = words.filter((word) => !written.has(word)).length;
+    return absent > (words.length >= 4 ? 1 : 0);
+  });
+  if (missing.length === 0) return detail;
+
+  const extra: string[] = [];
+  for (let index = 0; index < missing.length; index += 4) {
+    extra.push(`Also examinable: ${missing.slice(index, index + 4).join("; ")}.`);
+  }
+  return { ...detail, keyPoints: [...detail.keyPoints, ...extra].slice(0, 9) };
+}
+
+/** Used for any topic a model skipped, so the outline is never quietly pruned. */
+function fallbackDetail(topic: OutlineTopic): TopicDetail {
+  const points = subtopicPoints(topic.subtopics);
+  return {
+    summary:
+      topic.subtopics.length > 0
+        ? `Covers ${topic.subtopics.slice(0, 3).join(", ")}${
+            topic.subtopics.length > 3 ? " and the rest of this topic" : ""
+          }.`
+        : `Core content for ${topic.title}.`,
+    keyPoints:
+      points.length > 0
+        ? points
+        : [
+            `Define ${topic.title.toLowerCase()} precisely and explain how it works.`,
+            `Give one worked example or exam-style application of ${topic.title.toLowerCase()}.`,
+          ],
+    examSkill: `Be ready to apply ${topic.title} to an exam question and justify each point.`,
+  };
+}
+
+/** Fills one unit, trying the stronger free models before NVIDIA. */
+async function enrichSection(
+  course: PathwayCourse,
+  section: OutlineSection,
+): Promise<PathwayUnit> {
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content:
+        "You are an examiner writing tight revision notes. Return strict JSON only, with no markdown or commentary.",
+    },
+    { role: "user", content: detailsPrompt(course, section) },
+  ];
+  const maxTokens = Math.min(5_000, 600 + section.topics.length * 130);
+
+  let detail: SectionDetail | null = null;
+  if (readOpenRouterKey()) {
+    try {
+      detail = await openRouterChat(messages, maxTokens, (raw) => parseSectionDetail(raw, section), 75_000);
+    } catch {
+      detail = null;
+    }
+  }
+
+  if (!detail) {
+    const nvidiaKeys = readNvidiaKeys();
+    if (nvidiaKeys.length > 0) {
+      try {
+        const raw = await nvidiaChat(nvidiaKeys, {
+          model: NVIDIA_TEXT_MODEL,
+          messages,
+          maxTokens,
+          temperature: 0.2,
+          disableThinking: true,
+          timeoutMs: 75_000,
+        });
+        detail = parseSectionDetail(raw, section);
+      } catch {
+        detail = null;
+      }
+    }
+  }
+
+  const topics: PathwayTopic[] = section.topics.map((topic, index) => {
+    const filled = ensureSubtopicCoverage(
+      detail?.topics[index] ?? fallbackDetail(topic),
+      topic,
+    );
+    return {
+      id: `u0t${index}${topic.reference ? `-${topic.reference}` : ""}`.replace(/[^a-zA-Z0-9-]/g, ""),
+      title: topic.title,
+      ...(topic.reference ? { specReference: topic.reference } : {}),
+      summary: filled.summary,
+      keyPoints: filled.keyPoints,
+      examSkill: filled.examSkill,
+    };
+  });
+
+  return {
+    title: section.title,
+    summary: detail?.summary || `Covers ${topics.map((topic) => topic.title).join(", ")}.`,
+    topics,
+  };
+}
+
+/** One small call for the course overview and paper structure. */
+async function outlineOverview(
+  course: PathwayCourse,
+  outline: CourseOutline,
+): Promise<{ overview: string; examFormat: string }> {
+  const index = outline.sections
+    .map((section) => `- ${section.title}: ${section.topics.map((topic) => topic.title).join("; ")}`)
+    .join("\n");
+  const messages: ChatMessage[] = [
+    {
+      role: "system",
+      content: "You are an examiner. Return strict JSON only, no markdown or commentary.",
+    },
+    {
+      role: "user",
+      content:
+        `Summarise this course for a student building a revision plan.\n` +
+        `<course>${course.subject}</course>\n<qualification>${course.level}</qualification>\n` +
+        `<exam_board>${course.examBoard}</exam_board>\n` +
+        (course.tier ? `<tier>${course.tier}</tier>\n` : "") +
+        `<content>\n${index}\n</content>\n\n` +
+        "- overview: 2 sentences on what the course covers and how best to revise it.\n" +
+        "- examFormat: the papers/components with weighting and duration where you are certain. " +
+        "Otherwise: Check your specification for paper structure and weighting.\n" +
+        'Return {"overview":"...","examFormat":"..."}',
+    },
+  ];
+
+  const parse = (raw: string) => {
+    const parsed = tryParseJson<{ overview?: unknown; examFormat?: unknown }>(raw);
+    const overview = asText(parsed?.overview, 900);
+    const examFormat = asText(parsed?.examFormat, 700);
+    if (!overview) throw new Error("No overview.");
+    return { overview, examFormat };
+  };
+
+  if (readOpenRouterKey()) {
+    try {
+      return await openRouterChat(messages, 700, parse, 45_000);
+    } catch {
+      // Fall through to NVIDIA, then the deterministic text.
+    }
+  }
+  const nvidiaKeys = readNvidiaKeys();
+  if (nvidiaKeys.length > 0) {
+    try {
+      const raw = await nvidiaChat(nvidiaKeys, {
+        model: NVIDIA_TEXT_MODEL,
+        messages,
+        maxTokens: 700,
+        temperature: 0.2,
+        disableThinking: true,
+        timeoutMs: 45_000,
+      });
+      return parse(raw);
+    } catch {
+      // Fall through.
+    }
+  }
+
+  const topicCount = outline.sections.reduce((sum, section) => sum + section.topics.length, 0);
+  return {
+    overview: `A complete specification map for ${course.level} ${course.subject} with ${course.examBoard}, covering ${outline.sections.length} units and ${topicCount} topics.`,
+    examFormat: `Check the ${course.examBoard} specification for paper structure, weighting and duration.`,
+  };
+}
+
+/** Pass two: turn an outline into the pathway the course page renders. */
+async function buildPathwayFromOutline(
+  course: PathwayCourse,
+  outline: CourseOutline,
+): Promise<CoursePathway> {
+  const [overview, units] = await Promise.all([
+    outlineOverview(course, outline),
+    mapLimit(outline.sections, DETAIL_CONCURRENCY, (section) => enrichSection(course, section)),
+  ]);
+
+  // Ids are assigned after the fact so they stay unique across units.
+  return {
+    overview: overview.overview,
+    examFormat: overview.examFormat,
+    units: units.map((unit, unitIndex) => ({
+      ...unit,
+      topics: unit.topics.map((topic, topicIndex) => ({
+        ...topic,
+        id: `u${unitIndex + 1}t${topicIndex + 1}`,
+      })),
+    })),
+  };
+}
+
+/**
+ * Outline first — Cognito's page when it exists, otherwise a model's index —
+ * then detail. The old one-shot generation is kept as a last resort.
+ */
+async function generateFromOutline(course: PathwayCourse): Promise<CoursePathway | null> {
+  const page = await fetchCognitoOutline(course);
+  if (page) {
+    const outline = outlineFromPage(page.sections);
+    if (outline.sections.length > 0) return await buildPathwayFromOutline(course, outline);
+  }
+
+  const outline = await modelOutline(course);
+  if (outline) return await buildPathwayFromOutline(course, outline);
+  return null;
 }
 
 function parsePathway(raw: string): CoursePathway {
@@ -1362,6 +1882,15 @@ async function generateCoursePathway(
       "You are an experienced curriculum designer and examiner who knows current specifications. " +
       "Return strict JSON only, with no markdown fences or commentary.",
   };
+
+  // Preferred path: a published outline, then per-unit detail. It covers every
+  // topic on the specification, which a single long generation does not.
+  try {
+    const built = await generateFromOutline(course);
+    if (built) return built;
+  } catch {
+    // Fall through to the one-shot map below.
+  }
 
   // Free models often stop at a fixed output cap. The full map is tried first;
   // if it is truncated or unreadable, a smaller map is requested from the same
