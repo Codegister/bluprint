@@ -181,7 +181,15 @@ export function CreateSetDialog({
     setError(null);
 
     if (ai?.configured === false) {
-      setError("NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace owner to add it before compiling a set.");
+      const message =
+        "NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace owner to add it before compiling a set.";
+      setError(message);
+      return;
+    }
+    if (ai === undefined) {
+      // The settings query may still be loading for an unverified or guest
+      // session. Do not treat an in-flight response as a hard failure.
+      setError("Checking AI status…");
       return;
     }
     if (mode === "photos" && images.length === 0) {

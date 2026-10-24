@@ -208,6 +208,10 @@ export default function Dashboard() {
   const sets = useQuery(api.studySets.listMine);
   const courseRows = useQuery(api.courses.listMine);
   const ai = useQuery(api.settings.aiStatus);
+  // The settings query is the only Convex endpoint that previously gated non-
+  // sensitive AI status behind email verification, which is why guest and
+  // unverified sessions crashed on first paint. This dashboard keeps its own
+  // defensive read so an in-flight response is never treated as a hard failure.
   const study = useQuery(api.studySets.studyStats);
   const recoverCourses = useMutation(api.courses.recoverMine);
   const recoveryRequested = useRef(false);
@@ -302,6 +306,11 @@ export default function Dashboard() {
           </Button>
         </div>
       </header>
+
+      <p className="mt-1 text-[0.78rem] text-muted-foreground">
+        Religious Studies is supported as Edexcel Religious Studies A and B, with the
+        religions and units you study.
+      </p>
 
       <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
         <div className="rounded-2xl border border-[#DDD4FB] bg-[#F3F0FF] px-4 py-3">
