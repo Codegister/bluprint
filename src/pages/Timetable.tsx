@@ -399,11 +399,15 @@ export default function Timetable() {
     [courseSettings],
   );
 
+  // Plans built when each subject had its own length still report that length;
+  // newer plans share one session length for the whole timetable.
   const minSessionMinutes = useMemo(() => {
-    const minutes =
-      plan?.courseSettings?.map((setting) => setting.minutes) ??
-      plan?.entries.map((entry) => entry.minutes) ??
-      [];
+    const minutes = [
+      ...(plan?.courseSettings ?? []).map(
+        (setting) => setting.minutes ?? plan?.sessionMinutes,
+      ),
+      ...(plan?.entries ?? []).map((entry) => entry.minutes),
+    ].filter((value): value is number => typeof value === "number");
     return minutes.length > 0 ? Math.min(...minutes) : 25;
   }, [plan]);
 

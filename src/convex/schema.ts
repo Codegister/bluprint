@@ -178,7 +178,9 @@ const schema = defineSchema(
           v.object({
             courseId: v.id("courses"),
             subject: v.string(),
-            minutes: v.number(),
+            // Legacy: plans built when each subject had its own session length.
+            // New plans use the plan-level `sessionMinutes` instead.
+            minutes: v.optional(v.number()),
             // Paper 1, Paper 2, or Both. Entries store the resolved paper.
             paper: v.string(),
           }),

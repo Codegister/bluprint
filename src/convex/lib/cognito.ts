@@ -46,6 +46,7 @@ export type CognitoCourse = {
 /** Qualification folder names used by cognito.org. */
 const LEVEL_SLUGS: Record<string, string> = {
   GCSE: "gcse",
+  KS3: "ks3",
   "A-Level": "alevel",
   IB: "ib",
   AP: "ap",
@@ -424,6 +425,11 @@ function words(value: string): string[] {
 const SUBJECT_SLUG_ALIASES: Record<string, string> = {
   mathematics: "maths",
   "further mathematics": "further-maths",
+  // KS3 keeps one English course and shortens Computer Science to "cs"; the
+  // GCSE index has neither slug, so these only match where they exist.
+  "computer science": "cs",
+  "english language": "english",
+  "english literature": "english",
 };
 
 /** Matches "Mathematics" to "maths", "Biology" to "biology-triple", and so on. */
@@ -459,7 +465,13 @@ export async function findSubjectSlug(
   const html = await subjectIndex(levelSlug);
   if (!html) return null;
   const prefix = `/courses/${levelSlug}/`;
-  const paths = [...html.matchAll(/href="(\/courses\/[a-z0-9-]+\/[a-z0-9-]+)"/g)]
+  // Links can point at a leaf (`/courses/ks3/biology/notes`) as well as at the
+  // subject itself, so keep the first two segments and ignore the rest.
+  const paths = [
+    ...html.matchAll(
+      /href="(\/courses\/[a-z0-9-]+\/[a-z0-9-]+)(?:\/[a-z0-9/-]*)?"/g,
+    ),
+  ]
     .map((match) => match[1]!)
     .filter((path) => path.startsWith(prefix));
   const unique = [...new Set(paths)];
@@ -610,9 +622,13 @@ export async function fetchCognitoOutline(
     }
     candidates.push(`/courses/${levelSlug}/${subjectSlug}/${boardSlug}/notes`);
   }
-  // IB has no board segment; its route is the whole path.
+  // IB has no board segment; its route is the whole path. KS3 has neither a
+  // board nor a tier, so the subject page is the whole path.
   for (const route of routes) {
     candidates.push(`/courses/${levelSlug}/${subjectSlug}/${route}/notes`);
+  }
+  if (!boardSlug) {
+    candidates.push(`/courses/${levelSlug}/${subjectSlug}/notes`);
   }
 
   for (const path of [...new Set(candidates)]) {

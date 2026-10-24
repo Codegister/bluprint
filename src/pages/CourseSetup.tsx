@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { readableError } from "@/lib/errors";
 import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import {
-  SUBJECT_GROUPS,
+  POPULAR_SUBJECTS,
   SUBJECTS,
   subjectMeta,
   tierChoices,
@@ -13,9 +13,8 @@ import {
 } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Check, Loader2, Plus, Search, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { Check, ChevronRight, Loader2, Plus, Search, X } from "lucide-react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -30,13 +29,20 @@ type CourseDraft = {
 
 const levelHints: Record<string, string> = {
   GCSE: "Years 10–11",
+  KS3: "Years 7–9",
   "A-Level": "Years 12–13",
   IB: "HL and SL",
   AP: "Advanced Placement",
   Undergraduate: "University",
 };
 
+/** KS3 has no exam board; the empty string keeps the label clean. */
+function boardLabel(board: string): string {
+  return board === "None" ? "" : board;
+}
+
 function defaultBoardFor(level: string): string {
+  if (level === "KS3") return "None";
   if (level === "IB") return "IB";
   if (level === "AP") return "College Board AP";
   if (level === "Undergraduate") return "Other";
@@ -50,7 +56,7 @@ function defaultTierFor(level: string, subject: string): string | undefined {
   return tiers.includes("Higher") ? "Higher" : tiers[0];
 }
 
-/** A small segmented control, used for tiers and routes inside a course row. */
+/** A small segmented control, used for tiers and routes in the settings panel. */
 function Segmented({
   label,
   options,
@@ -65,11 +71,11 @@ function Segmented({
   format?: (option: string) => string;
 }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[0.62rem] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+    <div className="mt-4">
+      <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
         {label}
-      </span>
-      <div className="flex rounded-lg bg-brand-panel p-0.5">
+      </p>
+      <div className="mt-1.5 flex rounded-xl bg-brand-panel p-0.5">
         {options.map((option) => {
           const active = value === option;
           return (
@@ -79,7 +85,7 @@ function Segmented({
               aria-pressed={active}
               onClick={() => onChange(option)}
               className={cn(
-                "rounded-[7px] px-2 py-1 text-[0.7rem] font-semibold transition-colors",
+                "flex-1 rounded-[10px] px-2 py-1.5 text-[0.76rem] font-semibold transition-colors",
                 active
                   ? "bg-white text-brand-ink shadow-[0_1px_2px_rgba(22,24,31,0.1)]"
                   : "text-brand-ink/55 hover:text-brand-ink",
@@ -95,147 +101,75 @@ function Segmented({
 }
 
 /**
- * One subject in the catalogue. The row stays a single compact line until it is
- * selected; its board, tier and poetry theme then open directly underneath the
- * row rather than in a separate panel.
+ * One subject on a single line. Clicking it selects the subject and points the
+ * settings panel at it; nothing expands inside the list.
  */
-function CourseRow({
+function SubjectRow({
   name,
   draft,
-  level,
-  open,
-  onActivate,
-  onRemove,
-  onBoard,
-  onTier,
+  active,
+  onOpen,
 }: {
   name: string;
   draft?: CourseDraft;
-  level: string;
-  open: boolean;
-  onActivate: () => void;
-  onRemove: () => void;
-  onBoard: (board: string) => void;
-  onTier: (field: "tier" | "variant", value: string) => void;
+  active: boolean;
+  onOpen: () => void;
 }) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  const { variants, tiers } = tierChoices(level, name);
-  const selected = Boolean(draft);
   const meta = subjectMeta(name);
   const Icon = meta.icon;
-
-  const details: string[] = [];
-  if (draft) {
-    details.push(draft.examBoard);
-    if (draft.tier) details.push(tierLabel(draft.tier));
-    if (draft.variant) details.push(draft.variant);
-  }
+  const selected = Boolean(draft);
+  const detail = draft
+    ? [
+        boardLabel(draft.examBoard),
+        draft.variant ?? "",
+        draft.tier ? tierLabel(draft.tier) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
 
   return (
-    <div
-      ref={rowRef}
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-pressed={selected}
       className={cn(
-        "group rounded-xl border transition-colors",
-        selected
-          ? "border-[#191B27]/15 bg-white"
-          : "border-transparent hover:border-border hover:bg-white",
+        "flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
+        active
+          ? "border-[#7C5CFF]/50 bg-white shadow-[0_8px_20px_-18px_rgba(22,24,31,0.6)]"
+          : selected
+            ? "border-border bg-white"
+            : "border-transparent hover:border-border hover:bg-white",
       )}
     >
-      <div className="flex items-center gap-2.5 px-2.5 py-2">
-        <span
-          className={cn("grid size-8 shrink-0 place-items-center rounded-lg", meta.tint)}
-        >
-          <Icon className="size-4" style={{ color: meta.color }} aria-hidden />
+      <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg", meta.tint)}>
+        <Icon className="size-4" style={{ color: meta.color }} aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[0.86rem] font-semibold text-brand-ink">
+          {name}
         </span>
-        <button
-          type="button"
-          onClick={onActivate}
-          className="min-w-0 flex-1 text-left"
-        >
-          <span className="block truncate text-[0.86rem] font-semibold text-brand-ink">
-            {name}
-          </span>
+        {detail && (
           <span className="mt-0.5 block truncate text-[0.68rem] text-muted-foreground">
-            {details.length > 0 ? details.join(" · ") : "Tap to add"}
+            {detail}
           </span>
-        </button>
-        <button
-          type="button"
-          aria-label={selected ? `Remove ${name}` : `Add ${name}`}
-          aria-pressed={selected}
-          onClick={selected ? onRemove : onActivate}
-          className={cn(
-            "grid size-7 shrink-0 place-items-center rounded-full border transition-colors",
-            selected
-              ? "border-[#191B27] bg-[#191B27] text-white hover:bg-[#2A2D3E]"
-              : "border-border text-brand-ink/35 group-hover:border-[#7C5CFF] group-hover:text-[#5B3DF5]",
-          )}
-        >
-          {selected ? (
-            <Check className="size-3.5" aria-hidden />
-          ) : (
-            <Plus className="size-3.5" aria-hidden />
-          )}
-        </button>
-      </div>
-
-      <AnimatePresence initial={false}>
-        {draft && open && (
-          <motion.div
-            key="editor"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="overflow-hidden"
-          >
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 px-2.5 py-2.5">
-              <label className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-                Board
-                <select
-                  aria-label={`Exam board for ${name}`}
-                  value={draft.examBoard}
-                  onChange={(event) => onBoard(event.target.value)}
-                  className="h-8 rounded-lg border border-border bg-white px-1.5 text-[0.72rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#7C5CFF]"
-                >
-                  {EXAM_BOARDS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {tiers.length > 0 && (
-                <Segmented
-                  label="Tier"
-                  options={tiers}
-                  value={draft.tier}
-                  onChange={(value) => onTier("tier", value)}
-                />
-              )}
-
-              {variants.length > 0 && (
-                <Segmented
-                  label="Route"
-                  options={variants}
-                  value={draft.variant}
-                  onChange={(value) => onTier("variant", value)}
-                />
-              )}
-
-              <button
-                type="button"
-                onClick={onRemove}
-                className="ml-auto text-[0.7rem] font-semibold text-muted-foreground transition-colors hover:text-destructive"
-              >
-                Remove
-              </button>
-            </div>
-          </motion.div>
         )}
-      </AnimatePresence>
-    </div>
+      </span>
+      <span
+        className={cn(
+          "grid size-6 shrink-0 place-items-center rounded-full border transition-colors",
+          selected
+            ? "border-[#191B27] bg-[#191B27] text-white"
+            : "border-border text-brand-ink/35",
+        )}
+      >
+        {selected ? (
+          <Check className="size-3.5" aria-hidden />
+        ) : (
+          <Plus className="size-3.5" aria-hidden />
+        )}
+      </span>
+    </button>
   );
 }
 
@@ -243,62 +177,110 @@ export default function CourseSetup() {
   const navigate = useNavigate();
   const createMany = useMutation(api.courses.createMany);
 
-  const [level, setLevel] = useState("GCSE");
+  // Null until the student has chosen a qualification. Picking one is the first
+  // thing the page asks for, because it decides the boards and tiers on offer.
+  const [level, setLevel] = useState<string | null>(null);
   const [board, setBoard] = useState("AQA");
   const [selected, setSelected] = useState<Record<string, CourseDraft>>({});
+  const [active, setActive] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [opened, setOpened] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
 
   const selectedNames = Object.keys(selected);
   const selectedCount = selectedNames.length;
-  const distinctBoards = new Set(
-    Object.values(selected).map((course) => course.examBoard),
-  ).size;
+  const boardsInUse = new Set(
+    Object.values(selected)
+      .map((course) => course.examBoard)
+      .filter((value) => value !== "None"),
+  );
+  const distinctBoards = boardsInUse.size;
+  // The summary reflects the courses actually chosen, not just the default.
+  const summaryBoard = distinctBoards === 1 ? [...boardsInUse][0]! : board;
 
-  const groups = useMemo(() => {
+  const ordered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return SUBJECT_GROUPS.map((group) => ({
-      group,
-      subjects: SUBJECTS.filter(
-        (subject) =>
-          subject.group === group &&
-          (!needle ||
-            subject.name.toLowerCase().includes(needle) ||
-            group.toLowerCase().includes(needle)),
-      ),
-    })).filter((entry) => entry.subjects.length > 0);
+    if (needle) {
+      return SUBJECTS.filter((subject) =>
+        subject.name.toLowerCase().includes(needle),
+      );
+    }
+    const popularNames = new Set<string>(POPULAR_SUBJECTS);
+    const popular = POPULAR_SUBJECTS.flatMap((name) =>
+      SUBJECTS.filter((subject) => subject.name === name),
+    );
+    const rest = SUBJECTS.filter((subject) => !popularNames.has(subject.name)).sort(
+      (a, b) => a.name.localeCompare(b.name),
+    );
+    return [...popular, ...rest];
   }, [query]);
 
   const trimmedQuery = query.trim();
   const exactMatch = SUBJECTS.some(
     (subject) => subject.name.toLowerCase() === trimmedQuery.toLowerCase(),
   );
-  const showCustom = trimmedQuery.length >= 2 && !exactMatch && !(trimmedQuery in selected);
+  const showCustom =
+    trimmedQuery.length >= 2 && !exactMatch && !(trimmedQuery in selected);
 
-  const addCourse = (name: string, options?: { clearQuery?: boolean }) => {
+  const chooseQualification = (next: string) => {
+    const nextBoard = defaultBoardFor(next);
+    setLevel(next);
+    // Boards and tiers differ between qualifications, so existing picks are
+    // reset to the new qualification's defaults rather than kept stale.
+    setSelected((current) =>
+      Object.fromEntries(
+        Object.keys(current).map((name) => [
+          name,
+          { examBoard: nextBoard, tier: defaultTierFor(next, name) },
+        ]),
+      ),
+    );
+    setActive(null);
+    setQuery("");
+    setError(null);
+  };
+
+  const changeQualification = () => {
+    setLevel(null);
+    setActive(null);
+    setQuery("");
+    setError(null);
+  };
+
+  const openSubject = (name: string) => {
     const clean = name.trim().slice(0, 80);
-    if (clean.length < 2) return;
-    if (Object.keys(selected).length >= MAX_COURSES) {
+    if (clean.length < 2 || !level) return;
+    if (!(clean in selected) && Object.keys(selected).length >= MAX_COURSES) {
       toast.error(`You can set up ${MAX_COURSES} courses at a time.`);
       return;
     }
-    setSelected((current) => {
-      if (clean in current) return current;
-      return {
-        ...current,
-        [clean]: {
-          examBoard: board,
-          tier: defaultTierFor(level, clean),
-        },
-      };
-    });
-    setOpened(clean);
-    // A custom course only exists in this picker, so drop the search that found
-    // it. A catalogue subject keeps the query so several matches can be added.
-    if (options?.clearQuery) setQuery("");
+    setSelected((current) =>
+      clean in current
+        ? current
+        : {
+            ...current,
+            [clean]: {
+              examBoard: board,
+              tier: defaultTierFor(level, clean),
+            },
+          },
+    );
+    setActive(clean);
     setError(null);
+
+    // On a phone the panel sits below the list, so bring the settings the
+    // student just opened into view.
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      window.requestAnimationFrame(() => {
+        panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  };
+
+  const addCustom = () => {
+    openSubject(trimmedQuery);
+    if (trimmedQuery.length >= 2) setQuery("");
   };
 
   const removeCourse = (name: string) => {
@@ -307,51 +289,12 @@ export default function CourseSetup() {
       delete next[name];
       return next;
     });
-    setOpened((current) => (current === name ? null : current));
+    setActive((current) => {
+      if (current !== name) return current;
+      const remaining = selectedNames.filter((entry) => entry !== name);
+      return remaining[0] ?? null;
+    });
     setError(null);
-  };
-
-  /** Clicking a selected row opens or closes its settings. */
-  const activate = (name: string) => {
-    if (name in selected) {
-      setOpened((current) => (current === name ? null : name));
-      return;
-    }
-    addCourse(name);
-  };
-
-  const chooseLevel = (next: string) => {
-    const nextBoard = defaultBoardFor(next);
-    setLevel(next);
-    setBoard(nextBoard);
-    // Tier labels differ between qualifications (Higher, HL). Reset them to the
-    // new level's default rather than sending a stale one, and reset the
-    // per-subject boards to the new qualification's default.
-    setSelected((current) =>
-      Object.fromEntries(
-        Object.keys(current).map((name) => [
-          name,
-          {
-            examBoard: nextBoard,
-            tier: defaultTierFor(next, name),
-          },
-        ]),
-      ),
-    );
-  };
-
-  /** The default board applies to new picks and to courses the student has not
-   *  customised, which is the common case for a whole subject list. */
-  const chooseBoard = (next: string) => {
-    setBoard(next);
-    setSelected((current) =>
-      Object.fromEntries(
-        Object.entries(current).map(([name, course]) => [
-          name,
-          { ...course, examBoard: next },
-        ]),
-      ),
-    );
   };
 
   const setCourseBoard = (name: string, next: string) => {
@@ -375,6 +318,19 @@ export default function CourseSetup() {
     });
   };
 
+  /** One click to give every course the board the panel is showing. */
+  const applyBoardToAll = (next: string) => {
+    setBoard(next);
+    setSelected((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([name, course]) => [
+          name,
+          { ...course, examBoard: next },
+        ]),
+      ),
+    );
+  };
+
   const buildLabel = saving
     ? "Queuing pathways…"
     : selectedCount === 0
@@ -382,6 +338,10 @@ export default function CourseSetup() {
       : `Build ${selectedCount} pathway${selectedCount === 1 ? "" : "s"}`;
 
   const build = async () => {
+    if (!level) {
+      setError("Choose your qualification first.");
+      return;
+    }
     if (selectedCount === 0) {
       setError("Pick at least one course.");
       return;
@@ -420,6 +380,10 @@ export default function CourseSetup() {
     }
   };
 
+  const activeDraft = active ? selected[active] : undefined;
+  const activeMeta = active ? subjectMeta(active) : null;
+  const activeTiers = active && level ? tierChoices(level, active) : null;
+
   return (
     <AppShell>
       <Link
@@ -445,167 +409,336 @@ export default function CourseSetup() {
         </p>
       </div>
 
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="gizmo-scroll -mx-1 flex items-center gap-0.5 overflow-x-auto rounded-xl bg-brand-panel p-1 sm:mx-0">
-          {STUDY_LEVELS.map((option) => {
-            const active = level === option;
-            return (
+      {!level ? (
+        <section className="mt-6 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-7">
+          <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
+            Step 1 of 2
+          </p>
+          <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
+            Which qualification are you studying?
+          </h2>
+          <p className="mt-1 max-w-xl text-[0.86rem] leading-relaxed text-muted-foreground">
+            This decides the exam boards and tiers Bluprint offers for every
+            subject, so choose it before picking courses.
+          </p>
+
+          <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {STUDY_LEVELS.map((option) => (
               <button
                 key={option}
                 type="button"
-                aria-pressed={active}
-                onClick={() => chooseLevel(option)}
-                title={levelHints[option]}
-                className={cn(
-                  "shrink-0 rounded-[9px] px-3 py-1.5 text-[0.78rem] font-semibold transition-colors",
-                  active
-                    ? "bg-white text-brand-ink shadow-[0_1px_3px_rgba(22,24,31,0.12)]"
-                    : "text-brand-ink/55 hover:text-brand-ink",
-                )}
+                onClick={() => chooseQualification(option)}
+                className="group flex items-center justify-between gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-[#7C5CFF]/60 hover:bg-[#FAF8FF]"
               >
-                {option}
+                <span>
+                  <span className="block text-[0.94rem] font-semibold text-brand-ink">
+                    {option}
+                  </span>
+                  <span className="mt-0.5 block text-[0.72rem] text-muted-foreground">
+                    {levelHints[option]}
+                  </span>
+                </span>
+                <ChevronRight
+                  className="size-4 text-brand-ink/30 transition-colors group-hover:text-[#5B3DF5]"
+                  aria-hidden
+                />
               </button>
-            );
-          })}
-        </div>
-
-        <label className="flex shrink-0 items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-          Default board
-          <select
-            value={board}
-            onChange={(event) => chooseBoard(event.target.value)}
-            className="h-9 rounded-xl border border-border bg-white px-2 text-[0.78rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#7C5CFF]"
-          >
-            {EXAM_BOARDS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
             ))}
-          </select>
-        </label>
+          </div>
 
-        <div className="relative sm:ml-auto sm:w-64">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search subjects"
-            aria-label="Search subjects"
-            className="h-9 rounded-xl border-border bg-white pl-8 pr-8 text-[0.82rem] shadow-none placeholder:text-muted-foreground/60"
-          />
-          {query && (
+          {selectedCount > 0 && (
+            <p className="mt-4 text-[0.74rem] text-muted-foreground">
+              You already have {selectedCount} course
+              {selectedCount === 1 ? "" : "s"} picked. Choosing a qualification
+              resets their board and tier to that qualification's defaults.
+            </p>
+          )}
+        </section>
+      ) : (
+        <>
+          <p className="mt-5 text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
+            Step 2 of 2
+          </p>
+          <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               type="button"
-              aria-label="Clear search"
-              onClick={() => setQuery("")}
-              className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+              onClick={changeQualification}
+              className="flex shrink-0 items-center gap-2 self-start rounded-full border border-border bg-white px-3 py-1.5 text-[0.78rem] font-semibold text-brand-ink transition-colors hover:bg-brand-panel"
             >
-              <X className="size-3" aria-hidden />
-            </button>
-          )}
-        </div>
-      </div>
-
-      <p className="mt-4 text-[0.72rem] text-muted-foreground">
-        {selectedCount === 0
-          ? "Tap a subject to add it. Its board and tier appear right below."
-          : "Tap a selected subject to change its board, tier or route."}
-      </p>
-
-      <div className="gizmo-scroll mt-2 max-h-[none]">
-        {groups.length === 0 && !showCustom ? (
-          <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
-            <p className="text-[0.85rem] text-muted-foreground">
-              No subject matches “{trimmedQuery}”.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {groups.map(({ group, subjects }) => (
-              <section key={group}>
-                <p className="px-1 text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                  {group}
-                </p>
-                <div className="mt-1 grid items-start gap-1 sm:grid-cols-2">
-                  {subjects.map((subject) => (
-                    <CourseRow
-                      key={subject.name}
-                      name={subject.name}
-                      draft={selected[subject.name]}
-                      level={level}
-                      open={opened === subject.name}
-                      onActivate={() => activate(subject.name)}
-                      onRemove={() => removeCourse(subject.name)}
-                      onBoard={(next) => setCourseBoard(subject.name, next)}
-                      onTier={(field, value) =>
-                        setCourseTier(subject.name, field, value)
-                      }
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-
-            {showCustom && (
-              <button
-                type="button"
-                onClick={() => addCourse(trimmedQuery, { clearQuery: true })}
-                className="flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-left transition-colors hover:border-[#7C5CFF] hover:bg-white"
-              >
-                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#EFEDFF]">
-                  <Plus className="size-4 text-[#5B3DF5]" aria-hidden />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[0.84rem] font-semibold text-brand-ink">
-                    Add “{trimmedQuery}” as a custom course
-                  </span>
-                  <span className="text-[0.7rem] text-muted-foreground">
-                    Uses {board} · {level}
-                  </span>
-                </span>
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {error && (
-        <p className="mt-4 rounded-xl bg-[#FFEEF0] px-3 py-2 text-[0.78rem] leading-relaxed text-[#C23B49]">
-          {error}
-        </p>
-      )}
-
-      <div className="sticky bottom-3 z-20 mt-6">
-        <div className="flex items-center gap-3 rounded-2xl border border-border bg-white/95 px-3.5 py-2.5 shadow-[0_14px_40px_-24px_rgba(22,24,31,0.45)] backdrop-blur">
-          <div className="min-w-0 flex-1">
-            <p className="text-[0.82rem] font-semibold text-brand-ink">
-              {selectedCount} course{selectedCount === 1 ? "" : "s"}
-              <span className="font-medium text-muted-foreground">
-                {" "}
-                · {level} ·{" "}
-                {distinctBoards > 1 ? `${distinctBoards} boards` : board}
+              {level}
+              <span className="text-[0.7rem] font-medium text-muted-foreground">
+                Change
               </span>
-            </p>
-            <p className="truncate text-[0.7rem] text-muted-foreground">
-              {selectedCount === 0
-                ? "Choose up to 12 courses"
-                : selectedNames.slice(0, 3).join(", ") +
-                  (selectedCount > 3 ? ` and ${selectedCount - 3} more` : "")}
-            </p>
+            </button>
+
+            <div className="relative sm:ml-auto sm:w-64">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search subjects"
+                aria-label="Search subjects"
+                className="h-9 rounded-xl border-border bg-white pl-8 pr-8 text-[0.82rem] shadow-none placeholder:text-muted-foreground/60"
+              />
+              {query && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+                >
+                  <X className="size-3" aria-hidden />
+                </button>
+              )}
+            </div>
           </div>
-          <Button
-            onClick={build}
-            disabled={saving || selectedCount === 0}
-            className="h-10 shrink-0 rounded-full bg-[#191B27] px-5 text-[0.82rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-40"
-          >
-            {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-            {buildLabel}
-          </Button>
-        </div>
-      </div>
+
+          <p className="mt-3 text-[0.74rem] text-muted-foreground">
+            The subjects most students take are listed first. Click any subject
+            to set its exam board{level === "KS3" ? "" : " and tier"} in the panel.
+          </p>
+
+          <div className="mt-2 grid items-start gap-4 pb-16 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div>
+              {ordered.length === 0 && !showCustom ? (
+                <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+                  <p className="text-[0.85rem] text-muted-foreground">
+                    No subject matches “{trimmedQuery}”.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  {ordered.map((subject, index) => (
+                    <Fragment key={subject.name}>
+                      {!trimmedQuery && index === POPULAR_SUBJECTS.length && (
+                        <p className="mt-4 px-1 text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                          All subjects
+                        </p>
+                      )}
+                      <SubjectRow
+                        name={subject.name}
+                        draft={selected[subject.name]}
+                        active={active === subject.name}
+                        onOpen={() => openSubject(subject.name)}
+                      />
+                    </Fragment>
+                  ))}
+
+                  {showCustom && (
+                    <button
+                      type="button"
+                      onClick={addCustom}
+                      className="mt-2 flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-left transition-colors hover:border-[#7C5CFF] hover:bg-white"
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#EFEDFF]">
+                        <Plus className="size-4 text-[#5B3DF5]" aria-hidden />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[0.84rem] font-semibold text-brand-ink">
+                          Add “{trimmedQuery}” as a custom course
+                        </span>
+                        <span className="text-[0.7rem] text-muted-foreground">
+                          Uses {level}
+                          {level === "KS3" ? "" : ` · ${boardLabel(board)}`}
+                        </span>
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <aside
+              ref={panelRef}
+              className="scroll-mt-4 lg:sticky lg:top-20 lg:self-start"
+            >
+              <div className="rounded-[1.6rem] border border-border bg-white p-4 shadow-[0_16px_40px_-34px_rgba(22,24,31,0.5)]">
+                {active && activeDraft && activeMeta && activeTiers ? (
+                  <>
+                    <div className="flex items-start gap-2.5">
+                      <span
+                        className={cn(
+                          "grid size-9 shrink-0 place-items-center rounded-xl",
+                          activeMeta.tint,
+                        )}
+                      >
+                        <activeMeta.icon
+                          className="size-4"
+                          style={{ color: activeMeta.color }}
+                          aria-hidden
+                        />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-display text-[1rem] font-bold text-brand-ink">
+                          {active}
+                        </p>
+                        <p className="text-[0.72rem] text-muted-foreground">
+                          {[level, boardLabel(activeDraft.examBoard)]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${active}`}
+                        onClick={() => removeCourse(active)}
+                        className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-[#FFEEF0] hover:text-destructive"
+                      >
+                        <X className="size-3.5" aria-hidden />
+                      </button>
+                    </div>
+
+                    {level === "KS3" ? (
+                      <p className="mt-4 rounded-xl bg-brand-panel px-3 py-2.5 text-[0.76rem] leading-relaxed text-muted-foreground">
+                        KS3 has no exam board or tier. Bluprint maps the national
+                        curriculum topics for this subject.
+                      </p>
+                    ) : (
+                      <label className="mt-4 block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        Exam board
+                        <select
+                          value={activeDraft.examBoard}
+                          aria-label={`Exam board for ${active}`}
+                          onChange={(event) =>
+                            setCourseBoard(active, event.target.value)
+                          }
+                          className="mt-1.5 h-9 w-full rounded-xl border border-border bg-white px-2.5 text-[0.8rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#7C5CFF]"
+                        >
+                          {EXAM_BOARDS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+
+                    {activeTiers.tiers.length > 0 && (
+                      <Segmented
+                        label="Tier"
+                        options={activeTiers.tiers}
+                        value={activeDraft.tier}
+                        onChange={(value) => setCourseTier(active, "tier", value)}
+                      />
+                    )}
+
+                    {activeTiers.variants.length > 0 && (
+                      <Segmented
+                        label="Route"
+                        options={activeTiers.variants}
+                        value={activeDraft.variant}
+                        onChange={(value) => setCourseTier(active, "variant", value)}
+                      />
+                    )}
+
+                    {selectedCount > 1 &&
+                      level !== "KS3" &&
+                      activeDraft.examBoard !== "None" && (
+                        <button
+                          type="button"
+                          onClick={() => applyBoardToAll(activeDraft.examBoard)}
+                          className="mt-4 w-full rounded-xl bg-brand-panel px-3 py-2 text-[0.74rem] font-semibold text-brand-ink/75 transition-colors hover:bg-[#EFEDFF] hover:text-[#5B3DF5]"
+                        >
+                          Use {activeDraft.examBoard} for all {selectedCount} courses
+                        </button>
+                      )}
+                  </>
+                ) : (
+                  <div className="px-1 py-8 text-center">
+                    <p className="font-display text-[0.95rem] font-bold text-brand-ink">
+                      Pick a subject
+                    </p>
+                    <p className="mx-auto mt-1 max-w-[15rem] text-[0.76rem] leading-relaxed text-muted-foreground">
+                      Its exam board{level === "KS3" ? "" : ", tier"} and route
+                      appear here, one subject at a time.
+                    </p>
+                  </div>
+                )}
+
+                {selectedCount > 0 && (
+                  <div className="mt-4 border-t border-border pt-3">
+                    <p className="px-1 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      Your courses ({selectedCount})
+                    </p>
+                    <ul className="mt-1.5 space-y-0.5">
+                      {selectedNames.map((name) => (
+                        <li key={name} className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setActive(name)}
+                            className={cn(
+                              "min-w-0 flex-1 truncate rounded-lg px-2 py-1 text-left text-[0.78rem] font-medium transition-colors",
+                              active === name
+                                ? "bg-brand-panel text-brand-ink"
+                                : "text-brand-ink/70 hover:bg-brand-panel",
+                            )}
+                          >
+                            {name}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Remove ${name}`}
+                            onClick={() => removeCourse(name)}
+                            className="grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-[#FFEEF0] hover:text-destructive"
+                          >
+                            <X className="size-3" aria-hidden />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </aside>
+          </div>
+
+          {error && (
+            <p className="mt-4 rounded-xl bg-[#FFEEF0] px-3 py-2 text-[0.78rem] leading-relaxed text-[#C23B49]">
+              {error}
+            </p>
+          )}
+
+          <div className="sticky bottom-3 z-20 mt-6">
+            <div className="flex items-center gap-3 rounded-2xl border border-border bg-white/95 px-3.5 py-2.5 shadow-[0_14px_40px_-24px_rgba(22,24,31,0.45)] backdrop-blur">
+              <div className="min-w-0 flex-1">
+                <p className="text-[0.82rem] font-semibold text-brand-ink">
+                  {selectedCount} course{selectedCount === 1 ? "" : "s"}
+                  <span className="font-medium text-muted-foreground">
+                    {" "}
+                    · {level}
+                    {level !== "KS3" && (
+                      <>
+                        {" "}
+                        ·{" "}
+                        {distinctBoards > 1
+                          ? `${distinctBoards} boards`
+                          : boardLabel(summaryBoard)}
+                      </>
+                    )}
+                  </span>
+                </p>
+                <p className="truncate text-[0.7rem] text-muted-foreground">
+                  {selectedCount === 0
+                    ? "Choose up to 12 courses"
+                    : selectedNames.slice(0, 3).join(", ") +
+                      (selectedCount > 3 ? ` and ${selectedCount - 3} more` : "")}
+                </p>
+              </div>
+              <Button
+                onClick={build}
+                disabled={saving || selectedCount === 0}
+                className="h-10 shrink-0 rounded-full bg-[#191B27] px-5 text-[0.82rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-40"
+              >
+                {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                {buildLabel}
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </AppShell>
   );
 }

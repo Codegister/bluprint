@@ -36,12 +36,18 @@ assets.
 
 ### 1. Choose your courses (course pathway)
 
-Open **Choose courses** from the dashboard, pick your level and a default exam board, then
-select every subject you are taking in one pass (up to 12). Selecting a subject expands its
-board and tier controls directly beneath it, so a school that uses AQA for Biology and
-Edexcel for Maths is handled without a second setup. GCSE courses also show an explicit
-**Higher tier** / **Foundation tier** choice, with Higher preselected. Combined Science is
-its own subject, so there is no separate Triple/Combined toggle; IB adds HL/SL. Poetry is
+Open **Choose courses** from the dashboard and choose your qualification first — GCSE, KS3,
+A-Level, IB, AP or Undergraduate. That decides which exam boards and tiers the picker
+offers. Subjects then appear as a single-line list with the common ones at the top and the
+rest alphabetically below, plus a search box for anything further down. Clicking a subject
+selects it and loads its settings into a panel beside the list (below it on a phone): exam
+board, tier or route, and a shortcut to apply that board to every course already chosen.
+Nothing expands inline, so a whole timetable of subjects can be scanned at a glance, and a
+school that uses AQA for Biology and Edexcel for Maths is still handled in one pass (up to
+12 courses). GCSE courses also show an explicit **Higher tier** / **Foundation tier**
+choice, with Higher preselected. KS3 stores no board or tier and is scraped from Cognito's
+KS3 subject pages. Combined Science is its own subject, so there is no separate
+Triple/Combined toggle; IB adds HL/SL. Poetry is
 not chosen in the picker: every anthology cluster the board publishes arrives as its own
 unit, and the ones your school does not teach are removed from the pathway.
 
@@ -116,7 +122,7 @@ says so on the set page; it never silently pretends the request was met.
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
 10. **Plan your revision** — **Build revision timetable** asks which subjects to revise, how
-    long to spend on each one, which paper to cover, how long a school day and a day off
+    long each study session should be, which paper to cover, how long a school day and a day off
     should be, how many days a week you can work, and when your first exam is. Sessions are
     separated by breaks as long as the session before them, nothing runs past 8:00 pm, and
     if the topics will not fit the date you chose, the plan starts earlier rather than
@@ -382,23 +388,23 @@ same rate-limit messages as the rest of the app.
 ## How a revision timetable is built
 
 - The builder is four separate pages, each with its own URL and a **Next** button:
-  subjects; a session length and paper for each subject (25, 45, 60, or 90 minutes; Paper 1,
-  Paper 2, or both); a school-day study budget (30, 60, 90, or 120 minutes), a day-off study
-  budget (1, 1½, 2, 3, or 4 hours), revision days per week (three, five, or seven) and a
-  session start time; then the start date and first exam date. The four answers stay in
-  place while paging, and the final page builds.
+  subjects; **one session length for the whole timetable** (25, 45, 60, or 90 minutes) with
+  a paper choice (Paper 1, Paper 2, or both) for each subject; a school-day study budget
+  (30, 60, 90, or 120 minutes), a day-off study budget (1, 1½, 2, 3, or 4 hours), revision
+  days per week (three, five, or seven) and a session start time; then the start date and
+  first exam date. The four answers stay in place while paging, and the final page builds.
 - The server fills each school day up to the chosen budget with interleaved subject
-  sessions, respecting each subject's own length. A short subject can share a day with a
-  long one; a subject that no longer fits waits for the next revision day. A different
-  subject starts each day so the same course does not always occupy the first slot.
+  sessions of that one length. A subject that no longer has time for a whole session waits
+  for the next revision day. A different subject starts each day so the same course does
+  not always occupy the first slot.
 - Sessions never run back to back. A break as long as the session before it is inserted
   before the next subject, so a 45-minute session is followed by 45 minutes off. Breaks sit
   outside the study budget: the student chose study time, not desk time. The day's last
   session has no trailing break.
 - **Nothing is scheduled to end after 8:00 pm.** A session that would cross that line waits
   for the next revision day, and if the topics then will not fit before the exam the plan
-  starts earlier. The builder disables start times that are too late for the longest session
-  chosen, and the server rejects a plan whose sessions would run past the cutoff.
+  starts earlier. The builder disables start times too late for your session length, and the
+  server rejects a plan whose sessions would run past the cutoff.
 - Bank holidays, weekends and school-holiday weekdays use the **day-off budget the student
   chose** — nothing is multiplied or assumed. This lets a busy weekend stay short and a
   free half-term carry longer days.
@@ -497,6 +503,10 @@ src/
   clock includes those gaps; the day's study total does not. This is the simplest reading
   of "a break as long as the study before it", and it means a longer session buys a longer
   break rather than a shorter one.
+- **One session length for the whole plan.** Sessions are the same length for every
+  subject, because a study block is a habit rather than a per-subject setting. The paper
+  label still varies by subject. A session that does not fit the day's remaining budget or
+  would cross 8:00 pm moves to the next revision day.
 - **Paper choices label sessions, not separate sets.** A session marked Paper 1 or Paper 2
   opens the topic's study set; the set still covers the whole specification topic. Choosing
   "both" alternates the paper label between sessions so the plan covers both papers over

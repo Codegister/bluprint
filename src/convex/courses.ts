@@ -157,14 +157,17 @@ export const createMany = mutation({
     // it here keeps older clients and direct calls consistent. GCSE routes are
     // separate subjects now, so drop any legacy Triple/Combined variant.
     const defaultTier = level === "GCSE" ? "Higher" : undefined;
+    // KS3 sits below GCSE and has no exam board or tier at all.
+    const isKs3 = level === "KS3";
     const requested = args.courses
       .map((course) => ({
         subject: course.subject.trim().slice(0, 80),
-        examBoard:
-          course.examBoard?.trim().slice(0, 60) || defaultBoard || undefined,
-        tier: course.tier?.trim().slice(0, 40) || defaultTier,
+        examBoard: isKs3
+          ? "None"
+          : course.examBoard?.trim().slice(0, 60) || defaultBoard || undefined,
+        tier: isKs3 ? undefined : course.tier?.trim().slice(0, 40) || defaultTier,
         variant:
-          level === "GCSE"
+          level === "GCSE" || isKs3
             ? undefined
             : course.variant?.trim().slice(0, 40) || undefined,
       }))

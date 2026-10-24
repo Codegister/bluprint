@@ -29,14 +29,13 @@ const MAX_COURSES = 12;
 /** The builder runs as four pages; each has its own URL and one decision. */
 const STEPS = [
   { title: "Subjects", color: "#128A4C", tint: "bg-[#EAFBF4]" },
-  { title: "Time per subject", color: "#6B4DBE", tint: "bg-[#F3F0FF]" },
+  { title: "Session length", color: "#6B4DBE", tint: "bg-[#F3F0FF]" },
   { title: "Daily plan", color: "#2B7FB8", tint: "bg-[#EAF4FD]" },
   { title: "Exam dates", color: "#B7791F", tint: "bg-[#FFF7EC]" },
 ] as const;
 
 type CourseSetting = {
   courseId: Id<"courses">;
-  minutes: number;
   paper: string;
 };
 
@@ -61,10 +60,6 @@ function sessionWithin(minutes: number): number {
   return allowed[allowed.length - 1] ?? SESSION_MINUTES[0];
 }
 
-function defaultSessionMinutes(dailyMinutes: number): number {
-  return dailyMinutes >= 45 ? 45 : sessionWithin(dailyMinutes);
-}
-
 export default function TimetableBuilder() {
   const navigate = useNavigate();
   const { step: stepParam } = useParams<{ step?: string }>();
@@ -83,6 +78,8 @@ export default function TimetableBuilder() {
   const [examDate, setExamDate] = useState(initial.examDate);
   const [dailyMinutes, setDailyMinutes] = useState(60);
   const [dayOffMinutes, setDayOffMinutes] = useState(180);
+  // One uninterrupted study block, shared by every subject.
+  const [sessionMinutes, setSessionMinutes] = useState(45);
   const [startMinutes, setStartMinutes] = useState(17 * 60);
   const [daysPerWeek, setDaysPerWeek] = useState(5);
   const [settings, setSettings] = useState<CourseSetting[]>([]);
@@ -99,10 +96,7 @@ export default function TimetableBuilder() {
   );
   const daysLeft = daysUntilInput(examDate);
   const datesInvalid = Boolean(startDate && examDate) && examDate <= startDate;
-  const longestSessionMinutes =
-    settings.length > 0
-      ? Math.max(...settings.map((setting) => setting.minutes))
-      : 25;
+  const longestSessionMinutes = sessionMinutes;
 
   const toggle = (courseId: Id<"courses">) => {
     const alreadySelected = settings.some(
@@ -116,14 +110,7 @@ export default function TimetableBuilder() {
       if (current.some((setting) => setting.courseId === courseId)) {
         return current.filter((setting) => setting.courseId !== courseId);
       }
-      return [
-        ...current,
-        {
-          courseId,
-          minutes: defaultSessionMinutes(dailyMinutes),
-          paper: "Paper 1",
-        },
-      ];
+      return [...current, { courseId, paper: "Paper 1" }];
     });
     setError(null);
   };
@@ -139,21 +126,19 @@ export default function TimetableBuilder() {
 
   const chooseDayOffMinutes = (minutes: number) => {
     setDayOffMinutes(minutes);
+    // A session cannot outlast the day it sits in.
+    if (sessionMinutes > minutes) setSessionMinutes(sessionWithin(minutes));
     setError(null);
   };
 
   const chooseDailyMinutes = (minutes: number) => {
     setDailyMinutes(minutes);
-    // A subject cannot be revised for longer than the whole day's budget, and
-    // the replacement must still be one of the offered session lengths.
-    const longest = sessionWithin(minutes);
-    setSettings((current) =>
-      current.map((setting) => ({
-        ...setting,
-        minutes:
-          setting.minutes <= minutes ? setting.minutes : longest,
-      })),
-    );
+    if (sessionMinutes > minutes) setSessionMinutes(sessionWithin(minutes));
+    setError(null);
+  };
+
+  const chooseSessionMinutes = (minutes: number) => {
+    setSessionMinutes(minutes);
     setError(null);
   };
 
@@ -199,6 +184,7 @@ export default function TimetableBuilder() {
         dailyMinutes,
         dayOffMinutes,
         startMinutes,
+        sessionMinutes,
         courseSettings: settings,
       });
       if (result.startedEarlier) {
@@ -402,113 +388,108 @@ export default function TimetableBuilder() {
               Step 2 of 4
             </p>
             <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
-              How long on each subject, and which papers?
+              How long should each session be?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              Each subject can have its own session length. Choose whether to revise
-              Paper 1, Paper 2, or alternate between both.
+              One uninterrupted study block, used for every subject. Each day is
+              filled with as many whole sessions as your time allows, with a break
+              of the same length after each one.
             </p>
+
+            <div className="mt-4">
+              <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Session length
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {SESSION_MINUTES.map((minutes) => {
+                  const disabled = minutes > dailyMinutes || minutes > dayOffMinutes;
+                  return (
+                    <button
+                      key={minutes}
+                      type="button"
+                      disabled={disabled}
+                      aria-pressed={sessionMinutes === minutes}
+                      onClick={() => chooseSessionMinutes(minutes)}
+                      className={cn(
+                        "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
+                        sessionMinutes === minutes
+                          ? "border-[#191B27] bg-[#191B27] text-white"
+                          : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                        disabled && "cursor-not-allowed opacity-40 hover:bg-white",
+                      )}
+                    >
+                      {minutes} min
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                Applies to every subject and to every day. Nothing runs past
+                8:00 pm; a session that would cross that line waits for the next
+                revision day.
+              </p>
+            </div>
 
             {settings.length === 0 ? (
               <p className="mt-4 rounded-2xl border border-dashed border-border px-4 py-5 text-[0.82rem] text-muted-foreground">
-                Select at least one subject above to set its session length.
+                Select at least one subject above to choose its papers.
               </p>
             ) : (
-              <div className="mt-4 space-y-2.5">
-                {settings.map((setting) => {
-                  const course = ready.find(
-                    (item) => item._id === setting.courseId,
-                  );
-                  if (!course) return null;
-                  const index = settings.indexOf(setting);
-                  const color = SUBJECT_COLORS[index % SUBJECT_COLORS.length];
-                  return (
-                    <div
-                      key={setting.courseId}
-                      className={cn(
-                        "rounded-2xl border p-3.5 sm:p-4",
-                        color.border,
-                        color.tint,
-                      )}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <span className={cn("size-2.5 rounded-full", color.dot)} />
-                          <div className="min-w-0">
-                            <p className="truncate text-[0.88rem] font-semibold text-brand-ink">
-                              {course.subject}
-                            </p>
-                            <p className="mt-0.5 truncate text-[0.7rem] text-muted-foreground">
-                              {courseSubtitle(course)}
-                            </p>
-                          </div>
+              <div className="mt-5">
+                <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Papers
+                </p>
+                <div className="mt-2 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white">
+                  {settings.map((setting) => {
+                    const course = ready.find(
+                      (item) => item._id === setting.courseId,
+                    );
+                    if (!course) return null;
+                    const index = settings.indexOf(setting);
+                    const color = SUBJECT_COLORS[index % SUBJECT_COLORS.length];
+                    return (
+                      <div
+                        key={setting.courseId}
+                        className="flex flex-wrap items-center gap-2 px-3.5 py-2.5"
+                      >
+                        <span
+                          className={cn("size-2.5 shrink-0 rounded-full", color.dot)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[0.86rem] font-semibold text-brand-ink">
+                            {course.subject}
+                          </p>
+                          <p className="mt-0.5 truncate text-[0.7rem] text-muted-foreground">
+                            {courseSubtitle(course)}
+                          </p>
                         </div>
+                        <select
+                          value={setting.paper}
+                          aria-label={`${course.subject} paper`}
+                          onChange={(event) =>
+                            updateSetting(setting.courseId, {
+                              paper: event.target.value,
+                            })
+                          }
+                          className="h-8 w-[150px] rounded-lg border border-border bg-white px-2 text-[0.76rem] font-medium text-brand-ink outline-none focus:border-[#B9A6FF]"
+                        >
+                          {PAPERS.map((paper) => (
+                            <option key={paper} value={paper}>
+                              {paperLabel(paper)}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
                           onClick={() => toggle(course._id)}
-                          className="text-[0.7rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+                          className="text-[0.7rem] font-semibold text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
                         >
                           Remove
                         </button>
                       </div>
-
-                      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
-                        <div>
-                          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                            Session length
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {SESSION_MINUTES.map((minutes) => {
-                              const disabled =
-                                minutes > dailyMinutes || minutes > dayOffMinutes;
-                              return (
-                                <button
-                                  key={minutes}
-                                  type="button"
-                                  disabled={disabled}
-                                  aria-pressed={setting.minutes === minutes}
-                                  onClick={() =>
-                                    updateSetting(setting.courseId, { minutes })
-                                  }
-                                  className={cn(
-                                    "rounded-full border px-3 py-1.5 text-[0.74rem] font-semibold transition-colors",
-                                    setting.minutes === minutes
-                                      ? "border-[#191B27] bg-[#191B27] text-white"
-                                      : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
-                                    disabled &&
-                                      "cursor-not-allowed opacity-40 hover:bg-white",
-                                  )}
-                                >
-                                  {minutes} min
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <label className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                          Paper
-                          <select
-                            value={setting.paper}
-                            aria-label={`${course.subject} paper`}
-                            onChange={(event) =>
-                              updateSetting(setting.courseId, {
-                                paper: event.target.value,
-                              })
-                            }
-                            className="mt-1.5 h-9 w-full rounded-xl border border-border bg-white px-2.5 text-[0.78rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9A6FF]"
-                          >
-                            {PAPERS.map((paper) => (
-                              <option key={paper} value={paper}>
-                                {paperLabel(paper)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </section>
@@ -551,10 +532,11 @@ export default function TimetableBuilder() {
                 ))}
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-                Bluprint fills the budget with whole study sessions, so a day can
-                finish a few minutes early when the next session does not fit.
-                Breaks sit outside this budget: a 45-minute session is followed by
-                45 minutes off before the next subject.
+                Bluprint fills the budget with whole {sessionMinutes}-minute
+                sessions, so a day can finish early when the next one does not fit.
+                Breaks sit outside this budget: your session is followed by a break
+                of the same length. Choosing a day shorter than the session shortens
+                the session to the longest block that still fits.
               </p>
             </div>
 
@@ -593,8 +575,8 @@ export default function TimetableBuilder() {
                 })}
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-                At least as long as your longest session, so every subject can
-                still fit on a holiday.
+                At least as long as one session, so a study block still fits on a
+                day off.
               </p>
             </div>
 
@@ -728,8 +710,8 @@ export default function TimetableBuilder() {
               {step === 4 ? (
                 <>
                   {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
-                  {dailyMinutes} min on school days · {dayOffMinutes} min on days
-                  off · {daysPerWeek} days a week
+                  {sessionMinutes} min sessions · {dailyMinutes} min on school days
+                  · {dayOffMinutes} min on days off · {daysPerWeek} days a week
                 </>
               ) : (
                 <>

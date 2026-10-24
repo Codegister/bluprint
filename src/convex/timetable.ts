@@ -56,7 +56,6 @@ type TopicEntry = {
 type SubjectState = {
   courseId: Id<"courses">;
   subject: string;
-  minutes: number;
   paper: string;
   topics: TopicEntry[];
   topicIndex: number;
@@ -322,6 +321,9 @@ function scheduleDay(
   dailyMinutes: number,
   startMinutes: number,
   dayIndex: number,
+  // Every session is the same length. The student chooses one study block
+  // length, not a different one per subject.
+  sessionMinutes: number,
 ) {
   // A chosen start time at or after 8pm can never produce a session.
   if (startMinutes >= LATEST_END_MINUTES) return [];
@@ -337,15 +339,15 @@ function scheduleDay(
     }
   > = [];
 
-  while (remaining >= Math.min(...states.map((state) => state.minutes))) {
+  while (remaining >= sessionMinutes) {
     let picked = -1;
     for (let offset = 0; offset < states.length; offset += 1) {
       const index = (cursor + offset) % states.length;
       const state = states[index];
       if (
         state.topics.length > 0 &&
-        state.minutes <= remaining &&
-        clock + state.minutes <= LATEST_END_MINUTES
+        sessionMinutes <= remaining &&
+        clock + sessionMinutes <= LATEST_END_MINUTES
       ) {
         picked = index;
         break;
@@ -364,7 +366,7 @@ function scheduleDay(
 
     sessions.push({
       ...topic,
-      minutes: state.minutes,
+      minutes: sessionMinutes,
       paper,
       startMinutes: clock,
       breakMinutes: 0,
@@ -373,8 +375,8 @@ function scheduleDay(
     state.topicIndex += 1;
     state.paperCount += 1;
     // The break after this session is the same length as the session itself.
-    clock += state.minutes * 2;
-    remaining -= state.minutes;
+    clock += sessionMinutes * 2;
+    remaining -= sessionMinutes;
     cursor = (picked + 1) % states.length;
   }
 
@@ -414,10 +416,11 @@ export const build = mutation({
     // school holiday. Asked explicitly, never derived from the school-day budget.
     dayOffMinutes: v.number(),
     startMinutes: v.number(),
+    // One uninterrupted study block length, shared by every subject.
+    sessionMinutes: v.number(),
     courseSettings: v.array(
       v.object({
         courseId: v.id("courses"),
-        minutes: v.number(),
         paper: v.string(),
       }),
     ),
@@ -440,6 +443,24 @@ export const build = mutation({
     if (!DAY_OFF_LENGTHS.includes(args.dayOffMinutes)) {
       throw new Error("Choose how much time you can give a day off.");
     }
+    if (!SESSION_LENGTHS.includes(args.sessionMinutes)) {
+      throw new Error("Choose how long one study session should be.");
+    }
+    if (args.sessionMinutes > args.dailyMinutes) {
+      throw new Error(
+        "A session is longer than your school-day revision time. Choose a longer day or a shorter session.",
+      );
+    }
+    if (args.sessionMinutes > args.dayOffMinutes) {
+      throw new Error(
+        "A session is longer than your day-off revision time. Choose a longer day off or a shorter session.",
+      );
+    }
+    if (args.startMinutes + args.sessionMinutes > LATEST_END_MINUTES) {
+      throw new Error(
+        `A ${args.sessionMinutes}-minute session starting at ${formatClock(args.startMinutes)} would finish after 8pm. Start earlier or shorten the session.`,
+      );
+    }
     if (
       !Number.isInteger(args.startMinutes) ||
       args.startMinutes < 0 ||
@@ -456,32 +477,14 @@ export const build = mutation({
 
     const settings = new Map<
       Id<"courses">,
-      { courseId: Id<"courses">; minutes: number; paper: string }
+      { courseId: Id<"courses">; paper: string }
     >();
     for (const setting of args.courseSettings) {
       if (settings.has(setting.courseId)) {
         throw new Error("Each course can only appear once in the timetable.");
       }
-      if (!SESSION_LENGTHS.includes(setting.minutes)) {
-        throw new Error("Choose a valid session length for every course.");
-      }
       if (!PAPERS.includes(setting.paper)) {
         throw new Error("Choose Paper 1, Paper 2, or Both for every course.");
-      }
-      if (setting.minutes > args.dailyMinutes) {
-        throw new Error(
-          "A subject's session is longer than your daily revision time. Lower that subject's session length.",
-        );
-      }
-      if (setting.minutes > args.dayOffMinutes) {
-        throw new Error(
-          "A subject's session is longer than your day-off revision time. Raise that day's time or lower the session length.",
-        );
-      }
-      if (args.startMinutes + setting.minutes > LATEST_END_MINUTES) {
-        throw new Error(
-          `A ${setting.minutes}-minute session starting at ${formatClock(args.startMinutes)} would finish after 8pm. Start earlier or shorten that session.`,
-        );
       }
       settings.set(setting.courseId, setting);
     }
@@ -541,7 +544,6 @@ export const build = mutation({
       const states: SubjectState[] = courseSettings.map(({ course, setting }) => ({
         courseId: course._id,
         subject: course.subject,
-        minutes: setting.minutes,
         paper: setting.paper,
         topics: topicsFor(course),
         topicIndex: 0,
@@ -563,6 +565,7 @@ export const build = mutation({
             dailyCapacity(cursor, args.dailyMinutes, args.dayOffMinutes),
             args.startMinutes,
             revisionDays,
+            args.sessionMinutes,
           );
           revisionDays += 1;
           for (const session of sessions) {
@@ -622,13 +625,13 @@ export const build = mutation({
       dailyMinutes: args.dailyMinutes,
       dayOffMinutes: args.dayOffMinutes,
       startMinutes: args.startMinutes,
+      sessionMinutes: args.sessionMinutes,
       daysPerWeek: args.daysPerWeek,
       courseSettings: ordered.map((course) => {
         const setting = settings.get(course._id)!;
         return {
           courseId: course._id,
           subject: course.subject,
-          minutes: setting.minutes,
           paper: setting.paper,
         };
       }),

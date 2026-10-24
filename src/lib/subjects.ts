@@ -115,6 +115,26 @@ const catalogue: Array<Omit<SubjectMeta, "group"> & { group: string }> = [
 
 export const SUBJECTS: SubjectMeta[] = catalogue.map((entry) => ({ ...entry }));
 
+/**
+ * The subjects most students take, in the order they usually appear on a
+ * school timetable. The picker lists these first so the common choices need no
+ * scrolling or searching.
+ */
+export const POPULAR_SUBJECTS = [
+  "Biology",
+  "Chemistry",
+  "Physics",
+  "Combined Science",
+  "Mathematics",
+  "English Language",
+  "English Literature",
+  "History",
+  "Geography",
+  "Computer Science",
+  "Psychology",
+  "Business Studies",
+] as const;
+
 export const SUBJECT_GROUPS = [
   "Sciences",
   "Maths & Computing",
@@ -146,7 +166,9 @@ export function courseSubtitle(course: {
   tier?: string | null;
   variant?: string | null;
 }): string {
-  const qualification = [course.level, course.examBoard].filter(Boolean).join(" · ");
+  // KS3 has no exam board, and the picker stores "None" for it.
+  const board = course.examBoard === "None" ? "" : course.examBoard;
+  const qualification = [course.level, board].filter(Boolean).join(" · ");
   // Older GCSE courses may still carry a Triple/Combined variant. It is no
   // longer a picker option, so do not surface it as if it were current.
   const route = course.level === "GCSE" ? null : course.variant;

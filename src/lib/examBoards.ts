@@ -20,6 +20,7 @@ export const EXAM_BOARDS = [
 
 export const STUDY_LEVELS = [
   "GCSE",
+  "KS3",
   "A-Level",
   "IB",
   "AP",
