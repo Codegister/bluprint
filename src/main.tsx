@@ -84,7 +84,15 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+// Temporary migration override: the project's managed .env.local still points
+// at the disabled Freebuff deployment. Remove this once VITE_CONVEX_URL points
+// at the new project.
+const MIGRATION_CONVEX_URL = "https://honorable-lyrebird-974.convex.cloud";
+const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
+const convexUrl = configuredConvexUrl?.includes("honorable-lyrebird-974")
+  ? configuredConvexUrl
+  : MIGRATION_CONVEX_URL;
+const convex = new ConvexReactClient(convexUrl);
 
 
 

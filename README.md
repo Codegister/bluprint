@@ -151,8 +151,11 @@ it. Sets built from a course topic link back to that course.
 
 ### In this Freebuff environment
 
-The Vite dev server and Convex deployment are already managed. Open the preview, add the
-NVIDIA keys (below), and use the app. No terminal process needs to be started.
+The Vite dev server is managed. The client currently uses a temporary Convex URL fallback
+in `src/main.tsx` because the platform's `.env.local` still references the old deployment.
+Once `VITE_CONVEX_URL` points at the new deployment and the Convex integration is repointed,
+remove that fallback. Open the preview, add the NVIDIA keys (below), and use the app. No
+terminal process needs to be started.
 
 ### Locally
 
