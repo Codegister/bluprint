@@ -12,6 +12,8 @@ import "./index.css";
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const CourseSetup = lazy(() => import("./pages/CourseSetup.tsx"));
+const CoursePage = lazy(() => import("./pages/Course.tsx"));
 const StudySet = lazy(() => import("./pages/StudySet.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -132,6 +134,28 @@ createRoot(document.getElementById("root")!).render(
                     description="Your sets, progress and quiz scores live in your account."
                   >
                     <Dashboard />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/courses/new"
+                element={
+                  <RequireAuth
+                    title="Sign in to set up your courses"
+                    description="Course pathways are mapped to your account and your exam board."
+                  >
+                    <CourseSetup />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/courses/:courseId"
+                element={
+                  <RequireAuth
+                    title="Sign in to open this course"
+                    description="Course pathways are private to the account that created them."
+                  >
+                    <CoursePage />
                   </RequireAuth>
                 }
               />

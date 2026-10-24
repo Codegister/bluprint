@@ -24,14 +24,17 @@ import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { displayName, percent, relativeDate, sourceLabel } from "@/lib/format";
+import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
+  ArrowRight,
   Camera,
-  ClipboardPaste,
+  ChevronRight,
   FileUp,
   Flame,
+  GraduationCap,
   Layers,
   Loader2,
   MoreHorizontal,
@@ -40,13 +43,13 @@ import {
   Sparkles,
   Trash2,
   TrendingUp,
-  Video,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 type SetSummary = FunctionReturnType<typeof api.studySets.listMine>[number];
+type CourseSummary = FunctionReturnType<typeof api.courses.listMine>[number];
 
 const deckTints = [
   { solid: "#7C5CFF", tint: "bg-[#F3ECFF] text-[#5B3DF5]" },
@@ -232,27 +235,105 @@ function SetCard({ set }: { set: SetSummary }) {
   );
 }
 
-const composerActions = [
-  {
-    label: "Upload photos",
-    icon: FileUp,
-    tint: "bg-[#F3ECFF] text-[#5B3DF5]",
-  },
-  {
-    label: "Paste notes",
-    icon: ClipboardPaste,
-    tint: "bg-[#E9F0FF] text-[#2563EB]",
-  },
-  {
-    label: "Add a video",
-    icon: Video,
-    tint: "bg-[#FFF0F6] text-[#D1367E]",
-  },
-] as const;
+/** One row of the Cognito-style course table. */
+function CourseRow({ course }: { course: CourseSummary }) {
+  const meta = subjectMeta(course.subject);
+  const Icon = meta.icon;
+  const mastery = percent(course.completedCount, course.topicCount);
+  const building = course.status === "queued" || course.status === "processing";
+
+  return (
+    <Link
+      to={`/courses/${course._id}`}
+      className="group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel/40 sm:grid-cols-[minmax(0,1fr)_150px_160px_20px] sm:items-center sm:px-5"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={cn("grid size-11 shrink-0 place-items-center rounded-2xl", meta.tint)}
+          style={{ color: meta.color }}
+        >
+          <Icon className="size-5" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="truncate font-display text-[0.98rem] font-bold text-brand-ink">
+              {course.subject}
+            </h3>
+            {course.isNew && (
+              <span className="rounded-full bg-[#3B82F6] px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-[0.04em] text-white">
+                New course
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-[0.76rem] text-muted-foreground">
+            {courseSubtitle(course)}
+          </p>
+        </div>
+      </div>
+
+      <div className="pl-14 sm:pl-0">
+        <p className="text-[0.58rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:hidden">
+          Pathway
+        </p>
+        {building ? (
+          <p className="mt-0.5 flex items-center gap-1.5 text-[0.76rem] font-medium text-[#96650A]">
+            <Loader2 className="size-3 animate-spin" />
+            {course.progress || "Building"}
+          </p>
+        ) : course.status === "error" ? (
+          <p className="mt-0.5 text-[0.76rem] font-semibold text-[#C23B49]">
+            Needs a retry
+          </p>
+        ) : (
+          <>
+            <p className="text-[0.8rem] font-semibold text-brand-ink">
+              {course.completedCount}
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                / {course.topicCount} topics
+              </span>
+            </p>
+            <div className="mt-1 h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-brand-panel">
+              <div
+                className="h-full rounded-full bg-[#7C5CFF]"
+                style={{ width: `${mastery}%` }}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="pl-14 sm:pl-0">
+        <p className="text-[0.58rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:hidden">
+          Materials
+        </p>
+        {course.status === "ready" ? (
+          <div className="flex items-center gap-2 text-[0.76rem] text-muted-foreground">
+            <span className="font-semibold text-brand-ink">
+              {course.setCount} {course.setCount === 1 ? "set" : "sets"}
+            </span>
+            {course.cardCount > 0 && (
+              <span className="rounded-full bg-[#EAFBF0] px-2 py-0.5 text-[0.66rem] font-semibold text-[#128A4C]">
+                {percent(course.knownCount, course.cardCount)}% known
+              </span>
+            )}
+          </div>
+        ) : (
+          <p className="text-[0.76rem] text-muted-foreground">
+            {course.status === "error" ? "Open to retry" : "Mapping specification"}
+          </p>
+        )}
+      </div>
+
+      <ChevronRight className="hidden size-4 shrink-0 text-brand-ink/30 transition-colors group-hover:text-brand-ink/70 sm:block" />
+    </Link>
+  );
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
   const sets = useQuery(api.studySets.listMine);
+  const courseRows = useQuery(api.courses.listMine);
   const ai = useQuery(api.settings.aiStatus);
   const study = useQuery(api.studySets.studyStats);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -286,9 +367,9 @@ export default function Dashboard() {
     return { count: list.length, mastery: percent(known, cards), cards, quizAverage, due };
   }, [sets]);
 
-  // Courses are free text, so the filter is built from what the account actually
-  // contains rather than a fixed list.
-  const courses = useMemo(() => {
+  // Study-set courses are free text, so the filter is built from what the
+  // account actually contains rather than a fixed list.
+  const courseFilters = useMemo(() => {
     const counts = new Map<string, number>();
     for (const set of sets ?? []) {
       if (!set.course) continue;
@@ -331,73 +412,173 @@ export default function Dashboard() {
             today?
           </p>
         </div>
-        <Button
-          onClick={() => setDialogOpen(true)}
-          className="h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
-        >
-          <Plus className="size-4" />
-          New set
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            asChild
+            variant="outline"
+            className="h-10 rounded-full border-border bg-white px-4 font-semibold text-brand-ink hover:bg-brand-panel"
+          >
+            <Link to="/courses/new">
+              <GraduationCap className="size-4" />
+              Choose courses
+            </Link>
+          </Button>
+          <Button
+            onClick={() => setDialogOpen(true)}
+            className="h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
+          >
+            <FileUp className="size-4" />
+            Upload material
+          </Button>
+        </div>
       </header>
 
-      {/* Hero + composer, mirroring the Gizmo home screen. */}
-      <section className="mt-7 rounded-[2rem] border border-border bg-white px-5 pb-6 pt-8 shadow-[0_1px_2px_rgba(22,24,31,0.04),0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:px-8 sm:pb-8">
-        <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-center sm:gap-7">
-          <Mascot size={132} className="sm:size-[168px]" />
-          <div className="text-center sm:text-left">
-            <p className="text-[1.15rem] font-medium text-brand-ink/70">
-              What shall we
-            </p>
-            <p className="font-display text-[2.6rem] font-extrabold leading-none tracking-[-0.04em] text-[#191B27] sm:text-[3.4rem]">
+      {/* Two ways in: a whole course pathway, or the student's own material. */}
+      <section className="mt-7 overflow-hidden rounded-[2rem] border border-border bg-white shadow-[0_1px_2px_rgba(22,24,31,0.04),0_18px_44px_-34px_rgba(22,24,31,0.4)]">
+        <div className="flex flex-col items-center gap-3 border-b border-border/70 px-5 py-6 text-center sm:flex-row sm:justify-center sm:gap-6 sm:py-7 sm:text-left">
+          <Mascot size={104} className="sm:size-[124px]" />
+          <div>
+            <p className="text-[1rem] font-medium text-brand-ink/60">What shall we</p>
+            <p className="font-display text-[2.4rem] font-extrabold leading-none tracking-[-0.04em] text-[#191B27] sm:text-[3rem]">
               Study?
+            </p>
+            <p className="mt-1.5 text-[0.82rem] text-muted-foreground">
+              Start with your courses, or bring your own notes.
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          className="mt-7 flex w-full flex-col gap-3 rounded-3xl border border-border bg-white p-5 text-left transition-shadow hover:shadow-[0_14px_30px_-24px_rgba(22,24,31,0.45)] sm:p-6"
-        >
-          <span className="text-[1.02rem] text-muted-foreground">
-            I want to study…
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="grid size-8 place-items-center rounded-full bg-brand-panel text-brand-ink/70">
-              <Plus className="size-4" />
+        <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4">
+          <Link
+            to="/courses/new"
+            className="group flex flex-col rounded-3xl border border-[#D8CCFF] bg-[#FAF8FF] p-5 transition-shadow hover:shadow-[0_16px_36px_-26px_rgba(91,61,245,0.55)]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span className="grid size-10 place-items-center rounded-2xl bg-[#F3ECFF] text-[#5B3DF5]">
+                <GraduationCap className="size-5" />
+              </span>
+              <span className="rounded-full bg-white px-2.5 py-1 text-[0.64rem] font-bold uppercase tracking-[0.08em] text-[#6B4EE6]">
+                Course pathway
+              </span>
+            </div>
+            <h2 className="mt-3 font-display text-[1.15rem] font-bold text-brand-ink">
+              Revise a whole course
+            </h2>
+            <p className="mt-1.5 text-[0.84rem] leading-relaxed text-muted-foreground">
+              Pick your exam board and every course you take. Bluprint maps the
+              current specification into units and topics, then builds cards,
+              quizzes and exam practice for any topic.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {["Specification-mapped", "All your courses", "Per-topic sets"].map(
+                (chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full border border-[#E4DBFF] bg-white px-2 py-1 text-[0.66rem] font-semibold text-[#6B4EE6]"
+                  >
+                    {chip}
+                  </span>
+                ),
+              )}
+            </div>
+            <span className="mt-auto flex items-center gap-1.5 pt-4 text-[0.84rem] font-semibold text-[#5B3DF5]">
+              {courseRows && courseRows.length > 0
+                ? "Add another course"
+                : "Choose your courses"}
+              <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
             </span>
-            <span className="text-[0.8rem] text-muted-foreground">
-              Paste notes, upload photos of a page, or add a video
-            </span>
-          </span>
-        </button>
+          </Link>
 
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {composerActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <button
-                key={action.label}
-                type="button"
-                onClick={() => setDialogOpen(true)}
-                className="flex h-12 items-center justify-center gap-2 rounded-full border border-border bg-white px-4 text-[0.9rem] font-semibold text-brand-ink transition-colors hover:bg-brand-panel"
-              >
-                <span className={cn("grid size-7 place-items-center rounded-full", action.tint)}>
-                  <Icon className="size-3.5" />
+          <button
+            type="button"
+            onClick={() => setDialogOpen(true)}
+            className="group flex flex-col rounded-3xl border border-border bg-white p-5 text-left transition-shadow hover:shadow-[0_16px_36px_-26px_rgba(14,140,127,0.45)]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span className="grid size-10 place-items-center rounded-2xl bg-[#E6F9F6] text-[#0E8C7F]">
+                <FileUp className="size-5" />
+              </span>
+              <span className="rounded-full bg-brand-panel px-2.5 py-1 text-[0.64rem] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                Your own material
+              </span>
+            </div>
+            <h2 className="mt-3 font-display text-[1.15rem] font-bold text-brand-ink">
+              Turn notes into a study set
+            </h2>
+            <p className="mt-1.5 text-[0.84rem] leading-relaxed text-muted-foreground">
+              Upload photos of a page, add a video, or paste notes. Get a summary,
+              flashcards, a quiz and AI-marked exam questions from exactly what
+              you're studying.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {["Photos & video", "Summary", "Exam practice"].map((chip) => (
+                <span
+                  key={chip}
+                  className="rounded-full border border-border bg-white px-2 py-1 text-[0.66rem] font-semibold text-brand-ink/60"
+                >
+                  {chip}
                 </span>
-                {action.label}
-              </button>
-            );
-          })}
+              ))}
+            </div>
+            <span className="mt-auto flex items-center gap-1.5 pt-4 text-[0.84rem] font-semibold text-[#0E8C7F]">
+              Upload study material
+              <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </button>
         </div>
 
         {ai && !ai.configured && (
-          <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.82rem] font-medium text-[#96650A]">
-            AI is not connected on this deployment. Add NVIDIA_API_KEY to the server
-            environment to build new sets — everything already saved still works.
+          <p className="mx-3 mb-3 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.8rem] font-medium text-[#96650A] sm:mx-4 sm:mb-4">
+            AI is not connected on this deployment. Add NVIDIA_API_KEY to build new
+            sets or OPENROUTER_API_KEY for course pathways — everything already saved
+            still works.
           </p>
         )}
       </section>
+
+      {courseRows && courseRows.length > 0 && (
+        <section
+          id="courses"
+          className="mt-4 overflow-hidden rounded-[2rem] border border-border bg-white shadow-[0_18px_44px_-34px_rgba(22,24,31,0.35)]"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-4 sm:px-5">
+            <div className="flex items-center gap-2.5">
+              <span className="grid size-9 place-items-center rounded-full bg-[#191B27] text-[0.78rem] font-bold text-white">
+                {courseRows.length}
+              </span>
+              <div>
+                <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
+                  Your courses
+                </h2>
+                <p className="text-[0.72rem] text-muted-foreground">
+                  {courseRows.length} qualification{courseRows.length === 1 ? "" : "s"} · AI-mapped from your specification
+                </p>
+              </div>
+            </div>
+            <Button
+              asChild
+              variant="outline"
+              className="h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink hover:bg-brand-panel"
+            >
+              <Link to="/courses/new">
+                <Plus className="size-3.5" />
+                Add courses
+              </Link>
+            </Button>
+          </div>
+
+          <div className="hidden grid-cols-[minmax(0,1fr)_150px_160px_20px] gap-3 border-b border-border/70 bg-[#FCFCFD] px-5 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:grid">
+            <span>Subject</span>
+            <span>Pathway</span>
+            <span>Materials</span>
+            <span />
+          </div>
+
+          {courseRows.map((course) => (
+            <CourseRow key={course._id} course={course} />
+          ))}
+        </section>
+      )}
 
       {/* Progress strip */}
       <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -494,24 +675,37 @@ export default function Dashboard() {
           <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
       ) : sets.length === 0 ? (
-        <section className="mt-8 flex flex-col items-center gap-4 rounded-[2rem] border border-dashed border-border bg-card px-6 py-12 text-center">
-          <Mascot size={130} float={false} />
-          <div>
-            <h2 className="font-display text-[1.35rem] font-bold text-brand-ink">
-              Your first deck is one upload away
+        <section className="mt-4 flex flex-col items-start gap-3 rounded-3xl border border-dashed border-border bg-card px-5 py-5 sm:flex-row sm:items-center">
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#E6F9F6] text-[#0E8C7F]">
+            <Layers className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-display text-[1rem] font-bold text-brand-ink">
+              No study sets yet
             </h2>
-            <p className="mx-auto mt-1.5 max-w-md text-[0.9rem] leading-relaxed text-muted-foreground">
-              Bluprint reads your notes and builds a summary, ten flashcards, a
-              five-question quiz and three exam questions you can practise with.
+            <p className="mt-0.5 text-[0.8rem] leading-relaxed text-muted-foreground">
+              Build one from any course topic, or upload notes to compile a summary,
+              cards, a quiz and exam practice in one go.
             </p>
           </div>
-          <Button
-            onClick={() => setDialogOpen(true)}
-            className="h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
-          >
-            <Plus className="size-4" />
-            Add your notes
-          </Button>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {courseRows && courseRows.length > 0 && (
+              <Button
+                asChild
+                variant="outline"
+                className="h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink hover:bg-brand-panel"
+              >
+                <Link to={`/courses/${courseRows[0]!._id}`}>Open a course</Link>
+              </Button>
+            )}
+            <Button
+              onClick={() => setDialogOpen(true)}
+              className="h-9 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+            >
+              <Plus className="size-3.5" />
+              Upload notes
+            </Button>
+          </div>
         </section>
       ) : (
         <>
@@ -586,7 +780,7 @@ export default function Dashboard() {
                 >
                   All courses
                 </button>
-                {courses.map(([name, count]) => (
+                {courseFilters.map(([name, count]) => (
                   <button
                     key={name}
                     type="button"

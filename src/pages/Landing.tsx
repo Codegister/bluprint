@@ -16,6 +16,7 @@ import {
   Camera,
   Check,
   FileText,
+  GraduationCap,
   Layers,
   ListChecks,
   PenLine,
@@ -259,15 +260,15 @@ export default function Landing() {
             </Eyebrow>
 
             <h1 className="mt-5 text-[3rem] font-extrabold leading-[0.98] tracking-[-0.04em] sm:text-[4rem] lg:text-[4.4rem]">
-              Notes in.
+              Your course.
               <br />
-              <span className="text-brand-pink">Revision out.</span>
+              <span className="text-brand-pink">Compiled.</span>
             </h1>
 
             <p className="mt-6 max-w-[33rem] text-[1.02rem] leading-relaxed text-muted-foreground">
-              Bluprint reads your lecture photos, screen recordings and pasted notes, then
-              builds a summary, flashcards, a quiz and exam-style questions. Everything saved
-              in one private workspace for you and your friends.
+              Choose every course you take and Bluprint maps the specification into units
+              and topics, then builds flashcards, quizzes and AI-marked exam practice for any
+              topic. Prefer your own material? Upload notes and get the same set in one pass.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -296,7 +297,7 @@ export default function Landing() {
                 <Check className="size-3.5 text-brand-mint" /> Sign in with an email code
               </span>
               <span className="flex items-center gap-1.5">
-                <Check className="size-3.5 text-brand-mint" /> Sets stay private
+                <Check className="size-3.5 text-brand-mint" /> Courses and sets stay private
               </span>
               <span className="flex items-center gap-1.5">
                 <Check className="size-3.5 text-brand-mint" /> No setup to start
@@ -314,11 +315,11 @@ export default function Landing() {
           <Reveal className="max-w-2xl">
             <Eyebrow>How it works</Eyebrow>
             <h2 className="mt-4 text-[2rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.6rem]">
-              Upload once. Revise all week.
+              Two ways in. One revision workspace.
             </h2>
             <p className="mt-3 max-w-xl text-[1rem] leading-relaxed text-muted-foreground">
-              Bluprint extracts the source, builds every revision material in one run, and
-              keeps the set saved so you can come back to it later.
+              Map your courses from the specification, or compile a set from your own
+              uploads. Either way, the material is saved so you can come back and practise.
             </p>
           </Reveal>
 
@@ -326,10 +327,10 @@ export default function Landing() {
             {[
               {
                 step: "1",
-                title: "Bring your notes",
-                copy: "Add photos of handwritten notes, a screen recording of a lecture, or paste text directly. Images are compressed in the browser; video is sampled into frames before upload.",
+                title: "Choose your pathway",
+                copy: "Pick your exam board and every course you take for a full specification map, or bring your own material: photos, a screen recording, or pasted notes.",
                 tint: "bg-[#F3ECFF] text-[#7C5CFF]",
-                icon: <Camera className="size-5" />,
+                icon: <GraduationCap className="size-5" />,
               },
               {
                 step: "2",
@@ -710,11 +711,12 @@ export default function Landing() {
                   Ready when you are
                 </p>
                 <h2 className="mt-3 max-w-xl text-[2rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2.6rem]">
-                  Turn your notes into something you can practise.
+                  Turn your course into something you can practise.
                 </h2>
                 <p className="mt-3 max-w-lg text-[0.95rem] leading-relaxed text-brand-ink/60">
-                  Start with one page. Bluprint handles the extraction, structure and marking;
-                  your sets stay saved for the next session.
+                  Set up every course once and work through the specification topic by topic,
+                  or start with a single page of notes. Everything stays saved for the next
+                  session.
                 </p>
                 <div className="mt-6 flex flex-col gap-2 sm:flex-row">
                   <Button

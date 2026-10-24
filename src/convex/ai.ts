@@ -12,7 +12,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import {
   MAX_NOTES_CHARS,
@@ -21,6 +21,14 @@ import {
   NVIDIA_VISION_MODEL,
   readNvidiaKeys,
 } from "./lib/nvidiaConfig";
+import {
+  OPENROUTER_CHAT_URL,
+  OPENROUTER_DEFAULT_MODEL,
+  OPENROUTER_MODELS_URL,
+  OPENROUTER_PREFERRED_MODELS,
+  readOpenRouterKey,
+  readOpenRouterModelOverride,
+} from "./lib/openrouterConfig";
 
 type TextPart = { type: "text"; text: string };
 type ImagePart = { type: "image_url"; image_url: { url: string } };
@@ -711,6 +719,360 @@ async function readSourceImages(
 }
 
 // ---------------------------------------------------------------------------
+// Course pathways (larger model)
+// ---------------------------------------------------------------------------
+
+/**
+ * A pathway is a whole qualification laid out as units and topics, so it needs
+ * a stronger model than one page of notes. OpenRouter's free catalogue is the
+ * default; NVIDIA is kept as a fallback so the app still builds a useful map if
+ * only NVIDIA_API_KEY is configured.
+ */
+type PathwayTopic = {
+  id: string;
+  title: string;
+  specReference?: string;
+  summary: string;
+  keyPoints: string[];
+  examSkill: string;
+};
+type PathwayUnit = { title: string; summary: string; topics: PathwayTopic[] };
+type CoursePathway = { overview: string; examFormat: string; units: PathwayUnit[] };
+
+let freeModelCache: { at: number; ids: string[] } | null = null;
+
+/** Reads which `:free` models OpenRouter currently offers. Cached for 10 min. */
+async function freeOpenRouterModels(): Promise<string[]> {
+  if (freeModelCache && Date.now() - freeModelCache.at < 10 * 60 * 1000) {
+    return freeModelCache.ids;
+  }
+  try {
+    const response = await fetch(OPENROUTER_MODELS_URL, {
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) return [];
+    const payload = (await response.json()) as {
+      data?: Array<{
+        id?: string;
+        pricing?: { prompt?: string; completion?: string };
+      }>;
+    };
+    const ids = (payload.data ?? [])
+      .filter((model) => {
+        if (typeof model.id !== "string") return false;
+        if (!model.id.endsWith(":free")) return false;
+        // Guard against a catalogue entry labelled free but priced.
+        const promptPrice = Number(model.pricing?.prompt ?? "0");
+        const completionPrice = Number(model.pricing?.completion ?? "0");
+        return promptPrice === 0 && completionPrice === 0;
+      })
+      .map((model) => model.id as string);
+    freeModelCache = { at: Date.now(), ids };
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
+/** Picks up to three models, preferring the known-good free models. */
+async function pickOpenRouterModels(): Promise<string[]> {
+  const override = readOpenRouterModelOverride();
+  if (override) return [override];
+
+  const free = await freeOpenRouterModels();
+  const preferred: string[] = [...OPENROUTER_PREFERRED_MODELS].filter(
+    (model) => free.length === 0 || free.includes(model),
+  );
+  const fallback = free.filter((model) => !preferred.includes(model));
+  const chosen = preferred.length > 0 ? [...preferred, ...fallback] : free;
+  const list = chosen.length > 0 ? chosen : [OPENROUTER_DEFAULT_MODEL];
+  return [...new Set(list)].slice(0, 3);
+}
+
+function openRouterError(status: number): string {
+  if (status === 401 || status === 403) {
+    return "OpenRouter rejected OPENROUTER_API_KEY. Check the key on the deployment.";
+  }
+  if (status === 402) {
+    return "OpenRouter could not run that request. Check the account has free-model access and retry.";
+  }
+  if (status === 429) {
+    return "OpenRouter's free models are rate-limited right now. Wait a minute, then retry the build.";
+  }
+  if (status >= 500) {
+    return "OpenRouter's service is having trouble right now. Try again in a moment.";
+  }
+  return `OpenRouter could not build the pathway (HTTP ${status}). Please retry.`;
+}
+
+/**
+ * Chat call against OpenRouter. Free models come and go, so a few candidates
+ * are attempted in order. `reasoning` is capped where supported to stop hidden
+ * thinking eating the JSON budget, and dropped if a model rejects the field.
+ */
+async function openRouterChat(
+  messages: ChatMessage[],
+  maxTokens: number,
+): Promise<string> {
+  const key = readOpenRouterKey();
+  if (!key) {
+    throw new Error(
+      "OPENROUTER_API_KEY is not set on this deployment. Add it to build course pathways.",
+    );
+  }
+
+  const models = await pickOpenRouterModels();
+  let lastError = "OpenRouter could not build the pathway. Please retry.";
+
+  for (const model of models) {
+    for (const withReasoning of [true, false]) {
+      let response: Response;
+      try {
+        response = await fetch(OPENROUTER_CHAT_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://bluprint.local",
+            "X-Title": "Bluprint",
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: 0.2,
+            max_tokens: maxTokens,
+            stream: false,
+            ...(withReasoning ? { reasoning: { effort: "low" } } : {}),
+          }),
+          signal: AbortSignal.timeout(100_000),
+        });
+      } catch (error) {
+        lastError =
+          error instanceof Error && error.name === "TimeoutError"
+            ? "The pathway model took too long to respond. Please retry."
+            : "Could not reach OpenRouter. Check the deployment's network connection and retry.";
+        // Move to the next free model instead of waiting on the same one again.
+        break;
+      }
+
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          choices?: Array<{
+            message?: { content?: string | null; reasoning?: string | null };
+          }>;
+        };
+        const message = payload.choices?.[0]?.message;
+        const content =
+          typeof message?.content === "string" ? message.content.trim() : "";
+        if (content.length > 0) return content;
+        lastError =
+          "The pathway model returned an empty answer. Retry the build to try another free model.";
+        break;
+      }
+
+      lastError = openRouterError(response.status);
+      if (response.status === 401 || response.status === 403) throw new Error(lastError);
+      if (response.status === 429) {
+        // Try a different free model rather than hammering the same one.
+        await sleep(1200);
+        break;
+      }
+      if (response.status === 400 && withReasoning) continue;
+      if (response.status === 404) break;
+      if (response.status >= 500) {
+        await sleep(800);
+        break;
+      }
+    }
+  }
+
+  throw new Error(lastError);
+}
+
+function parsePathway(raw: string): CoursePathway {
+  const parsed =
+    tryParseJson<Record<string, unknown>>(raw) ??
+    parsedObjects(stripReasoning(raw)).find((row) => Array.isArray(row.units)) ??
+    null;
+  if (!parsed) {
+    throw new Error(
+      "The pathway model returned something Bluprint couldn't read. Retry, or check OPENROUTER_MODEL on the deployment.",
+    );
+  }
+
+  const overview = asText(parsed.overview, 1600);
+  const examFormat = asText(parsed.examFormat, 1200);
+  const rawUnits = Array.isArray(parsed.units) ? parsed.units : [];
+  const units: PathwayUnit[] = [];
+
+  for (const [unitIndex, entry] of rawUnits.slice(0, 12).entries()) {
+    if (!entry || typeof entry !== "object") continue;
+    const unit = entry as Record<string, unknown>;
+    const unitTitle = asText(unit.title, 120);
+    const rawTopics = Array.isArray(unit.topics) ? unit.topics : [];
+    const topics: PathwayTopic[] = [];
+
+    for (const [topicIndex, topicEntry] of rawTopics.slice(0, 8).entries()) {
+      if (!topicEntry || typeof topicEntry !== "object") continue;
+      const topic = topicEntry as Record<string, unknown>;
+      const title = asText(topic.title, 140);
+      const keyPoints = Array.isArray(topic.keyPoints)
+        ? topic.keyPoints.map((point) => asText(point, 300)).filter(Boolean).slice(0, 5)
+        : [];
+      if (!title || keyPoints.length === 0) continue;
+      const specReference = asText(topic.specReference, 40);
+      topics.push({
+        // Ids are generated here so they stay stable and unique even if the
+        // model repeats a topic title.
+        id: `u${unitIndex + 1}t${topicIndex + 1}`,
+        title,
+        ...(specReference ? { specReference } : {}),
+        summary: asText(topic.summary, 500),
+        keyPoints,
+        examSkill: asText(topic.examSkill, 300),
+      });
+    }
+
+    if (unitTitle && topics.length >= 2) {
+      units.push({
+        title: unitTitle,
+        summary: asText(unit.summary, 600),
+        topics,
+      });
+    }
+  }
+
+  const topicCount = units.reduce((sum, unit) => sum + unit.topics.length, 0);
+  if (units.length < 3 || topicCount < 8) {
+    throw new Error(
+      "The pathway model returned an incomplete course map. Retry the build to try another free model.",
+    );
+  }
+
+  return {
+    overview:
+      overview ||
+      `A specification-led revision pathway for this course, split into ${units.length} units and ${topicCount} topics.`,
+    examFormat:
+      examFormat ||
+      "Check your exam board's specification for the current paper structure and weightings.",
+    units,
+  };
+}
+
+function pathwayPrompt(course: {
+  subject: string;
+  level: string;
+  examBoard: string;
+  tier?: string;
+}): string {
+  return (
+    `Design a complete revision pathway for this course.\n` +
+    `<course>${course.subject}</course>\n` +
+    `<qualification>${course.level}</qualification>\n` +
+    `<exam_board>${course.examBoard}</exam_board>\n` +
+    (course.tier ? `<tier>${course.tier}</tier>\n` : "") +
+    "\nUse the official specification for this exact course and board as your source. " +
+    "Choose the current specification, not an old syllabus. If you are not certain a topic or reference is on the current specification, leave the reference blank rather than inventing one.\n\n" +
+    "Rules:\n" +
+    "- 6 to 10 units in teaching order. 4 to 6 topics per unit. Cover the whole course, including required practicals, case studies or set texts where the specification requires them.\n" +
+    "- Use official unit and topic names. Keep titles under 12 words.\n" +
+    "- Each topic gets a one-sentence summary (max 30 words), 2 to 4 key points (max 22 words each), and one examSkill sentence describing how it is examined or what exam technique it demands.\n" +
+    "- examFormat: name the papers/components and their weighting and duration where you are confident. Otherwise say: Check your specification for paper structure and weighting.\n" +
+    "- overview: 2 to 3 sentences on what the course covers and the best way to revise it.\n" +
+    "- No markdown, no commentary, no extra keys. Strict JSON only.\n\n" +
+    "Return this exact shape:\n" +
+    '{"overview":"...","examFormat":"...","units":[{"title":"...","summary":"...","topics":[{"title":"...","specReference":"4.1.2","summary":"...","keyPoints":["..."],"examSkill":"..."}]}]}'
+  );
+}
+
+/** Uses OpenRouter first, then NVIDIA, so a missing free-model key is not fatal. */
+async function generateCoursePathway(course: {
+  subject: string;
+  level: string;
+  examBoard: string;
+  tier?: string;
+}): Promise<CoursePathway> {
+  const prompt = pathwayPrompt(course);
+  const system: ChatMessage = {
+    role: "system",
+    content:
+      "You are an experienced curriculum designer and examiner who knows current specifications. " +
+      "Return strict JSON only, with no markdown fences or commentary.",
+  };
+
+  if (readOpenRouterKey()) {
+    try {
+      const raw = await openRouterChat(
+        [system, { role: "user", content: prompt }],
+        9000,
+      );
+      return parsePathway(raw);
+    } catch (error) {
+      const nvidiaKeys = readNvidiaKeys();
+      if (nvidiaKeys.length === 0) throw error;
+      // Fall through to NVIDIA rather than failing a whole course on a free
+      // model's rate limit.
+    }
+  }
+
+  const nvidiaKeys = readNvidiaKeys();
+  if (nvidiaKeys.length === 0) {
+    throw new Error(
+      "Course pathways need OPENROUTER_API_KEY (or NVIDIA_API_KEY as a fallback). Add one to the server environment and retry.",
+    );
+  }
+  const raw = await nvidiaChat(nvidiaKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [system, { role: "user", content: prompt }],
+    maxTokens: 6000,
+    temperature: 0.2,
+    disableThinking: true,
+  });
+  return parsePathway(raw);
+}
+
+/**
+ * Builds one course map. Scheduled by `courses.createMany`, so the browser can
+ * queue nine courses and watch them complete without holding a request open.
+ */
+export const buildCoursePathway = internalAction({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, { courseId }) => {
+    const course = await ctx.runQuery(internal.courses.getForBuild, { courseId });
+    if (!course) return { ok: false };
+    if (course.status === "ready") return { ok: true };
+
+    const claim = await ctx.runMutation(internal.courses.claimBuild, { courseId });
+    if (!claim.claimed) return { ok: false };
+
+    try {
+      const pathway = await generateCoursePathway(course);
+      await ctx.runMutation(internal.courses.completeBuild, { courseId, pathway });
+      return { ok: true };
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "The pathway could not be built. Please retry.";
+      await ctx.runMutation(internal.courses.failBuild, { courseId, message });
+      return { ok: false };
+    }
+  },
+});
+
+/** Re-runs pathway generation for a course the signed-in student owns. */
+export const rebuildCoursePathway = action({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, { courseId }) => {
+    const userId = await requireUserId(ctx);
+    await ctx.runMutation(internal.courses.resetBuild, { courseId, userId });
+    await ctx.scheduler.runAfter(0, internal.ai.buildCoursePathway, { courseId });
+    return { queued: true };
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Public actions
 // ---------------------------------------------------------------------------
 
@@ -1079,3 +1441,4 @@ export const askTutor = action({
     return { reply };
   },
 });
+

@@ -52,6 +52,10 @@ const schema = defineSchema(
       // how exam questions are phrased and how written answers are marked.
       examBoard: v.optional(v.string()),
       level: v.optional(v.string()),
+      // Set when material was built from a topic on a course pathway. The
+      // original course is kept so progress can be shown on the course page.
+      courseId: v.optional(v.id("courses")),
+      topicId: v.optional(v.string()),
       // Photos (or video frames) are kept in Convex file storage so the
       // original material can be revisited from the set page.
       sourceImageIds: v.array(v.id("_storage")),
@@ -79,6 +83,57 @@ const schema = defineSchema(
       lastStudiedAt: v.optional(v.number()),
       lastQuizScore: v.optional(v.number()),
       lastQuizTotal: v.optional(v.number()),
+    })
+      .index("by_user_updated", ["userId", "updatedAt"])
+      .index("by_course", ["courseId", "updatedAt"]),
+
+    // A course pathway is the second way into Bluprint: instead of uploading
+    // notes, a student picks their qualification and the AI lays out the whole
+    // specification as units and topics. Topics are ordered, tagged with the
+    // specification reference, and can be expanded into a study set on demand.
+    courses: defineTable({
+      userId: v.id("users"),
+      subject: v.string(),
+      level: v.string(),
+      examBoard: v.string(),
+      // GCSE sciences use Triple/Combined and maths uses Higher/Foundation.
+      tier: v.optional(v.string()),
+      status: v.union(
+        v.literal("queued"),
+        v.literal("processing"),
+        v.literal("ready"),
+        v.literal("error"),
+      ),
+      progress: v.optional(v.string()),
+      errorMessage: v.optional(v.string()),
+      processingStartedAt: v.optional(v.number()),
+      pathway: v.optional(
+        v.object({
+          overview: v.string(),
+          examFormat: v.string(),
+          units: v.array(
+            v.object({
+              title: v.string(),
+              summary: v.string(),
+              topics: v.array(
+                v.object({
+                  id: v.string(),
+                  title: v.string(),
+                  specReference: v.optional(v.string()),
+                  summary: v.string(),
+                  keyPoints: v.array(v.string()),
+                  examSkill: v.string(),
+                }),
+              ),
+            }),
+          ),
+        }),
+      ),
+      // Topic ids the student has marked as revised.
+      completedTopics: v.array(v.string()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+      lastStudiedAt: v.optional(v.number()),
     }).index("by_user_updated", ["userId", "updatedAt"]),
 
     flashcards: defineTable({

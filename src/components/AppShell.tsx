@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import {
   ChevronRight,
+  GraduationCap,
   Home,
   Layers,
   LogOut,
@@ -43,6 +44,12 @@ const navItems = [
     label: "Home",
     icon: Home,
     tint: "bg-[#E9F0FF] text-[#3B82F6]",
+  },
+  {
+    to: "/dashboard#courses",
+    label: "My courses",
+    icon: GraduationCap,
+    tint: "bg-[#E6F9F6] text-[#0E8C7F]",
   },
   {
     to: "/dashboard#sets",
@@ -134,10 +141,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           const Icon = item.icon;
           const active =
             item.to === "/dashboard"
-              ? location.pathname === "/dashboard"
-              : item.to.startsWith("/dashboard#")
-                ? location.pathname.startsWith("/sets/")
-                : false;
+              ? location.pathname === "/dashboard" && !location.hash
+              : item.to === "/dashboard#courses"
+                ? location.pathname.startsWith("/courses")
+                : item.to === "/dashboard#sets"
+                  ? location.pathname.startsWith("/sets/")
+                  : false;
           return (
             <Link
               key={item.label}

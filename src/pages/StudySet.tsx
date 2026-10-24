@@ -415,8 +415,8 @@ export default function StudySet() {
       <>
         <div className="flex items-center gap-3">
           <Link
-            to="/dashboard"
-            aria-label="Back to home"
+            to={set.courseId ? `/courses/${set.courseId}` : "/dashboard"}
+            aria-label={set.courseId ? "Back to course" : "Back to home"}
             className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-white text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink"
           >
             <ArrowLeft className="size-4" />
@@ -440,9 +440,7 @@ export default function StudySet() {
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <SourceIcon className="size-3.5" />
-                {set.sourceType === "text"
-                  ? "Pasted notes"
-                  : set.sourceLabel || sourceLabel(set.sourceType)}
+                {set.sourceLabel || sourceLabel(set.sourceType)}
               </span>
               <span className="text-brand-ink/20">•</span>
               <span>{set.cardCount} cards</span>
