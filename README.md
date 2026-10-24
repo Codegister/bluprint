@@ -40,14 +40,15 @@ Open **Choose courses** from the dashboard and choose your qualification first �
 A-Level, IB, AP or Undergraduate. That decides which exam boards and tiers the picker
 offers. Subjects then appear as a single-line list with the common ones at the top and the
 rest alphabetically below, plus a search box for anything further down. Clicking a subject
-selects it and loads its settings into a panel beside the list (below it on a phone): exam
-board, tier or route, and a shortcut to apply that board to every course already chosen.
-Nothing expands inline, so a whole timetable of subjects can be scanned at a glance, and a
-school that uses AQA for Biology and Edexcel for Maths is still handled in one pass (up to
-12 courses). GCSE courses also show an explicit **Higher tier** / **Foundation tier**
-choice, with Higher preselected. KS3 stores no board or tier and is scraped from Cognito's
-KS3 subject pages. Combined Science is its own subject, so there is no separate
-Triple/Combined toggle; IB adds HL/SL. Poetry is
+replaces the list with **one question at a time** — which exam board, then which tier — and
+returns to the list as soon as the last one is answered. Nothing expands inline and no
+side panel grows, so a whole timetable of subjects can be scanned at a glance, and a school
+that uses AQA for Biology and Edexcel for Maths is still handled one subject at a time (up
+to 12 courses). GCSE asks for a board and a **Higher tier** / **Foundation tier** choice,
+with Higher preselected; A-Level asks for a board only; IB asks HL or SL; KS3, AP and
+university modules have nothing to ask, so tapping one simply adds it. KS3 stores no board
+or tier and is scraped from Cognito's KS3 subject pages. Combined Science is its own
+subject, so there is no separate Triple/Combined toggle. Poetry is
 not chosen in the picker: every anthology cluster the board publishes arrives as its own
 unit, and the ones your school does not teach are removed from the pathway.
 

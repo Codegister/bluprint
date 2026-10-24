@@ -27,6 +27,9 @@ type CourseDraft = {
   variant?: string;
 };
 
+/** The questions asked after a subject is tapped, in order. */
+type Question = "board" | "tier";
+
 const levelHints: Record<string, string> = {
   GCSE: "Years 10–11",
   KS3: "Years 7–9",
@@ -56,53 +59,24 @@ function defaultTierFor(level: string, subject: string): string | undefined {
   return tiers.includes("Higher") ? "Higher" : tiers[0];
 }
 
-/** A small segmented control, used for tiers and routes in the settings panel. */
-function Segmented({
-  label,
-  options,
-  value,
-  onChange,
-  format = (option) => option,
-}: {
-  label: string;
-  options: string[];
-  value?: string;
-  onChange: (option: string) => void;
-  format?: (option: string) => string;
-}) {
-  return (
-    <div className="mt-4">
-      <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
-      </p>
-      <div className="mt-1.5 flex rounded-xl bg-brand-panel p-0.5">
-        {options.map((option) => {
-          const active = value === option;
-          return (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onChange(option)}
-              className={cn(
-                "flex-1 rounded-[10px] px-2 py-1.5 text-[0.76rem] font-semibold transition-colors",
-                active
-                  ? "bg-white text-brand-ink shadow-[0_1px_2px_rgba(22,24,31,0.1)]"
-                  : "text-brand-ink/55 hover:text-brand-ink",
-              )}
-            >
-              {format(option)}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+/**
+ * What Bluprint still needs to know about a subject.
+ *
+ * Only qualifications that actually have a choice are asked about: GCSE asks for
+ * a board and a tier, A-Level asks for a board, IB asks for HL or SL, and KS3,
+ * AP and university modules have nothing to ask — tapping one just adds it.
+ */
+function questionsFor(level: string, subject: string): Question[] {
+  const questions: Question[] = [];
+  if (level === "GCSE" || level === "A-Level") questions.push("board");
+  const { tiers, variants } = tierChoices(level, subject);
+  if (tiers.length > 0 || variants.length > 0) questions.push("tier");
+  return questions;
 }
 
 /**
- * One subject on a single line. Clicking it selects the subject and points the
- * settings panel at it; nothing expands inside the list.
+ * One subject on a single line. Clicking it either asks its questions or, when
+ * there is nothing to ask, adds it and leaves the student on the list.
  */
 function SubjectRow({
   name,
@@ -183,6 +157,7 @@ export default function CourseSetup() {
   const [board, setBoard] = useState("AQA");
   const [selected, setSelected] = useState<Record<string, CourseDraft>>({});
   const [active, setActive] = useState<string | null>(null);
+  const [questionIndex, setQuestionIndex] = useState(0);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,6 +197,13 @@ export default function CourseSetup() {
   const showCustom =
     trimmedQuery.length >= 2 && !exactMatch && !(trimmedQuery in selected);
 
+  const activeDraft = active ? selected[active] : undefined;
+  const activeMeta = active ? subjectMeta(active) : null;
+  const activeChoices = active && level ? tierChoices(level, active) : null;
+  const questions = active && level ? questionsFor(level, active) : [];
+  const currentQuestion: Question | null =
+    questions[Math.min(questionIndex, Math.max(0, questions.length - 1))] ?? null;
+
   const chooseQualification = (next: string) => {
     const nextBoard = defaultBoardFor(next);
     setLevel(next);
@@ -236,6 +218,7 @@ export default function CourseSetup() {
       ),
     );
     setActive(null);
+    setQuestionIndex(0);
     setQuery("");
     setError(null);
   };
@@ -247,13 +230,20 @@ export default function CourseSetup() {
     setError(null);
   };
 
+  /** Back to the list; the last answer is already saved. */
+  const finishQuestions = () => {
+    setActive(null);
+    setQuestionIndex(0);
+  };
+
   const openSubject = (name: string) => {
     const clean = name.trim().slice(0, 80);
     if (clean.length < 2 || !level) return;
-    if (!(clean in selected) && Object.keys(selected).length >= MAX_COURSES) {
+    if (!(clean in selected) && selectedNames.length >= MAX_COURSES) {
       toast.error(`You can set up ${MAX_COURSES} courses at a time.`);
       return;
     }
+
     setSelected((current) =>
       clean in current
         ? current
@@ -265,8 +255,15 @@ export default function CourseSetup() {
             },
           },
     );
-    setActive(clean);
     setError(null);
+
+    // Nothing to ask (KS3, AP, university): add it and stay on the list.
+    if (questionsFor(level, clean).length === 0) {
+      setActive(null);
+      return;
+    }
+    setQuestionIndex(0);
+    setActive(clean);
   };
 
   const addCustom = () => {
@@ -280,9 +277,7 @@ export default function CourseSetup() {
       delete next[name];
       return next;
     });
-    // Removing the subject being edited returns to the list rather than
-    // opening a different subject the student did not ask for.
-    setActive((current) => (current === name ? null : current));
+    if (active === name) finishQuestions();
     setError(null);
   };
 
@@ -293,31 +288,39 @@ export default function CourseSetup() {
     }));
   };
 
-  const setCourseTier = (name: string, field: "tier" | "variant", value: string) => {
+  const setCourseTier = (name: string, value: string) => {
     setSelected((current) => {
       const course = current[name];
       if (!course) return current;
-      // A tier is a required choice once shown, so clicking the active tier
-      // keeps it. Routes such as IB HL/SL can still be toggled off.
-      if (field === "tier") return { ...current, [name]: { ...course, tier: value } };
-      return {
-        ...current,
-        [name]: { ...course, variant: course.variant === value ? undefined : value },
-      };
+      // IB offers HL/SL as a route, GCSE offers a tier. Both live in one answer.
+      const { variants } = tierChoices(level ?? "", name);
+      if (variants.length > 0) {
+        return { ...current, [name]: { ...course, variant: value } };
+      }
+      return { ...current, [name]: { ...course, tier: value } };
     });
   };
 
-  /** One click to give every course the board the panel is showing. */
-  const applyBoardToAll = (next: string) => {
-    setBoard(next);
-    setSelected((current) =>
-      Object.fromEntries(
-        Object.entries(current).map(([name, course]) => [
-          name,
-          { ...course, examBoard: next },
-        ]),
-      ),
-    );
+  /** Move to the next question, or back to the list when this was the last. */
+  const advance = () => {
+    if (!active) return;
+    if (questionIndex + 1 < questions.length) {
+      setQuestionIndex(questionIndex + 1);
+      return;
+    }
+    finishQuestions();
+  };
+
+  const answerBoard = (next: string) => {
+    if (!active) return;
+    setCourseBoard(active, next);
+    advance();
+  };
+
+  const answerTier = (next: string) => {
+    if (!active) return;
+    setCourseTier(active, next);
+    advance();
   };
 
   const buildLabel = saving
@@ -369,9 +372,9 @@ export default function CourseSetup() {
     }
   };
 
-  const activeDraft = active ? selected[active] : undefined;
-  const activeMeta = active ? subjectMeta(active) : null;
-  const activeTiers = active && level ? tierChoices(level, active) : null;
+  const asking = Boolean(
+    active && activeDraft && activeMeta && activeChoices && currentQuestion,
+  );
 
   return (
     <AppShell>
@@ -460,7 +463,7 @@ export default function CourseSetup() {
               </span>
             </button>
 
-            <div className={cn("relative sm:ml-auto sm:w-64", active && "hidden")}>
+            <div className={cn("relative sm:ml-auto sm:w-64", asking && "hidden")}>
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
                 aria-hidden
@@ -486,208 +489,190 @@ export default function CourseSetup() {
           </div>
 
           <p className="mt-3 text-[0.74rem] text-muted-foreground">
-            {active
-              ? "Set this course's options below, then choose Done. Your other courses are on the subject list."
-              : "The subjects most students take are listed first. Click a subject to switch this panel to its options."}
+            {asking
+              ? "One answer at a time. Bluprint saves it and puts you back on the subject list."
+              : "The subjects most students take are listed first. Click a subject to add it and answer its options."}
           </p>
 
           <div className="mt-2 max-w-2xl pb-16">
-            {/* The list and the settings swap in the same place, so choosing a
-                subject never sends anyone scrolling down the page. */}
-            <div className={cn(activeDraft && "hidden")}>
-              {ordered.length === 0 && !showCustom ? (
-                <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
-                  <p className="text-[0.85rem] text-muted-foreground">
-                    No subject matches “{trimmedQuery}”.
-                  </p>
-                </div>
-              ) : (
-                <div>
-                  {ordered.map((subject, index) => (
-                    <Fragment key={subject.name}>
-                      {!trimmedQuery && index === POPULAR_SUBJECTS.length && (
-                        <p className="mt-4 px-1 text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                          All subjects
-                        </p>
-                      )}
-                      <SubjectRow
-                        name={subject.name}
-                        draft={selected[subject.name]}
-                        active={active === subject.name}
-                        onOpen={() => openSubject(subject.name)}
-                      />
-                    </Fragment>
-                  ))}
+            {asking && activeDraft && activeMeta && activeChoices && currentQuestion ? (
+              <section className="rounded-[1.6rem] border border-border bg-white p-5 shadow-[0_16px_40px_-34px_rgba(22,24,31,0.5)] sm:p-6">
+                <button
+                  type="button"
+                  onClick={() =>
+                    questionIndex > 0
+                      ? setQuestionIndex(questionIndex - 1)
+                      : finishQuestions()
+                  }
+                  className="flex items-center gap-1 text-[0.74rem] font-semibold text-muted-foreground transition-colors hover:text-brand-ink"
+                >
+                  <ChevronLeft className="size-3.5" aria-hidden />
+                  {questionIndex > 0 ? "Back" : "All subjects"}
+                </button>
 
-                  {showCustom && (
-                    <button
-                      type="button"
-                      onClick={addCustom}
-                      className="mt-2 flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-left transition-colors hover:border-[#7C5CFF] hover:bg-white"
-                    >
-                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#EFEDFF]">
-                        <Plus className="size-4 text-[#5B3DF5]" aria-hidden />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[0.84rem] font-semibold text-brand-ink">
-                          Add “{trimmedQuery}” as a custom course
-                        </span>
-                        <span className="text-[0.7rem] text-muted-foreground">
-                          Uses {level}
-                          {level === "KS3" ? "" : ` · ${boardLabel(board)}`}
-                        </span>
-                      </span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <aside className={cn(!activeDraft && "hidden")}>
-              <div className="rounded-[1.6rem] border border-border bg-white p-4 shadow-[0_16px_40px_-34px_rgba(22,24,31,0.5)] sm:p-5">
-                {active && activeDraft && activeMeta && activeTiers ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setActive(null)}
-                      className="mb-3 flex items-center gap-1 text-[0.74rem] font-semibold text-muted-foreground transition-colors hover:text-brand-ink"
-                    >
-                      <ChevronLeft className="size-3.5" aria-hidden />
-                      All subjects
-                    </button>
-
-                    <div className="flex items-start gap-2.5">
-                      <span
-                        className={cn(
-                          "grid size-9 shrink-0 place-items-center rounded-xl",
-                          activeMeta.tint,
-                        )}
-                      >
-                        <activeMeta.icon
-                          className="size-4"
-                          style={{ color: activeMeta.color }}
-                          aria-hidden
-                        />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-display text-[1rem] font-bold text-brand-ink">
-                          {active}
-                        </p>
-                        <p className="text-[0.72rem] text-muted-foreground">
-                          {[level, boardLabel(activeDraft.examBoard)]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${active}`}
-                        onClick={() => removeCourse(active)}
-                        className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-[#FFEEF0] hover:text-destructive"
-                      >
-                        <X className="size-3.5" aria-hidden />
-                      </button>
-                    </div>
-
-                    {level === "KS3" ? (
-                      <p className="mt-4 rounded-xl bg-brand-panel px-3 py-2.5 text-[0.76rem] leading-relaxed text-muted-foreground">
-                        KS3 has no exam board or tier. Bluprint maps the national
-                        curriculum topics for this subject.
-                      </p>
-                    ) : (
-                      <label className="mt-4 block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        Exam board
-                        <select
-                          value={activeDraft.examBoard}
-                          aria-label={`Exam board for ${active}`}
-                          onChange={(event) =>
-                            setCourseBoard(active, event.target.value)
-                          }
-                          className="mt-1.5 h-9 w-full rounded-xl border border-border bg-white px-2.5 text-[0.8rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#7C5CFF]"
-                        >
-                          {EXAM_BOARDS.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                <div className="mt-3 flex items-start gap-2.5">
+                  <span
+                    className={cn(
+                      "grid size-9 shrink-0 place-items-center rounded-xl",
+                      activeMeta.tint,
                     )}
-
-                    {activeTiers.tiers.length > 0 && (
-                      <Segmented
-                        label="Tier"
-                        options={activeTiers.tiers}
-                        value={activeDraft.tier}
-                        onChange={(value) => setCourseTier(active, "tier", value)}
-                      />
-                    )}
-
-                    {activeTiers.variants.length > 0 && (
-                      <Segmented
-                        label="Route"
-                        options={activeTiers.variants}
-                        value={activeDraft.variant}
-                        onChange={(value) => setCourseTier(active, "variant", value)}
-                      />
-                    )}
-
-                    {selectedCount > 1 &&
-                      level !== "KS3" &&
-                      activeDraft.examBoard !== "None" && (
-                        <button
-                          type="button"
-                          onClick={() => applyBoardToAll(activeDraft.examBoard)}
-                          className="mt-4 w-full rounded-xl bg-brand-panel px-3 py-2 text-[0.74rem] font-semibold text-brand-ink/75 transition-colors hover:bg-[#EFEDFF] hover:text-[#5B3DF5]"
-                        >
-                          Use {activeDraft.examBoard} for all {selectedCount} courses
-                        </button>
-                      )}
-                  </>
-                ) : null}
-
-                {selectedCount > 0 && (
-                  <div className="mt-4 border-t border-border pt-3">
-                    <p className="px-1 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                      Your courses ({selectedCount})
+                  >
+                    <activeMeta.icon
+                      className="size-4"
+                      style={{ color: activeMeta.color }}
+                      aria-hidden
+                    />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-[1.02rem] font-bold text-brand-ink">
+                      {active}
                     </p>
-                    <ul className="mt-1.5 space-y-0.5">
-                      {selectedNames.map((name) => (
-                        <li key={name} className="flex items-center gap-1">
+                    <p className="text-[0.72rem] text-muted-foreground">
+                      Question {Math.min(questionIndex + 1, questions.length)} of{" "}
+                      {questions.length}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCourse(active!)}
+                    className="shrink-0 text-[0.72rem] font-semibold text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                {currentQuestion === "board" ? (
+                  <>
+                    <h2 className="mt-5 font-display text-[1.06rem] font-bold text-brand-ink">
+                      Which exam board?
+                    </h2>
+                    <p className="mt-1 text-[0.78rem] text-muted-foreground">
+                      Choose the board your school enters you for in {active}.
+                    </p>
+                    <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                      {EXAM_BOARDS.map((option) => {
+                        const chosen = activeDraft.examBoard === option;
+                        return (
                           <button
+                            key={option}
                             type="button"
-                            onClick={() => setActive(name)}
+                            aria-pressed={chosen}
+                            onClick={() => answerBoard(option)}
                             className={cn(
-                              "min-w-0 flex-1 truncate rounded-lg px-2 py-1 text-left text-[0.78rem] font-medium transition-colors",
-                              active === name
-                                ? "bg-brand-panel text-brand-ink"
-                                : "text-brand-ink/70 hover:bg-brand-panel",
+                              "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.82rem] font-medium transition-colors",
+                              chosen
+                                ? "border-[#191B27] bg-[#191B27] text-white"
+                                : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
                             )}
                           >
-                            {name}
+                            <span className="truncate">{option}</span>
+                            {chosen && <Check className="size-4 shrink-0" aria-hidden />}
                           </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="mt-5 font-display text-[1.06rem] font-bold text-brand-ink">
+                      {activeChoices.tiers.length > 0
+                        ? "Which tier?"
+                        : "Which route?"}
+                    </h2>
+                    <p className="mt-1 text-[0.78rem] text-muted-foreground">
+                      {activeChoices.tiers.length > 0
+                        ? "Most students sit Higher; pick Foundation if that is your entry."
+                        : "Higher Level (HL) and Standard Level (SL) are examined differently."}
+                    </p>
+                    <div
+                      className={cn(
+                        "mt-3 grid gap-1.5",
+                        (activeChoices.tiers.length > 0
+                          ? activeChoices.tiers
+                          : activeChoices.variants
+                        ).length > 1 && "sm:grid-cols-2",
+                      )}
+                    >
+                      {(activeChoices.tiers.length > 0
+                        ? activeChoices.tiers
+                        : activeChoices.variants
+                      ).map((option) => {
+                        const chosen =
+                          activeChoices.tiers.length > 0
+                            ? activeDraft.tier === option
+                            : activeDraft.variant === option;
+                        return (
                           <button
+                            key={option}
                             type="button"
-                            aria-label={`Remove ${name}`}
-                            onClick={() => removeCourse(name)}
-                            className="grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-[#FFEEF0] hover:text-destructive"
+                            aria-pressed={chosen}
+                            onClick={() => answerTier(option)}
+                            className={cn(
+                              "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
+                              chosen
+                                ? "border-[#191B27] bg-[#191B27] text-white"
+                                : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                            )}
                           >
-                            <X className="size-3" aria-hidden />
+                            <span className="truncate">{tierLabel(option)}</span>
+                            {chosen && <Check className="size-4 shrink-0" aria-hidden />}
                           </button>
-                        </li>
-                      ))}
-                    </ul>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </section>
+            ) : (
+              <>
+                {ordered.length === 0 && !showCustom ? (
+                  <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+                    <p className="text-[0.85rem] text-muted-foreground">
+                      No subject matches “{trimmedQuery}”.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    {ordered.map((subject, index) => (
+                      <Fragment key={subject.name}>
+                        {!trimmedQuery && index === POPULAR_SUBJECTS.length && (
+                          <p className="mt-4 px-1 text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                            All subjects
+                          </p>
+                        )}
+                        <SubjectRow
+                          name={subject.name}
+                          draft={selected[subject.name]}
+                          active={false}
+                          onOpen={() => openSubject(subject.name)}
+                        />
+                      </Fragment>
+                    ))}
+
+                    {showCustom && (
+                      <button
+                        type="button"
+                        onClick={addCustom}
+                        className="mt-2 flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-left transition-colors hover:border-[#7C5CFF] hover:bg-white"
+                      >
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#EFEDFF]">
+                          <Plus className="size-4 text-[#5B3DF5]" aria-hidden />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[0.84rem] font-semibold text-brand-ink">
+                            Add “{trimmedQuery}” as a custom course
+                          </span>
+                          <span className="text-[0.7rem] text-muted-foreground">
+                            Uses {level}
+                            {level === "KS3" ? "" : ` · ${boardLabel(board)}`}
+                          </span>
+                        </span>
+                      </button>
+                    )}
                   </div>
                 )}
-
-                <Button
-                  onClick={() => setActive(null)}
-                  className="mt-4 h-9 w-full rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
-                >
-                  Done
-                </Button>
-              </div>
-            </aside>
+              </>
+            )}
           </div>
 
           {error && (
