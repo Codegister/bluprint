@@ -84,10 +84,12 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-// Fallback only. The managed .env.local supplies VITE_CONVEX_URL for the
-// current production project; keeping this here means a missing build-time
-// variable cannot send the preview back to an old deployment.
-const FALLBACK_CONVEX_URL = "https://harmless-dog-538.convex.cloud";
+// The migration connected this project to the dev deployment
+// honorable-lyrebird-974. That deployment holds the migrated courses and the
+// server environment. harmless-dog-538 is a separate production deployment and
+// does not have this data yet, so do not let a stale VITE_CONVEX_URL point the
+// browser at it.
+const TARGET_CONVEX_URL = "https://honorable-lyrebird-974.convex.cloud";
 const configuredConvexUrl = (
   import.meta.env.VITE_CONVEX_URL as string | undefined
 )?.trim();
@@ -97,9 +99,10 @@ const configuredConvexUrl = (
 // address ending in `/` becomes `//api/...`, which returns 404 on the sync
 // WebSocket and leaves the app retrying forever.
 const candidateConvexUrl = configuredConvexUrl?.replace(/\/+$/, "");
-const convexUrl = candidateConvexUrl?.endsWith(".convex.cloud")
-  ? candidateConvexUrl
-  : FALLBACK_CONVEX_URL;
+const convexUrl =
+  candidateConvexUrl === TARGET_CONVEX_URL
+    ? candidateConvexUrl
+    : TARGET_CONVEX_URL;
 const convex = new ConvexReactClient(convexUrl);
 
 
