@@ -17,6 +17,7 @@ const CoursePage = lazy(() => import("./pages/Course.tsx"));
 const StudySet = lazy(() => import("./pages/StudySet.tsx"));
 const Timetable = lazy(() => import("./pages/Timetable.tsx"));
 const TimetableBuilder = lazy(() => import("./pages/TimetableBuilder.tsx"));
+const Tutor = lazy(() => import("./pages/Tutor.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -223,6 +224,17 @@ createRoot(document.getElementById("root")!).render(
                     description="Timetables are built from your own courses and exam dates."
                   >
                     <TimetableBuilder />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/tutor"
+                element={
+                  <RequireAuth
+                    title="Sign in to use the AI tutor"
+                    description="The tutor uses your notes, courses and study sets."
+                  >
+                    <Tutor />
                   </RequireAuth>
                 }
               />

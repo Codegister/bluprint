@@ -4,7 +4,6 @@ import { ExamPractice } from "@/components/study/ExamPractice";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { QuizRunner } from "@/components/study/QuizRunner";
 import { SetSettingsDialog } from "@/components/study/SetSettingsDialog";
-import { TutorChat } from "@/components/study/TutorChat";
 import { Button } from "@/components/ui/button";
 import {
   Tabs,
@@ -20,8 +19,9 @@ import { percent, relativeDate, sourceLabel } from "@/lib/format";
 import { useAction, useQuery } from "convex/react";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
+import { Sparkles } from "lucide-react";
 
 type Tab = "summary" | "cards" | "quiz" | "exam" | "tutor";
 
@@ -401,6 +401,7 @@ function SummaryTab({
 
 export default function StudySet() {
   const { setId } = useParams<{ setId: string }>();
+  const navigate = useNavigate();
   const validId = Boolean(setId && /^[a-z0-9]{20,40}$/i.test(setId));
   const details = useQuery(
     api.studySets.getDetails,
@@ -411,6 +412,11 @@ export default function StudySet() {
   const [retrying, setRetrying] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const triggered = useRef<string | null>(null);
+
+  const openTutor = () => {
+    if (!validId) return;
+    navigate(`/tutor?set=${setId}`);
+  };
 
   useEffect(() => {
     if (!details || details.set.status !== "queued") return;
@@ -587,11 +593,19 @@ export default function StudySet() {
                 <ExamPractice exams={details.exams} qualification={qualification} />
               </TabsContent>
               <TabsContent value="tutor" className="mt-1">
-                <TutorChat
-                  scope={{ kind: "set", setId: set._id }}
-                  title={set.title}
-                  qualification={qualification}
-                />
+                <div className="flex flex-col items-start gap-3">
+                  <p className="text-[0.82rem] font-medium text-brand-ink/80">
+                    Ask the tutor about this set.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={openTutor}
+                    className="h-9 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
+                  >
+                    <Sparkles className="size-3.5" aria-hidden />
+                    Open tutor in full screen
+                  </Button>
+                </div>
               </TabsContent>
             </Tabs>
           </>

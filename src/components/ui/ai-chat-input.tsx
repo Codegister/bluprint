@@ -58,32 +58,20 @@ function MorphingText({ text }: { text: string }) {
 function ModelIcon({
   model,
   className,
+  modelIcons,
 }: {
   model: string;
   className?: string;
+  modelIcons?: Record<string, string>;
 }) {
-  const icons: Record<string, string> = {
-    "Composer 2.5":
-      "https://cdn.21st.dev/assets/mirror/7d/7dc00bc09f225fcda46cbc9c6b669c69c025a231877d6c17baa6a003f04f02b2.svg",
-    "Gemini 3.5 Flash":
-      "https://cdn.21st.dev/assets/mirror/cd/cda2df6631d5fa227de3fa04ed78cf354f910ba92a9f086e7455655c10ad9d09.svg",
-    "GPT 5.5":
-      "https://cdn.21st.dev/assets/mirror/b9/b93fa7942be639a1dae60194ff12141145d7d9fd59581582d6ff23335755f19c.svg",
-    "Opus 4.8":
-      "https://cdn.21st.dev/assets/mirror/5d/5de1221c77cc91e748066fd642ad0eee1c1fa65328814f5178166f901e599709.svg",
-    "GLM 5.2":
-      "https://cdn.21st.dev/assets/mirror/b2/b2a6c0ff63efd8a555edf8a174ea6fcfeca120ac1595a2d461ca11d3ae89276c.svg",
-  };
-
-  const filters: Record<string, string> = {
-    "GPT 5.5": "dark:invert",
-  };
+  const src =
+    modelIcons?.[model] ?? modelIcons?.["NVIDIA"] ?? "https://placehold.co/64x64/1d1d2d/7c5cff?text=NVIDIA";
 
   return (
     <img
-      src={icons[model] ?? icons["GPT 5.5"]}
+      src={src}
       alt={model}
-      className={cn("object-contain", filters[model], className)}
+      className={cn("object-contain", className)}
     />
   );
 }
@@ -434,6 +422,7 @@ export interface PromptInputProps {
   placeholder?: string;
   className?: string;
   models?: string[];
+  modelIcons?: Record<string, string>;
   efforts?: string[];
   defaultValue?: string;
   value?: string;
@@ -447,7 +436,8 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       onSubmit,
       placeholder = "Ask anything",
       className,
-      models = ["GPT 5.5", "Opus 4.8", "Gemini 3.5 Flash", "Composer 2.5", "GLM 5.2"],
+      models = ["NVIDIA"],
+      modelIcons: propModelIcons = {},
       efforts = ["Low", "Medium", "Max Effort"],
       defaultValue = "",
       value: controlledValue,
@@ -460,6 +450,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     const [isSmoothResize, setIsSmoothResize] = useState(false);
     const [localValue, setLocalValue] = useState(defaultValue);
     const [selectedModel, setSelectedModel] = useState(models[0]);
+    const [modelIcons, setModelIcons] = useState<Record<string, string>>(propModelIcons);
     const [effortIndex, setEffortIndex] = useState(1);
     const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
 
@@ -1037,13 +1028,12 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                   <ModelIcon
                     model={selectedModel}
                     className="size-3.5 opacity-70 group-hover:opacity-100 transition-opacity"
+                    modelIcons={modelIcons}
                   />
                   <span className="text-xs font-semibold select-none transition-colors">
                     <MorphingText text={selectedModel} />
                   </span>
-                </button>
-
-                <div
+                </button>                  <div
                   style={{ transformOrigin: "bottom left" }}
                   onMouseLeave={() => {
                     setHoverStyle((prev) => ({
@@ -1092,6 +1082,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                           <ModelIcon
                             model={model}
                             className="size-3.5 opacity-85 group-hover:opacity-100 transition-opacity"
+                            modelIcons={modelIcons}
                           />
                           {model}
                         </span>

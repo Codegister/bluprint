@@ -9,15 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { TutorChat } from "@/components/study/TutorChat";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
@@ -230,10 +222,12 @@ export default function Course() {
   const [deleting, setDeleting] = useState(false);
   // null means "follow the next unfinished unit"; -1 means every unit closed.
   const [openUnit, setOpenUnit] = useState<number | null>(null);
-  const [tutorScope, setTutorScope] = useState<{
-    unitTitle?: string;
-    title: string;
-  } | null>(null);
+  const openTutor = (unitTitle?: string) => {
+    if (!validId) return;
+    const params = new URLSearchParams([["course", courseId as string]]);
+    if (unitTitle) params.set("unit", unitTitle);
+    navigate(`/tutor?${params.toString()}`);
+  };
   const [removal, setRemoval] = useState<{
     kind: "unit" | "topic";
     unitIndex: number;
@@ -384,7 +378,7 @@ export default function Course() {
             {pathway && (
               <Button
                 type="button"
-                onClick={() => setTutorScope({ title: course.subject })}
+                onClick={() => openTutor()}
                 className="h-9 rounded-full bg-[#EDE8FF] px-4 text-[0.8rem] font-semibold text-[#5130D8] hover:bg-[#E2DBFF]"
               >
                 <Sparkles className="size-3.5" aria-hidden />
@@ -635,12 +629,7 @@ export default function Course() {
                             <div className="mt-2.5 flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setTutorScope({
-                                    unitTitle: unit.title,
-                                    title: `${course.subject} · ${unit.title}`,
-                                  })
-                                }
+                                onClick={() => openTutor(unit.title)}
                                 className="inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[0.68rem] font-semibold transition-colors"
                                 style={{
                                   backgroundColor: color.soft,
@@ -815,32 +804,7 @@ export default function Course() {
           </>
         )}
 
-        <Dialog
-          open={tutorScope !== null}
-          onOpenChange={(open) => {
-            if (!open) setTutorScope(null);
-          }}
-        >
-          <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto border-none bg-transparent p-0 shadow-none">
-            <DialogHeader className="sr-only">
-              <DialogTitle>AI tutor</DialogTitle>
-              <DialogDescription>
-                Ask questions about this course or one of its units.
-              </DialogDescription>
-            </DialogHeader>
-            {tutorScope && (
-              <TutorChat
-                scope={{
-                  kind: "course",
-                  courseId: courseId as Id<"courses">,
-                  unitTitle: tutorScope.unitTitle,
-                }}
-                title={tutorScope.title}
-                qualification={courseSubtitle(course)}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
+
 
         <AlertDialog
           open={removal !== null}
