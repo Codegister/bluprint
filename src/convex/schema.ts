@@ -152,6 +152,10 @@ const schema = defineSchema(
     revisionPlans: defineTable({
       userId: v.id("users"),
       startDate: v.string(),
+      // The start the student asked for. When every topic would not fit before
+      // the first exam, the plan begins earlier and startDate is that earlier
+      // date; this keeps the original so the timetable can explain the change.
+      requestedStartDate: v.optional(v.string()),
       examDate: v.string(),
       // Legacy: plans built before the per-subject grid used one session length.
       sessionMinutes: v.optional(v.number()),
@@ -185,6 +189,9 @@ const schema = defineSchema(
           minutes: v.number(),
           paper: v.optional(v.string()),
           startMinutes: v.optional(v.number()),
+          // Gap after this session, equal to the session itself. Absent on the
+          // last session of a day, because there is nothing to break before.
+          breakMinutes: v.optional(v.number()),
         }),
       ),
       // UK bank holidays in the plan window, shown in empty day columns.

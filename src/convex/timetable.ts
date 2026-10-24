@@ -22,11 +22,10 @@ const MAX_ENTRIES = 480;
 
 const SESSION_LENGTHS = [25, 45, 60, 90];
 const DAILY_LENGTHS = [30, 60, 90, 120];
-// A school day uses the chosen budget. Bank holidays, weekends and school
-// holidays get double, because there is no school day to work around. This is
-// deliberately a simple multiplier rather than a minute-by-minute model of a
-// student's calendar.
-const EXTENDED_DAY_MULTIPLIER = 2;
+// How much time a student can give a bank holiday, weekend or school holiday.
+// It is asked for, not derived: half-term is not a constant multiple of a
+// Tuesday evening.
+const DAY_OFF_LENGTHS = [60, 90, 120, 180, 240];
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
 const DAYS_PER_WEEK = [3, 5, 7];
 
@@ -258,30 +257,22 @@ function schoolHolidaysBetween(start: Date, end: Date) {
 }
 
 /**
- * The time budget for a date: the school-day budget, or double on a day off.
- * The `base + minSession` floor guarantees the extra capacity fits a whole
- * extra session, so a day off is never merely equal to a school day.
+ * Capacity for a date: the school-day budget, or the day-off budget the
+ * student chose in the builder. Nothing is assumed about holidays — someone
+ * who can only manage an hour at the weekend says so, and someone with a free
+ * half-term chooses a longer day instead.
  */
-/** The capacity given to any day off, regardless of its date. */
-function dayOffCapacity(schoolDayMinutes: number, minSessionMinutes: number): number {
-  const multiplied = Math.round(
-    (schoolDayMinutes * EXTENDED_DAY_MULTIPLIER) / 5,
-  ) * 5;
-  return Math.max(multiplied, schoolDayMinutes + minSessionMinutes);
-}
-
 function dailyCapacity(
   date: Date,
   schoolDayMinutes: number,
-  minSessionMinutes: number,
+  dayOffMinutes: number,
 ): number {
   const isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
   const isDayOff =
     isWeekend ||
     schoolHolidayName(date) !== null ||
     bankHolidayName(date) !== null;
-  if (!isDayOff) return schoolDayMinutes;
-  return dayOffCapacity(schoolDayMinutes, minSessionMinutes);
+  return isDayOff ? dayOffMinutes : schoolDayMinutes;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -301,10 +292,15 @@ function topicsFor(course: Doc<"courses">): TopicEntry[] {
 }
 
 /**
- * Fills one day up to `dailyMinutes`, rotating through subjects. Each subject's
- * own session length is respected; a subject that no longer fits is skipped
- * until the next day. Starting the rotation at a different subject each day
- * stops the same subject always occupying the first slot.
+ * Fills one day up to `dailyMinutes` of study, rotating through subjects. Each
+ * subject's own session length is respected; a subject that no longer fits is
+ * skipped until the next day. Starting the rotation at a different subject each
+ * day stops the same subject always occupying the first slot.
+ *
+ * Sessions are never back to back: the clock advances by the session plus a
+ * break of the same length, so a 45-minute session is followed by 45 minutes
+ * off before the next subject. Breaks sit outside the study budget — the
+ * student asked for the amount of studying, not the amount of sitting at a desk.
  */
 function scheduleDay(
   states: SubjectState[],
@@ -316,7 +312,12 @@ function scheduleDay(
   let clock = startMinutes;
   let cursor = states.length > 0 ? dayIndex % states.length : 0;
   const sessions: Array<
-    TopicEntry & { minutes: number; paper: string; startMinutes: number }
+    TopicEntry & {
+      minutes: number;
+      paper: string;
+      startMinutes: number;
+      breakMinutes: number;
+    }
   > = [];
 
   while (remaining >= Math.min(...states.map((state) => state.minutes))) {
@@ -345,13 +346,20 @@ function scheduleDay(
       minutes: state.minutes,
       paper,
       startMinutes: clock,
+      breakMinutes: 0,
     });
 
     state.topicIndex += 1;
     state.paperCount += 1;
-    clock += state.minutes;
+    // The break after this session is the same length as the session itself.
+    clock += state.minutes * 2;
     remaining -= state.minutes;
     cursor = (picked + 1) % states.length;
+  }
+
+  // A break only exists between two sessions, so the day's last one has none.
+  for (let index = 0; index < sessions.length - 1; index += 1) {
+    sessions[index]!.breakMinutes = sessions[index]!.minutes;
   }
 
   return sessions;
@@ -381,6 +389,9 @@ export const build = mutation({
     examDate: v.string(),
     daysPerWeek: v.number(),
     dailyMinutes: v.number(),
+    // How much time the student actually has on a weekend, bank holiday or
+    // school holiday. Asked explicitly, never derived from the school-day budget.
+    dayOffMinutes: v.number(),
     startMinutes: v.number(),
     courseSettings: v.array(
       v.object({
@@ -404,6 +415,9 @@ export const build = mutation({
     }
     if (!DAILY_LENGTHS.includes(args.dailyMinutes)) {
       throw new Error("Choose between 30 and 120 minutes of revision a day.");
+    }
+    if (!DAY_OFF_LENGTHS.includes(args.dayOffMinutes)) {
+      throw new Error("Choose how much time you can give a day off.");
     }
     if (
       !Number.isInteger(args.startMinutes) ||
@@ -435,6 +449,11 @@ export const build = mutation({
           "A subject's session is longer than your daily revision time. Lower that subject's session length.",
         );
       }
+      if (setting.minutes > args.dayOffMinutes) {
+        throw new Error(
+          "A subject's session is longer than your day-off revision time. Raise that day's time or lower the session length.",
+        );
+      }
       settings.set(setting.courseId, setting);
     }
 
@@ -461,26 +480,21 @@ export const build = mutation({
       .map((id) => courses.find((course) => course._id === id))
       .filter((course): course is Doc<"courses"> => Boolean(course));
 
-    const states: SubjectState[] = ordered.map((course) => {
-      const setting = settings.get(course._id)!;
-      return {
-        courseId: course._id,
-        subject: course.subject,
-        minutes: setting.minutes,
-        paper: setting.paper,
-        topics: topicsFor(course),
-        topicIndex: 0,
-        paperCount: 0,
-      };
-    });
-    const topicTotal = states.reduce((sum, state) => sum + state.topics.length, 0);
+    const courseSettings = ordered.map((course) => ({
+      course,
+      setting: settings.get(course._id)!,
+    }));
+    const topicTotal = ordered.reduce(
+      (sum, course) => sum + topicsFor(course).length,
+      0,
+    );
     if (topicTotal === 0) {
       throw new Error("Those courses do not have any topics to schedule yet.");
     }
 
     const weekdays = new Set(WEEKDAYS[args.daysPerWeek]);
     const examDate = parseDateKey(exam);
-    const entries: Array<{
+    type PlannedEntry = {
       date: string;
       courseId: Id<"courses">;
       course: string;
@@ -490,41 +504,77 @@ export const build = mutation({
       minutes: number;
       paper: string;
       startMinutes: number;
-    }> = [];
-    let cursor = parseDateKey(start);
-    let revisionDays = 0;
-    let truncated = false;
-    const minSession = Math.min(...states.map((state) => state.minutes));
+      breakMinutes: number;
+    };
 
-    while (cursor < examDate) {
-      if (weekdays.has(cursor.getUTCDay())) {
-        if (revisionDays >= MAX_DAYS || entries.length >= MAX_ENTRIES) {
-          truncated = true;
-          break;
+    /** One full pass from a start date, with fresh per-subject cursors. */
+    const planFrom = (from: Date) => {
+      const states: SubjectState[] = courseSettings.map(({ course, setting }) => ({
+        courseId: course._id,
+        subject: course.subject,
+        minutes: setting.minutes,
+        paper: setting.paper,
+        topics: topicsFor(course),
+        topicIndex: 0,
+        paperCount: 0,
+      }));
+      const entries: PlannedEntry[] = [];
+      let cursor = from;
+      let revisionDays = 0;
+      let truncated = false;
+
+      while (cursor < examDate) {
+        if (weekdays.has(cursor.getUTCDay())) {
+          if (revisionDays >= MAX_DAYS || entries.length >= MAX_ENTRIES) {
+            truncated = true;
+            break;
+          }
+          const sessions = scheduleDay(
+            states,
+            dailyCapacity(cursor, args.dailyMinutes, args.dayOffMinutes),
+            args.startMinutes,
+            revisionDays,
+          );
+          revisionDays += 1;
+          for (const session of sessions) {
+            entries.push({ date: toDateKey(cursor), ...session });
+          }
         }
-        const sessions = scheduleDay(
-          states,
-          dailyCapacity(cursor, args.dailyMinutes, minSession),
-          args.startMinutes,
-          revisionDays,
-        );
-        revisionDays += 1;
-        for (const session of sessions) {
-          entries.push({ date: toDateKey(cursor), ...session });
-        }
+        cursor = addDays(cursor, 1);
       }
-      cursor = addDays(cursor, 1);
+
+      return {
+        entries,
+        truncated,
+        scheduledTopics: new Set(
+          entries.map((entry) => `${entry.courseId}:${entry.topicId}`),
+        ).size,
+      };
+    };
+
+    // Start on the date the student picked. If every topic will not fit before
+    // the exam, begin a day earlier and try again (up to twelve weeks): the
+    // honest fix is more days, not a silently incomplete plan. Never reach into
+    // the past — today is the earliest start that means anything, and the rep
+    // plan uses the weekday pattern the student chose.
+    let planStart = start;
+    let planned = planFrom(parseDateKey(planStart));
+    let daysEarlier = 0;
+    const todayKey = toDateKey(new Date());
+    while (planned.scheduledTopics < topicTotal && daysEarlier < 84) {
+      const earlier = toDateKey(addDays(parseDateKey(planStart), -1));
+      if (earlier < todayKey) break;
+      planStart = earlier;
+      planned = planFrom(parseDateKey(planStart));
+      daysEarlier += 1;
     }
+    const { entries, truncated, scheduledTopics } = planned;
 
     if (entries.length === 0) {
       throw new Error(
         "There are no revision days before your first exam. Choose a later exam date or more revision days.",
       );
     }
-
-    const scheduledTopics = new Set(
-      entries.map((entry) => `${entry.courseId}:${entry.topicId}`),
-    ).size;
 
     const existing = await ctx.db
       .query("revisionPlans")
@@ -537,10 +587,11 @@ export const build = mutation({
     const now = Date.now();
     await ctx.db.insert("revisionPlans", {
       userId,
-      startDate: start,
+      startDate: planStart,
+      requestedStartDate: start,
       examDate: exam,
       dailyMinutes: args.dailyMinutes,
-      dayOffMinutes: dayOffCapacity(args.dailyMinutes, minSession),
+      dayOffMinutes: args.dayOffMinutes,
       startMinutes: args.startMinutes,
       daysPerWeek: args.daysPerWeek,
       courseSettings: ordered.map((course) => {
@@ -553,8 +604,8 @@ export const build = mutation({
         };
       }),
       entries,
-      holidays: bankHolidaysBetween(parseDateKey(start), examDate),
-      schoolHolidays: schoolHolidaysBetween(parseDateKey(start), examDate),
+      holidays: bankHolidaysBetween(parseDateKey(planStart), examDate),
+      schoolHolidays: schoolHolidaysBetween(parseDateKey(planStart), examDate),
       topicTotal,
       scheduledTopics,
       truncated,
@@ -562,6 +613,12 @@ export const build = mutation({
       updatedAt: now,
     });
 
-    return { sessions: entries.length, topics: topicTotal };
+    return {
+      sessions: entries.length,
+      topics: topicTotal,
+      startDate: planStart,
+      requestedStartDate: start,
+      startedEarlier: planStart !== start,
+    };
   },
 });

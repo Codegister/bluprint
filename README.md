@@ -105,10 +105,12 @@ niche, exam-distinguishing detail rather than broad topic headings.
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
 10. **Plan your revision** — **Build revision timetable** asks which subjects to revise, how
-    long to spend on each one, which paper to cover, how long each revision day should be,
-    how many days a week you can work, and when your first exam is. The schedule is saved to
-    your account and appears in the sidebar as a colour-coded weekly timetable; clicking a
-    session opens (or builds) the study set for that topic.
+    long to spend on each one, which paper to cover, how long a school day and a day off
+    should be, how many days a week you can work, and when your first exam is. Sessions are
+    separated by breaks as long as the session before them, and if the topics will not fit
+    the date you chose, the plan starts earlier rather than dropping topics. The schedule is
+    saved to your account and appears in the sidebar as a colour-coded weekly timetable;
+    clicking a session opens (or builds) the study set for that topic.
 
 After signing in, the main screen is the **Home** dashboard. It keeps one primary action,
 **New study set**, for uploading notes, a **Build revision timetable** action for planning
@@ -293,17 +295,21 @@ same rate-limit messages as the rest of the app.
 
 - The builder is four separate pages, each with its own URL and a **Next** button:
   subjects; a session length and paper for each subject (25, 45, 60, or 90 minutes; Paper 1,
-  Paper 2, or both); one daily revision budget (30, 60, 90, or 120 minutes), revision days
-  per week (three, five, or seven) and a session start time; then the start date and first
-  exam date. The four answers stay in place while paging, and the final page builds.
+  Paper 2, or both); a school-day study budget (30, 60, 90, or 120 minutes), a day-off study
+  budget (1, 1½, 2, 3, or 4 hours), revision days per week (three, five, or seven) and a
+  session start time; then the start date and first exam date. The four answers stay in
+  place while paging, and the final page builds.
 - The server fills each school day up to the chosen budget with interleaved subject
   sessions, respecting each subject's own length. A short subject can share a day with a
   long one; a subject that no longer fits waits for the next revision day. A different
   subject starts each day so the same course does not always occupy the first slot.
-- Bank holidays, weekends and school-holiday weekdays get **double the school-day
-  budget**, with a floor that guarantees at least one extra whole session, so a seven-day
-  plan naturally puts more work into Saturday, Sunday, half-term and bank holidays. A
-  school day keeps the budget chosen in the builder.
+- Sessions never run back to back. A break as long as the session before it is inserted
+  before the next subject, so a 45-minute session is followed by 45 minutes off. Breaks sit
+  outside the study budget: the student chose study time, not desk time. The day's last
+  session has no trailing break.
+- Bank holidays, weekends and school-holiday weekdays use the **day-off budget the student
+  chose** — nothing is multiplied or assumed. This lets a busy weekend stay short and a
+  free half-term carry longer days.
 - Three-day plans use Monday/Wednesday/Friday, five-day plans use weekdays, and seven-day
   plans use every day. The selected paper rotates between Paper 1 and Paper 2 when the
   student chooses to cover both.
@@ -312,8 +318,11 @@ same rate-limit messages as the rest of the app.
   calculated per year (Easter is derived, not hard-coded), so the plan stays correct across
   different exam seasons.
 - Sessions run from the start date up to the day before the first exam, capped at 60
-  revision days. A plan is deterministic and does not call an AI model, so it builds
-  instantly and cannot fail on a model rate limit.
+  revision days. If the topics do not all fit by then, the planner moves the start back a
+  day at a time (up to twelve weeks, never before today) and builds again, so a complete
+  plan can begin earlier than the date entered. The timetable reports when it did this.
+- A plan is deterministic and does not call an AI model, so it builds instantly and cannot
+  fail on a model rate limit.
 - The saved plan is rendered as a real week table: days run across the top, start times
   run down the left, and each cell holds that day's session or a hatched **Free** block.
   One week is shown at a time with previous/next controls, and it opens on the week that
@@ -388,8 +397,14 @@ src/
   calendar.** The planner uses the common Monday-to-Friday windows for autumn, Christmas,
   February, Easter, May, and summer breaks. Local authorities can differ by a week; the
   table labels the break it used, and rebuilding after checking your school calendar is the
-  simplest adjustment. Weekends, bank holidays and these break weekdays all receive the
-  same doubled capacity (2x, plus at least one whole extra session).
+  simplest adjustment. Weekends, bank holidays and these break weekdays all use the
+  day-off budget the student chose in the builder; nothing is multiplied or assumed.
+- **Breaks count as time, not study time.** The budget the student picks is study time.
+  Between two subjects Bluprint inserts a break as long as the session before it, so a
+  45-minute session is followed by 45 minutes off before the next one. The timetable's
+  clock includes those gaps; the day's study total does not. This is the simplest reading
+  of "a break as long as the study before it", and it means a longer session buys a longer
+  break rather than a shorter one.
 - **Paper choices label sessions, not separate sets.** A session marked Paper 1 or Paper 2
   opens the topic's study set; the set still covers the whole specification topic. Choosing
   "both" alternates the paper label between sessions so the plan covers both papers over

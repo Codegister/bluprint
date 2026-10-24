@@ -73,14 +73,21 @@ function SessionBlock({
       <span className="mt-auto truncate pt-1 text-[0.58rem] font-medium text-muted-foreground">
         {entry.course}
       </span>
-      <span
-        className={cn(
-          "mt-1 w-fit rounded-full px-1.5 py-0.5 text-[0.5rem] font-semibold",
-          color.tint,
-          color.text,
-        )}
-      >
-        {entry.paper ?? "All papers"}
+      <span className="mt-1 flex flex-wrap items-center gap-1">
+        <span
+          className={cn(
+            "w-fit rounded-full px-1.5 py-0.5 text-[0.5rem] font-semibold",
+            color.tint,
+            color.text,
+          )}
+        >
+          {entry.paper ?? "All papers"}
+        </span>
+        {entry.breakMinutes ? (
+          <span className="w-fit rounded-full bg-[#F3F0FF] px-1.5 py-0.5 text-[0.5rem] font-semibold text-[#5130D8]">
+            {entry.breakMinutes}m break
+          </span>
+        ) : null}
       </span>
     </button>
   );
@@ -502,8 +509,8 @@ export default function Timetable() {
   const daysLeft = daysUntilInput(plan.examDate);
   const holidayAware = plan.schoolHolidays !== undefined;
   const schoolDayMinutes = plan.dailyMinutes ?? plan.sessionMinutes ?? 60;
-  // Plans built before day-off minutes were stored used a 1.5x boost, so report
-  // what those plans actually hold rather than today's doubled figure.
+  // Plans built before the day-off budget was stored used a 1.5× boost. Report
+  // what those legacy plans actually hold rather than a figure they never used.
   const dayOffMinutes =
     plan.dayOffMinutes ??
     (holidayAware
@@ -551,9 +558,7 @@ export default function Timetable() {
         {holidayAware && (
           <>
             <span aria-hidden>·</span>
-            <span>
-              up to {dayOffMinutes} min on days off
-            </span>
+            <span>{dayOffMinutes} min on days off</span>
           </>
         )}
         <span aria-hidden>·</span>
@@ -563,6 +568,8 @@ export default function Timetable() {
           {courseSettings.length} subject
           {courseSettings.length === 1 ? "" : "s"}
         </span>
+        <span aria-hidden>·</span>
+        <span>breaks between subjects</span>
         {plan.scheduledTopics < plan.topicTotal && (
           <>
             <span aria-hidden>·</span>
@@ -601,9 +608,16 @@ export default function Timetable() {
 
       {!holidayAware && (
         <p className="mt-3 rounded-2xl bg-[#F3ECFF] px-4 py-3 text-[0.8rem] leading-relaxed text-[#5B3DF5]">
-          This timetable was built before holiday-aware scheduling. Build it again
-          to double the time on bank holidays, weekends and school holidays, and to
-          label half-terms in the grid.
+          This timetable was built before days off were asked for. Build it again to
+          choose the time you have on bank holidays, weekends and school holidays.
+        </p>
+      )}
+
+      {plan.requestedStartDate && plan.requestedStartDate !== plan.startDate && (
+        <p className="mt-3 rounded-2xl bg-[#EAFBF4] px-4 py-3 text-[0.8rem] leading-relaxed text-[#0C6B4C]">
+          Revision starts {formatLongDate(plan.startDate)} rather than{" "}
+          {formatLongDate(plan.requestedStartDate)}, so every topic fits before your
+          first exam.
         </p>
       )}
 
@@ -644,8 +658,9 @@ Bank holidays · double time
       <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
         Each session opens the study set for that topic. If one does not exist yet,
         Bluprint builds it from the course pathway and takes you straight there.
-        School days use the budget you chose. Bank holidays, weekends and typical
-        England school holidays get double that, so days off carry more work.
+        School days use the school-day budget you chose; bank holidays, weekends and
+        school holidays use the day-off budget. Every session is followed by a break
+        as long as the session itself.
       </p>
     </AppShell>
   );

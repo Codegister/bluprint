@@ -6,11 +6,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { dateInputValue, daysUntilInput } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
-import {
-  extendedDailyMinutes,
-  formatTime,
-  SUBJECT_COLORS,
-} from "@/lib/timetable";
+import { formatLongDate, formatTime, SUBJECT_COLORS } from "@/lib/timetable";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
@@ -20,6 +16,9 @@ import { toast } from "sonner";
 
 const SESSION_MINUTES = [25, 45, 60, 90];
 const DAILY_MINUTES = [30, 60, 90, 120];
+// Time on a bank holiday, weekend or school holiday is asked for rather than
+// assumed, so a busy weekend and a free half-term can be planned differently.
+const DAY_OFF_MINUTES = [60, 90, 120, 180, 240];
 const DAYS_PER_WEEK = [3, 5, 7];
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
 const START_HOURS = [9, 10, 14, 16, 17, 18, 19, 20];
@@ -80,6 +79,7 @@ export default function TimetableBuilder() {
   const [startDate, setStartDate] = useState(initial.startDate);
   const [examDate, setExamDate] = useState(initial.examDate);
   const [dailyMinutes, setDailyMinutes] = useState(60);
+  const [dayOffMinutes, setDayOffMinutes] = useState(180);
   const [startMinutes, setStartMinutes] = useState(17 * 60);
   const [daysPerWeek, setDaysPerWeek] = useState(5);
   const [settings, setSettings] = useState<CourseSetting[]>([]);
@@ -96,9 +96,9 @@ export default function TimetableBuilder() {
   );
   const daysLeft = daysUntilInput(examDate);
   const datesInvalid = Boolean(startDate && examDate) && examDate <= startDate;
-  const minSessionMinutes =
+  const longestSessionMinutes =
     settings.length > 0
-      ? Math.min(...settings.map((setting) => setting.minutes))
+      ? Math.max(...settings.map((setting) => setting.minutes))
       : 25;
 
   const toggle = (courseId: Id<"courses">) => {
@@ -131,6 +131,11 @@ export default function TimetableBuilder() {
         setting.courseId === courseId ? { ...setting, ...patch } : setting,
       ),
     );
+    setError(null);
+  };
+
+  const chooseDayOffMinutes = (minutes: number) => {
+    setDayOffMinutes(minutes);
     setError(null);
   };
 
@@ -184,15 +189,22 @@ export default function TimetableBuilder() {
     setSaving(true);
     setError(null);
     try {
-      await buildPlan({
+      const result = await buildPlan({
         startDate,
         examDate,
         daysPerWeek,
         dailyMinutes,
+        dayOffMinutes,
         startMinutes,
         courseSettings: settings,
       });
-      toast.success("Revision timetable built.");
+      if (result.startedEarlier) {
+        toast.success(
+          `Timetable built. To fit every topic, revision starts on ${formatLongDate(result.startDate)}.`,
+        );
+      } else {
+        toast.success("Revision timetable built.");
+      }
       navigate("/timetable");
     } catch (buildError) {
       const message = readableError(
@@ -233,9 +245,9 @@ export default function TimetableBuilder() {
           Build a plan you can actually follow
         </h1>
         <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
-          Four short steps. Bluprint builds a weekly calendar, and gives bank
-          holidays, weekends and school holidays double the school-day time.
-          Every session links to its study set.
+          Four short steps. You choose the time you have on school days and on
+          days off, and Bluprint adds a break as long as the session before the
+          next subject. Every session links to its study set.
         </p>
       </header>
 
@@ -444,7 +456,8 @@ export default function TimetableBuilder() {
                           </p>
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {SESSION_MINUTES.map((minutes) => {
-                              const disabled = minutes > dailyMinutes;
+                              const disabled =
+                                minutes > dailyMinutes || minutes > dayOffMinutes;
                               return (
                                 <button
                                   key={minutes}
@@ -508,9 +521,8 @@ export default function TimetableBuilder() {
               How much time do you have each day?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              Pick a budget for a school day. Bank holidays, weekends and school
-              holidays get double that automatically, because there is no school day
-              to work around.
+              Pick the study time you realistically have. Breaks are added on top,
+              and every break lasts as long as the session before it.
             </p>
 
             <div className="mt-4">
@@ -536,11 +548,50 @@ export default function TimetableBuilder() {
                 ))}
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-                Bluprint fills the budget with whole sessions, so a day can finish a
-                few minutes early when the next session does not fit. A school day
-                uses this budget; a bank holiday, weekend or school-holiday weekday
-                can use up to{" "}
-                {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} minutes.
+                Bluprint fills the budget with whole study sessions, so a day can
+                finish a few minutes early when the next session does not fit.
+                Breaks sit outside this budget: a 45-minute session is followed by
+                45 minutes off before the next subject.
+              </p>
+            </div>
+
+            <div className="mt-5">
+              <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Time on a day off
+              </p>
+              <p className="mt-0.5 text-[0.72rem] text-muted-foreground">
+                Weekends, bank holidays and school holidays use this budget. Pick
+                what you can actually manage, not a multiple of a school day.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {DAY_OFF_MINUTES.map((minutes) => {
+                  const disabled = minutes < longestSessionMinutes;
+                  return (
+                    <button
+                      key={minutes}
+                      type="button"
+                      disabled={disabled}
+                      aria-pressed={dayOffMinutes === minutes}
+                      onClick={() => chooseDayOffMinutes(minutes)}
+                      className={cn(
+                        "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
+                        dayOffMinutes === minutes
+                          ? "border-[#6B4DBE] bg-[#F3F0FF] text-[#5130D8]"
+                          : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                        disabled &&
+                          "cursor-not-allowed opacity-40 hover:bg-white",
+                      )}
+                    >
+                      {minutes < 60
+                        ? `${minutes} min`
+                        : `${minutes / 60} hour${minutes === 60 ? "" : "s"}`}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                At least as long as your longest session, so every subject can
+                still fit on a holiday.
               </p>
             </div>
 
@@ -572,7 +623,7 @@ export default function TimetableBuilder() {
                     ? "Monday, Wednesday and Friday."
                     : daysPerWeek === 5
                       ? "Monday to Friday. Weekends stay free."
-                      : "Every day, with longer weekend and holiday blocks."}
+                      : "Every day, using your day-off time at weekends and on holidays."}
                 </p>
               </div>
 
@@ -604,9 +655,11 @@ export default function TimetableBuilder() {
               When does revision start, and when is the first exam?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              The plan runs up to the day before your first exam. England and Wales
-              bank holidays, weekends and school holidays all get double the
-              school-day time. School breaks follow typical England term dates.
+              The plan runs up to the day before your first exam. Bank holidays,
+              weekends and school holidays use the day-off time you chose, and
+              England's usual school breaks are recognised. If every topic will not
+              fit, revision starts earlier than the date below — Bluprint never
+              leaves topics unscheduled.
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -661,9 +714,8 @@ export default function TimetableBuilder() {
               {step === 4 ? (
                 <>
                   {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
-                  {dailyMinutes} min on school days · up to{" "}
-                  {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} min on
-                  days off · {daysPerWeek} days a week
+                  {dailyMinutes} min on school days · {dayOffMinutes} min on days
+                  off · {daysPerWeek} days a week
                 </>
               ) : (
                 <>

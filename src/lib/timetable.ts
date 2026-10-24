@@ -149,9 +149,10 @@ export function formatTimeRange(startMinutes: number, duration: number): string 
 }
 
 /**
- * The capacity used on a day off (bank holiday, weekend or school holiday).
- * Must match the backend: double the school-day budget, and always enough for
- * one extra session of the shortest selected length.
+ * Legacy fallback only. Plans built before the day-off budget was asked for
+ * used a simple 1.5–2× school-day figure; this reproduces that so those
+ * timetables still report the capacity they were actually built with. New
+ * plans store the chosen `dayOffMinutes` and never call this.
  */
 export function extendedDailyMinutes(
   schoolDayMinutes: number,
