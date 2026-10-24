@@ -325,6 +325,12 @@ export default function CourseSetup() {
     );
   };
 
+  const buildLabel = saving
+    ? "Queuing pathways…"
+    : selectedCount === 0
+      ? "Build pathways"
+      : `Build ${selectedCount} pathway${selectedCount === 1 ? "" : "s"}`;
+
   const build = async () => {
     if (selectedCount === 0) {
       setError("Pick at least one course.");
@@ -523,11 +529,7 @@ export default function CourseSetup() {
                   className="h-10 rounded-full bg-[#191B27] px-5 text-[0.82rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                  {saving
-                    ? "Queuing pathways…"
-                    : selectedCount === 0
-                      ? "Build pathways"
-                      : `Build ${selectedCount} pathway${selectedCount === 1 ? "" : "s"}`}
+                  {buildLabel}
                 </Button>
               </div>
             </div>
@@ -627,6 +629,24 @@ export default function CourseSetup() {
                   </div>
                 ))
               )}
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[0.8rem] text-muted-foreground">
+                <span className="font-semibold text-brand-ink">
+                  {selectedCount} course{selectedCount === 1 ? "" : "s"}
+                </span>{" "}
+                selected · {level} ·{" "}
+                {distinctBoards > 1 ? `${distinctBoards} exam boards` : board}
+              </p>
+              <Button
+                onClick={build}
+                disabled={saving || selectedCount === 0}
+                className="h-11 w-full rounded-full bg-[#191B27] px-6 text-[0.85rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50 sm:w-auto"
+              >
+                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                {buildLabel}
+              </Button>
             </div>
           </section>
 
