@@ -263,6 +263,10 @@ same rate-limit messages as the rest of the app.
   fetches `/courses/<level>/<subject>/<board>/<tier>/notes`, lets Cognito redirect to its
   dated route (Biology → biology-triple) and reads the paper, module, topic and subtopic
   headings from the page. IB uses its `ibhl` / `ibsl` route instead of a board segment.
+- Combined Science is the exception Cognito splits before the exam board: Biology,
+  Chemistry and Physics are separate component routes. The scraper reads all three and
+  merges them into one pathway with a unit per science, so a Combined Science course covers
+  the whole qualification.
 - If that notes page is a client-rendered shell, the specification page at
   `/specifications/<level>/<subject>/<board>` supplies the numbered topic list instead.
 - The pathway is a direct mapping of those headings: summaries, key points and exam skills

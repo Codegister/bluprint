@@ -504,6 +504,77 @@ export function routeSlugs(course: CognitoCourse): string[] {
 }
 
 /**
+ * Combined Science is the one qualification Cognito splits before the exam
+ * board: the student picks Biology, Chemistry or Physics, then the board, then
+ * the tier. A Combined Science pathway should cover all three, so each
+ * component is scraped and merged under its own unit.
+ */
+const COMBINED_SCIENCE_COMPONENTS = ["biology", "chemistry", "physics"] as const;
+
+/** Notes URL for a component, finding Cognito's routed slug if it differs. */
+async function componentNotes(
+  levelSlug: string,
+  component: string,
+  boardSlug: string,
+  route: string,
+): Promise<CognitoOutline | null> {
+  const canonical = `/courses/${levelSlug}/${component}-combined/${boardSlug}/${route}/notes`;
+  const direct = await fetchPage(`${SITE}${canonical}`);
+  if (direct) {
+    const outline = parseCognitoPage(direct.html, direct.url);
+    if (outline) return outline;
+  }
+
+  // Fall back to the route shown in the menu; its landing page redirects to
+  // Cognito's canonical course path (…/biology-combined/…).
+  const landing = await fetchPage(
+    `${SITE}/courses/${levelSlug}/combined-science/${component}/${boardSlug}/${route}`,
+  );
+  if (!landing) return null;
+  const notesUrl = landing.url.replace(/\/lessons(?:\?.*)?$/, "/notes");
+  if (notesUrl === landing.url) return null;
+  const page = await fetchPage(notesUrl);
+  return page ? parseCognitoPage(page.html, page.url) : null;
+}
+
+async function fetchCombinedScienceOutline(
+  levelSlug: string,
+  boardSlug: string,
+  route: string,
+  boardLabel: string,
+): Promise<CognitoOutline | null> {
+  const parts = await Promise.all(
+    COMBINED_SCIENCE_COMPONENTS.map(async (component) => ({
+      component,
+      outline: await componentNotes(levelSlug, component, boardSlug, route),
+    })),
+  );
+  // Half a Combined Science course is worse than a starter map, so every
+  // component has to be readable before the merged map is accepted.
+  if (parts.some((part) => !part.outline)) return null;
+
+  const sections: CognitoSection[] = parts.flatMap(({ component, outline }) => {
+    const name = component.charAt(0).toUpperCase() + component.slice(1);
+    return outline!.sections.map((section) => ({
+      title:
+        outline!.sections.length === 1
+          ? name
+          : `${name} · ${section.title.replace(new RegExp(`^${name}\\s*·?\\s*`, "i"), "")}`,
+      topics: section.topics,
+    }));
+  });
+
+  const topicCount = sections.reduce((sum, section) => sum + section.topics.length, 0);
+  if (sections.length === 0 || topicCount < 3) return null;
+
+  return {
+    sourceUrl: `${SITE}/courses/${levelSlug}/combined-science`,
+    label: `GCSE Combined Science (${boardLabel})`,
+    sections,
+  };
+}
+
+/**
  * Walks the same route as "Find my course": qualification, subject, exam board,
  * then tier. Cognito redirects dated routes (biology → biology-triple) itself,
  * so the candidate URLs are tried in order and the first readable outline wins.
@@ -519,6 +590,18 @@ export async function fetchCognitoOutline(
 
   const boardSlug = boardSlugFor(course.examBoard);
   const routes = routeSlugs(course);
+
+  // Combined Science adds a Biology / Chemistry / Physics step before the board.
+  if (subjectSlug === "combined-science") {
+    if (!boardSlug || routes.length === 0) return null;
+    return await fetchCombinedScienceOutline(
+      levelSlug,
+      boardSlug,
+      routes[0]!,
+      course.examBoard,
+    );
+  }
+
   const candidates: string[] = [];
 
   if (boardSlug) {
