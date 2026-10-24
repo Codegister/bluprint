@@ -1,6 +1,7 @@
 import { Mascot } from "@/components/Mascot";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { PromptInput } from "@/components/ui/ai-chat-input";
+
+type MascotFloat = boolean | undefined;
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
@@ -106,6 +107,8 @@ export function TutorChat({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useWeb, setUseWeb] = useState(true);
+  const [effort, setEffort] = useState<"Low" | "Medium" | "Max Effort">("Medium");
+  const [model, setModel] = useState<string>("GPT 5.5");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // The reply being written right now, if any.
@@ -118,14 +121,13 @@ export function TutorChat({
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages?.length, sending, streamedLength]);
 
-  const send = async (raw?: string) => {
-    const question = (raw ?? draft).trim();
+  const send = async (value: string, meta: { model: string; effort: string; attachments: File[] }) => {
+    const question = value.trim();
     if (!question || sending) return;
 
     setError(null);
     setSending(true);
     setPending(question);
-    setDraft("");
 
     try {
       if (scope.kind === "set") {
@@ -142,7 +144,7 @@ export function TutorChat({
       setError(
         readableError(sendError, "The tutor could not answer that. Please try again."),
       );
-      // The question is already saved, so put it back in the box to ask again.
+      // The question is already saved, so restore it for a retry.
       setDraft(question);
     } finally {
       setSending(false);
@@ -193,7 +195,7 @@ export function TutorChat({
             </div>
           ) : empty ? (
             <div className="flex flex-col items-center pb-2 text-center">
-              <Mascot size={96} />
+              <Mascot size={96} float={false} />
               <p className="font-display text-[1.15rem] font-bold text-brand-ink">
                 Stuck on something?
               </p>
@@ -206,7 +208,7 @@ export function TutorChat({
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => void send(suggestion)}
+                    onClick={() => void send(suggestion, { model: model, effort: effort, attachments: [] })}
                     className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-[#D8CCFF] hover:bg-[#FAF8FF]"
                   >
                     {suggestion}
@@ -276,40 +278,21 @@ export function TutorChat({
             </p>
           )}
 
-          <div className="relative">
-            <Textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
-              placeholder={
-                scope.kind === "set"
-                  ? "Ask anything about this set…"
-                  : "Ask anything about this course…"
-              }
-              aria-label="Ask the AI tutor"
-              rows={2}
-              maxLength={1200}
-              disabled={sending}
-              className="min-h-[76px] resize-none rounded-2xl border-border bg-white pb-10 pr-20 text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
-            />
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void send()}
-              disabled={!draft.trim() || sending}
-              className="absolute bottom-2.5 right-2.5 h-8 rounded-full bg-[#191B27] px-3 text-[0.75rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:bg-[#191B27]/20"
-            >
-              {sending ? <Loader2 className="size-3.5 animate-spin" /> : "Send"}
-            </Button>
-          </div>
+          <PromptInput
+            value={draft}
+            onChange={setDraft}
+            onSubmit={send}
+            placeholder={
+              scope.kind === "set"
+                ? "Ask anything about this set…"
+                : "Ask anything about this course…"
+            }
+            className="px-4 pb-2"
+            maxAttachments={1}
+          />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            Enter to send · Shift + Enter for a new line ·{" "}
+            Use Enter inside the prompt to send · Shift + Enter for a new line ·{" "}
             {useWeb
               ? "web search is on, so recent and specification details can be checked online."
               : "web search is off, so answers come from your material and the model only."}{" "}
