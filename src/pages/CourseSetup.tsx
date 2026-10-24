@@ -630,7 +630,9 @@ export default function CourseSetup() {
         </div>
         <p className="max-w-md text-[0.82rem] leading-relaxed text-muted-foreground">
           Pick what you study. Bluprint maps each course from its published
-          specification, then builds revision material for every topic.
+          specification, then builds revision material for every topic. Religious
+          Studies is split into Edexcel Religious Studies A and B, with the
+          religions and units you study.
         </p>
       </div>
 
