@@ -329,6 +329,15 @@ export default function StudySet() {
     const set = details.set;
     const mastery = percent(set.knownCount, set.cardCount);
     const qualification = qualificationLabel(set);
+    // A build can stop at the material's practical ceiling; say so rather than
+    // leaving a shorter deck looking like the requested one.
+    const shortfall = (
+      [
+        ["flashcards", set.targetCardCount, set.cardCount],
+        ["quiz questions", set.targetQuizCount, set.quizCount],
+        ["exam-style questions", set.targetExamCount, set.examCount],
+      ] as Array<[string, number | undefined, number]>
+    ).filter(([, asked, built]) => asked !== undefined && asked > built);
 
     return (
       <>
@@ -396,6 +405,25 @@ export default function StudySet() {
                 </span>
               ) : null}
             </div>
+
+            {(set.generationNote || shortfall.length > 0) && (
+              <div className="mt-3 rounded-2xl border border-[#EBD6AB] bg-[#FFFBEC] px-4 py-3 text-[0.82rem] leading-relaxed text-[#7A5306]">
+                {shortfall.length > 0 && (
+                  <p>
+                    You asked for{" "}
+                    {shortfall
+                      .map(([label, asked, built]) => `${asked} ${label} (built ${built})`)
+                      .join(", ")}
+                    . Bluprint built the maximum this material supports.
+                  </p>
+                )}
+                {set.generationNote && (
+                  <p className={shortfall.length > 0 ? "mt-1.5" : undefined}>
+                    {set.generationNote}
+                  </p>
+                )}
+              </div>
+            )}
 
             <Tabs
               value={tab}

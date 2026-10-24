@@ -67,6 +67,9 @@ const schema = defineSchema(
       ),
       progress: v.optional(v.string()),
       errorMessage: v.optional(v.string()),
+      // Explains a build that hit the material's realistic limit or where one
+      // section failed, without hiding the sections that did generate.
+      generationNote: v.optional(v.string()),
       summary: v.optional(
         v.object({
           overview: v.string(),

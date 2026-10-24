@@ -281,9 +281,11 @@ export const create = mutation({
       cardCount: 0,
       quizCount: 0,
       examCount: 0,
-      targetCardCount: targetCount(args.targetCardCount, 10, 30, 20),
-      targetQuizCount: targetCount(args.targetQuizCount, 5, 20, 10),
-      targetExamCount: targetCount(args.targetExamCount, 2, 10, 4),
+      // The sliders allow 1–100 of each; the generation action then caps the
+      // request at what the material can actually support.
+      targetCardCount: targetCount(args.targetCardCount, 1, 100, 20),
+      targetQuizCount: targetCount(args.targetQuizCount, 1, 100, 10),
+      targetExamCount: targetCount(args.targetExamCount, 1, 100, 4),
       knownCount: 0,
       updatedAt: now,
     });
@@ -302,8 +304,25 @@ export const updateDetails = mutation({
     course: v.optional(v.string()),
     examBoard: v.optional(v.string()),
     level: v.optional(v.string()),
+    // Optional so older clients can still rename a set without touching its
+    // build length. The rebuild action reads these targets.
+    targetCardCount: v.optional(v.number()),
+    targetQuizCount: v.optional(v.number()),
+    targetExamCount: v.optional(v.number()),
   },
-  handler: async (ctx, { setId, title, course, examBoard, level }) => {
+  handler: async (
+    ctx,
+    {
+      setId,
+      title,
+      course,
+      examBoard,
+      level,
+      targetCardCount,
+      targetQuizCount,
+      targetExamCount,
+    },
+  ) => {
     const userId = await requireUserId(ctx);
     const set = await ctx.db.get(setId);
     if (!set || set.userId !== userId) throw new Error("Study set not found.");
@@ -316,6 +335,15 @@ export const updateDetails = mutation({
       course: course?.trim().slice(0, 60) || undefined,
       examBoard: examBoard?.trim().slice(0, 60) || undefined,
       level: level?.trim().slice(0, 40) || undefined,
+      ...(targetCardCount !== undefined
+        ? { targetCardCount: targetCount(targetCardCount, 1, 100, set.targetCardCount ?? 20) }
+        : {}),
+      ...(targetQuizCount !== undefined
+        ? { targetQuizCount: targetCount(targetQuizCount, 1, 100, set.targetQuizCount ?? 10) }
+        : {}),
+      ...(targetExamCount !== undefined
+        ? { targetExamCount: targetCount(targetExamCount, 1, 100, set.targetExamCount ?? 4) }
+        : {}),
       updatedAt: Date.now(),
     });
   },
@@ -532,8 +560,9 @@ export const completeGeneration = internalMutation({
     cards: v.array(cardInput),
     quiz: v.array(quizInput),
     exams: v.array(examInput),
+    generationNote: v.optional(v.string()),
   },
-  handler: async (ctx, { setId, summary, cards, quiz, exams }) => {
+  handler: async (ctx, { setId, summary, cards, quiz, exams, generationNote }) => {
     const set = await ctx.db.get(setId);
     if (!set) throw new Error("Study set not found.");
 
@@ -585,6 +614,7 @@ export const completeGeneration = internalMutation({
       quizCount: quiz.length,
       examCount: exams.length,
       knownCount: 0,
+      generationNote,
       lastQuizScore: undefined,
       lastQuizTotal: undefined,
       status: "ready",

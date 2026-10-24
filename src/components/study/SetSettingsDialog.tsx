@@ -53,6 +53,9 @@ export function SetSettingsDialog({
   const [course, setCourse] = useState(set.course ?? "");
   const [examBoard, setExamBoard] = useState(set.examBoard ?? "");
   const [level, setLevel] = useState(set.level ?? "");
+  const [cardCount, setCardCount] = useState(set.targetCardCount ?? 20);
+  const [quizCount, setQuizCount] = useState(set.targetQuizCount ?? 10);
+  const [examCount, setExamCount] = useState(set.targetExamCount ?? 4);
   const [saving, setSaving] = useState<"save" | "rebuild" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -65,8 +68,20 @@ export function SetSettingsDialog({
     setCourse(set.course ?? "");
     setExamBoard(set.examBoard ?? "");
     setLevel(set.level ?? "");
+    setCardCount(set.targetCardCount ?? 20);
+    setQuizCount(set.targetQuizCount ?? 10);
+    setExamCount(set.targetExamCount ?? 4);
     setError(null);
-  }, [open, set.title, set.course, set.examBoard, set.level]);
+  }, [
+    open,
+    set.title,
+    set.course,
+    set.examBoard,
+    set.level,
+    set.targetCardCount,
+    set.targetQuizCount,
+    set.targetExamCount,
+  ]);
 
   const save = async (rebuild: boolean) => {
     if (title.trim().length < 2) {
@@ -82,6 +97,9 @@ export function SetSettingsDialog({
         course: course.trim() || undefined,
         examBoard: examBoard || undefined,
         level: level || undefined,
+        targetCardCount: cardCount,
+        targetQuizCount: quizCount,
+        targetExamCount: examCount,
       });
 
       if (rebuild) {
@@ -227,6 +245,45 @@ export function SetSettingsDialog({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-border bg-[#FCFCFD] p-3.5">
+            <p className="text-xs font-semibold text-brand-ink">Material to build</p>
+            <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
+              1–100 of each. A rebuild uses these counts, and Bluprint stops at the
+              most the notes can support.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {[
+                { label: "Flashcards", value: cardCount, onChange: setCardCount },
+                { label: "Quiz questions", value: quizCount, onChange: setQuizCount },
+                {
+                  label: "Exam-style questions",
+                  value: examCount,
+                  onChange: setExamCount,
+                },
+              ].map((control) => (
+                <label key={control.label} className="block">
+                  <span className="flex items-center justify-between gap-1.5 text-[0.7rem] font-semibold text-brand-ink">
+                    {control.label}
+                    <span className="rounded-full bg-white px-1.5 py-0.5 text-[0.66rem] tabular-nums text-[#5B3DF5]">
+                      {control.value}
+                    </span>
+                  </span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={100}
+                    step={1}
+                    value={control.value}
+                    disabled={saving !== null}
+                    onChange={(event) => control.onChange(Number(event.target.value))}
+                    aria-label={control.label}
+                    className="mt-1.5 w-full cursor-pointer accent-[#7C5CFF]"
+                  />
+                </label>
+              ))}
             </div>
           </div>
 

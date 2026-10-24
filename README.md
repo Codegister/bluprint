@@ -70,18 +70,21 @@ course never lands in a "needs a retry" state.
 
 Use **Upload material** to add up to eight photos, a short video, or pasted notes. This keeps
 the upload compile flow and is the right path for a single handout, a textbook page, or
-notes that do not follow a specification. Two sliders choose the length: 5–20 quiz
-questions and 2–10 exam-style questions. Every set includes 20 flashcards written to target
-niche, exam-distinguishing detail rather than broad topic headings.
+notes that do not follow a specification. Three sliders choose the length separately:
+flashcards, quiz questions and exam-style questions, each from 1 to 100. If the notes
+cannot realistically support the number asked for, Bluprint builds the maximum it can and
+says so on the set page; it never silently pretends the request was met.
 
 ## What version 1 does
 
 1. **Add source material** — up to eight photos (JPG or PNG), a video (six frames are
    sampled in the browser), or pasted text.
-2. **Compile** — NVIDIA reads the source, then generates a structured summary, 20
-   detail-heavy flashcards, 5–20 quiz questions with explanations, and 2–10 written exam
-   questions with marking guides. Long sets are generated in batches so a single JSON
-   response cannot truncate the middle of the deck.
+2. **Compile** — NVIDIA reads the source, then generates a structured summary and up to
+   100 of each: detail-heavy flashcards, quiz questions with explanations, and written
+   exam questions with marking guides. The numbers are chosen with three sliders at
+   upload. Long sets are generated in batches so a single JSON response cannot truncate
+   the middle of the deck, and a batch that comes back malformed is retried rather than
+   ending the run.
 3. **Study** — flip and self-rate flashcards, take the quiz, and answer exam questions
    that are marked against the guide with feedback and a model answer.
 4. **Set the exam context** — tag a set with a course, an exam board (AQA, Pearson
@@ -99,8 +102,10 @@ niche, exam-distinguishing detail rather than broad topic headings.
    conversation saved separately, so a question about one unit never blends into another.
    Suggested first questions get you started; exam practice is one question at a time.
 8. **Edit and rebuild** — **Set settings** next to a set's title changes its name, course,
-   board, or level. "Save and rebuild" regenerates the summary, cards, quiz, and exam
-   questions so the new board conventions apply; your notes and uploads are kept.
+   board, or level, and its three build sliders (1–100 flashcards, quiz questions and
+   exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and exam
+   questions with those counts and the new board conventions; your notes and uploads are
+   kept.
 9. **Persist** — study sets, extracted notes, uploads, card progress, due dates, quiz
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
@@ -161,6 +166,17 @@ it. Sets built from a course topic link back to that course.
   cost predictable.
 - **Tutor history is saved in the database**, one thread per set, per course, and per unit.
   There is no clear-thread button yet; deleting a set or course deletes its conversations.
+- **Requested counts are capped by the material.** The sliders allow 1–100, but before
+  generating Bluprint estimates a sane ceiling from the notes' word count — roughly one
+  card per 12 words, one quiz question per 30, and one exam question per 90. The request is
+  kept on the set, so the page can say "asked for 100, built 34" and explain that the
+  material set the limit. This is deliberately conservative for exam questions, which need
+  much more substance than a flashcard.
+- **A single failed generation stage does not lose the set.** Bad JSON is repaired first
+  (unescaped LaTeX backslashes and literal newlines, the usual cause of Physics sets
+  failing), a malformed batch is retried, and if one section still cannot be produced the
+  others are saved and the set page names the missing section with a rebuild prompt. Only a
+  run where nothing at all came back is reported as a failure.
 
 ## Run it
 

@@ -77,6 +77,7 @@ export function CreateSetDialog({
   const [images, setImages] = useState<ImageDraft[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [text, setText] = useState("");
+  const [cardCount, setCardCount] = useState(20);
   const [quizCount, setQuizCount] = useState(10);
   const [examCount, setExamCount] = useState(4);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,6 +108,7 @@ export function CreateSetDialog({
     setCustomCourseOpen(false);
     setExamBoard("");
     setLevel("");
+    setCardCount(20);
     setQuizCount(10);
     setExamCount(4);
     setMode("photos");
@@ -242,7 +244,7 @@ export function CreateSetDialog({
         course: (customCourseOpen ? customCourse : course).trim() || undefined,
         examBoard: examBoard || undefined,
         level: level || undefined,
-        targetCardCount: 20,
+        targetCardCount: cardCount,
         targetQuizCount: quizCount,
         targetExamCount: examCount,
         sourceImageIds,
@@ -565,73 +567,67 @@ export function CreateSetDialog({
           </Tabs>
 
           <div className="mt-5 rounded-3xl border border-border bg-[#FCFCFD] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold text-brand-ink">
-                  Study set length
-                </p>
-                <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-                  Every set includes 20 detail-heavy flashcards that target niche, exam-distinguishing facts.
-                </p>
-              </div>
-              <span className="inline-flex shrink-0 items-center rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.64rem] font-bold text-[#5B3DF5]">
-                20 cards
-              </span>
+            <div>
+              <p className="text-xs font-semibold text-brand-ink">
+                How much to build
+              </p>
+              <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
+                Choose anything from 1 to 100 of each. If your notes cannot support
+                the number, Bluprint builds the maximum it can and explains why on
+                the set page.
+              </p>
             </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="flex items-center justify-between text-[0.76rem] font-semibold text-brand-ink">
-                  Quiz questions
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[0.7rem] text-[#5B3DF5]">
-                    {quizCount}
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              {[
+                {
+                  label: "Flashcards",
+                  value: cardCount,
+                  onChange: setCardCount,
+                  aria: "Number of flashcards",
+                },
+                {
+                  label: "Quiz questions",
+                  value: quizCount,
+                  onChange: setQuizCount,
+                  aria: "Number of quiz questions",
+                },
+                {
+                  label: "Exam-style questions",
+                  value: examCount,
+                  onChange: setExamCount,
+                  aria: "Number of exam-style questions",
+                },
+              ].map((control) => (
+                <label key={control.label} className="block">
+                  <span className="flex items-center justify-between gap-2 text-[0.76rem] font-semibold text-brand-ink">
+                    {control.label}
+                    <span className="rounded-full bg-[#F3ECFF] px-2 py-0.5 text-[0.7rem] tabular-nums text-[#5B3DF5]">
+                      {control.value}
+                    </span>
                   </span>
-                </span>
-                <input
-                  type="range"
-                  min={5}
-                  max={20}
-                  step={1}
-                  value={quizCount}
-                  disabled={isLoading}
-                  onChange={(event) => setQuizCount(Number(event.target.value))}
-                  aria-label="Number of quiz questions"
-                  className="mt-2 w-full cursor-pointer accent-[#7C5CFF]"
-                />
-                <span className="flex justify-between text-[0.62rem] font-medium text-muted-foreground">
-                  <span>5</span>
-                  <span>20</span>
-                </span>
-              </label>
-
-              <label className="block">
-                <span className="flex items-center justify-between text-[0.76rem] font-semibold text-brand-ink">
-                  Exam questions
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[0.7rem] text-[#5B3DF5]">
-                    {examCount}
+                  <input
+                    type="range"
+                    min={1}
+                    max={100}
+                    step={1}
+                    value={control.value}
+                    disabled={isLoading}
+                    onChange={(event) => control.onChange(Number(event.target.value))}
+                    aria-label={control.aria}
+                    className="mt-2 w-full cursor-pointer accent-[#7C5CFF]"
+                  />
+                  <span className="flex justify-between text-[0.62rem] font-medium text-muted-foreground">
+                    <span>1</span>
+                    <span>100</span>
                   </span>
-                </span>
-                <input
-                  type="range"
-                  min={2}
-                  max={10}
-                  step={1}
-                  value={examCount}
-                  disabled={isLoading}
-                  onChange={(event) => setExamCount(Number(event.target.value))}
-                  aria-label="Number of exam-style questions"
-                  className="mt-2 w-full cursor-pointer accent-[#7C5CFF]"
-                />
-                <span className="flex justify-between text-[0.62rem] font-medium text-muted-foreground">
-                  <span>2</span>
-                  <span>10</span>
-                </span>
-              </label>
+                </label>
+              ))}
             </div>
 
             <p className="mt-3 text-[0.66rem] leading-relaxed text-muted-foreground">
-              Longer sets are generated in batches and take a little more time to
-              compile. Exam questions are written at 5-10 marks each.
+              Longer sets are generated in batches and take more time to compile.
+              Exam-style questions are written at 5–10 marks each.
             </p>
           </div>
 

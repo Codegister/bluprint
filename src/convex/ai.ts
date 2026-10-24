@@ -271,6 +271,86 @@ async function nvidiaChat(
 // ---------------------------------------------------------------------------
 
 /**
+ * Escapes literal newlines/tabs that a model left inside a JSON string. They
+ * are invalid JSON and appear most often in long science answers.
+ */
+function repairJsonControlChars(text: string): string {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (const char of text) {
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        out += char;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        out += char;
+        continue;
+      }
+      if (char === '"') {
+        inString = false;
+        out += char;
+        continue;
+      }
+      if (char === "\n") {
+        out += "\\n";
+        continue;
+      }
+      if (char === "\r") {
+        out += "\\r";
+        continue;
+      }
+      if (char === "\t") {
+        out += "\\t";
+        continue;
+      }
+      out += char;
+      continue;
+    }
+    if (char === '"') inString = true;
+    out += char;
+  }
+  return out;
+}
+
+/**
+ * Models put LaTeX in JSON without escaping the backslash — `\Delta`, `\frac`,
+ * `\uparrow` — which is invalid JSON and made Physics sets fail while other
+ * subjects parsed. Double only the escapes JSON does not recognise, leaving
+ * real escapes such as `\n` and `\"` alone.
+ */
+function repairJsonEscapes(text: string): string {
+  const backslash = String.fromCharCode(92);
+  const valid = new Set(['"', backslash, "/", "b", "f", "n", "r", "t", "u"]);
+  let out = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char !== backslash) {
+      out += char;
+      continue;
+    }
+    const next = text[index + 1] ?? "";
+    const isUnicode = next === "u";
+    const unicodeValid =
+      isUnicode && /^[0-9a-fA-F]{4}$/.test(text.slice(index + 2, index + 6));
+    if (valid.has(next) && (!isUnicode || unicodeValid)) {
+      // A real escape: copy the whole sequence so its own backslash is not
+      // treated as another candidate.
+      const length = isUnicode ? 6 : 2;
+      out += text.slice(index, index + length);
+      index += length - 1;
+      continue;
+    }
+    // LaTeX commands and other unknown escapes: make the backslash literal.
+    out += backslash + backslash;
+  }
+  return out;
+}
+
+/**
  * Some models still print their reasoning inline when thinking can't be turned
  * off. Drop those blocks so JSON extraction looks at the answer only.
  */
@@ -308,7 +388,7 @@ function parsedObjects(text: string): Array<Record<string, unknown>> {
       const start = starts.pop();
       if (start === undefined) continue;
       try {
-        const value = JSON.parse(text.slice(start, i + 1));
+        const value = JSON.parse(repairJsonEscapes(text.slice(start, i + 1)));
         if (value && typeof value === "object" && !Array.isArray(value)) {
           found.push({ start, value: value as Record<string, unknown> });
         }
@@ -345,7 +425,13 @@ function tryParseJson<T>(raw: string): T | null {
     try {
       return JSON.parse(candidate) as T;
     } catch {
-      // Try the next candidate.
+      // LaTeX-heavy answers (Physics, Chemistry) need their escapes repaired
+      // before the second attempt.
+      try {
+        return JSON.parse(repairJsonEscapes(candidate)) as T;
+      } catch {
+        // Try the next candidate.
+      }
     }
   }
   return null;
@@ -577,19 +663,58 @@ async function summariseNotes(
 const CARD_BATCH_SIZE = 20;
 const QUIZ_BATCH_SIZE = 20;
 const EXAM_BATCH_SIZE = 10;
-const MAX_BATCH_ATTEMPTS = 4;
+/** One deck can ask for up to this many of each item (see the builder sliders). */
+const MAX_REQUESTED_ITEMS = 100;
+
+/**
+ * How many items the material can honestly support. A student can ask for 100
+ * of everything, but two paragraphs cannot yield 100 exam-style questions;
+ * without this ceiling the pipeline spends minutes on calls that cannot succeed
+ * and then reports a failed run. These ratios are deliberately generous.
+ */
+function materialLimits(notes: string): { cards: number; quiz: number; exam: number } {
+  const words = notes.trim().split(/\s+/).filter(Boolean).length;
+  const cap = (divisor: number) =>
+    Math.max(1, Math.min(MAX_REQUESTED_ITEMS, Math.floor(words / divisor)));
+  return { cards: cap(12), quiz: cap(30), exam: cap(90) };
+}
+
+/** A usable summary assembled from the notes when the summary call fails. */
+function summaryFromNotes(notes: string): Summary {
+  const clean = notes.replace(/\s+/g, " ").trim();
+  const sentences = clean
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 20);
+  const overview =
+    sentences.slice(0, 3).join(" ") || clean.slice(0, 900) || "Your saved notes.";
+  const keyPoints = (sentences.length > 0 ? sentences : [clean])
+    .slice(0, 8)
+    .map((sentence) => sentence.slice(0, 220));
+  return {
+    overview: overview.slice(0, 1500),
+    keyPoints,
+    examFocus: [],
+  };
+}
 
 async function generateCards(
   apiKeys: string[],
   notes: string,
   target: number,
+  // A wall-clock guard: Convex stops an action that runs too long, so stop
+  // asking for new batches and save what exists instead.
+  deadline = Number.POSITIVE_INFINITY,
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
   const seen = new Set<string>();
 
+  // Enough calls to actually reach the requested count, plus spare attempts for
+  // a malformed reply. A 100-card request needs five batches, not four.
+  const maxAttempts = Math.min(8, Math.ceil(target / CARD_BATCH_SIZE) + 2);
   for (
     let attempt = 0;
-    attempt < MAX_BATCH_ATTEMPTS && cards.length < target;
+    attempt < maxAttempts && cards.length < target && Date.now() < deadline;
     attempt += 1
   ) {
     const want = Math.min(CARD_BATCH_SIZE, target - cards.length);
@@ -623,9 +748,10 @@ async function generateCards(
     let batch: GeneratedCard[] = [];
     try {
       batch = parseCards(raw, want);
-    } catch (error) {
-      if (cards.length === 0) throw error;
-      break;
+    } catch {
+      // A malformed batch costs one attempt, not the whole set. The next call
+      // asks for whatever is still missing.
+      continue;
     }
 
     let added = 0;
@@ -642,9 +768,9 @@ async function generateCards(
     if (added === 0) break;
   }
 
-  if (cards.length < 6) {
+  if (cards.length === 0) {
     throw new Error(
-      "Not enough flashcards could be generated from this material. Add more notes and retry.",
+      "No flashcards could be generated from this material. Add more notes and retry.",
     );
   }
   return cards.slice(0, target);
@@ -654,13 +780,17 @@ async function generateQuiz(
   apiKeys: string[],
   notes: string,
   target: number,
+  deadline = Number.POSITIVE_INFINITY,
 ): Promise<GeneratedQuiz[]> {
   const questions: GeneratedQuiz[] = [];
   const seen = new Set<string>();
 
+  const maxAttempts = Math.min(8, Math.ceil(target / QUIZ_BATCH_SIZE) + 2);
   for (
     let attempt = 0;
-    attempt < MAX_BATCH_ATTEMPTS && questions.length < target;
+    attempt < maxAttempts &&
+    questions.length < target &&
+    Date.now() < deadline;
     attempt += 1
   ) {
     const want = Math.min(QUIZ_BATCH_SIZE, target - questions.length);
@@ -695,9 +825,8 @@ async function generateQuiz(
     let batch: GeneratedQuiz[] = [];
     try {
       batch = parseQuiz(raw, want);
-    } catch (error) {
-      if (questions.length === 0) throw error;
-      break;
+    } catch {
+      continue;
     }
 
     let added = 0;
@@ -712,9 +841,9 @@ async function generateQuiz(
     if (added === 0) break;
   }
 
-  if (questions.length < 3) {
+  if (questions.length === 0) {
     throw new Error(
-      "Not enough quiz questions could be generated. Retry the build or add more material.",
+      "No quiz questions could be generated. Retry the build or add more material.",
     );
   }
   return questions.slice(0, target);
@@ -725,14 +854,18 @@ async function generateExams(
   notes: string,
   context: StudyContext | undefined,
   target: number,
+  deadline = Number.POSITIVE_INFINITY,
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText(context);
   const exams: GeneratedExam[] = [];
   const seen = new Set<string>();
 
+  const maxAttempts = Math.min(14, Math.ceil(target / EXAM_BATCH_SIZE) + 2);
   for (
     let attempt = 0;
-    attempt < MAX_BATCH_ATTEMPTS && exams.length < target;
+    attempt < maxAttempts &&
+    exams.length < target &&
+    Date.now() < deadline;
     attempt += 1
   ) {
     const want = Math.min(EXAM_BATCH_SIZE, target - exams.length);
@@ -770,9 +903,8 @@ async function generateExams(
     let batch: GeneratedExam[] = [];
     try {
       batch = parseExams(raw, want);
-    } catch (error) {
-      if (exams.length === 0) throw error;
-      break;
+    } catch {
+      continue;
     }
 
     let added = 0;
@@ -1334,35 +1466,99 @@ export const processStudySet = action({
         level: existing.level,
       };
 
-      // Sets created before the sliders existed fall back to the longer
-      // defaults; older sets stay readable and can be rebuilt at any length.
-      const targetCards = Math.min(30, Math.max(10, existing.targetCardCount ?? 20));
-      const targetQuiz = Math.min(20, Math.max(5, existing.targetQuizCount ?? 10));
-      const targetExam = Math.min(10, Math.max(2, existing.targetExamCount ?? 4));
+      // Sets created before the sliders existed fall back to the old defaults;
+      // every set is capped at 100 and at whatever the notes can support.
+      const requestedCards = Math.min(
+        MAX_REQUESTED_ITEMS,
+        Math.max(1, existing.targetCardCount ?? 20),
+      );
+      const requestedQuiz = Math.min(
+        MAX_REQUESTED_ITEMS,
+        Math.max(1, existing.targetQuizCount ?? 10),
+      );
+      const requestedExam = Math.min(
+        MAX_REQUESTED_ITEMS,
+        Math.max(1, existing.targetExamCount ?? 4),
+      );
+      const limits = materialLimits(notes);
+      const targetCards = Math.min(requestedCards, limits.cards);
+      const targetQuiz = Math.min(requestedQuiz, limits.quiz);
+      const targetExam = Math.min(requestedExam, limits.exam);
+      // Leave room inside Convex's action limit for the final writes.
+      const deadline = Date.now() + 8 * 60 * 1000;
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: "Writing your summary…",
       });
-      const summary = await summariseNotes(apiKeys, notes, context);
+      const generatedSummary = await summariseNotes(apiKeys, notes, context).catch(
+        () => null,
+      );
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: `Building ${targetCards} detail-heavy flashcards…`,
       });
-      const cards = await generateCards(apiKeys, notes, targetCards);
+      const cards = await generateCards(apiKeys, notes, targetCards, deadline).catch(
+        () => [],
+      );
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: `Writing ${targetQuiz} quiz questions…`,
       });
-      const quiz = await generateQuiz(apiKeys, notes, targetQuiz);
+      const quiz = await generateQuiz(apiKeys, notes, targetQuiz, deadline).catch(
+        () => [],
+      );
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: `Drafting ${targetExam} exam questions…`,
       });
-      const exams = await generateExams(apiKeys, notes, context, targetExam);
+      const exams = await generateExams(
+        apiKeys,
+        notes,
+        context,
+        targetExam,
+        deadline,
+      ).catch(() => []);
+
+      // A failed stage should not lose the rest of the set. Only a run where
+      // nothing at all came back is a real failure, and it gets a clear message.
+      const summary = generatedSummary ?? summaryFromNotes(notes);
+      if (
+        !generatedSummary &&
+        cards.length === 0 &&
+        quiz.length === 0 &&
+        exams.length === 0
+      ) {
+        throw new Error(
+          "NVIDIA did not return any usable material for this set. Your notes are saved; rebuild in a moment.",
+        );
+      }
+
+      const missed: string[] = [];
+      if (!generatedSummary) missed.push("the summary");
+      if (cards.length === 0) missed.push("the flashcards");
+      if (quiz.length === 0) missed.push("the quiz");
+      if (exams.length === 0) missed.push("the exam questions");
+      const capped =
+        requestedCards > limits.cards ||
+        requestedQuiz > limits.quiz ||
+        requestedExam > limits.exam;
+      const note = [
+        capped
+          ? `The notes support about ${limits.cards} flashcards, ${limits.quiz} quiz questions and ${limits.exam} exam questions, so Bluprint built the maximum it could.`
+          : "",
+        missed.length > 0
+          ? `NVIDIA could not finish ${missed.join(", ")}. Everything that did generate is saved; rebuild to fill the gaps.`
+          : "",
+        Date.now() >= deadline
+          ? "The build reached its time limit before every batch finished. Rebuild to add the rest."
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
 
       await ctx.runMutation(internal.studySets.completeGeneration, {
         setId,
@@ -1370,6 +1566,7 @@ export const processStudySet = action({
         cards,
         quiz,
         exams,
+        generationNote: note || undefined,
       });
       return { started: true };
     } catch (error) {
