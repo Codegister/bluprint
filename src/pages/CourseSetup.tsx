@@ -7,23 +7,12 @@ import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import {
   SUBJECT_GROUPS,
   SUBJECTS,
-  subjectMeta,
   tierChoices,
   tierLabel,
 } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Loader2,
-  Plus,
-  Search,
-  Sparkles,
-  Wand2,
-  X,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -210,22 +199,19 @@ export default function CourseSetup() {
 
   return (
     <AppShell>
-      <div className="flex items-center gap-3">
-        <Link
-          to="/dashboard"
-          aria-label="Back to home"
-          className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-white text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink"
-        >
-          <ArrowLeft className="size-4" />
-        </Link>
-        <div>
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#7C5CFF]">
-            Course pathway
-          </p>
-          <h1 className="font-display text-[1.6rem] font-bold leading-tight text-brand-ink sm:text-[2rem]">
-            Set up your courses
-          </h1>
-        </div>
+      <Link
+        to="/dashboard"
+        className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
+      >
+        Back to home
+      </Link>
+      <div className="mt-4">
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#7C5CFF]">
+          Course pathway
+        </p>
+        <h1 className="font-display text-[1.6rem] font-bold leading-tight text-brand-ink sm:text-[2rem]">
+          Set up your courses
+        </h1>
       </div>
 
       <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
@@ -241,33 +227,16 @@ export default function CourseSetup() {
         ].map((item, index) => (
           <div key={item.number} className="flex items-center gap-2">
             {index > 0 && <span className="h-px w-6 bg-border sm:w-10" />}
-            <button
-              type="button"
-              onClick={() => {
-                if (item.number === 1) setStep(1);
-                if (item.number === 2 && selectedCount > 0) setStep(2);
-              }}
+            <span
               className={cn(
-                "flex items-center gap-2 rounded-full px-2.5 py-1.5 text-[0.8rem] font-semibold transition-colors",
+                "rounded-full px-3 py-1.5 text-[0.8rem] font-semibold",
                 step === item.number
                   ? "bg-[#191B27] text-white"
-                  : "text-muted-foreground hover:bg-brand-panel",
+                  : "text-muted-foreground",
               )}
             >
-              <span
-                className={cn(
-                  "grid size-5 place-items-center rounded-full text-[0.68rem]",
-                  step === item.number
-                    ? "bg-white/15 text-white"
-                    : step > item.number
-                      ? "bg-[#EAFBF0] text-[#128A4C]"
-                      : "bg-brand-panel text-brand-ink/60",
-                )}
-              >
-                {step > item.number ? <Check className="size-3" /> : item.number}
-              </span>
-              {item.label}
-            </button>
+              {item.number}. {item.label}
+            </span>
           </div>
         ))}
       </div>
@@ -307,15 +276,8 @@ export default function CourseSetup() {
                       : "border-border bg-white hover:bg-brand-panel",
                   )}
                 >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="font-display text-[0.98rem] font-bold text-brand-ink">
-                      {option}
-                    </span>
-                    {active && (
-                      <span className="grid size-5 place-items-center rounded-full bg-[#7C5CFF] text-white">
-                        <Check className="size-3" />
-                      </span>
-                    )}
+                  <span className="block font-display text-[0.98rem] font-bold text-brand-ink">
+                    {option}
                   </span>
                   <span className="mt-0.5 block text-[0.74rem] text-muted-foreground">
                     {levelHints[option] ?? "Full specification pathway"}
@@ -363,7 +325,6 @@ export default function CourseSetup() {
               className="h-11 rounded-full bg-[#191B27] px-6 font-semibold text-white hover:bg-[#2A2D3E]"
             >
               Choose courses
-              <ArrowRight className="size-4" />
             </Button>
           </div>
         </section>
@@ -383,20 +344,19 @@ export default function CourseSetup() {
               <button
                 type="button"
                 onClick={() => setStep(1)}
-                className="rounded-full border border-border px-3 py-1.5 text-[0.76rem] font-semibold text-brand-ink/70 hover:bg-brand-panel"
+                className="text-[0.78rem] font-semibold text-[#5B3DF5] hover:underline"
               >
-                Change qualification
+                Change level or board
               </button>
             </div>
 
-            <div className="relative mt-4">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="mt-4">
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search subjects"
                 aria-label="Search subjects"
-                className="h-11 rounded-2xl border-border bg-white pl-10 text-sm shadow-none placeholder:text-muted-foreground/60"
+                className="h-11 rounded-2xl border-border bg-white px-4 text-sm shadow-none placeholder:text-muted-foreground/60"
               />
             </div>
 
@@ -421,7 +381,6 @@ export default function CourseSetup() {
                 variant="outline"
                 className="h-10 shrink-0 rounded-full border-border bg-white px-4 font-semibold text-brand-ink hover:bg-brand-panel"
               >
-                <Plus className="size-4" />
                 Add
               </Button>
             </div>
@@ -441,7 +400,6 @@ export default function CourseSetup() {
                       {subjects.map((subject) => {
                         const draft = selected[subject.name];
                         const active = Boolean(draft);
-                        const Icon = subject.icon;
                         return (
                           <button
                             key={subject.name}
@@ -455,15 +413,6 @@ export default function CourseSetup() {
                                 : "border-border bg-white hover:bg-brand-panel",
                             )}
                           >
-                            <span
-                              className={cn(
-                                "grid size-8 shrink-0 place-items-center rounded-xl",
-                                subject.tint,
-                              )}
-                              style={{ color: subject.color }}
-                            >
-                              <Icon className="size-4" />
-                            </span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-[0.84rem] font-semibold text-brand-ink">
                                 {subject.name}
@@ -476,11 +425,6 @@ export default function CourseSetup() {
                                 </span>
                               )}
                             </span>
-                            {active && (
-                              <span className="grid size-4 shrink-0 place-items-center rounded-full bg-[#191B27] text-white">
-                                <Check className="size-2.5" />
-                              </span>
-                            )}
                           </button>
                         );
                       })}
@@ -511,8 +455,6 @@ export default function CourseSetup() {
             ) : (
               <div className="mt-3 space-y-2">
                 {selectedNames.map((name) => {
-                  const meta = subjectMeta(name);
-                  const Icon = meta.icon;
                   const course = selected[name]!;
                   const { variants, tiers } = tierChoices(level, name);
                   return (
@@ -521,15 +463,6 @@ export default function CourseSetup() {
                       className="rounded-2xl border border-border px-3 py-2.5"
                     >
                       <div className="flex items-center gap-1.5">
-                        <span
-                          className={cn(
-                            "grid size-7 shrink-0 place-items-center rounded-lg",
-                            meta.tint,
-                          )}
-                          style={{ color: meta.color }}
-                        >
-                          <Icon className="size-3.5" />
-                        </span>
                         <span className="min-w-0 flex-1 truncate text-[0.82rem] font-semibold text-brand-ink">
                           {name}
                         </span>
@@ -549,14 +482,14 @@ export default function CourseSetup() {
                           type="button"
                           aria-label={`Remove ${name}`}
                           onClick={() => toggle(name)}
-                          className="grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+                          className="shrink-0 px-1 text-[0.66rem] font-semibold text-muted-foreground hover:text-brand-ink"
                         >
-                          <X className="size-3.5" />
+                          Remove
                         </button>
                       </div>
 
                       {(variants.length > 0 || tiers.length > 0) && (
-                        <div className="mt-2 space-y-1.5 pl-9">
+                        <div className="mt-2 space-y-1.5">
                           {variants.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1">
                               <span className="mr-0.5 text-[0.58rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
@@ -617,25 +550,22 @@ export default function CourseSetup() {
               </p>
             )}
 
-            <Button
-              onClick={build}
-              disabled={saving || selectedCount === 0}
-              className="mt-4 h-11 w-full rounded-full bg-[#191B27] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50"
-            >
-              {saving ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Wand2 className="size-4" />
-              )}
-              {saving
-                ? "Queuing pathways…"
-                : `Build ${selectedCount || ""} pathway${selectedCount === 1 ? "" : "s"}`}
-            </Button>
-            <p className="mt-2.5 flex items-start gap-1.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-              <Sparkles className="mt-0.5 size-3 shrink-0 text-[#7C5CFF]" />
-              Each course is mapped in the background. You can close this tab and
-              come back when it's ready.
-            </p>
+            <div className="hidden lg:block">
+              <Button
+                onClick={build}
+                disabled={saving || selectedCount === 0}
+                className="mt-4 h-11 w-full rounded-full bg-[#191B27] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                {saving
+                  ? "Queuing pathways…"
+                  : `Build ${selectedCount || ""} pathway${selectedCount === 1 ? "" : "s"}`}
+              </Button>
+              <p className="mt-2.5 text-[0.7rem] leading-relaxed text-muted-foreground">
+                Each course is mapped in the background. You can close this tab and
+                come back when it's ready.
+              </p>
+            </div>
           </aside>
 
           <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
@@ -653,11 +583,7 @@ export default function CourseSetup() {
                 disabled={saving || selectedCount === 0}
                 className="h-10 shrink-0 rounded-full bg-[#191B27] px-5 text-[0.85rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50"
               >
-                {saving ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Wand2 className="size-4" />
-                )}
+                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
                 {saving ? "Queuing…" : "Build pathways"}
               </Button>
             </div>

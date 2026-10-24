@@ -6,7 +6,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
-import { AlertCircle, ArrowUp, Loader2, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const SUGGESTIONS = [
@@ -75,21 +75,13 @@ export function TutorChat({
   return (
     <div className="mx-auto w-full max-w-3xl">
       <section className="gizmo-card overflow-hidden">
-        <header className="flex items-center gap-3 border-b border-border px-4 py-4 sm:px-5">
-          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#F3ECFF] text-[#5B3DF5]">
-            <Sparkles className="size-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-display text-[0.98rem] font-bold text-brand-ink">
-              AI tutor
-            </p>
-            <p className="truncate text-[0.74rem] text-muted-foreground">
-              {qualification ? `${qualification} · ` : ""}Grounded in this set's notes
-            </p>
-          </div>
-          <span className="hidden shrink-0 rounded-full bg-[#EAFBF0] px-2.5 py-1 text-[0.68rem] font-semibold text-[#128A4C] sm:inline-flex">
-            Saved to this set
-          </span>
+        <header className="border-b border-border px-4 py-4 sm:px-5">
+          <p className="font-display text-[0.98rem] font-bold text-brand-ink">
+            AI tutor
+          </p>
+          <p className="truncate text-[0.74rem] text-muted-foreground">
+            {qualification ? `${qualification} · ` : ""}Grounded in this set's notes
+          </p>
         </header>
 
         <div
@@ -133,11 +125,6 @@ export function TutorChat({
                     message.role === "user" && "justify-end",
                   )}
                 >
-                  {message.role === "assistant" && (
-                    <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-[#F3ECFF] text-[#5B3DF5]">
-                      <Sparkles className="size-3.5" />
-                    </span>
-                  )}
                   <div
                     className={cn(
                       "max-w-[86%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-[0.9rem] leading-relaxed",
@@ -159,9 +146,6 @@ export function TutorChat({
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5">
-                    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#F3ECFF] text-[#5B3DF5]">
-                      <Sparkles className="size-3.5" />
-                    </span>
                     <div className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-brand-panel px-4 py-3.5">
                       {[0, 1, 2].map((dot) => (
                         <span
@@ -181,8 +165,7 @@ export function TutorChat({
 
         <div className="border-t border-border px-4 py-4 sm:px-5">
           {error && (
-            <p className="mb-3 flex items-start gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
-              <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+            <p className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
               {error}
             </p>
           )}
@@ -202,21 +185,16 @@ export function TutorChat({
               rows={2}
               maxLength={1200}
               disabled={sending}
-              className="min-h-[76px] resize-none rounded-2xl border-border bg-white pb-9 pr-14 text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+              className="min-h-[76px] resize-none rounded-2xl border-border bg-white pb-10 pr-20 text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
             />
             <Button
               type="button"
-              size="icon"
+              size="sm"
               onClick={() => void send()}
               disabled={!draft.trim() || sending}
-              aria-label="Send question"
-              className="absolute bottom-2.5 right-2.5 size-9 rounded-full bg-[#191B27] text-white hover:bg-[#2A2D3E] disabled:bg-[#191B27]/20"
+              className="absolute bottom-2.5 right-2.5 h-8 rounded-full bg-[#191B27] px-3 text-[0.75rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:bg-[#191B27]/20"
             >
-              {sending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <ArrowUp className="size-4" />
-              )}
+              {sending ? <Loader2 className="size-3.5 animate-spin" /> : "Send"}
             </Button>
           </div>
 

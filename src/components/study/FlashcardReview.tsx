@@ -6,7 +6,6 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Clock, RotateCcw, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -87,7 +86,6 @@ export function FlashcardReview({
           <Mascot size={112} float={false} />
         </div>
         <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#128A5B]">
-          <Check className="size-3.5" />
           Session complete
         </p>
         <h3 className="mt-3 font-display text-2xl font-bold text-brand-ink">
@@ -123,7 +121,6 @@ export function FlashcardReview({
             onClick={restart}
             className="h-11 rounded-full border-border bg-white px-6 font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
           >
-            <RotateCcw className="size-4" />
             Review again
           </Button>
           {onTakeQuiz && (
@@ -132,7 +129,6 @@ export function FlashcardReview({
               className="h-11 rounded-full bg-[#191B27] px-6 font-semibold text-white hover:bg-[#2A2D3E]"
             >
               Take quiz
-              <ArrowRight className="size-4" />
             </Button>
           )}
         </div>
@@ -148,8 +144,7 @@ export function FlashcardReview({
         </p>
         <div className="flex items-center gap-2">
           {dueCount > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF3E8] px-2.5 py-1 text-[0.7rem] font-semibold text-[#C2660F]">
-              <Clock className="size-3" />
+            <span className="inline-flex items-center rounded-full bg-[#FFF3E8] px-2.5 py-1 text-[0.7rem] font-semibold text-[#C2660F]">
               {dueCount} due now
             </span>
           )}
@@ -189,8 +184,7 @@ export function FlashcardReview({
                 <span className="rounded-full bg-[#F3ECFF] px-3 py-1 text-xs font-semibold text-[#5B3DF5]">
                   Question
                 </span>
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                  <Sparkles className="size-3.5" />
+                <span className="text-xs font-medium text-muted-foreground">
                   Tap to reveal
                 </span>
               </div>
@@ -219,8 +213,7 @@ export function FlashcardReview({
               <p className="overflow-y-auto py-4 text-[1.05rem] leading-relaxed text-brand-ink sm:text-[1.15rem]">
                 {current.back}
               </p>
-              <div className="flex items-center gap-1.5 border-t border-[#D7F0E3] pt-4 text-xs font-medium text-[#128A5B]">
-                <Check className="size-3.5" />
+              <div className="border-t border-[#D7F0E3] pt-4 text-xs font-medium text-[#128A5B]">
                 Compare with your own wording
               </div>
             </div>
@@ -247,14 +240,12 @@ export function FlashcardReview({
               onClick={() => handleOutcome("again")}
               className="h-12 rounded-full border-[#F6D2D6] bg-[#FFEEF0] text-sm font-semibold text-[#D24350] hover:bg-[#FFE3E6]"
             >
-              <X className="size-4" />
               Again
             </Button>
             <Button
               onClick={() => handleOutcome("known")}
               className="h-12 rounded-full border border-[#BDEBD3] bg-[#E9FBF3] text-sm font-semibold text-[#128A5B] hover:bg-[#DDF7EB]"
             >
-              <Check className="size-4" />
               Got it
             </Button>
           </motion.div>

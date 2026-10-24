@@ -78,24 +78,25 @@ niche, exam-distinguishing detail rather than broad topic headings.
 5. **Review on a schedule** — flashcards use a simplified SM-2 schedule: a card you miss
    returns in ten minutes, a card you recall returns tomorrow and then at widening
    intervals (×2.5 ease, capped at 180 days). Each deck shows how many cards are due.
-6. **Keep a habit** — the dashboard shows a daily goal of 10 reviewed cards and a streak.
+6. **Keep a habit** — the dashboard shows how many cards you have reviewed today against your daily goal.
 7. **Ask the tutor** — every set has an AI tutor tab. It answers using that set's notes,
    knows the course, board, and level, and keeps the conversation saved so you can come
    back to it. Suggested first questions get you started; exam practice is one question at
    a time.
-8. **Edit and rebuild** — the pencil next to a set's title changes its name, course,
+8. **Edit and rebuild** — **Set settings** next to a set's title changes its name, course,
    board, or level. "Save and rebuild" regenerates the summary, cards, quiz, and exam
    questions so the new board conventions apply; your notes and uploads are kept.
 9. **Persist** — study sets, extracted notes, uploads, card progress, due dates, quiz
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
 
-After signing in, the main screen is the **Home** dashboard: the two pathways, a course table
-with topic progress and material counts, your daily goal and streak, the decks you were last
-working on, saved sets with due counts, card mastery and quiz averages, and delete controls.
-Opening a set gives you five tabs — Summary, Flashcards, Quiz, Exam, and Tutor — plus an
-**Ask the tutor** shortcut in the header. Sets built from a course topic link back to that
-course.
+After signing in, the main screen is the **Home** dashboard. It keeps one primary action,
+**New study set**, for uploading notes, and one course action, **Add courses**, for building
+AI revision pathways. Below those sit a course table with topic progress and material counts,
+and a saved-sets table with status, due counts, card mastery and last quiz score. Opening a
+set gives you five tabs — Summary, Flashcards, Quiz, Exam, and Tutor — plus a **Set settings**
+button for renaming, rebuilding, or deleting it. Sets built from a course topic link back to
+that course.
 
 ## Assumptions
 
@@ -275,7 +276,7 @@ src/
   pages/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
-    Dashboard.tsx        two pathways, course table, and saved study sets
+    Dashboard.tsx        primary actions, course table, and saved study sets
     CourseSetup.tsx      level, board, and multi-subject course picker
     Course.tsx           one course workspace: units, topics, progress, topic sets
     StudySet.tsx         set detail, compile progress, and the five study tabs

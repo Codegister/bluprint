@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/AppShell";
-import { DeckGlyph, Mascot } from "@/components/Mascot";
+import { Mascot } from "@/components/Mascot";
 import { ExamPractice } from "@/components/study/ExamPractice";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { QuizRunner } from "@/components/study/QuizRunner";
@@ -17,56 +17,21 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
-import {
-  ArrowLeft,
-  BookOpen,
-  Camera,
-  Check,
-  FileText,
-  Layers,
-  ListChecks,
-  Loader2,
-  Lock,
-  MessagesSquare,
-  PenLine,
-  Pencil,
-  RotateCcw,
-  Sparkles,
-  Target,
-  Video,
-} from "lucide-react";
+import { Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 
 type Tab = "summary" | "cards" | "quiz" | "exam" | "tutor";
 
-const sourceIcons = {
-  text: FileText,
-  photos: Camera,
-  video: Video,
-} satisfies Record<Doc<"studySets">["sourceType"], typeof FileText>;
-
-const tabItems: Array<{ value: Tab; label: string; icon: typeof BookOpen }> = [
-  { value: "summary", label: "Summary", icon: BookOpen },
-  { value: "cards", label: "Flashcards", icon: Layers },
-  { value: "quiz", label: "Quiz", icon: ListChecks },
-  { value: "exam", label: "Exam", icon: PenLine },
-  { value: "tutor", label: "Tutor", icon: MessagesSquare },
+const tabItems: Array<{ value: Tab; label: string }> = [
+  { value: "summary", label: "Summary" },
+  { value: "cards", label: "Flashcards" },
+  { value: "quiz", label: "Quiz" },
+  { value: "exam", label: "Exam" },
+  { value: "tutor", label: "Tutor" },
 ];
-
-const pipelineStages = ["Read", "Summary", "Cards", "Quiz", "Exam"] as const;
-
-function currentStage(progress?: string): number {
-  const value = (progress ?? "").toLowerCase();
-  if (value.includes("exam")) return 4;
-  if (value.includes("quiz")) return 3;
-  if (value.includes("flash")) return 2;
-  if (value.includes("summar")) return 1;
-  return 0;
-}
 
 function LoadingCard() {
   return (
@@ -113,8 +78,6 @@ function BuildingPanel({
   onRetry: () => void;
   retrying: boolean;
 }) {
-  const activeStage = currentStage(set.progress);
-
   return (
     <div className="mt-6 overflow-hidden rounded-[2rem] border border-border bg-card p-6 sm:p-7">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
@@ -135,31 +98,11 @@ function BuildingPanel({
             seconds. You can leave this page — the run continues on the server.
           </p>
 
-          <div className="mt-4 grid gap-1.5 sm:grid-cols-5">
-            {pipelineStages.map((stage, index) => {
-              const complete = index < activeStage;
-              const active = index === activeStage;
-              return (
-                <div
-                  key={stage}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[0.72rem] font-semibold",
-                    complete && "bg-[#EAFBF0] text-[#128A4C]",
-                    active && "bg-[#F3ECFF] text-[#5B3DF5]",
-                    !complete && !active && "bg-brand-panel text-muted-foreground",
-                  )}
-                >
-                  {complete ? (
-                    <Check className="size-3" />
-                  ) : active ? (
-                    <Loader2 className="size-3 animate-spin" />
-                  ) : (
-                    <span className="size-1 rounded-full bg-current opacity-40" />
-                  )}
-                  {stage}
-                </div>
-              );
-            })}
+          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-brand-panel">
+            <div
+              className="h-full w-1/3 animate-pulse rounded-full bg-[#7C5CFF]"
+              aria-hidden
+            />
           </div>
 
           {stale && (
@@ -200,11 +143,8 @@ function ErrorPanel({
 }) {
   return (
     <div className="mt-6 rounded-[2rem] border border-border bg-card p-6 sm:p-7">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#FFEEF0] text-[#C23B49]">
-          <Lock className="size-5" />
-        </span>
-        <div className="flex-1">
+      <div>
+        <div>
           <p className="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[#C23B49]">
             Build failed
           </p>
@@ -259,28 +199,18 @@ function SummaryTab({
     <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
       <div className="space-y-3">
         <section className="rounded-[2rem] border border-border bg-card p-6">
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-2xl bg-[#F3ECFF] text-[#5B3DF5]">
-              <BookOpen className="size-4" />
-            </span>
-            <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-              Overview
-            </h2>
-          </div>
+          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
+            Overview
+          </h2>
           <p className="mt-3 whitespace-pre-wrap text-[0.94rem] leading-relaxed text-brand-ink/80">
             {summary.overview}
           </p>
         </section>
 
         <section className="rounded-[2rem] border border-border bg-card p-6">
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-2xl bg-[#EAFBF0] text-[#128A4C]">
-              <Check className="size-4" />
-            </span>
-            <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-              Key points
-            </h2>
-          </div>
+          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
+            Key points
+          </h2>
           <ol className="mt-4 space-y-3">
             {summary.keyPoints.map((point, index) => (
               <li key={point} className="flex items-start gap-3">
@@ -296,14 +226,9 @@ function SummaryTab({
 
       <aside className="space-y-3">
         <section className="rounded-[2rem] border border-border bg-[#FFFBEC] p-6">
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-2xl bg-[#FFF3D1] text-[#96650A]">
-              <Target className="size-4" />
-            </span>
-            <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-              Exam focus
-            </h2>
-          </div>
+          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
+            Exam focus
+          </h2>
           <ul className="mt-3 space-y-2.5">
             {summary.examFocus.map((point) => (
               <li
@@ -318,14 +243,9 @@ function SummaryTab({
         </section>
 
         <section className="rounded-[2rem] border border-border bg-card p-6">
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-2xl bg-[#E9F0FF] text-[#2563EB]">
-              <FileText className="size-4" />
-            </span>
-            <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-              Source material
-            </h2>
-          </div>
+          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
+            Source material
+          </h2>
 
           {sourceImages.length > 0 && (
             <div className="mt-3 grid grid-cols-4 gap-2">
@@ -407,51 +327,42 @@ export default function StudySet() {
     if (details === null) return <MissingCard />;
 
     const set = details.set;
-    const SourceIcon = sourceIcons[set.sourceType];
     const mastery = percent(set.knownCount, set.cardCount);
     const qualification = qualificationLabel(set);
 
     return (
       <>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             to={set.courseId ? `/courses/${set.courseId}` : "/dashboard"}
-            aria-label={set.courseId ? "Back to course" : "Back to home"}
-            className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-white text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink"
+            className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
           >
-            <ArrowLeft className="size-4" />
+            {set.courseId ? "Back to course" : "Back to home"}
           </Link>
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-1.5">
-              <h1 className="min-w-0 truncate font-display text-[1.5rem] font-bold leading-tight text-brand-ink sm:text-[1.8rem]">
-                {set.title}
-              </h1>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Edit set details"
-                title="Edit set details"
-                onClick={() => setSettingsOpen(true)}
-                className="shrink-0 rounded-full text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
-              >
-                <Pencil className="size-3.5" />
-              </Button>
-            </div>
-            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <SourceIcon className="size-3.5" />
-                {set.sourceLabel || sourceLabel(set.sourceType)}
-              </span>
-              <span className="text-brand-ink/20">•</span>
-              <span>{set.cardCount} cards</span>
-              <span className="text-brand-ink/20">•</span>
-              <span>{set.quizCount} quiz</span>
-              <span className="text-brand-ink/20">•</span>
-              <span>{set.examCount} exam</span>
-              <span className="text-brand-ink/20">•</span>
-              <span>Updated {relativeDate(set.updatedAt)}</span>
-            </p>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSettingsOpen(true)}
+            className="ml-auto h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+          >
+            Set settings
+          </Button>
+        </div>
+        <div className="mt-1 min-w-0">
+          <h1 className="truncate font-display text-[1.5rem] font-bold leading-tight text-brand-ink sm:text-[1.8rem]">
+            {set.title}
+          </h1>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground">
+            <span>{set.sourceLabel || sourceLabel(set.sourceType)}</span>
+            <span className="text-brand-ink/20">•</span>
+            <span>{set.cardCount} cards</span>
+            <span className="text-brand-ink/20">•</span>
+            <span>{set.quizCount} quiz</span>
+            <span className="text-brand-ink/20">•</span>
+            <span>{set.examCount} exam</span>
+            <span className="text-brand-ink/20">•</span>
+            <span>Updated {relativeDate(set.updatedAt)}</span>
+          </p>
         </div>
 
         {set.status === "error" ? (
@@ -471,20 +382,7 @@ export default function StudySet() {
                   {qualification}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => setTab("tutor")}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#D8CCFF] bg-[#F7F3FF] px-3 py-1.5 text-[0.75rem] font-semibold text-[#5B3DF5] transition-colors hover:bg-[#F3ECFF]"
-              >
-                <MessagesSquare className="size-3.5" />
-                Ask the tutor
-              </button>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EAFBF0] px-3 py-1.5 text-[0.75rem] font-semibold text-[#128A4C]">
-                <span className="size-1.5 rounded-full bg-[#22A06B]" />
-                Ready to study
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
-                <Sparkles className="size-3.5 text-[#7C5CFF]" />
+              <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
                 {mastery}% of cards known
               </span>
               {set.lastStudiedAt && (
@@ -506,7 +404,6 @@ export default function StudySet() {
             >
               <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0 sm:w-auto">
                 {tabItems.map((item) => {
-                  const Icon = item.icon;
                   const count =
                     item.value === "cards"
                       ? set.cardCount
@@ -521,7 +418,6 @@ export default function StudySet() {
                       value={item.value}
                       className="h-10 gap-2 rounded-full border border-border bg-white px-4 text-[0.85rem] font-semibold text-brand-ink/70 shadow-none transition-colors data-[state=active]:border-[#191B27] data-[state=active]:bg-[#191B27] data-[state=active]:text-white data-[state=active]:shadow-none"
                     >
-                      <Icon className="size-4" />
                       {item.label}
                       {count !== null && (
                         <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
@@ -557,14 +453,14 @@ export default function StudySet() {
                 />
               </TabsContent>
             </Tabs>
-
-            <SetSettingsDialog
-              set={set}
-              open={settingsOpen}
-              onOpenChange={setSettingsOpen}
-            />
           </>
         )}
+
+        <SetSettingsDialog
+          set={set}
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+        />
       </>
     );
   })();

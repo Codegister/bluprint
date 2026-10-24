@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,8 +23,9 @@ import { readableError } from "@/lib/errors";
 import { EXAM_BOARDS, STUDY_LEVELS, qualificationLabel } from "@/lib/examBoards";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
-import { Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 /**
@@ -34,7 +45,9 @@ export function SetSettingsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const updateDetails = useMutation(api.studySets.updateDetails);
+  const removeSet = useMutation(api.studySets.remove);
   const processSet = useAction(api.ai.processStudySet);
+  const navigate = useNavigate();
 
   const [title, setTitle] = useState(set.title);
   const [course, setCourse] = useState(set.course ?? "");
@@ -42,6 +55,8 @@ export function SetSettingsDialog({
   const [level, setLevel] = useState(set.level ?? "");
   const [saving, setSaving] = useState<"save" | "rebuild" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Re-sync every time the dialog opens so a cancelled edit is discarded.
   useEffect(() => {
@@ -92,6 +107,21 @@ export function SetSettingsDialog({
   };
 
   const qualification = qualificationLabel({ examBoard, level, course });
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await removeSet({ setId: set._id });
+      toast.success("Set deleted.");
+      setConfirmingDelete(false);
+      onOpenChange(false);
+      navigate("/dashboard");
+    } catch (deleteError) {
+      toast.error(readableError(deleteError, "Could not delete that set."));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <Dialog
@@ -201,8 +231,7 @@ export function SetSettingsDialog({
           </div>
 
           {qualification && (
-            <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-3 py-1.5 text-[0.75rem] font-semibold text-brand-ink/70">
-              <Sparkles className="size-3.5 text-[#7C5CFF]" />
+            <p className="mt-4 inline-flex items-center rounded-full bg-brand-panel px-3 py-1.5 text-[0.75rem] font-semibold text-brand-ink/70">
               {qualification}
             </p>
           )}
@@ -244,15 +273,54 @@ export function SetSettingsDialog({
               onClick={() => void save(true)}
               className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E]"
             >
-              {saving === "rebuild" ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
+              {saving === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : null}
               Save and rebuild
             </Button>
           </div>
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+            <p className="text-[0.72rem] leading-relaxed text-muted-foreground">
+              Deleting removes this set, its cards, quizzes and uploaded images.
+            </p>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              className="text-[0.78rem] font-semibold text-destructive underline-offset-2 hover:underline"
+            >
+              Delete set
+            </button>
+          </div>
         </div>
+
+        <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+          <AlertDialogContent className="rounded-3xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display">
+                Delete “{set.title}”?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-muted-foreground">
+                This removes the extracted notes, flashcards, quiz, exam practice and
+                uploaded images. It cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting} className="rounded-full">
+                Keep set
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleting}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void handleDelete();
+                }}
+                className="rounded-full bg-destructive text-white hover:bg-destructive/90"
+              >
+                {deleting ? <Loader2 className="size-4 animate-spin" /> : null}
+                Delete set
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

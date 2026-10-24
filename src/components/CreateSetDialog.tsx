@@ -16,18 +16,7 @@ import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import { compressImage, extractVideoFrames } from "@/lib/media";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import {
-  AlertCircle,
-  Camera,
-  FileText,
-  ImagePlus,
-  Loader2,
-  Sparkles,
-  Trash2,
-  Upload,
-  Video,
-  X,
-} from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -293,8 +282,7 @@ export function CreateSetDialog({
 
         <div className="px-6 pb-6 sm:px-7">
           {ai?.configured === false && (
-            <div className="mb-4 flex items-start gap-2.5 rounded-2xl bg-[#FFF6E5] px-3.5 py-3">
-              <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#B47700]" />
+            <div className="mb-4 rounded-2xl bg-[#FFF6E5] px-3.5 py-3">
               <p className="text-xs leading-relaxed text-[#8A5D00]">
                 NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace
                 owner to add it before compiling a set.
@@ -449,9 +437,9 @@ export function CreateSetDialog({
           >
             <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-full bg-brand-panel p-1">
               {[
-                { value: "photos", label: "Photos", icon: <Camera className="size-4" /> },
-                { value: "video", label: "Video", icon: <Video className="size-4" /> },
-                { value: "text", label: "Paste", icon: <FileText className="size-4" /> },
+                { value: "photos", label: "Photos" },
+                { value: "video", label: "Video" },
+                { value: "text", label: "Paste" },
               ].map((tab) => (
                 <TabsTrigger
                   key={tab.value}
@@ -459,17 +447,13 @@ export function CreateSetDialog({
                   disabled={isLoading}
                   className="h-9 gap-2 rounded-full text-sm font-semibold text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm"
                 >
-                  {tab.icon}
-                  {tab.label}
+                {tab.label}
                 </TabsTrigger>
               ))}
             </TabsList>
 
             <TabsContent value="photos" className="mt-0">
               <label className={cn(dropzoneClass, isLoading && "pointer-events-none opacity-60")}>
-                <span className="grid size-11 place-items-center rounded-2xl bg-[#F3ECFF] text-[#5B3DF5]">
-                  <ImagePlus className="size-5" />
-                </span>
                 <span className="font-display text-base font-bold text-brand-ink">
                   Drop photos here
                 </span>
@@ -518,9 +502,6 @@ export function CreateSetDialog({
 
             <TabsContent value="video" className="mt-0">
               <label className={cn(dropzoneClass, isLoading && "pointer-events-none opacity-60")}>
-                <span className="grid size-11 place-items-center rounded-2xl bg-[#E9F0FF] text-[#3B82F6]">
-                  <Upload className="size-5" />
-                </span>
                 <span className="font-display text-base font-bold text-brand-ink">
                   Upload a video
                 </span>
@@ -544,9 +525,6 @@ export function CreateSetDialog({
 
               {videoFile && (
                 <div className="mt-3 flex items-center gap-3 rounded-2xl bg-brand-panel p-3.5">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#E9F0FF] text-[#3B82F6]">
-                    <Video className="size-4" />
-                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-brand-ink">
                       {videoFile.name}
@@ -558,13 +536,12 @@ export function CreateSetDialog({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-sm"
                     aria-label="Remove video"
-                    className="rounded-full text-muted-foreground hover:bg-white hover:text-brand-ink"
+                    className="h-8 shrink-0 rounded-full px-3 text-xs font-semibold text-muted-foreground hover:bg-white hover:text-brand-ink"
                     onClick={() => setVideoFile(null)}
                     disabled={isLoading}
                   >
-                    <Trash2 className="size-4" />
+                    Remove
                   </Button>
                 </div>
               )}
@@ -597,8 +574,7 @@ export function CreateSetDialog({
                   Every set includes 20 detail-heavy flashcards that target niche, exam-distinguishing facts.
                 </p>
               </div>
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.64rem] font-bold text-[#5B3DF5]">
-                <Sparkles className="size-3" />
+              <span className="inline-flex shrink-0 items-center rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.64rem] font-bold text-[#5B3DF5]">
                 20 cards
               </span>
             </div>
@@ -660,9 +636,8 @@ export function CreateSetDialog({
           </div>
 
           {error && (
-            <div className="mt-4 flex items-start gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#C93C49]">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" />
-              <span>{error}</span>
+            <div className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#C93C49]">
+              {error}
             </div>
           )}
 
@@ -703,10 +678,7 @@ export function CreateSetDialog({
                     Working…
                   </>
                 ) : (
-                  <>
-                    <Sparkles className="size-4" />
-                    Build study set
-                  </>
+                  "Build study set"
                 )}
               </Button>
             </div>

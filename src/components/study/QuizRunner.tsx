@@ -5,7 +5,7 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, RotateCcw, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -81,7 +81,6 @@ export function QuizRunner({
             }}
             className="h-11 rounded-full border-border bg-white px-6 font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
           >
-            <RotateCcw className="size-4" />
             Retake
           </Button>
           {onReviewCards && (
@@ -90,7 +89,6 @@ export function QuizRunner({
               className="h-11 rounded-full bg-[#191B27] px-6 font-semibold text-white hover:bg-[#2A2D3E]"
             >
               Review cards
-              <ArrowRight className="size-4" />
             </Button>
           )}
         </div>
@@ -130,14 +128,9 @@ export function QuizRunner({
 
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-brand-ink">
-          Question {index + 1} of {quiz.length}
-        </p>
-        <span className="rounded-full bg-[#F3ECFF] px-3 py-1 text-xs font-semibold text-[#5B3DF5]">
-          Multiple choice
-        </span>
-      </div>
+      <p className="text-sm font-semibold text-brand-ink">
+        Question {index + 1} of {quiz.length}
+      </p>
       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[#E7E7EF]">
         <div
           className="h-full rounded-full bg-brand-pink transition-all duration-300"
@@ -220,11 +213,10 @@ export function QuizRunner({
           >
             <p
               className={cn(
-                "flex items-center gap-1.5 text-xs font-semibold",
+                "text-xs font-semibold",
                 correct ? "text-[#0F7A50]" : "text-[#C93C49]",
               )}
             >
-              {correct ? <Check className="size-3.5" /> : <X className="size-3.5" />}
               {correct
                 ? "Correct"
                 : `Not quite — the answer is ${String.fromCharCode(
@@ -257,7 +249,7 @@ export function QuizRunner({
                 : isLast
                   ? "Finish and save score"
                   : "Next question"}
-              {!submitting && <ArrowRight className="size-4" />}
+
             </Button>
           )}
         </div>

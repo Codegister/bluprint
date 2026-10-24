@@ -10,39 +10,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { percent, relativeDate } from "@/lib/format";
-import { courseSubtitle, subjectMeta } from "@/lib/subjects";
+import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  BookOpen,
-  Check,
-  ChevronDown,
-  CircleDot,
-  Clock,
-  FileQuestion,
-  Info,
-  Layers,
-  Loader2,
-  MoreHorizontal,
-  Pencil,
-  RotateCcw,
-  Sparkles,
-  Target,
-  Trash2,
-  Wand2,
-} from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -95,50 +70,23 @@ function BuildingPanel({
 }) {
   return (
     <section className="mt-6 overflow-hidden rounded-[2rem] border border-border bg-white p-6 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-8">
-      <div className="flex items-start gap-4">
-        <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#F3ECFF] text-[#5B3DF5]">
-          <Wand2 className="size-6" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
-            Building pathway
-          </p>
-          <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
-            Mapping {course.subject}
-          </h2>
-          <p className="mt-1 flex items-center gap-1.5 text-[0.84rem] text-muted-foreground">
-            <Clock className="size-3.5" />
-            {course.progress || "Waiting to start"}
-          </p>
-        </div>
+      <div>
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
+          Building pathway
+        </p>
+        <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
+          Mapping {course.subject}
+        </h2>
+        <p className="mt-1 text-[0.84rem] text-muted-foreground">
+          {course.progress || "Waiting to start"}
+        </p>
       </div>
 
-      <div className="mt-6 space-y-2.5">
-        {[
-          "Reading the current specification",
-          "Laying out units in teaching order",
-          "Tagging topics with exam skills",
-        ].map((step, index) => (
-          <div
-            key={step}
-            className={cn(
-              "flex items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 text-[0.82rem]",
-              index === 0
-                ? "border-[#D8CCFF] bg-[#FAF8FF] text-[#5B3DF5]"
-                : "border-border text-muted-foreground",
-            )}
-          >
-            {index === 0 ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <CircleDot className="size-3.5" />
-            )}
-            {step}
-          </div>
-        ))}
+      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
+        <div className="h-full w-1/3 animate-pulse rounded-full bg-[#7C5CFF]" />
       </div>
 
-      <p className="mt-5 text-[0.78rem] leading-relaxed text-muted-foreground">
+      <p className="mt-4 text-[0.78rem] leading-relaxed text-muted-foreground">
         This usually takes under a minute. You can leave this page — the pathway
         keeps building in the background.
       </p>
@@ -183,25 +131,14 @@ function ErrorPanel({
         {course.errorMessage ||
           "The pathway model didn't return a complete course map. Retry to try another free model."}
       </p>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4">
         <Button
           onClick={onRetry}
           disabled={retrying}
           className="h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
         >
-          {retrying ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RotateCcw className="size-4" />
-          )}
+          {retrying ? <Loader2 className="size-4 animate-spin" /> : null}
           Retry pathway
-        </Button>
-        <Button
-          asChild
-          variant="outline"
-          className="h-10 rounded-full border-border bg-white px-5 font-semibold text-brand-ink hover:bg-brand-panel"
-        >
-          <Link to="/dashboard">Back to home</Link>
         </Button>
       </div>
     </section>
@@ -317,8 +254,6 @@ export default function Course() {
     if (details === null) return <MissingCard />;
 
     const { course, sets } = details;
-    const meta = subjectMeta(course.subject);
-    const Icon = meta.icon;
     const pathway = course.pathway;
     const mastery = percent(details.completedCount, details.topicCount);
     const cards = sets.reduce((sum, set) => sum + set.cardCount, 0);
@@ -327,63 +262,42 @@ export default function Course() {
 
     return (
       <>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             to="/dashboard"
-            aria-label="Back to home"
-            className="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-white text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink"
+            className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
           >
-            <ArrowLeft className="size-4" />
+            Back to home
           </Link>
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <span
-              className={cn(
-                "hidden size-12 shrink-0 place-items-center rounded-2xl sm:grid",
-                meta.tint,
-              )}
-              style={{ color: meta.color }}
-            >
-              <Icon className="size-6" />
-            </span>
-            <div className="min-w-0">
-              <h1 className="truncate font-display text-[1.55rem] font-bold leading-tight text-brand-ink sm:text-[1.9rem]">
-                {course.subject}
-              </h1>
-              <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-                {courseSubtitle(course)}
-              </p>
-            </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-display text-[1.55rem] font-bold leading-tight text-brand-ink sm:text-[1.9rem]">
+              {course.subject}
+            </h1>
+            <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
+              {courseSubtitle(course)}
+            </p>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <div className="flex shrink-0 items-center gap-2">
+            {course.status === "ready" && (
               <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Course options"
-                className="size-9 shrink-0 rounded-full text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
-              >
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 rounded-2xl">
-              <DropdownMenuItem
+                variant="outline"
+                onClick={() => void handleRetry()}
                 disabled={retrying}
-                onSelect={() => void handleRetry()}
-                className="cursor-pointer gap-2 text-[0.82rem]"
+                className="h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
               >
-                <RotateCcw className="size-4" />
+                {retrying ? <Loader2 className="size-3.5 animate-spin" /> : null}
                 Rebuild pathway
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => setConfirmingDelete(true)}
-                className="cursor-pointer gap-2 text-[0.82rem] text-destructive focus:text-destructive"
-              >
-                <Trash2 className="size-4" />
-                Remove course
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              className="px-2 text-[0.78rem] font-semibold text-destructive underline-offset-2 hover:underline"
+            >
+              Remove
+            </button>
+          </div>
         </div>
 
         {course.status === "error" ? (
@@ -444,18 +358,13 @@ export default function Course() {
 
             <section className="mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#F3ECFF] text-[#5B3DF5]">
-                    <BookOpen className="size-5" />
-                  </span>
-                  <div>
-                    <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
-                      How this course is assessed
-                    </h2>
-                    <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
-                      {pathway.examFormat}
-                    </p>
-                  </div>
+                <div>
+                  <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
+                    How this course is assessed
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
+                    {pathway.examFormat}
+                  </p>
                 </div>
                 <span className="rounded-full bg-[#EAFBF0] px-3 py-1.5 text-[0.72rem] font-semibold text-[#128A4C]">
                   {details.topicCount} topics · {pathway.units.length} units
@@ -464,8 +373,7 @@ export default function Course() {
               <p className="mt-4 max-w-3xl text-[0.88rem] leading-relaxed text-brand-ink/75">
                 {pathway.overview}
               </p>
-              <p className="mt-3 flex items-start gap-1.5 text-[0.72rem] leading-relaxed text-muted-foreground">
-                <Info className="mt-0.5 size-3.5 shrink-0" />
+              <p className="mt-3 text-[0.72rem] leading-relaxed text-muted-foreground">
                 AI-built from the published specification. Always check your exam
                 board's current specification before relying on a topic list.
               </p>
@@ -473,21 +381,16 @@ export default function Course() {
 
             {nextTopic && (
               <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-[#D8CCFF] bg-[#FAF8FF] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-                <div className="flex items-start gap-3">
-                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#7C5CFF] text-white">
-                    <Target className="size-5" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
-                      Next up · {nextTopic.unit.title}
-                    </p>
-                    <h2 className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink">
-                      {nextTopic.topic.title}
-                    </h2>
-                    <p className="mt-1 line-clamp-2 text-[0.82rem] leading-relaxed text-muted-foreground">
-                      {nextTopic.topic.summary}
-                    </p>
-                  </div>
+                <div className="min-w-0">
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
+                    Next up · {nextTopic.unit.title}
+                  </p>
+                  <h2 className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink">
+                    {nextTopic.topic.title}
+                  </h2>
+                  <p className="mt-1 line-clamp-2 text-[0.82rem] leading-relaxed text-muted-foreground">
+                    {nextTopic.topic.summary}
+                  </p>
                 </div>
                 <Button
                   onClick={() => void handleTopic(nextTopic.topic.id)}
@@ -496,11 +399,7 @@ export default function Course() {
                 >
                   {busyTopic === nextTopic.topic.id ? (
                     <Loader2 className="size-4 animate-spin" />
-                  ) : setsByTopic.has(nextTopic.topic.id) ? (
-                    <ArrowRight className="size-4" />
-                  ) : (
-                    <Sparkles className="size-4" />
-                  )}
+                  ) : null}
                   {setsByTopic.has(nextTopic.topic.id) ? "Open study set" : "Build study set"}
                 </Button>
               </section>
@@ -516,15 +415,7 @@ export default function Course() {
                     Work through each unit in order, or jump to a topic you need.
                   </p>
                 </div>
-                {sets.length > 0 && (
-                  <Link
-                    to="/dashboard#sets"
-                    className="hidden items-center gap-1 text-[0.8rem] font-semibold text-brand-ink/60 hover:text-brand-ink sm:flex"
-                  >
-                    <Layers className="size-3.5" />
-                    All study sets
-                  </Link>
-                )}
+
               </div>
 
               <div className="mt-3 space-y-3">
@@ -547,8 +438,9 @@ export default function Course() {
                               ? "bg-[#EAFBF0] text-[#128A4C]"
                               : "bg-brand-panel text-brand-ink/60",
                           )}
+                          aria-label={unitComplete ? "Unit complete" : undefined}
                         >
-                          {unitComplete ? <Check className="size-4" /> : unitIndex + 1}
+                          {unitIndex + 1}
                         </span>
                         <div className="min-w-0 flex-1">
                           <h3 className="truncate font-display text-[0.98rem] font-bold text-brand-ink">
@@ -575,26 +467,20 @@ export default function Course() {
                             >
                               <button
                                 type="button"
-                                aria-label={
-                                  isDone
-                                    ? `Mark ${topic.title} as not revised`
-                                    : `Mark ${topic.title} as revised`
-                                }
                                 aria-pressed={isDone}
                                 disabled={tickingTopic === topic.id}
                                 onClick={() => void toggleTopic(topic.id, !isDone)}
                                 className={cn(
-                                  "grid size-6 shrink-0 place-items-center rounded-full border transition-colors",
+                                  "inline-flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[0.68rem] font-semibold transition-colors",
                                   isDone
-                                    ? "border-[#22A06B] bg-[#22A06B] text-white"
-                                    : "border-border bg-white text-transparent hover:border-[#22A06B] hover:text-[#22A06B]",
+                                    ? "border-[#22A06B] bg-[#EAFBF0] text-[#128A4C]"
+                                    : "border-border bg-white text-brand-ink/60 hover:border-[#22A06B] hover:text-[#128A4C]",
                                 )}
                               >
                                 {tickingTopic === topic.id ? (
-                                  <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                                ) : (
-                                  <Check className="size-3.5" />
-                                )}
+                                  <Loader2 className="size-3 animate-spin" />
+                                ) : null}
+                                {isDone ? "Revised" : "Mark revised"}
                               </button>
 
                               <div className="min-w-0 flex-1">
@@ -627,15 +513,15 @@ export default function Course() {
                                         key={point}
                                         className="flex items-start gap-1.5 text-[0.75rem] leading-relaxed text-brand-ink/60"
                                       >
-                                        <CircleDot className="mt-0.5 size-2.5 shrink-0 text-[#7C5CFF]" />
+                                        <span className="mt-1.5 size-1 shrink-0 rounded-full bg-[#7C5CFF]" />
                                         {point}
                                       </li>
                                     ))}
                                   </ul>
                                 )}
                                 {topic.examSkill && (
-                                  <p className="mt-2 flex items-start gap-1.5 text-[0.72rem] leading-relaxed text-[#6B4EE6]">
-                                    <FileQuestion className="mt-0.5 size-3 shrink-0" />
+                                  <p className="mt-2 text-[0.72rem] leading-relaxed text-[#6B4EE6]">
+                                    <span className="font-semibold">Exam skill: </span>
                                     {topic.examSkill}
                                   </p>
                                 )}
@@ -672,11 +558,7 @@ export default function Course() {
                                 >
                                   {busyTopic === topic.id ? (
                                     <Loader2 className="size-3.5 animate-spin" />
-                                  ) : set ? (
-                                    <ArrowRight className="size-3.5" />
-                                  ) : (
-                                    <Sparkles className="size-3.5" />
-                                  )}
+                                  ) : null}
                                   {set ? "Open set" : "Study this topic"}
                                 </Button>
                               </div>
@@ -690,8 +572,7 @@ export default function Course() {
               </div>
             </section>
 
-            <p className="mt-4 flex items-center gap-1.5 text-[0.72rem] text-muted-foreground">
-              <Pencil className="size-3.5" />
+            <p className="mt-4 text-[0.72rem] text-muted-foreground">
               Progress updated {relativeDate(course.updatedAt)} · last studied{" "}
               {course.lastStudiedAt ? relativeDate(course.lastStudiedAt) : "not yet"}
             </p>

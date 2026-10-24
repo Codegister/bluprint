@@ -6,13 +6,7 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
 import { motion } from "framer-motion";
-import {
-  AlertCircle,
-  ChevronDown,
-  Loader2,
-  PenLine,
-  Sparkles,
-} from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -66,10 +60,7 @@ export function ExamPractice({
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4">
-      <div className="gizmo-card flex items-start gap-3.5 p-5">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#E9F0FF] text-[#3B82F6]">
-          <PenLine className="size-4" />
-        </span>
+      <div className="gizmo-card p-5">
         <div>
           <p className="font-display text-base font-bold text-brand-ink">
             Exam practice, marked by AI
@@ -145,17 +136,13 @@ export function ExamPractice({
                     Marking…
                   </>
                 ) : (
-                  <>
-                    <Sparkles className="size-4" />
-                    {graded ? "Mark again" : "Mark answer"}
-                  </>
+                  <>{graded ? "Mark again" : "Mark answer"}</>
                 )}
               </Button>
             </div>
 
             {errors[exam._id] && (
-              <p className="mt-3 flex items-start gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
-                <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+              <p className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
                 {errors[exam._id]}
               </p>
             )}
