@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -41,6 +41,147 @@ function defaultBoardFor(level: string): string {
   return "AQA";
 }
 
+/**
+ * A subject tile that opens its board and tier controls directly underneath.
+ * Keeping the editor inside the picker means a chosen subject never sends the
+ * student to a separate panel to finish configuring it.
+ */
+function SubjectEditor({
+  name,
+  draft,
+  level,
+  onToggle,
+  onBoard,
+  onTier,
+}: {
+  name: string;
+  draft?: CourseDraft;
+  level: string;
+  onToggle: () => void;
+  onBoard: (board: string) => void;
+  onTier: (field: "tier" | "variant", value: string) => void;
+}) {
+  const { variants, tiers } = tierChoices(level, name);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const wasSelected = useRef(Boolean(draft));
+
+  // Selecting a subject opens its settings below the tile. If the tile sits at
+  // the edge of the scroll area, bring the new controls into view.
+  useEffect(() => {
+    if (draft && !wasSelected.current) {
+      cardRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    wasSelected.current = Boolean(draft);
+  }, [draft]);
+
+  if (!draft) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-2 rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left transition-colors hover:bg-brand-panel"
+      >
+        <span className="min-w-0 flex-1 truncate text-[0.84rem] font-semibold text-brand-ink">
+          {name}
+        </span>
+        <span className="text-[0.72rem] font-semibold text-[#5B3DF5]">Add</span>
+      </button>
+    );
+  }
+
+  return (
+    <div
+      ref={cardRef}
+      className="rounded-2xl border border-[#191B27] bg-[#FAFAFF]"
+    >
+      <div className="flex items-center gap-2 px-3.5 py-2.5">
+        <span className="min-w-0 flex-1 truncate text-[0.84rem] font-semibold text-brand-ink">
+          {name}
+        </span>
+        <span className="rounded-full bg-[#191B27] px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-[0.05em] text-white">
+          Added
+        </span>
+      </div>
+
+      <div className="border-t border-border/70 px-3.5 pb-3 pt-3">
+        <label className="block text-[0.6rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+          Exam board
+          <select
+            aria-label={`Exam board for ${name}`}
+            value={draft.examBoard}
+            onChange={(event) => onBoard(event.target.value)}
+            className="mt-1 h-9 w-full rounded-xl border border-border bg-white px-2 text-[0.76rem] font-semibold text-brand-ink outline-none focus:border-[#B9A6FF]"
+          >
+            {EXAM_BOARDS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {variants.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-[0.6rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Route
+            </span>
+            {variants.map((variant) => (
+              <button
+                key={variant}
+                type="button"
+                aria-pressed={draft.variant === variant}
+                onClick={() => onTier("variant", variant)}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold transition-colors",
+                  draft.variant === variant
+                    ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
+                    : "border-border text-brand-ink/60 hover:bg-brand-panel",
+                )}
+              >
+                {variant}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tiers.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[0.6rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Tier
+            </span>
+            {tiers.map((tier) => (
+              <button
+                key={tier}
+                type="button"
+                aria-pressed={draft.tier === tier}
+                onClick={() => onTier("tier", tier)}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold transition-colors",
+                  draft.tier === tier
+                    ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
+                    : "border-border text-brand-ink/60 hover:bg-brand-panel",
+                )}
+              >
+                {tierLabel(tier)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="text-[0.7rem] font-semibold text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
+          >
+            Remove course
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CourseSetup() {
   const navigate = useNavigate();
   const ai = useQuery(api.settings.aiStatus);
@@ -57,6 +198,10 @@ export default function CourseSetup() {
 
   const selectedNames = Object.keys(selected);
   const selectedCount = selectedNames.length;
+  // Custom courses are not in SUBJECTS, so they need their own inline group.
+  const selectedCustomNames = selectedNames.filter(
+    (name) => !SUBJECTS.some((subject) => subject.name === name),
+  );
   const distinctBoards = new Set(
     Object.values(selected).map((course) => course.examBoard),
   ).size;
@@ -329,26 +474,47 @@ export default function CourseSetup() {
           </div>
         </section>
       ) : (
-        <div className="mt-6 grid items-start gap-5 pb-24 lg:grid-cols-[minmax(0,1fr)_330px] lg:pb-0">
+        <div className="mt-6 pb-8">
           <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="font-display text-[1.15rem] font-bold text-brand-ink">
                   Pick your subjects
                 </h2>
                 <p className="mt-0.5 text-[0.82rem] text-muted-foreground">
-                  {level} · {distinctBoards > 1 ? "mixed exam boards" : board} ·
-                  choose up to {MAX_COURSES}
+                  {selectedCount} selected · {level} ·{" "}
+                  {distinctBoards > 1 ? "mixed exam boards" : board} · choose up to{" "}
+                  {MAX_COURSES}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="text-[0.78rem] font-semibold text-[#5B3DF5] hover:underline"
-              >
-                Change level or board
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="px-1 text-[0.78rem] font-semibold text-[#5B3DF5] hover:underline"
+                >
+                  Change level or board
+                </button>
+                <Button
+                  onClick={build}
+                  disabled={saving || selectedCount === 0}
+                  className="h-10 rounded-full bg-[#191B27] px-5 text-[0.82rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {saving
+                    ? "Queuing pathways…"
+                    : selectedCount === 0
+                      ? "Build pathways"
+                      : `Build ${selectedCount} pathway${selectedCount === 1 ? "" : "s"}`}
+                </Button>
+              </div>
             </div>
+
+            {error && (
+              <p className="mt-3 rounded-xl bg-[#FFEEF0] px-3 py-2 text-[0.76rem] leading-relaxed text-[#C23B49]">
+                {error}
+              </p>
+            )}
 
             <div className="mt-4">
               <Input
@@ -385,7 +551,28 @@ export default function CourseSetup() {
               </Button>
             </div>
 
-            <div className="gizmo-scroll mt-5 max-h-[560px] space-y-5 overflow-y-auto pr-1">
+            <div className="gizmo-scroll mt-5 max-h-[640px] space-y-5 overflow-y-auto pr-1">
+              {selectedCustomNames.length > 0 && (
+                <div>
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Your custom courses
+                  </p>
+                  <div className="mt-2 grid items-start gap-2 sm:grid-cols-2">
+                    {selectedCustomNames.map((name) => (
+                      <SubjectEditor
+                        key={name}
+                        name={name}
+                        draft={selected[name]}
+                        level={level}
+                        onToggle={() => toggle(name)}
+                        onBoard={(next) => setCourseBoard(name, next)}
+                        onTier={(field, value) => setCourseTier(name, field, value)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {groups.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-[0.84rem] text-muted-foreground">
                   No subject matches “{query}”. Add it as a custom course above.
@@ -396,38 +583,20 @@ export default function CourseSetup() {
                     <p className="text-[0.7rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       {group}
                     </p>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                      {subjects.map((subject) => {
-                        const draft = selected[subject.name];
-                        const active = Boolean(draft);
-                        return (
-                          <button
-                            key={subject.name}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => toggle(subject.name)}
-                            className={cn(
-                              "flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition-colors",
-                              active
-                                ? "border-[#191B27] bg-[#FAFAFF]"
-                                : "border-border bg-white hover:bg-brand-panel",
-                            )}
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[0.84rem] font-semibold text-brand-ink">
-                                {subject.name}
-                              </span>
-                              {draft && (
-                                <span className="mt-0.5 block truncate text-[0.62rem] font-medium text-muted-foreground">
-                                  {draft.examBoard}
-                                  {draft.variant ? ` · ${draft.variant}` : ""}
-                                  {draft.tier ? ` · ${tierLabel(draft.tier)}` : ""}
-                                </span>
-                              )}
-                            </span>
-                          </button>
-                        );
-                      })}
+                    <div className="mt-2 grid items-start gap-2 sm:grid-cols-2">
+                      {subjects.map((subject) => (
+                        <SubjectEditor
+                          key={subject.name}
+                          name={subject.name}
+                          draft={selected[subject.name]}
+                          level={level}
+                          onToggle={() => toggle(subject.name)}
+                          onBoard={(next) => setCourseBoard(subject.name, next)}
+                          onTier={(field, value) =>
+                            setCourseTier(subject.name, field, value)
+                          }
+                        />
+                      ))}
                     </div>
                   </div>
                 ))
@@ -435,159 +604,6 @@ export default function CourseSetup() {
             </div>
           </section>
 
-          <aside className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] lg:sticky lg:top-6">
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-                Your courses
-              </h2>
-              <span className="rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.72rem] font-bold text-[#5B3DF5]">
-                {selectedCount}
-              </span>
-            </div>
-            <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
-              Set the exam board and tier for each subject.
-            </p>
-
-            {selectedCount === 0 ? (
-              <p className="mt-3 rounded-2xl border border-dashed border-border px-3 py-6 text-center text-[0.8rem] leading-relaxed text-muted-foreground">
-                Nothing picked yet. Tap a subject to add it to your pathway.
-              </p>
-            ) : (
-              <div className="mt-3 space-y-2">
-                {selectedNames.map((name) => {
-                  const course = selected[name]!;
-                  const { variants, tiers } = tierChoices(level, name);
-                  return (
-                    <div
-                      key={name}
-                      className="rounded-2xl border border-border px-3 py-2.5"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="min-w-0 flex-1 truncate text-[0.82rem] font-semibold text-brand-ink">
-                          {name}
-                        </span>
-                        <select
-                          aria-label={`Exam board for ${name}`}
-                          value={course.examBoard}
-                          onChange={(event) => setCourseBoard(name, event.target.value)}
-                          className="h-7 max-w-[106px] shrink-0 rounded-lg border border-border bg-white px-1 text-[0.64rem] font-semibold text-brand-ink outline-none focus:border-[#B9A6FF]"
-                        >
-                          {EXAM_BOARDS.map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          aria-label={`Remove ${name}`}
-                          onClick={() => toggle(name)}
-                          className="shrink-0 px-1 text-[0.66rem] font-semibold text-muted-foreground hover:text-brand-ink"
-                        >
-                          Remove
-                        </button>
-                      </div>
-
-                      {(variants.length > 0 || tiers.length > 0) && (
-                        <div className="mt-2 space-y-1.5">
-                          {variants.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1">
-                              <span className="mr-0.5 text-[0.58rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                                Route
-                              </span>
-                              {variants.map((variant) => (
-                                <button
-                                  key={variant}
-                                  type="button"
-                                  aria-pressed={course.variant === variant}
-                                  onClick={() => setCourseTier(name, "variant", variant)}
-                                  className={cn(
-                                    "rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold transition-colors",
-                                    course.variant === variant
-                                      ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
-                                      : "border-border text-brand-ink/60 hover:bg-brand-panel",
-                                  )}
-                                >
-                                  {variant}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                          {tiers.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1">
-                              <span className="mr-0.5 text-[0.58rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                                Tier
-                              </span>
-                              {tiers.map((tier) => (
-                                <button
-                                  key={tier}
-                                  type="button"
-                                  aria-pressed={course.tier === tier}
-                                  onClick={() => setCourseTier(name, "tier", tier)}
-                                  className={cn(
-                                    "rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold transition-colors",
-                                    course.tier === tier
-                                      ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
-                                      : "border-border text-brand-ink/60 hover:bg-brand-panel",
-                                  )}
-                                >
-                                  {tierLabel(tier)}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {error && (
-              <p className="mt-3 rounded-xl bg-[#FFEEF0] px-3 py-2 text-[0.76rem] leading-relaxed text-[#C23B49]">
-                {error}
-              </p>
-            )}
-
-            <div className="hidden lg:block">
-              <Button
-                onClick={build}
-                disabled={saving || selectedCount === 0}
-                className="mt-4 h-11 w-full rounded-full bg-[#191B27] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                {saving
-                  ? "Queuing pathways…"
-                  : `Build ${selectedCount || ""} pathway${selectedCount === 1 ? "" : "s"}`}
-              </Button>
-              <p className="mt-2.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-                Each course is mapped in the background. You can close this tab and
-                come back when it's ready.
-              </p>
-            </div>
-          </aside>
-
-          <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
-            <div className="mx-auto flex max-w-2xl items-center gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-[0.8rem] font-semibold text-brand-ink">
-                  {selectedCount} course{selectedCount === 1 ? "" : "s"} selected
-                </p>
-                <p className="truncate text-[0.7rem] text-muted-foreground">
-                  {level} · {distinctBoards > 1 ? `${distinctBoards} exam boards` : board}
-                </p>
-              </div>
-              <Button
-                onClick={build}
-                disabled={saving || selectedCount === 0}
-                className="h-10 shrink-0 rounded-full bg-[#191B27] px-5 text-[0.85rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                {saving ? "Queuing…" : "Build pathways"}
-              </Button>
-            </div>
-          </div>
         </div>
       )}
     </AppShell>

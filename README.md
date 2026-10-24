@@ -34,10 +34,11 @@ assets.
 ### 1. Choose your courses (course pathway)
 
 Open **Choose courses** from the dashboard, pick your level and a default exam board, then
-select every subject you are taking in one pass (up to 12). Each selected subject has its
-own board selector, so a school that uses AQA for Biology and Edexcel for Maths is handled
-without a second setup. GCSE courses also show an explicit **Higher tier** / **Foundation
-tier** choice; sciences add the Triple/Combined route, and IB adds HL/SL.
+select every subject you are taking in one pass (up to 12). Selecting a subject expands its
+board and tier controls directly beneath it, so a school that uses AQA for Biology and
+Edexcel for Maths is handled without a second setup. GCSE courses also show an explicit
+**Higher tier** / **Foundation tier** choice; sciences add the Triple/Combined route, and IB
+adds HL/SL.
 
 Bluprint queues each course immediately and maps the current specification server-side:
 6–10 units in teaching order, 4–6 topics per unit, specification references where the model
