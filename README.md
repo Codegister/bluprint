@@ -100,7 +100,13 @@ says so on the set page; it never silently pretends the request was met.
    unit of a course. A set thread reads that set's notes; a course or unit thread reads the
    scraped pathway for that scope. It knows the course, board, and level, and keeps each
    conversation saved separately, so a question about one unit never blends into another.
-   Suggested first questions get you started; exam practice is one question at a time.
+   Answers are **streamed** — the reply is written into the chat as the model produces it,
+   and is saved as it grows, so it survives a reload.
+   A **Web** switch on the tutor header decides whether it may search the internet for the
+   question. With web on, it can check exam-board pages and other sites, and the pages it
+   used are listed under the answer and saved with the thread. With web off it answers from
+   your material alone. Suggested first questions get you started; exam practice is one
+   question at a time.
 8. **Edit and rebuild** — **Set settings** next to a set's title changes its name, course,
    board, or level, and its three build sliders (1–100 flashcards, quiz questions and
    exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and exam
@@ -112,8 +118,9 @@ says so on the set page; it never silently pretends the request was met.
 10. **Plan your revision** — **Build revision timetable** asks which subjects to revise, how
     long to spend on each one, which paper to cover, how long a school day and a day off
     should be, how many days a week you can work, and when your first exam is. Sessions are
-    separated by breaks as long as the session before them, and if the topics will not fit
-    the date you chose, the plan starts earlier rather than dropping topics. The schedule is
+    separated by breaks as long as the session before them, nothing runs past 8:00 pm, and
+    if the topics will not fit the date you chose, the plan starts earlier rather than
+    dropping topics. The schedule is
     saved to your account and appears in the sidebar as a colour-coded weekly timetable;
     clicking a session opens (or builds) the study set for that topic.
 
@@ -240,6 +247,25 @@ and usage bills to whoever owns the keys.
 
 Get keys from [NVIDIA Build](https://build.nvidia.com/).
 
+### Web access for the tutor (optional)
+
+When the tutor's **Web** switch is on, the question is answered by a web-connected model
+through [OpenRouter](https://openrouter.ai/) instead of NVIDIA, because OpenRouter's web
+plugin can search and return the pages it cited. That uses a second key, stored on the
+Convex deployment as **`OPENROUTER_API_KEY`**:
+
+```bash
+npx convex env set OPENROUTER_API_KEY "sk-or-..."
+```
+
+On Freebuff, add `OPENROUTER_API_KEY` in the **Keys** tab. The key is read on the server
+only and is never sent to the browser. The web plugin is a paid OpenRouter feature, so the
+account needs a small credit balance; free models generally reject the plugin.
+
+If the key is missing, out of credit, or OpenRouter is unreachable, the tutor falls back to
+NVIDIA and answers from the student's own material. Nothing breaks — the answer simply has
+no web sources.
+
 ### Course pathways need no key
 
 Pathways are scraped from Cognito's published pages, so they build with no AI key at all.
@@ -255,6 +281,7 @@ endpoints:
 | --- | --- | --- |
 | Summaries, cards, quizzes, exams | `NVIDIA_TEXT_MODEL` | `nvidia/nemotron-3.5-lightning-30b-a3b` |
 | Reading photos / video frames | `NVIDIA_VISION_MODEL` | `meta/llama-3.2-90b-vision-instruct` |
+| Tutor answers with web access | `OPENROUTER_TUTOR_MODEL` | `meta-llama/llama-3.3-70b-instruct` |
 
 Set overrides on the Convex deployment the same way as `NVIDIA_API_KEY`. If a model is
 retired, the set shows a clear "model not available" message and the environment variable
@@ -323,6 +350,10 @@ same rate-limit messages as the rest of the app.
   before the next subject, so a 45-minute session is followed by 45 minutes off. Breaks sit
   outside the study budget: the student chose study time, not desk time. The day's last
   session has no trailing break.
+- **Nothing is scheduled to end after 8:00 pm.** A session that would cross that line waits
+  for the next revision day, and if the topics then will not fit before the exam the plan
+  starts earlier. The builder disables start times that are too late for the longest session
+  chosen, and the server rejects a plan whose sessions would run past the cutoff.
 - Bank holidays, weekends and school-holiday weekdays use the **day-off budget the student
   chose** — nothing is multiplied or assumed. This lets a busy weekend stay short and a
   free half-term carry longer days.
@@ -434,6 +465,9 @@ src/
   separate accounts and separate libraries.
 - **One shared key pool** per deployment, configured only through `NVIDIA_API_KEY`. There
   is no in-app key entry, so friends cannot add or change keys from the browser.
+- **Web answers come from a second provider on purpose.** No NVIDIA-hosted model can
+  search the internet, so the tutor's optional web switch uses OpenRouter's web plugin and
+  saves the pages it cited. Turn the switch off to keep an answer entirely on NVIDIA.
 - **English prompts and defaults**, with at most 60,000 characters of pasted notes stored
   (12,000 characters sent to the model per generation call).
 
@@ -451,3 +485,10 @@ src/
   course page always links the current specification as the source of truth.
 - **Poor OCR** — use straighter, brighter photos; dark handwriting or blurry frames are
   the usual cause. Pasted text is the most reliable input.
+- **Tutor answers have no web sources** — the Web switch is off, or `OPENROUTER_API_KEY` is
+  missing / out of credit, so the tutor fell back to NVIDIA. The answer is still valid, it
+  just did not search. Add credit or leave web off deliberately.
+- **Tutor reply stops mid-sentence** — the stream was cut off by a timeout. Ask again; the
+  half-written reply is removed automatically before the next question.
+- **A session is missing from the timetable** — it would have run past 8:00 pm, so it moved
+  to the next revision day. Start earlier or shorten that subject's session to fit more in.

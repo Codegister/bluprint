@@ -29,6 +29,14 @@ const DAY_OFF_LENGTHS = [60, 90, 120, 180, 240];
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
 const DAYS_PER_WEEK = [3, 5, 7];
 
+/**
+ * Revision stops at 8pm. Evenings after that are for the rest of a student's
+ * life, and a plan that runs to midnight is one nobody follows. Sessions that
+ * would cross this line are left for the next day (or the plan starts a day
+ * earlier when it needs the extra capacity).
+ */
+const LATEST_END_MINUTES = 20 * 60;
+
 // 0 = Sunday. Three-day plans use Monday/Wednesday/Friday so subjects are
 // spaced rather than stacked on consecutive evenings.
 const WEEKDAYS: Record<number, number[]> = {
@@ -68,6 +76,13 @@ function parseDateKey(value: string): Date {
 
 function toDateKey(value: Date): string {
   return value.toISOString().slice(0, 10);
+}
+
+/** 24-hour clock used in validation messages, e.g. 19:30. */
+function formatClock(minutes: number): string {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
 }
 
 function addDays(value: Date, days: number): Date {
@@ -308,6 +323,8 @@ function scheduleDay(
   startMinutes: number,
   dayIndex: number,
 ) {
+  // A chosen start time at or after 8pm can never produce a session.
+  if (startMinutes >= LATEST_END_MINUTES) return [];
   let remaining = dailyMinutes;
   let clock = startMinutes;
   let cursor = states.length > 0 ? dayIndex % states.length : 0;
@@ -325,7 +342,11 @@ function scheduleDay(
     for (let offset = 0; offset < states.length; offset += 1) {
       const index = (cursor + offset) % states.length;
       const state = states[index];
-      if (state.topics.length > 0 && state.minutes <= remaining) {
+      if (
+        state.topics.length > 0 &&
+        state.minutes <= remaining &&
+        clock + state.minutes <= LATEST_END_MINUTES
+      ) {
         picked = index;
         break;
       }
@@ -426,6 +447,9 @@ export const build = mutation({
     ) {
       throw new Error("Choose a start time for your revision sessions.");
     }
+    if (args.startMinutes >= LATEST_END_MINUTES) {
+      throw new Error("Revision has to start before 8pm. Choose an earlier start time.");
+    }
     if (args.courseSettings.length === 0) {
       throw new Error("Choose at least one course to revise.");
     }
@@ -452,6 +476,11 @@ export const build = mutation({
       if (setting.minutes > args.dayOffMinutes) {
         throw new Error(
           "A subject's session is longer than your day-off revision time. Raise that day's time or lower the session length.",
+        );
+      }
+      if (args.startMinutes + setting.minutes > LATEST_END_MINUTES) {
+        throw new Error(
+          `A ${setting.minutes}-minute session starting at ${formatClock(args.startMinutes)} would finish after 8pm. Start earlier or shorten that session.`,
         );
       }
       settings.set(setting.courseId, setting);

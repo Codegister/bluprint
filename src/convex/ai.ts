@@ -16,6 +16,11 @@ import { action, internalAction } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import { fetchCognitoOutline, type CognitoOutline } from "./lib/cognito";
 import {
+  OPENROUTER_CHAT_URL,
+  OPENROUTER_TUTOR_MODEL,
+  readOpenRouterKey,
+} from "./lib/openrouterConfig";
+import {
   MAX_NOTES_CHARS,
   NVIDIA_CHAT_URL,
   NVIDIA_TEXT_MODEL,
@@ -1831,6 +1836,8 @@ const TUTOR_SYSTEM_PROMPT =
   "You are Bluprint's AI tutor: a patient, precise subject teacher working one-to-one with a student. " +
   "Explain the reasoning rather than only the conclusion, and use a concrete example when it helps. " +
   "Use the provided study material as the primary source. If it does not cover something, say so plainly before giving the standard explanation, and never invent content and attribute it to the material. " +
+  "When you can search the web, use it for anything recent, exam-board specific, or outside the study material, and name the site you took the fact from. " +
+  "Never cite a page you did not actually read, and never invent a source. " +
   "Answer in plain text with short paragraphs and hyphen bullets. No markdown headings, tables, or code fences. " +
   "Be direct and warm, not effusive. Keep answers under 250 words unless the student asks for a model answer or a step-by-step walkthrough.";
 
@@ -1845,11 +1852,8 @@ type TutorContext = {
   messages: Array<{ role: string; content: string }>;
 };
 
-async function answerAsTutor(
-  apiKeys: string[],
-  context: TutorContext,
-  question: string,
-): Promise<string> {
+/** The question as the tutor's prompt, with the material and any web results. */
+function tutorPrompt(context: TutorContext, question: string): ChatMessage[] {
   const qualification = qualificationText(context);
   const history = context.messages
     .map(
@@ -1858,50 +1862,303 @@ async function answerAsTutor(
     )
     .join("\n\n");
 
-  const raw = await nvidiaChat(apiKeys, {
-    model: NVIDIA_TEXT_MODEL,
-    messages: [
-      { role: "system", content: TUTOR_SYSTEM_PROMPT },
-      {
-        role: "user",
-        content:
-          `${materialBlock(context.material)}\n\n` +
-          `<material_title>${context.title}</material_title>\n` +
-          `<qualification>${qualification || "Not specified"}</qualification>\n` +
-          (context.examBoard
-            ? `<mark_scheme_style>${markSchemeStyle(context.examBoard)}</mark_scheme_style>\n`
-            : "") +
-          (context.level
-            ? `Pitch the explanation at ${context.level} depth and use that qualification's command words when discussing exam technique.\n`
-            : "") +
-          `<conversation>\n${history || "(this is the student's first question)"}\n</conversation>\n\n` +
-          `<student_question>${question}</student_question>\n\n` +
-          "Answer as the tutor. If the student asks for exam practice, give one question at a time and wait for their answer before marking it.",
-      },
-    ],
-    maxTokens: 1500,
-    temperature: 0.3,
-    disableThinking: true,
-  });
+  return [
+    { role: "system", content: TUTOR_SYSTEM_PROMPT },
+    {
+      role: "user",
+      content:
+        `${materialBlock(context.material)}\n\n` +
+        `<material_title>${context.title}</material_title>\n` +
+        `<qualification>${qualification || "Not specified"}</qualification>\n` +
+        (context.examBoard
+          ? `<mark_scheme_style>${markSchemeStyle(context.examBoard)}</mark_scheme_style>\n`
+          : "") +
+        (context.level
+          ? `Pitch the explanation at ${context.level} depth and use that qualification's command words when discussing exam technique.\n`
+          : "") +
+        `<conversation>\n${history || "(this is the student's first question)"}\n</conversation>\n\n` +
+        `<student_question>${question}</student_question>\n\n` +
+        "Answer as the tutor. If the student asks for exam practice, give one question at a time and wait for their answer before marking it.",
+    },
+  ];
+}
 
-  return stripReasoning(raw).trim();
+/** A page an answer cited, stored beside the message. */
+type StreamSource = { title: string; url: string };
+
+/** What one streamed answer produced. */
+type StreamResult = { text: string; sources: StreamSource[] };
+
+type Snapshot = (fullText: string, sources: StreamSource[]) => Promise<void>;
+
+/**
+ * The chat renders plain text, so markdown links and emphasis are flattened.
+ * A link becomes its label; the full URL is still shown in the source list.
+ */
+function tidyTutorText(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1")
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "");
 }
 
 /**
- * Answers one tutor question using the set's notes and recent saved turns,
- * then stores the exchange. The key never leaves this action.
+ * Reads an OpenAI-compatible server-sent-event chat stream, calling `onSnapshot`
+ * roughly eight times a second with the text written so far. OpenRouter's web
+ * plugin also streams url_citation annotations; those become the saved sources,
+ * so the chat can show exactly which pages the answer used.
+ */
+async function readChatStream(
+  response: Response,
+  onSnapshot: Snapshot,
+): Promise<StreamResult> {
+  if (!response.body) throw new Error("The AI response had no body to read.");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const sources: StreamSource[] = [];
+  let buffer = "";
+  let answer = "";
+  let lastEmit = 0;
+
+  const addSource = (candidate: unknown) => {
+    const citation = (candidate as { url_citation?: { url?: unknown; title?: unknown } })
+      ?.url_citation;
+    const url = typeof citation?.url === "string" ? citation.url.trim() : "";
+    if (!url) return;
+    if (sources.some((source) => source.url === url)) return;
+    const title = typeof citation?.title === "string" ? citation.title.trim() : "";
+    sources.push({ title: title || url, url });
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline = buffer.indexOf("\n");
+    while (newline >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      newline = buffer.indexOf("\n");
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      try {
+        const payload = JSON.parse(data) as {
+          choices?: Array<{
+            delta?: { content?: string; annotations?: unknown[] };
+            message?: { annotations?: unknown[] };
+          }>;
+        };
+        const choice = payload.choices?.[0];
+        const piece = choice?.delta?.content;
+        if (typeof piece === "string" && piece) answer += piece;
+        for (const annotation of [
+          ...(choice?.delta?.annotations ?? []),
+          ...(choice?.message?.annotations ?? []),
+        ]) {
+          addSource(annotation);
+        }
+      } catch {
+        // A malformed keep-alive frame is not worth failing the answer over.
+      }
+    }
+
+    if (answer && Date.now() - lastEmit > 120) {
+      lastEmit = Date.now();
+      await onSnapshot(tidyTutorText(answer), sources);
+    }
+  }
+
+  return { text: tidyTutorText(answer).trim(), sources };
+}
+
+/**
+ * Streams one tutor answer from NVIDIA. Each attempt takes the next key; a 429
+ * cools that key and moves on. The answer is retried only while nothing has
+ * been written, because a half-streamed answer cannot be resumed.
+ */
+async function streamNvidiaAnswer(
+  apiKeys: string[],
+  messages: ChatMessage[],
+  onSnapshot: Snapshot,
+): Promise<StreamResult> {
+  const maxAttempts = Math.max(2, Math.min(apiKeys.length + 1, 4));
+  let thinkingDisabled = true;
+  let lastStatus: number | null = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const apiKey = nextApiKey(apiKeys);
+    let response: Response;
+    try {
+      response = await fetch(NVIDIA_CHAT_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({
+          model: NVIDIA_TEXT_MODEL,
+          messages,
+          temperature: 0.3,
+          top_p: 1,
+          max_tokens: 1500,
+          stream: true,
+          ...(thinkingDisabled
+            ? { chat_template_kwargs: { enable_thinking: false } }
+            : {}),
+        }),
+        signal: AbortSignal.timeout(90_000),
+      });
+    } catch {
+      if (attempt < maxAttempts - 1) {
+        await sleep(1000 * (attempt + 1));
+        continue;
+      }
+      throw new Error(
+        "Could not reach NVIDIA. Check the deployment's network connection and retry.",
+      );
+    }
+
+    if (!response.ok || !response.body) {
+      lastStatus = response.status;
+      if (response.status === 429) {
+        coolingKeys.set(apiKey, Date.now() + KEY_COOLDOWN_MS);
+        if (attempt < maxAttempts - 1) {
+          await sleep(400 * (attempt + 1));
+          continue;
+        }
+      } else if (response.status === 401 || response.status === 403) {
+        rejectedKeys.add(apiKey);
+        if (attempt < maxAttempts - 1) continue;
+      } else if (response.status >= 500) {
+        if (attempt < maxAttempts - 1) {
+          await sleep(1000 * (attempt + 1));
+          continue;
+        }
+      } else if (response.status === 400 && thinkingDisabled) {
+        // The model does not understand the thinking flag; drop it and retry.
+        thinkingDisabled = false;
+        if (attempt < maxAttempts - 1) continue;
+      }
+      throw new Error(friendlyHttpError(response.status));
+    }
+
+    const result = await readChatStream(response, onSnapshot);
+    if (result.text.length > 0) {
+      return { text: stripReasoning(result.text).trim(), sources: result.sources };
+    }
+    if (attempt < maxAttempts - 1) continue;
+    throw new Error(
+      "NVIDIA sent back an empty answer, which usually means the model used its whole token budget on reasoning. Ask again.",
+    );
+  }
+
+  if (lastStatus !== null) throw new Error(friendlyHttpError(lastStatus));
+  throw new Error("NVIDIA could not complete the answer. Please retry.");
+}
+
+/**
+ * Streams a web-connected answer from OpenRouter with its web plugin, which
+ * researches the question and returns url_citation annotations. Used only when
+ * the student asks for web access and the deployment has an OpenRouter key.
+ */
+async function streamWebAnswer(
+  messages: ChatMessage[],
+  onSnapshot: Snapshot,
+): Promise<StreamResult> {
+  const apiKey = readOpenRouterKey();
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set on this deployment.");
+
+  const response = await fetch(OPENROUTER_CHAT_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "HTTP-Referer": "https://bluprint.study",
+      "X-Title": "Bluprint",
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_TUTOR_MODEL,
+      messages,
+      temperature: 0.3,
+      max_tokens: 1500,
+      stream: true,
+      plugins: [{ id: "web", max_results: 4 }],
+    }),
+    signal: AbortSignal.timeout(90_000),
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`OpenRouter could not search the web (HTTP ${response.status}).`);
+  }
+
+  const result = await readChatStream(response, onSnapshot);
+  if (result.text.length === 0) {
+    throw new Error("OpenRouter returned an empty answer.");
+  }
+  return result;
+}
+
+/**
+ * Answers as the tutor, streaming into `onSnapshot`.
+ *
+ * With web access on, OpenRouter's web-connected model researches the question
+ * and cites pages. If that path is unavailable — no key, no credits, an outage
+ * — the answer falls back to NVIDIA using the student's own material, so the
+ * tutor still replies instead of failing.
+ */
+async function streamTutorAnswer(
+  apiKeys: string[],
+  context: TutorContext,
+  question: string,
+  useWeb: boolean,
+  onSnapshot: Snapshot,
+): Promise<StreamResult> {
+  const messages = tutorPrompt(context, question);
+
+  if (useWeb) {
+    try {
+      return await streamWebAnswer(messages, onSnapshot);
+    } catch {
+      // Fall through to the NVIDIA path below.
+    }
+  }
+
+  return await streamNvidiaAnswer(apiKeys, messages, onSnapshot);
+}
+
+/** Trims and validates a tutor question; the UI and the action agree on limits. */
+function readQuestion(question: string): string {
+  const text = question.trim();
+  if (text.length < 3) {
+    throw new Error("Write a question for the tutor first.");
+  }
+  if (text.length > 1200) {
+    throw new Error("Keep the question under 1,200 characters.");
+  }
+  return text;
+}
+
+/**
+ * Answers one tutor question using the set's notes and recent saved turns.
+ *
+ * The reply is streamed: the question and an empty assistant row are saved
+ * first, then the text is written to that row as NVIDIA sends it, so the chat
+ * fills in live. Web search runs before the model is called, and the pages it
+ * found are saved with the answer so citations survive a reload.
  */
 export const askTutor = action({
-  args: { setId: v.id("studySets"), question: v.string() },
-  handler: async (ctx, { setId, question }): Promise<{ reply: string }> => {
+  args: {
+    setId: v.id("studySets"),
+    question: v.string(),
+    useWeb: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { setId, question, useWeb }): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
-    const text = question.trim();
-    if (text.length < 3) {
-      throw new Error("Write a question for the tutor first.");
-    }
-    if (text.length > 1200) {
-      throw new Error("Keep the question under 1,200 characters.");
-    }
+    const text = readQuestion(question);
 
     const context = await ctx.runQuery(internal.tutor.getTutorContext, {
       setId,
@@ -1910,50 +2167,69 @@ export const askTutor = action({
     if (!context) throw new Error("Study set not found.");
 
     const apiKeys = resolveNvidiaKeys();
-    const reply = await answerAsTutor(
-      apiKeys,
-      {
+    const messageId = await ctx.runMutation(internal.tutor.beginTutorExchange, {
+      setId,
+      userId,
+      question: text,
+    });
+
+    try {
+      const tutorContext: TutorContext = {
         title: context.set.title,
         material: context.set.notes,
         course: context.set.course,
         examBoard: context.set.examBoard,
         level: context.set.level,
         messages: context.messages,
-      },
-      text,
-    );
+      };
+      const result = await streamTutorAnswer(
+        apiKeys,
+        tutorContext,
+        text,
+        useWeb !== false,
+        async (content, sources) => {
+          await ctx.runMutation(internal.tutor.appendTutorAnswer, {
+            messageId,
+            content,
+            ...(sources.length > 0 ? { sources } : {}),
+          });
+        },
+      );
 
-    await ctx.runMutation(internal.tutor.saveExchange, {
-      setId,
-      userId,
-      question: text,
-      answer: reply,
-    });
-
-    return { reply };
+      // One last write carries the final text and every page that was cited.
+      await ctx.runMutation(internal.tutor.appendTutorAnswer, {
+        messageId,
+        content: result.text,
+        ...(result.sources.length > 0 ? { sources: result.sources } : {}),
+      });
+      await ctx.runMutation(internal.tutor.finishTutorExchange, { messageId });
+      return { reply: result.text };
+    } catch (error) {
+      await ctx.runMutation(internal.tutor.discardTutorAnswer, { messageId });
+      throw error;
+    }
   },
 });
 
 /**
  * Answers a question pointed at a whole course or one unit of it, using that
  * scope's scraped pathway as context. A unit thread and a course thread are
- * stored separately, so follow-ups stay about what the student opened.
+ * stored separately, so follow-ups stay about what the student opened. Streams
+ * exactly like the study-set tutor.
  */
 export const askCourseTutor = action({
   args: {
     courseId: v.id("courses"),
     unitTitle: v.optional(v.string()),
     question: v.string(),
+    useWeb: v.optional(v.boolean()),
   },
-  handler: async (ctx, { courseId, unitTitle, question }): Promise<{ reply: string }> => {
+  handler: async (
+    ctx,
+    { courseId, unitTitle, question, useWeb },
+  ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
-    const text = question.trim();
-    if (text.length < 3) {
-      throw new Error("Write a question for the tutor first.");
-    }
-    if (text.length > 1200) {
-      throw new Error("Keep the question under 1,200 characters.");
-    }
+    const text = readQuestion(question);
 
     const context = await ctx.runQuery(internal.tutor.getCourseTutorContext, {
       courseId,
@@ -1963,17 +2239,39 @@ export const askCourseTutor = action({
     if (!context) throw new Error("Course not found.");
 
     const apiKeys = resolveNvidiaKeys();
-    const reply = await answerAsTutor(apiKeys, context, text);
+    const messageId = await ctx.runMutation(
+      internal.tutor.beginCourseTutorExchange,
+      { courseId, userId, unitTitle, question: text },
+    );
 
-    await ctx.runMutation(internal.tutor.saveCourseExchange, {
-      courseId,
-      userId,
-      unitTitle,
-      question: text,
-      answer: reply,
-    });
+    try {
+      const result = await streamTutorAnswer(
+        apiKeys,
+        context,
+        text,
+        useWeb !== false,
+        async (content, sources) => {
+          await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
+            messageId,
+            content,
+            ...(sources.length > 0 ? { sources } : {}),
+          });
+        },
+      );
 
-    return { reply };
+      await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
+        messageId,
+        content: result.text,
+        ...(result.sources.length > 0 ? { sources: result.sources } : {}),
+      });
+      await ctx.runMutation(internal.tutor.finishCourseTutorExchange, {
+        messageId,
+      });
+      return { reply: result.text };
+    } catch (error) {
+      await ctx.runMutation(internal.tutor.discardCourseTutorAnswer, { messageId });
+      throw error;
+    }
   },
 });
 

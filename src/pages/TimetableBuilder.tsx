@@ -21,7 +21,10 @@ const DAILY_MINUTES = [30, 60, 90, 120];
 const DAY_OFF_MINUTES = [60, 90, 120, 180, 240];
 const DAYS_PER_WEEK = [3, 5, 7];
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
-const START_HOURS = [9, 10, 14, 16, 17, 18, 19, 20];
+const START_HOURS = [9, 10, 14, 16, 17, 18, 19];
+// Sessions never cross this line, so a start time plus the longest session has
+// to land before it. Kept in step with the planner's LATEST_END_MINUTES.
+const LATEST_END = 20 * 60;
 const MAX_COURSES = 12;
 /** The builder runs as four pages; each has its own URL and one decision. */
 const STEPS = [
@@ -635,11 +638,22 @@ export default function TimetableBuilder() {
                   className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9A6FF]"
                 >
                   {START_HOURS.map((hour) => (
-                    <option key={hour} value={hour * 60}>
+                    <option
+                      key={hour}
+                      value={hour * 60}
+                      disabled={hour * 60 + longestSessionMinutes > LATEST_END}
+                    >
                       {formatTime(hour * 60)}
+                      {hour * 60 + longestSessionMinutes > LATEST_END
+                        ? " — too late for your sessions"
+                        : ""}
                     </option>
                   ))}
                 </select>
+                <span className="mt-2 block text-[0.7rem] font-normal normal-case tracking-normal text-muted-foreground">
+                  Nothing is scheduled to run past {"8:00 pm"}. A session that would
+                  cross it moves to the next revision day.
+                </span>
               </label>
             </div>
           </section>

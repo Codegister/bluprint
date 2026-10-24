@@ -286,6 +286,13 @@ const schema = defineSchema(
       role: v.union(v.literal("user"), v.literal("assistant")),
       content: v.string(),
       createdAt: v.number(),
+      // True while the reply is still being written token by token. The chat
+      // renders the growing content live and shows a caret.
+      streaming: v.optional(v.boolean()),
+      // Pages the answer was allowed to cite, saved with the reply.
+      sources: v.optional(
+        v.array(v.object({ title: v.string(), url: v.string() })),
+      ),
     }).index("by_set", ["setId"]),
 
     // Tutor conversation pointed at a whole course, or at one unit of it. The
@@ -298,6 +305,10 @@ const schema = defineSchema(
       role: v.union(v.literal("user"), v.literal("assistant")),
       content: v.string(),
       createdAt: v.number(),
+      streaming: v.optional(v.boolean()),
+      sources: v.optional(
+        v.array(v.object({ title: v.string(), url: v.string() })),
+      ),
     }).index("by_course", ["courseId"]),
 
     // One row per person per calendar day (UTC) so the dashboard can show a

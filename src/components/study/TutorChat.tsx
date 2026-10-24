@@ -6,7 +6,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
-import { Loader2 } from "lucide-react";
+import { Check, Globe, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const SUGGESTIONS = [
@@ -24,12 +24,50 @@ export type TutorScope =
   | { kind: "set"; setId: Id<"studySets"> }
   | { kind: "course"; courseId: Id<"courses">; unitTitle?: string };
 
+type Source = { title: string; url: string };
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+/** Numbered links that match the [1], [2] citations in an answer. */
+function SourceList({ sources }: { sources: Source[] }) {
+  if (sources.length === 0) return null;
+  return (
+    <ul className="mt-2 space-y-1">
+      {sources.map((source, index) => (
+        <li key={source.url} className="flex items-start gap-1.5 text-[0.74rem]">
+          <span className="mt-px shrink-0 rounded bg-white px-1 font-semibold text-brand-ink/45">
+            {index + 1}
+          </span>
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-w-0 truncate text-[#4C5FD5] underline decoration-[#C6CCF3] underline-offset-2 hover:text-[#3846A8]"
+            title={source.title}
+          >
+            {source.title || hostOf(source.url)}
+          </a>
+          <span className="shrink-0 text-brand-ink/35">{hostOf(source.url)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * Tutor chat for a study set, a course, or a single course unit.
  *
  * The whole thread lives on the server, so switching tabs, reloading, or
- * signing back in keeps the conversation. While a reply is in flight the
- * student's question is shown locally so the wait has context.
+ * signing back in keeps the conversation. Answers stream in: the server opens
+ * an empty reply before it calls NVIDIA and writes the text into it as it
+ * arrives, so this component simply renders the growing message. Web search is
+ * optional per question and the cited pages are saved with the answer.
  */
 export function TutorChat({
   scope,
@@ -64,16 +102,21 @@ export function TutorChat({
         : "Grounded in this course's specification";
 
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useWeb, setUseWeb] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // The reply being written right now, if any.
+  const streaming = messages?.find((message) => message.streaming);
+  const streamedLength = streaming?.content.length ?? 0;
 
   // Keep the newest turn in view without moving the whole page.
   useEffect(() => {
     const node = scrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [messages?.length, sending]);
+  }, [messages?.length, sending, streamedLength]);
 
   const send = async (raw?: string) => {
     const question = (raw ?? draft).trim();
@@ -86,19 +129,20 @@ export function TutorChat({
 
     try {
       if (scope.kind === "set") {
-        await askTutor({ setId: scope.setId, question });
+        await askTutor({ setId: scope.setId, question, useWeb });
       } else {
         await askCourseTutor({
           courseId: scope.courseId,
           unitTitle: scope.unitTitle,
           question,
+          useWeb,
         });
       }
     } catch (sendError) {
       setError(
         readableError(sendError, "The tutor could not answer that. Please try again."),
       );
-      // Put the question back so a retry does not mean retyping it.
+      // The question is already saved, so put it back in the box to ask again.
       setDraft(question);
     } finally {
       setSending(false);
@@ -106,19 +150,37 @@ export function TutorChat({
     }
   };
 
-  const empty = messages !== undefined && messages.length === 0 && !pending;
+  const empty = messages !== undefined && messages.length === 0 && !sending;
 
   return (
     <div className="mx-auto w-full max-w-3xl">
       <section className="gizmo-card overflow-hidden">
-        <header className="border-b border-border px-4 py-4 sm:px-5">
-          <p className="font-display text-[0.98rem] font-bold text-brand-ink">
-            AI tutor
-          </p>
-          <p className="truncate text-[0.74rem] text-muted-foreground">
-            {qualification ? `${qualification} · ` : ""}
-            {groundedIn}
-          </p>
+        <header className="flex items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
+          <div className="min-w-0">
+            <p className="font-display text-[0.98rem] font-bold text-brand-ink">
+              AI tutor
+            </p>
+            <p className="truncate text-[0.74rem] text-muted-foreground">
+              {qualification ? `${qualification} · ` : ""}
+              {groundedIn}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-pressed={useWeb}
+            onClick={() => setUseWeb((value) => !value)}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
+              useWeb
+                ? "border-[#B6E4DB] bg-[#E4F6F2] text-[#0A655C]"
+                : "border-border bg-white text-muted-foreground hover:bg-brand-panel",
+            )}
+            title="Let the tutor search the web for this question"
+          >
+            <Globe className="size-3.5" aria-hidden />
+            Web
+            {useWeb && <Check className="size-3" aria-hidden />}
+          </button>
         </header>
 
         <div
@@ -158,8 +220,8 @@ export function TutorChat({
                 <div
                   key={message._id}
                   className={cn(
-                    "flex gap-2.5",
-                    message.role === "user" && "justify-end",
+                    "flex flex-col gap-1",
+                    message.role === "user" && "items-end",
                   )}
                 >
                   <div
@@ -171,30 +233,37 @@ export function TutorChat({
                     )}
                   >
                     {message.content}
+                    {message.streaming && (
+                      <span
+                        aria-hidden
+                        className="ml-0.5 inline-block h-[1em] w-[2px] translate-y-[2px] animate-pulse bg-brand-ink/50"
+                      />
+                    )}
+                    {message.streaming && message.content.length === 0 && (
+                      <span className="inline-flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        {message.sources.length > 0
+                          ? "Reading the web…"
+                          : useWeb
+                            ? "Searching the web…"
+                            : "Thinking…"}
+                      </span>
+                    )}
                   </div>
+                  {message.role === "assistant" && !message.streaming && (
+                    <div className="max-w-[86%]">
+                      <SourceList sources={message.sources} />
+                    </div>
+                  )}
                 </div>
               ))}
 
-              {pending && (
-                <>
-                  <div className="flex justify-end">
-                    <div className="max-w-[86%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#191B27] px-4 py-3 text-[0.9rem] leading-relaxed text-white">
-                      {pending}
-                    </div>
+              {sending && !streaming && pending && (
+                <div className="flex justify-end">
+                  <div className="max-w-[86%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#191B27] px-4 py-3 text-[0.9rem] leading-relaxed text-white opacity-80">
+                    {pending}
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-brand-panel px-4 py-3.5">
-                      {[0, 1, 2].map((dot) => (
-                        <span
-                          key={dot}
-                          className="size-1.5 animate-pulse rounded-full bg-brand-ink/35"
-                          style={{ animationDelay: `${dot * 160}ms` }}
-                        />
-                      ))}
-                      <span className="sr-only">The tutor is writing</span>
-                    </div>
-                  </div>
-                </>
+                </div>
               )}
             </div>
           )}
@@ -240,8 +309,11 @@ export function TutorChat({
           </div>
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            Enter to send · Shift + Enter for a new line · answers can be wrong, so check
-            them against your notes.
+            Enter to send · Shift + Enter for a new line ·{" "}
+            {useWeb
+              ? "web search is on, so recent and specification details can be checked online."
+              : "web search is off, so answers come from your material and the model only."}{" "}
+            Answers can be wrong, so check them against your notes.
           </p>
         </div>
       </section>

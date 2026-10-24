@@ -51,6 +51,8 @@ export const listMessages = query({
       role: row.role,
       content: row.content,
       createdAt: row.createdAt,
+      streaming: row.streaming ?? false,
+      sources: row.sources ?? [],
     }));
   },
 });
@@ -76,7 +78,7 @@ export const getTutorContext = internalQuery({
         examBoard: set.examBoard,
         level: set.level,
       },
-      messages: inConversationOrder(rows)
+      messages: inConversationOrder(rows.filter((row) => !row.streaming))
         .slice(-HISTORY_LIMIT)
         .map((row) => ({ role: row.role, content: row.content })),
     };
@@ -114,6 +116,8 @@ export const listCourseMessages = query({
         role: row.role,
         content: row.content,
         createdAt: row.createdAt,
+        streaming: row.streaming ?? false,
+        sources: row.sources ?? [],
       }),
     );
   },
@@ -192,76 +196,178 @@ export const getCourseTutorContext = internalQuery({
       course: course.subject,
       examBoard: course.examBoard,
       level: course.level,
-      messages: inConversationOrder(rows.filter((row) => sameScope(row, unitTitle)))
+      messages: inConversationOrder(
+        rows.filter((row) => sameScope(row, unitTitle) && !row.streaming),
+      )
         .slice(-HISTORY_LIMIT)
         .map((row) => ({ role: row.role, content: row.content })),
     };
   },
 });
 
-/** Saves a completed course or unit exchange, never a partial one. */
-export const saveCourseExchange = internalMutation({
+/* -------------------------------------------------------------------------- */
+/* Streaming replies                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A reply is written as it arrives: the question and an empty assistant row are
+ * saved first, the action appends tokens to that row, and the row is marked
+ * complete at the end. If the action dies, the next question deletes the
+ * half-written row, so a crash never leaves a conversation mid-sentence.
+ */
+const MAX_ANSWER_CHARS = 8000;
+const MAX_QUESTION_CHARS = 1200;
+
+/** Persists the question and opens an empty reply for the streaming action. */
+export const beginTutorExchange = internalMutation({
+  args: {
+    setId: v.id("studySets"),
+    userId: v.id("users"),
+    question: v.string(),
+  },
+  handler: async (ctx, { setId, userId, question }) => {
+    const set = await ctx.db.get(setId);
+    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+
+    const existing = await ctx.db
+      .query("tutorMessages")
+      .withIndex("by_set", (q) => q.eq("setId", setId))
+      .collect();
+    for (const row of existing) {
+      if (row.streaming) await ctx.db.delete(row._id);
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("tutorMessages", {
+      setId,
+      userId,
+      role: "user",
+      content: question.slice(0, MAX_QUESTION_CHARS),
+      createdAt: now,
+    });
+    return await ctx.db.insert("tutorMessages", {
+      setId,
+      userId,
+      role: "assistant",
+      content: "",
+      createdAt: now + 1,
+      streaming: true,
+    });
+  },
+});
+
+/** Replaces the streaming reply's text (and sources, once the search is done). */
+export const appendTutorAnswer = internalMutation({
+  args: {
+    messageId: v.id("tutorMessages"),
+    content: v.string(),
+    sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
+  },
+  handler: async (ctx, { messageId, content, sources }) => {
+    const row = await ctx.db.get(messageId);
+    if (!row) return;
+    await ctx.db.patch(messageId, {
+      content: content.slice(0, MAX_ANSWER_CHARS),
+      ...(sources === undefined ? {} : { sources }),
+    });
+  },
+});
+
+/** Marks a reply finished and keeps the deck near the top of "Jump back in". */
+export const finishTutorExchange = internalMutation({
+  args: { messageId: v.id("tutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    const row = await ctx.db.get(messageId);
+    if (!row) return;
+    const now = Date.now();
+    await ctx.db.patch(messageId, { streaming: false });
+    await ctx.db.patch(row.setId, { lastStudiedAt: now, updatedAt: now });
+  },
+});
+
+/** Drops a reply that failed, leaving the question saved for a retry. */
+export const discardTutorAnswer = internalMutation({
+  args: { messageId: v.id("tutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    await ctx.db.delete(messageId);
+  },
+});
+
+/** Course-scoped equivalent of `beginTutorExchange`. */
+export const beginCourseTutorExchange = internalMutation({
   args: {
     courseId: v.id("courses"),
     userId: v.id("users"),
     unitTitle: v.optional(v.string()),
     question: v.string(),
-    answer: v.string(),
   },
-  handler: async (ctx, { courseId, userId, unitTitle, question, answer }) => {
+  handler: async (ctx, { courseId, userId, unitTitle, question }) => {
     const course = await ctx.db.get(courseId);
     if (!course || course.userId !== userId) throw new Error("Course not found.");
 
+    const existing = await ctx.db
+      .query("courseTutorMessages")
+      .withIndex("by_course", (q) => q.eq("courseId", courseId))
+      .collect();
+    for (const row of existing) {
+      if (row.streaming && sameScope(row, unitTitle)) {
+        await ctx.db.delete(row._id);
+      }
+    }
+
     const now = Date.now();
+    const scope = unitTitle ? { unitTitle } : {};
     await ctx.db.insert("courseTutorMessages", {
       courseId,
       userId,
       role: "user",
-      content: question.slice(0, 1200),
+      content: question.slice(0, MAX_QUESTION_CHARS),
       createdAt: now,
-      ...(unitTitle ? { unitTitle } : {}),
+      ...scope,
     });
-    await ctx.db.insert("courseTutorMessages", {
+    return await ctx.db.insert("courseTutorMessages", {
       courseId,
       userId,
       role: "assistant",
-      content: answer.slice(0, 8000),
+      content: "",
       createdAt: now + 1,
-      ...(unitTitle ? { unitTitle } : {}),
+      streaming: true,
+      ...scope,
     });
-    await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
   },
 });
 
-/** Saves one completed exchange once the model has returned a usable answer. */
-export const saveExchange = internalMutation({
+export const appendCourseTutorAnswer = internalMutation({
   args: {
-    setId: v.id("studySets"),
-    userId: v.id("users"),
-    question: v.string(),
-    answer: v.string(),
+    messageId: v.id("courseTutorMessages"),
+    content: v.string(),
+    sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
   },
-  handler: async (ctx, { setId, userId, question, answer }) => {
-    const set = await ctx.db.get(setId);
-    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+  handler: async (ctx, { messageId, content, sources }) => {
+    const row = await ctx.db.get(messageId);
+    if (!row) return;
+    await ctx.db.patch(messageId, {
+      content: content.slice(0, MAX_ANSWER_CHARS),
+      ...(sources === undefined ? {} : { sources }),
+    });
+  },
+});
 
+export const finishCourseTutorExchange = internalMutation({
+  args: { messageId: v.id("courseTutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    const row = await ctx.db.get(messageId);
+    if (!row) return;
     const now = Date.now();
-    await ctx.db.insert("tutorMessages", {
-      setId,
-      userId,
-      role: "user",
-      content: question.slice(0, 1200),
-      createdAt: now,
-    });
-    await ctx.db.insert("tutorMessages", {
-      setId,
-      userId,
-      role: "assistant",
-      content: answer.slice(0, 8000),
-      createdAt: now + 1,
-    });
-    // Keeps the deck near the top of "Jump back in" after a tutoring session.
-    await ctx.db.patch(setId, { lastStudiedAt: now, updatedAt: now });
+    await ctx.db.patch(messageId, { streaming: false });
+    await ctx.db.patch(row.courseId, { lastStudiedAt: now, updatedAt: now });
+  },
+});
+
+export const discardCourseTutorAnswer = internalMutation({
+  args: { messageId: v.id("courseTutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    await ctx.db.delete(messageId);
   },
 });
 
