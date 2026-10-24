@@ -156,6 +156,10 @@ export default function CourseSetup() {
   const [level, setLevel] = useState<string | null>(null);
   const [board, setBoard] = useState("AQA");
   const [selected, setSelected] = useState<Record<string, CourseDraft>>({});
+  // The first board and tier answered become the defaults for every subject
+  // added afterwards, so the same choice is not asked for eight times.
+  const [rememberedBoard, setRememberedBoard] = useState<string | null>(null);
+  const [rememberedTier, setRememberedTier] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [query, setQuery] = useState("");
@@ -207,6 +211,7 @@ export default function CourseSetup() {
   const chooseQualification = (next: string) => {
     const nextBoard = defaultBoardFor(next);
     setLevel(next);
+    setBoard(nextBoard);
     // Boards and tiers differ between qualifications, so existing picks are
     // reset to the new qualification's defaults rather than kept stale.
     setSelected((current) =>
@@ -220,12 +225,17 @@ export default function CourseSetup() {
     setActive(null);
     setQuestionIndex(0);
     setQuery("");
+    // A tier or board only means something inside its qualification.
+    setRememberedBoard(null);
+    setRememberedTier(null);
     setError(null);
   };
 
   const changeQualification = () => {
     setLevel(null);
     setActive(null);
+    setRememberedBoard(null);
+    setRememberedTier(null);
     setQuery("");
     setError(null);
   };
@@ -239,26 +249,47 @@ export default function CourseSetup() {
   const openSubject = (name: string) => {
     const clean = name.trim().slice(0, 80);
     if (clean.length < 2 || !level) return;
-    if (!(clean in selected) && selectedNames.length >= MAX_COURSES) {
+    const existing = clean in selected;
+    if (!existing && selectedNames.length >= MAX_COURSES) {
       toast.error(`You can set up ${MAX_COURSES} courses at a time.`);
       return;
     }
 
+    const choices = tierChoices(level, clean);
+    const nextBoard = rememberedBoard ?? board;
+    // A remembered Higher tier must not be applied to a course that only offers
+    // HL/SL, so check it against this subject's own choices first.
+    const nextAnswer =
+      rememberedTier &&
+      (choices.tiers.includes(rememberedTier) ||
+        choices.variants.includes(rememberedTier))
+        ? rememberedTier
+        : undefined;
+
     setSelected((current) =>
-      clean in current
+      existing
         ? current
         : {
             ...current,
             [clean]: {
-              examBoard: board,
-              tier: defaultTierFor(level, clean),
+              examBoard: nextBoard,
+              ...(choices.variants.length > 0
+                ? nextAnswer
+                  ? { variant: nextAnswer }
+                  : {}
+                : { tier: nextAnswer ?? defaultTierFor(level, clean) }),
             },
           },
     );
     setError(null);
 
-    // Nothing to ask (KS3, AP, university): add it and stay on the list.
-    if (questionsFor(level, clean).length === 0) {
+    const needed = questionsFor(level, clean);
+    // A new subject that can use the remembered answers is added straight away;
+    // clicking an existing one still opens them so it can be changed.
+    const alreadyAnswered = needed.every((question) =>
+      question === "board" ? Boolean(rememberedBoard) : Boolean(nextAnswer),
+    );
+    if (needed.length === 0 || (!existing && alreadyAnswered)) {
       setActive(null);
       return;
     }
@@ -314,12 +345,16 @@ export default function CourseSetup() {
   const answerBoard = (next: string) => {
     if (!active) return;
     setCourseBoard(active, next);
+    // Only the first answer sets the default; a one-off change for one subject
+    // should not quietly rewrite every subject added after it.
+    if (!rememberedBoard) setRememberedBoard(next);
     advance();
   };
 
   const answerTier = (next: string) => {
     if (!active) return;
     setCourseTier(active, next);
+    if (!rememberedTier) setRememberedTier(next);
     advance();
   };
 
@@ -491,7 +526,9 @@ export default function CourseSetup() {
           <p className="mt-3 text-[0.74rem] text-muted-foreground">
             {asking
               ? "One answer at a time. Bluprint saves it and puts you back on the subject list."
-              : "The subjects most students take are listed first. Click a subject to add it and answer its options."}
+              : rememberedBoard || rememberedTier
+                ? "The first board and tier you picked are the default for new subjects. Click an added subject to change just that one."
+                : "The subjects most students take are listed first. Click a subject to add it and answer its options."}
           </p>
 
           <div className="mt-2 max-w-2xl pb-16">
@@ -664,7 +701,9 @@ export default function CourseSetup() {
                           </span>
                           <span className="text-[0.7rem] text-muted-foreground">
                             Uses {level}
-                            {level === "KS3" ? "" : ` · ${boardLabel(board)}`}
+                            {level === "KS3"
+                              ? ""
+                              : ` · ${boardLabel(rememberedBoard ?? board)}`}
                           </span>
                         </span>
                       </button>
