@@ -4,11 +4,6 @@ import React, { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -138,23 +133,15 @@ function ErrorDialog({
           </p>
         </div>
 
-        {technicalDetails && (
-          <Collapsible>
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-100"
-              >
+        {technicalDetails && (            <details className="mt-2 rounded-md border border-zinc-800 bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-zinc-400">
+              <summary className="cursor-pointer list-none flex items-center gap-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-100">
                 <ChevronDown className="h-3.5 w-3.5" />
                 Show technical details
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
+              </summary>
               <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-md border border-zinc-800 bg-black/30 p-3 font-mono text-[11px] leading-relaxed text-zinc-400">
                 {technicalDetails}
               </pre>
-            </CollapsibleContent>
-          </Collapsible>
+            </details>
         )}
 
         <DialogFooter className="gap-3 sm:items-center">

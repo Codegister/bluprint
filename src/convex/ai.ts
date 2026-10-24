@@ -909,7 +909,7 @@ async function generateExams(
           content:
             `${materialBlock(notes)}\n\n` +
             (qualification ? `This set is for ${qualification}.\n` : "") +
-            `Create ${want} exam-style short-answer questions that ask the student to explain, compare, or apply ideas from the material. Each is worth 5-10 marks. Use the full depth of the material rather than one-line recall. ` +
+
             "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
             `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
             "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
@@ -1090,6 +1090,9 @@ function outlineFromPage(page: CognitoOutline): CourseOutline {
           .map((topic) => ({
             title: cleanTitle(topic.title, 160),
             ...(topic.reference ? { reference: topic.reference.slice(0, 20) } : {}),
+            ...(course.subject === "Religious Studies" && course.level === "GCSE" && course.examBoard.toLowerCase().includes("edexcel")
+              ? { reference: `Edexcel GCSE RS` }
+              : undefined),
             subtopics: topic.subtopics
               .map((sub) =>
                 [(sub.reference ?? "").trim(), cleanTitle(sub.title, 160)]
