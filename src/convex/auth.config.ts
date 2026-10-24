@@ -1,12 +1,20 @@
 import type { AuthConfig } from "convex/server";
 
-// Freebuff-signed federated tokens (see freebuff web's
-// src/lib/vly-convex-jwt.ts) let a signed-in freebuff.com user carry their
-// identity into this project without going through local sign-in. customJwt
-// is correct for this provider: freebuff's tokens and JWKS both carry a
-// `kid` header, which the customJwt validation path requires.
+// This project authenticates through Convex Auth and a federated Freebuff
+// session when present. Both providers are validated server-side. No auth token
+// is meant to be read or stored by the client app; the client only gets a
+// signed-in / signed-out state through Convex React.
+
 const freebuffIssuer =
   process.env.VLY_CONVEX_AUTH_ISSUER ?? "https://freebuff.com";
+
+if (!process.env.VLY_INTEGRATION_KEY) {
+  // Email sign-in is useless without the integration gateway. Fail fast in the
+  // deployment so a missing secret does not result in silent auth failures.
+  throw new Error(
+    "VLY_INTEGRATION_KEY is not set on this deployment, so email sign-in cannot send codes.",
+  );
+}
 
 export default {
   providers: [

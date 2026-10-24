@@ -1,6 +1,8 @@
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
+import { requireOwner } from "./lib/authorization";
 
 /**
  * Saved AI tutor threads, one per study set.
@@ -11,6 +13,19 @@ import { requireUserId } from "./lib/requireUser";
  * saves the question and answer together so a failed call never leaves a
  * half-written conversation.
  */
+
+/**
+ * User questions and answers may contain anything a student pastes in. Before
+ * storing or forwarding them, normalize the worst control characters and cap
+ * the length so a single runaway message cannot bloat a conversation.
+ */
+function normalizeTutorText(value: string, max = 4000): string {
+  return value
+    .replace(/\x00/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
 
 /** How many previous turns are replayed as context for the next answer. */
 const HISTORY_LIMIT = 10;
@@ -61,8 +76,18 @@ export const listMessages = query({
 export const getTutorContext = internalQuery({
   args: { setId: v.id("studySets"), userId: v.id("users") },
   handler: async (ctx, { setId, userId }) => {
-    const set = await ctx.db.get(setId);
-    if (!set || set.userId !== userId) return null;
+    const set = await requireOwner(
+      await ctx.db.get(setId),
+      userId,
+    ) as {
+      userId: Id<"users">;
+      title: string;
+      notes: string;
+      course?: string | null;
+      examBoard?: string | null;
+      level?: string | null;
+    };
+    if (!set) return null;
 
     const rows = await ctx.db
       .query("tutorMessages")
@@ -74,9 +99,9 @@ export const getTutorContext = internalQuery({
       set: {
         title: set.title,
         notes: set.notes,
-        course: set.course,
-        examBoard: set.examBoard,
-        level: set.level,
+        course: set.course ?? undefined,
+        examBoard: set.examBoard ?? undefined,
+        level: set.level ?? undefined,
       },
       messages: inConversationOrder(rows.filter((row) => !row.streaming))
         .slice(-HISTORY_LIMIT)
@@ -226,8 +251,10 @@ export const beginTutorExchange = internalMutation({
     question: v.string(),
   },
   handler: async (ctx, { setId, userId, question }) => {
-    const set = await ctx.db.get(setId);
-    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+    const set = await requireOwner(
+      await ctx.db.get(setId),
+      userId,
+    );
 
     const existing = await ctx.db
       .query("tutorMessages")
@@ -242,7 +269,7 @@ export const beginTutorExchange = internalMutation({
       setId,
       userId,
       role: "user",
-      content: question.slice(0, MAX_QUESTION_CHARS),
+      content: normalizeTutorText(question, MAX_QUESTION_CHARS),
       createdAt: now,
     });
     return await ctx.db.insert("tutorMessages", {
@@ -267,11 +294,32 @@ export const appendTutorAnswer = internalMutation({
     const row = await ctx.db.get(messageId);
     if (!row) return;
     await ctx.db.patch(messageId, {
-      content: content.slice(0, MAX_ANSWER_CHARS),
-      ...(sources === undefined ? {} : { sources }),
+      content: normalizeTutorText(content, MAX_ANSWER_CHARS),
+      ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
     });
   },
 });
+
+function sanitizeTutorSources(
+  sources: Array<{ title: string; url: string }>,
+): Array<{ title: string; url: string }> {
+  const out: Array<{ title: string; url: string }> = [];
+  for (const source of sources) {
+    const url = source.url.trim().slice(0, 1000);
+    if (!url) continue;
+    try {
+      const parsed = new URL(url);
+      out.push({
+        title: normalizeTutorText(source.title, 200) || parsed.hostname,
+        url: parsed.toString(),
+      });
+    } catch {
+      // Malformed urls are not trustworthy as links. Drop them rather than
+      // storing strings that the browser might interpret as javascript: etc.
+    }
+  }
+  return out;
+}
 
 /** Marks a reply finished and keeps the deck near the top of "Jump back in". */
 export const finishTutorExchange = internalMutation({
@@ -302,8 +350,10 @@ export const beginCourseTutorExchange = internalMutation({
     question: v.string(),
   },
   handler: async (ctx, { courseId, userId, unitTitle, question }) => {
-    const course = await ctx.db.get(courseId);
-    if (!course || course.userId !== userId) throw new Error("Course not found.");
+    const course = await requireOwner(
+      await ctx.db.get(courseId),
+      userId,
+    );
 
     const existing = await ctx.db
       .query("courseTutorMessages")
@@ -316,12 +366,12 @@ export const beginCourseTutorExchange = internalMutation({
     }
 
     const now = Date.now();
-    const scope = unitTitle ? { unitTitle } : {};
+    const scope = unitTitle ? { unitTitle: normalizeTutorText(unitTitle, 200) } : {};
     await ctx.db.insert("courseTutorMessages", {
       courseId,
       userId,
       role: "user",
-      content: question.slice(0, MAX_QUESTION_CHARS),
+      content: normalizeTutorText(question, MAX_QUESTION_CHARS),
       createdAt: now,
       ...scope,
     });
@@ -347,8 +397,8 @@ export const appendCourseTutorAnswer = internalMutation({
     const row = await ctx.db.get(messageId);
     if (!row) return;
     await ctx.db.patch(messageId, {
-      content: content.slice(0, MAX_ANSWER_CHARS),
-      ...(sources === undefined ? {} : { sources }),
+      content: normalizeTutorText(content, MAX_ANSWER_CHARS),
+      ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
     });
   },
 });

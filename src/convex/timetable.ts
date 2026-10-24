@@ -281,12 +281,14 @@ function dailyCapacity(
   schoolDayMinutes: number,
   dayOffMinutes: number,
 ): number {
-  const isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
-  const isDayOff =
-    isWeekend ||
-    schoolHolidayName(date) !== null ||
-    bankHolidayName(date) !== null;
-  return isDayOff ? dayOffMinutes : schoolDayMinutes;
+  const weekday = date.getUTCDay();
+  const isWeekend = weekday === 0 || weekday === 6;
+  const namedHoliday =
+    schoolHolidayName(date) !== null || bankHolidayName(date) !== null;
+  // Weekdays without school still get the student's chosen day-off budget.
+  // That budget is explicit in the builder — the planner does not assume how
+  // much time someone has on a holiday or half-term.
+  return isWeekend || namedHoliday ? dayOffMinutes : schoolDayMinutes;
 }
 
 /* -------------------------------------------------------------------------- */

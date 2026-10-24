@@ -8,6 +8,10 @@ import {
   query,
 } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
+import {
+  requireVerifiedUser,
+  requireOwner,
+} from "./lib/authorization";
 
 const sourceType = v.union(
   v.literal("text"),
@@ -253,7 +257,9 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
-    const notes = args.notes.trim();
+    await requireVerifiedUser(ctx, userId);
+
+    const notes = normalizeStudyText(args.notes);
     if (args.sourceType === "text" && notes.length < 40) {
       throw new Error("Paste at least a few sentences so Bluprint has source material.");
     }
@@ -271,10 +277,10 @@ export const create = mutation({
       title,
       notes,
       sourceType: args.sourceType,
-      sourceLabel: args.sourceLabel?.slice(0, 120),
-      course: args.course?.trim().slice(0, 60) || undefined,
-      examBoard: args.examBoard?.trim().slice(0, 60) || undefined,
-      level: args.level?.trim().slice(0, 40) || undefined,
+      sourceLabel: safeLabel(args.sourceLabel),
+      course: safeLabel(args.course),
+      examBoard: safeLabel(args.examBoard),
+      level: safeLabel(args.level),
       sourceImageIds: args.sourceImageIds.slice(0, 10),
       status: "queued",
       progress: "Queued",
@@ -291,6 +297,26 @@ export const create = mutation({
     });
   },
 });
+
+/**
+ * Mild normalization for text that will be stored and later shown to the user
+ * or passed into prompts. It trims obvious control characters and collapses
+ * degenerate whitespace, but it does not change the content.
+ */
+function normalizeStudyText(value: string): string {
+  return value
+    .slice(0, 60_000)
+    .replace(/\x00/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Label-style fields are short, plain text. Keep them boring. */
+function safeLabel(value?: string): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.replace(/\x00/g, "").trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 60) : undefined;
+}
 
 /**
  * Renames a set or changes its course / exam context. The generated material
@@ -324,17 +350,19 @@ export const updateDetails = mutation({
     },
   ) => {
     const userId = await requireUserId(ctx);
-    const set = await ctx.db.get(setId);
-    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+    const set = await requireOwner(
+      await ctx.db.get(setId),
+      userId,
+    );
 
-    const nextTitle = title.trim().slice(0, 80);
+    const nextTitle = normalizeStudyText(title);
     if (nextTitle.length < 2) throw new Error("Give the set a name first.");
 
     await ctx.db.patch(setId, {
       title: nextTitle,
-      course: course?.trim().slice(0, 60) || undefined,
-      examBoard: examBoard?.trim().slice(0, 60) || undefined,
-      level: level?.trim().slice(0, 40) || undefined,
+      course: safeLabel(course),
+      examBoard: safeLabel(examBoard),
+      level: safeLabel(level),
       ...(targetCardCount !== undefined
         ? { targetCardCount: targetCount(targetCardCount, 1, 100, set.targetCardCount ?? 20) }
         : {}),
@@ -353,8 +381,10 @@ export const remove = mutation({
   args: { setId: v.id("studySets") },
   handler: async (ctx, { setId }) => {
     const userId = await requireUserId(ctx);
-    const set = await ctx.db.get(setId);
-    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+    const set = await requireOwner(
+      await ctx.db.get(setId),
+      userId,
+    );
 
     await deleteStudySetContent(ctx, setId);
 
@@ -454,6 +484,10 @@ export const reviewCard = mutation({
   },
   handler: async (ctx, { cardId, outcome }) => {
     const userId = await requireUserId(ctx);
+    const card = await requireOwner(
+      await ctx.db.get(cardId),
+      userId,
+    );
     return await applyReview(ctx, userId, cardId, outcome);
   },
 });
@@ -465,8 +499,10 @@ export const submitQuiz = mutation({
   },
   handler: async (ctx, { setId, answers }) => {
     const userId = await requireUserId(ctx);
-    const set = await ctx.db.get(setId);
-    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+    const set = await requireOwner(
+      await ctx.db.get(setId),
+      userId,
+    );
 
     const questions = byOrder(
       await ctx.db
@@ -475,6 +511,16 @@ export const submitQuiz = mutation({
         .collect(),
     );
     if (questions.length === 0) throw new Error("This set has no quiz yet.");
+
+    // Reject oversized or malformed answer arrays early. This is a client trust
+    // boundary: the server should not assume the browser sent one answer per
+    // question in the right order.
+    if (!Array.isArray(answers) || answers.length !== questions.length) {
+      throw new Error("That quiz submission did not look right. Open the quiz again and retry.");
+    }
+    if (answers.some((value) => !Number.isInteger(value) || value < 0 || value > 3)) {
+      throw new Error("That quiz submission did not look right. Open the quiz again and retry.");
+    }
 
     let score = 0;
     questions.forEach((question, index) => {
@@ -673,12 +719,15 @@ export const saveExamResult = internalMutation({
     if (!exam) throw new Error("Question not found.");
     const set = await ctx.db.get(exam.setId);
     if (!set) throw new Error("Study set not found.");
+    if (exam.userId !== set.userId) {
+      throw new Error("That question does not belong to the same set.");
+    }
 
     const now = Date.now();
     await ctx.db.patch(examId, {
-      userAnswer: answer.slice(0, 5000),
+      userAnswer: normalizeStudyText(answer).slice(0, 5000),
       awardedMarks: Math.max(0, Math.min(exam.marks, Math.round(awardedMarks))),
-      feedback: feedback.slice(0, 4000),
+      feedback: normalizeStudyText(feedback).slice(0, 4000),
       gradedAt: now,
     });
     await ctx.db.patch(set._id, { lastStudiedAt: now, updatedAt: now });
