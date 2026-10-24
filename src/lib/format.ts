@@ -41,3 +41,31 @@ export function percent(part: number, total: number): number {
   if (total <= 0) return 0;
   return Math.round((part / total) * 100);
 }
+
+/** Local calendar date for an `<input type="date">`, without UTC drift. */
+export function dateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Noon avoids DST making a calendar date render as the previous day. */
+export function dateFromInput(value: string): Date {
+  return new Date(`${value}T12:00:00`);
+}
+
+export function formatDateInput(value: string): string {
+  return dateFromInput(value).toLocaleDateString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+export function daysUntilInput(value: string): number {
+  const target = dateFromInput(value);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+}

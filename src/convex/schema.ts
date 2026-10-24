@@ -106,6 +106,9 @@ const schema = defineSchema(
       // boards describe it.
       tier: v.optional(v.string()),
       variant: v.optional(v.string()),
+      // English Language/Literature poetry anthology studied at GCSE. Kept as
+      // free text so older courses and other qualifications still load.
+      poetryTheme: v.optional(v.string()),
       status: v.union(
         v.literal("queued"),
         v.literal("processing"),
@@ -143,6 +146,33 @@ const schema = defineSchema(
       updatedAt: v.number(),
       lastStudiedAt: v.optional(v.number()),
     }).index("by_user_updated", ["userId", "updatedAt"]),
+
+    // One saved revision timetable per account. Dates are UTC calendar keys
+    // (YYYY-MM-DD) so a plan renders the same day regardless of server timezone.
+    revisionPlans: defineTable({
+      userId: v.id("users"),
+      startDate: v.string(),
+      examDate: v.string(),
+      sessionMinutes: v.number(),
+      daysPerWeek: v.number(),
+      entries: v.array(
+        v.object({
+          date: v.string(),
+          courseId: v.id("courses"),
+          course: v.string(),
+          unit: v.string(),
+          topicId: v.string(),
+          topic: v.string(),
+          minutes: v.number(),
+        }),
+      ),
+      topicTotal: v.number(),
+      scheduledTopics: v.number(),
+      // True when the plan stops at the session cap before the exam date.
+      truncated: v.boolean(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_user", ["userId"]),
 
     flashcards: defineTable({
       setId: v.id("studySets"),

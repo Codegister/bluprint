@@ -4,7 +4,8 @@ Bluprint is a private revision workspace with two ways in. Choose your courses o
 maps each specification into units and topics, then builds study material for any topic — or
 upload photos of your notes, sample a video, or paste text and compile a study set directly.
 Every set gets a summary, flashcards, a multiple-choice quiz, and exam-style questions with
-AI marking, plus an AI tutor that knows the material.
+AI marking, plus an AI tutor that knows the material. Courses can also be turned into a
+day-by-day revision timetable, with every session linked to a topic study set.
 
 Version 1 is built for a small group of friends. Each person signs in separately and gets
 their own dashboard containing only their courses and study sets.
@@ -38,7 +39,9 @@ select every subject you are taking in one pass (up to 12). Selecting a subject 
 board and tier controls directly beneath it, so a school that uses AQA for Biology and
 Edexcel for Maths is handled without a second setup. GCSE courses also show an explicit
 **Higher tier** / **Foundation tier** choice, with Higher preselected. Combined Science is
-its own subject, so there is no separate Triple/Combined toggle; IB adds HL/SL.
+its own subject, so there is no separate Triple/Combined toggle; IB adds HL/SL. GCSE English
+Language and English Literature also offer a poetry theme choice: **Power and Conflict** or
+**Love and Relationships**.
 
 Bluprint queues each course immediately and maps the current specification server-side:
 6–10 units in teaching order, 4–6 topics per unit, specification references where the model
@@ -91,14 +94,19 @@ niche, exam-distinguishing detail rather than broad topic headings.
 9. **Persist** — study sets, extracted notes, uploads, card progress, due dates, quiz
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
+10. **Plan your revision** — **Build revision timetable** asks which courses to revise, how
+    long each session should be, how many days a week you can work, and when your first exam
+    is. The schedule is saved to your account and appears in the sidebar; clicking a session
+    opens (or builds) the study set for that topic.
 
 After signing in, the main screen is the **Home** dashboard. It keeps one primary action,
-**New study set**, for uploading notes, and one course action, **Add courses**, for building
-AI revision pathways. Below those sit a course table with topic progress and material counts,
-and a saved-sets table with status, due counts, card mastery and last quiz score. Opening a
-set gives you five tabs — Summary, Flashcards, Quiz, Exam, and Tutor — plus a **Set settings**
-button for renaming, rebuilding, or deleting it. Sets built from a course topic link back to
-that course.
+**New study set**, for uploading notes, a **Build revision timetable** action for planning
+course topics, and one course action, **Add courses**, for building AI revision pathways.
+Below those sit a course table with topic progress and material counts, and a saved-sets
+table with status, due counts, card mastery and last quiz score. The sidebar also links to
+the saved **Revision timetable**. Opening a set gives you five tabs — Summary, Flashcards,
+Quiz, Exam, and Tutor — plus a **Set settings** button for renaming, rebuilding, or deleting
+it. Sets built from a course topic link back to that course.
 
 ## Assumptions
 
@@ -274,6 +282,21 @@ same rate-limit messages as the rest of the app.
 - Marking topics complete is manual. A topic's linked study set, card counts, and course
   scores are derived from the set, not duplicated.
 
+## How a revision timetable is built
+
+- The builder asks for courses, session length (25–90 minutes), revision days per week
+  (three, five, or seven), a start date, and the first exam date.
+- The server interleaves topics from the selected course pathways so subjects alternate
+  instead of stacking into one long block. Three-day plans use Monday/Wednesday/Friday;
+  five-day plans use weekdays; seven-day plans use every day.
+- Sessions run from the start date up to the day before the first exam, capped at 60. A plan
+  is deterministic and does not call an AI model, so it builds instantly and cannot fail on
+  a model rate limit.
+- Every entry is clickable. It calls the same topic-to-study-set mutation as the course
+  page, reusing an existing set for that topic or creating one and opening it.
+- Only one plan is stored per account. Building again replaces it, so the sidebar never
+  shows a stale schedule beside a new one.
+
 ## Project structure
 
 ```
@@ -282,9 +305,11 @@ src/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
     Dashboard.tsx        primary actions, course table, and saved study sets
-    CourseSetup.tsx      level, board, and multi-subject course picker
+    CourseSetup.tsx      level, board, poetry theme, and multi-subject course picker
     Course.tsx           one course workspace: units, topics, progress, topic sets
     StudySet.tsx         set detail, compile progress, and the five study tabs
+    TimetableBuilder.tsx course, session, and exam-date questions for a revision plan
+    Timetable.tsx        saved day-by-day plan with clickable topic sessions
   components/
     AppShell.tsx         sidebar / mobile navigation for signed-in pages
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
@@ -293,8 +318,9 @@ src/
     study/               flashcard review, quiz runner, exam practice, tutor chat,
                          set settings
   convex/
-    schema.ts            users, courses, studySets, cards, quiz, exam, tutor, study days
+    schema.ts            users, courses, studySets, cards, quiz, exam, tutor, study days, plans
     courses.ts           pathway CRUD, topic progress, topic-to-set creation, schedulers
+    timetable.ts         deterministic revision-plan generation and saved-plan queries
     studySets.ts         ownership-checked queries/mutations + internal compile writes
     tutor.ts             saved tutor threads and the context the action reads
     ai.ts                "use node" NVIDIA + OpenRouter calls, key rotation, OCR, JSON validation,
@@ -322,6 +348,14 @@ src/
 - **Different boards per subject are supported.** Courses store their own board, so one
   timetable can mix AQA, Edexcel, OCR, and Cambridge. The level is shared across a setup
   batch; add another batch for a different qualification.
+- **There is one active revision timetable per account.** Rebuilding replaces the previous
+  plan. It schedules one topic per revision day, covers up to 60 sessions, and cycles back
+  through topics if there are more revision days than topics. If there are more topics than
+  sessions, the page states how many are covered so the plan is not mistaken for a complete
+  pass.
+- **Timetable dates are UTC calendar keys.** They are stored as `YYYY-MM-DD` and rendered
+  with a local weekday label, so a plan built in one timezone still shows the same dates for
+  friends elsewhere.
 - **Accounts use email codes, not passwords.** Guest sign-in exists for quick demos, but
   guest sets only survive that browser session. Use email to keep sets recoverable.
 - **Sets are private.** There is no sharing or group folder in version 1; friends have

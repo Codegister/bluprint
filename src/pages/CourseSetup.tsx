@@ -7,6 +7,7 @@ import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import {
   SUBJECT_GROUPS,
   SUBJECTS,
+  poetryThemesFor,
   tierChoices,
   tierLabel,
 } from "@/lib/subjects";
@@ -24,6 +25,7 @@ type CourseDraft = {
   examBoard: string;
   tier?: string;
   variant?: string;
+  poetryTheme?: string;
 };
 
 const levelHints: Record<string, string> = {
@@ -48,6 +50,11 @@ function defaultTierFor(level: string, subject: string): string | undefined {
   return tiers.includes("Higher") ? "Higher" : tiers[0];
 }
 
+/** Power and Conflict stays the default; students can switch anthology theme. */
+function defaultPoetryThemeFor(level: string, subject: string): string | undefined {
+  return poetryThemesFor(level, subject)[0];
+}
+
 /**
  * A subject tile that opens its board and tier controls directly underneath.
  * Keeping the editor inside the picker means a chosen subject never sends the
@@ -59,6 +66,7 @@ function SubjectEditor({
   level,
   onToggle,
   onBoard,
+  onPoetryTheme,
   onTier,
 }: {
   name: string;
@@ -66,9 +74,11 @@ function SubjectEditor({
   level: string;
   onToggle: () => void;
   onBoard: (board: string) => void;
+  onPoetryTheme: (theme: string) => void;
   onTier: (field: "tier" | "variant", value: string) => void;
 }) {
   const { variants, tiers } = tierChoices(level, name);
+  const poetryThemes = poetryThemesFor(level, name);
   const cardRef = useRef<HTMLDivElement>(null);
   const wasSelected = useRef(Boolean(draft));
 
@@ -126,6 +136,32 @@ function SubjectEditor({
             ))}
           </select>
         </label>
+
+        {poetryThemes.length > 0 && (
+          <div className="mt-3">
+            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              Poetry theme
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {poetryThemes.map((theme) => (
+                <button
+                  key={theme}
+                  type="button"
+                  aria-pressed={draft.poetryTheme === theme}
+                  onClick={() => onPoetryTheme(theme)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold transition-colors",
+                    draft.poetryTheme === theme
+                      ? "border-[#D1367E] bg-[#FFF0F6] text-[#B12A68]"
+                      : "border-border text-brand-ink/60 hover:bg-brand-panel",
+                  )}
+                >
+                  {theme}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {variants.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -240,7 +276,11 @@ export default function CourseSetup() {
       }
       return {
         ...current,
-        [name]: { examBoard: board, tier: defaultTierFor(level, name) },
+        [name]: {
+          examBoard: board,
+          tier: defaultTierFor(level, name),
+          poetryTheme: defaultPoetryThemeFor(level, name),
+        },
       };
     });
     setError(null);
@@ -264,6 +304,13 @@ export default function CourseSetup() {
     setSelected((current) => ({
       ...current,
       [name]: { ...current[name]!, examBoard: next },
+    }));
+  };
+
+  const setCoursePoetryTheme = (name: string, theme: string) => {
+    setSelected((current) => ({
+      ...current,
+      [name]: { ...current[name]!, poetryTheme: theme },
     }));
   };
 
@@ -302,6 +349,7 @@ export default function CourseSetup() {
       [nameSlice]: {
         examBoard: board,
         tier: defaultTierFor(level, nameSlice),
+        poetryTheme: defaultPoetryThemeFor(level, nameSlice),
       },
     }));
     setCustom("");
@@ -319,7 +367,11 @@ export default function CourseSetup() {
       Object.fromEntries(
         Object.keys(current).map((name) => [
           name,
-          { examBoard: nextBoard, tier: defaultTierFor(next, name) },
+          {
+            examBoard: nextBoard,
+            tier: defaultTierFor(next, name),
+            poetryTheme: defaultPoetryThemeFor(next, name),
+          },
         ]),
       ),
     );
@@ -347,6 +399,7 @@ export default function CourseSetup() {
           examBoard: selected[subject]!.examBoard,
           tier: selected[subject]!.tier,
           variant: selected[subject]!.variant,
+          poetryTheme: selected[subject]!.poetryTheme,
         })),
       });
 
@@ -594,6 +647,7 @@ export default function CourseSetup() {
                         level={level}
                         onToggle={() => toggle(name)}
                         onBoard={(next) => setCourseBoard(name, next)}
+                        onPoetryTheme={(theme) => setCoursePoetryTheme(name, theme)}
                         onTier={(field, value) => setCourseTier(name, field, value)}
                       />
                     ))}
@@ -620,6 +674,9 @@ export default function CourseSetup() {
                           level={level}
                           onToggle={() => toggle(subject.name)}
                           onBoard={(next) => setCourseBoard(subject.name, next)}
+                          onPoetryTheme={(theme) =>
+                            setCoursePoetryTheme(subject.name, theme)
+                          }
                           onTier={(field, value) =>
                             setCourseTier(subject.name, field, value)
                           }

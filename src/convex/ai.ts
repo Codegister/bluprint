@@ -1124,6 +1124,7 @@ function pathwayPrompt(course: {
   examBoard: string;
   tier?: string;
   variant?: string;
+  poetryTheme?: string;
 }): string {
   return (
     `Design a complete revision pathway for this course.\n` +
@@ -1136,8 +1137,14 @@ function pathwayPrompt(course: {
       ? `<route>${course.variant}</route>\n`
       : "") +
     (course.tier ? `<tier>${course.tier}</tier>\n` : "") +
+    (course.poetryTheme
+      ? `<poetry_theme>${course.poetryTheme}</poetry_theme>\n`
+      : "") +
     "\nUse the official specification for this exact course, route, tier and board as your source. " +
     "Pitch the depth at the stated tier: Foundation omits higher-tier-only content, while Higher includes it. If a route is given, follow that route. " +
+    (course.poetryTheme
+      ? "Plan the poetry anthology around the stated poetry theme. Do not default to Power and Conflict when another theme is given. "
+      : "") +
     "Choose the current specification, not an old syllabus. If you are not certain a topic or reference is on the current specification, leave the reference blank rather than inventing one.\n\n" +
     "Rules:\n" +
     "- 6 to 10 units in teaching order. 4 to 6 topics per unit. Cover the whole course, including required practicals, case studies or set texts where the specification requires them.\n" +
@@ -1158,6 +1165,7 @@ async function generateCoursePathway(course: {
   examBoard: string;
   tier?: string;
   variant?: string;
+  poetryTheme?: string;
 }): Promise<CoursePathway> {
   const prompt = pathwayPrompt(course);
   const system: ChatMessage = {

@@ -20,6 +20,7 @@ const navItems = [
   { to: "/dashboard", label: "Home" },
   { to: "/dashboard#courses", label: "My courses" },
   { to: "/dashboard#sets", label: "My sets" },
+  { to: "/timetable", label: "Revision timetable" },
 ] as const;
 
 function DeckRow({
@@ -93,7 +94,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               ? location.pathname === "/dashboard" && !location.hash
               : item.to === "/dashboard#courses"
                 ? location.pathname.startsWith("/courses")
-                : location.pathname.startsWith("/sets/");
+                : item.to === "/dashboard#sets"
+                  ? location.pathname.startsWith("/sets/")
+                  : location.pathname.startsWith("/timetable");
           return (
             <Link
               key={item.label}

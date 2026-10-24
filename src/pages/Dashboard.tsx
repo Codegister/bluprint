@@ -255,12 +255,21 @@ export default function Dashboard() {
             Welcome back, {displayName(user?.name, user?.email)}.
           </p>
         </div>
-        <Button
-          onClick={() => setDialogOpen(true)}
-          className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E]"
-        >
-          New study set
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            asChild
+            variant="outline"
+            className="h-11 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+          >
+            <Link to="/timetable/new">Build revision timetable</Link>
+          </Button>
+          <Button
+            onClick={() => setDialogOpen(true)}
+            className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E]"
+          >
+            New study set
+          </Button>
+        </div>
       </header>
 
       <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground">

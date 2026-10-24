@@ -15,6 +15,8 @@ const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const CourseSetup = lazy(() => import("./pages/CourseSetup.tsx"));
 const CoursePage = lazy(() => import("./pages/Course.tsx"));
 const StudySet = lazy(() => import("./pages/StudySet.tsx"));
+const Timetable = lazy(() => import("./pages/Timetable.tsx"));
+const TimetableBuilder = lazy(() => import("./pages/TimetableBuilder.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 // Simple loading fallback for route transitions
@@ -167,6 +169,28 @@ createRoot(document.getElementById("root")!).render(
                     description="Study sets are private to the account that created them."
                   >
                     <StudySet />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/timetable"
+                element={
+                  <RequireAuth
+                    title="Sign in to see your revision timetable"
+                    description="Your timetable and course topics live in your account."
+                  >
+                    <Timetable />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/timetable/new"
+                element={
+                  <RequireAuth
+                    title="Sign in to build a revision timetable"
+                    description="Timetables are built from your own courses and exam dates."
+                  >
+                    <TimetableBuilder />
                   </RequireAuth>
                 }
               />

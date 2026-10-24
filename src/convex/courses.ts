@@ -62,6 +62,7 @@ export const listMine = query({
         examBoard: course.examBoard,
         tier: course.tier,
         variant: course.variant,
+        poetryTheme: course.poetryTheme,
         status: course.status,
         progress: course.progress,
         errorMessage: course.errorMessage,
@@ -139,6 +140,7 @@ export const createMany = mutation({
         examBoard: v.optional(v.string()),
         tier: v.optional(v.string()),
         variant: v.optional(v.string()),
+        poetryTheme: v.optional(v.string()),
       }),
     ),
   },
@@ -164,6 +166,7 @@ export const createMany = mutation({
           level === "GCSE"
             ? undefined
             : course.variant?.trim().slice(0, 40) || undefined,
+        poetryTheme: course.poetryTheme?.trim().slice(0, 80) || undefined,
       }))
       .filter((course) => course.subject.length > 0)
       .slice(0, MAX_COURSES_PER_SETUP);
@@ -182,14 +185,14 @@ export const createMany = mutation({
     const known = new Set(
       existing.map(
         (course) =>
-          `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}`.toLowerCase(),
+          `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.poetryTheme ?? ""}`.toLowerCase(),
       ),
     );
 
     const now = Date.now();
     const ids: Id<"courses">[] = [];
     for (const course of requested) {
-      const key = `${course.subject}|${level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}`.toLowerCase();
+      const key = `${course.subject}|${level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.poetryTheme ?? ""}`.toLowerCase();
       if (known.has(key)) continue;
       known.add(key);
 
@@ -200,6 +203,7 @@ export const createMany = mutation({
         examBoard: course.examBoard!,
         tier: course.tier,
         variant: course.variant,
+        poetryTheme: course.poetryTheme,
         status: "queued",
         progress: "Queued",
         completedTopics: [],
@@ -284,6 +288,7 @@ export const createTopicSet = mutation({
     const notes = [
       `Course: ${course.level} ${course.subject}`,
       `Exam board: ${course.examBoard}${course.variant ? ` · ${course.variant}` : ""}${course.tier ? ` · ${course.tier}` : ""}`,
+      course.poetryTheme ? `Poetry theme: ${course.poetryTheme}` : "",
       `Unit: ${unit.title}`,
       `Topic: ${topic.title}${topic.specReference ? ` (specification ${topic.specReference})` : ""}`,
       unit.summary ? `Unit overview: ${unit.summary}` : "",

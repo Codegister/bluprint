@@ -145,14 +145,30 @@ export function courseSubtitle(course: {
   examBoard: string;
   tier?: string | null;
   variant?: string | null;
+  poetryTheme?: string | null;
 }): string {
   const qualification = [course.level, course.examBoard].filter(Boolean).join(" · ");
   // Older GCSE courses may still carry a Triple/Combined variant. It is no
   // longer a picker option, so do not surface it as if it were current.
   const route = course.level === "GCSE" ? null : course.variant;
-  return [qualification, route, course.tier ? tierLabel(course.tier) : ""]
+  return [
+    qualification,
+    route,
+    course.tier ? tierLabel(course.tier) : "",
+    course.poetryTheme,
+  ]
     .filter(Boolean)
     .join(", ");
+}
+
+/** GCSE English poetry anthologies offered by the major boards. */
+export const POETRY_THEMES = ["Power and Conflict", "Love and Relationships"] as const;
+
+export function poetryThemesFor(level: string, subject: string): string[] {
+  if (level !== "GCSE") return [];
+  const name = subject.trim().toLowerCase();
+  if (name !== "english language" && name !== "english literature") return [];
+  return [...POETRY_THEMES];
 }
 
 export type TierChoices = {
