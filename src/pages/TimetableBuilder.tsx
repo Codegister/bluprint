@@ -13,9 +13,9 @@ import {
 } from "@/lib/timetable";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { Loader2 } from "lucide-react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 
 const SESSION_MINUTES = [25, 45, 60, 90];
@@ -24,6 +24,13 @@ const DAYS_PER_WEEK = [3, 5, 7];
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
 const START_HOURS = [9, 10, 14, 16, 17, 18, 19, 20];
 const MAX_COURSES = 12;
+/** The builder runs as four pages; each has its own URL and one decision. */
+const STEPS = [
+  { title: "Subjects", color: "#128A4C", tint: "bg-[#EAFBF4]" },
+  { title: "Time per subject", color: "#6B4DBE", tint: "bg-[#F3F0FF]" },
+  { title: "Daily plan", color: "#2B7FB8", tint: "bg-[#EAF4FD]" },
+  { title: "Exam dates", color: "#B7791F", tint: "bg-[#FFF7EC]" },
+] as const;
 
 type CourseSetting = {
   courseId: Id<"courses">;
@@ -58,6 +65,13 @@ function defaultSessionMinutes(dailyMinutes: number): number {
 
 export default function TimetableBuilder() {
   const navigate = useNavigate();
+  const { step: stepParam } = useParams<{ step?: string }>();
+  // Invalid or missing step values fall back to the first page rather than a
+  // blank screen.
+  const parsedStep = Number(stepParam ?? "1");
+  const step = Number.isInteger(parsedStep)
+    ? Math.min(4, Math.max(1, parsedStep))
+    : 1;
   const courses = useQuery(api.courses.listMine);
   const existing = useQuery(api.timetable.getMine);
   const buildPlan = useMutation(api.timetable.build);
@@ -71,6 +85,11 @@ export default function TimetableBuilder() {
   const [settings, setSettings] = useState<CourseSetting[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Each step is a page, so start at the top of it.
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step]);
 
   const ready = (courses ?? []).filter(
     (course) => course.status === "ready" && course.topicCount > 0,
@@ -128,6 +147,20 @@ export default function TimetableBuilder() {
       })),
     );
     setError(null);
+  };
+
+  const goToStep = (next: number) => {
+    const target = Math.min(4, Math.max(1, next));
+    navigate(target === 1 ? "/timetable/new" : `/timetable/new/${target}`);
+  };
+
+  const nextStep = () => {
+    if (step === 1 && settings.length === 0) {
+      setError("Choose at least one course to revise.");
+      return;
+    }
+    setError(null);
+    goToStep(step + 1);
   };
 
   const submit = async () => {
@@ -200,12 +233,60 @@ export default function TimetableBuilder() {
           Build a plan you can actually follow
         </h1>
         <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
-          Choose how long to spend on each subject and each school day. Bluprint
-          builds a weekly calendar, and gives bank holidays, weekends and school
-          holidays double the school-day time. Every session links to
-          its study set.
+          Four short steps. Bluprint builds a weekly calendar, and gives bank
+          holidays, weekends and school holidays double the school-day time.
+          Every session links to its study set.
         </p>
       </header>
+
+      <ol className="mt-5 flex flex-wrap items-stretch gap-2">
+        {STEPS.map((entry, index) => {
+          const value = index + 1;
+          const active = value === step;
+          const done = value < step;
+          return (
+            <li key={entry.title} className="min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => goToStep(value)}
+                aria-current={active ? "step" : undefined}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-2xl border px-3 py-2 text-left transition-colors",
+                  active
+                    ? "bg-white shadow-[0_10px_24px_-22px_rgba(22,24,31,0.5)]"
+                    : "border-border bg-white/60 hover:bg-white",
+                )}
+                style={
+                  active
+                    ? {
+                        backgroundColor: `${entry.color}12`,
+                        borderColor: `${entry.color}44`,
+                      }
+                    : undefined
+                }
+              >
+                <span
+                  className={cn(
+                    "grid size-6 shrink-0 place-items-center rounded-full text-[0.66rem] font-bold text-white",
+                    !active && !done && "bg-[#C9CBD6]",
+                  )}
+                  style={{ backgroundColor: active || done ? entry.color : undefined }}
+                >
+                  {done ? <Check className="size-3" aria-hidden /> : value}
+                </span>
+                <span
+                  className={cn(
+                    "truncate text-[0.76rem] font-semibold",
+                    active ? "text-brand-ink" : "text-muted-foreground",
+                  )}
+                >
+                  {entry.title}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
 
       {ready.length === 0 ? (
         <section className="mt-6 rounded-[2rem] border border-dashed border-border bg-white p-6 sm:p-8">
@@ -226,11 +307,17 @@ export default function TimetableBuilder() {
         </section>
       ) : (
         <div className="mt-6 space-y-4 pb-10">
-          <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+          <section
+            hidden={step !== 1}
+            className="rounded-[2rem] border border-[#CFEBDD] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+          >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h2 className="font-display text-[1.12rem] font-bold text-brand-ink">
-                  1. Subjects to revise
+                <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#0C6B4C]">
+                  Step 1 of 4
+                </p>
+                <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
+                  Which subjects are you revising?
                 </h2>
                 <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
                   Select a course for each subject you want on the timetable.
@@ -292,9 +379,15 @@ export default function TimetableBuilder() {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
-            <h2 className="font-display text-[1.12rem] font-bold text-brand-ink">
-              2. Time per subject and paper
+          <section
+            hidden={step !== 2}
+            className="rounded-[2rem] border border-[#DDD4FB] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+          >
+            <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
+              Step 2 of 4
+            </p>
+            <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
+              How long on each subject, and which papers?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
               Each subject can have its own session length. Choose whether to revise
@@ -404,9 +497,15 @@ export default function TimetableBuilder() {
             )}
           </section>
 
-          <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
-            <h2 className="font-display text-[1.12rem] font-bold text-brand-ink">
-              3. Daily revision time
+          <section
+            hidden={step !== 3}
+            className="rounded-[2rem] border border-[#BFDDEF] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+          >
+            <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#1B5C8A]">
+              Step 3 of 4
+            </p>
+            <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
+              How much time do you have each day?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
               Pick a budget for a school day. Bank holidays, weekends and school
@@ -494,9 +593,15 @@ export default function TimetableBuilder() {
             </div>
           </section>
 
-          <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
-            <h2 className="font-display text-[1.12rem] font-bold text-brand-ink">
-              4. Exam dates
+          <section
+            hidden={step !== 4}
+            className="rounded-[2rem] border border-[#EBD6AB] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+          >
+            <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12]">
+              Step 4 of 4
+            </p>
+            <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
+              When does revision start, and when is the first exam?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
               The plan runs up to the day before your first exam. England and Wales
@@ -553,26 +658,59 @@ export default function TimetableBuilder() {
 
           <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[0.76rem] leading-relaxed text-muted-foreground">
-              {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
-              {dailyMinutes} min on school days · up to{" "}
-              {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} min on days off ·{" "}
-              {daysPerWeek} days a week
+              {step === 4 ? (
+                <>
+                  {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
+                  {dailyMinutes} min on school days · up to{" "}
+                  {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} min on
+                  days off · {daysPerWeek} days a week
+                </>
+              ) : (
+                <>
+                  Step {step} of 4 · {STEPS[step - 1]!.title}
+                  {settings.length > 0 ? ` · ${settings.length} subjects` : ""}
+                </>
+              )}
             </p>
-            <Button
-              onClick={() => void submit()}
-              disabled={
-                saving ||
-                settings.length === 0 ||
-                !startDate ||
-                !examDate ||
-                daysLeft <= 0 ||
-                datesInvalid
-              }
-              className="h-11 w-full rounded-full bg-[#191B27] px-6 text-sm font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50 sm:w-auto"
-            >
-              {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-              Build revision timetable
-            </Button>
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              {step > 1 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => goToStep(step - 1)}
+                  className="h-11 rounded-full border-border bg-white px-4 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                >
+                  <ChevronLeft className="size-4" aria-hidden />
+                  Back
+                </Button>
+              )}
+              {step < 4 ? (
+                <Button
+                  type="button"
+                  onClick={nextStep}
+                  className="h-11 flex-1 rounded-full bg-[#191B27] px-6 text-sm font-semibold text-white hover:bg-[#2A2D3E] sm:flex-none"
+                >
+                  Next
+                  <ChevronRight className="size-4" aria-hidden />
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => void submit()}
+                  disabled={
+                    saving ||
+                    settings.length === 0 ||
+                    !startDate ||
+                    !examDate ||
+                    daysLeft <= 0 ||
+                    datesInvalid
+                  }
+                  className="h-11 flex-1 rounded-full bg-[#191B27] px-6 text-sm font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50 sm:flex-none"
+                >
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                  Build revision timetable
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}

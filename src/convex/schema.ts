@@ -275,6 +275,18 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_set", ["setId"]),
 
+    // Tutor conversation pointed at a whole course, or at one unit of it. The
+    // scope is the pair (courseId, unitTitle); a missing unitTitle means the
+    // whole course. Kept apart from per-set threads so the two never blend.
+    courseTutorMessages: defineTable({
+      userId: v.id("users"),
+      courseId: v.id("courses"),
+      unitTitle: v.optional(v.string()),
+      role: v.union(v.literal("user"), v.literal("assistant")),
+      content: v.string(),
+      createdAt: v.number(),
+    }).index("by_course", ["courseId"]),
+
     // One row per person per calendar day (UTC) so the dashboard can show a
     // daily review goal and a streak without storing every review event.
     studyDays: defineTable({

@@ -41,6 +41,7 @@ function SetRow({ set }: { set: SetSummary }) {
   const mastery = percent(set.knownCount, set.cardCount);
   const processing = set.status === "processing" || set.status === "queued";
   const context = qualificationLabel(set);
+  const accent = subjectMeta(set.course ?? "").color;
 
   return (
     <Link
@@ -75,8 +76,8 @@ function SetRow({ set }: { set: SetSummary }) {
           <div className="mt-2 flex items-center gap-2.5">
             <div className="h-1.5 w-full max-w-[180px] overflow-hidden rounded-full bg-brand-panel">
               <div
-                className="h-full rounded-full bg-[#7C5CFF]"
-                style={{ width: `${mastery}%` }}
+                className="h-full rounded-full"
+                style={{ width: `${mastery}%`, backgroundColor: accent }}
               />
             </div>
             <span className="shrink-0 text-[0.7rem] text-muted-foreground">
@@ -124,8 +125,11 @@ function CourseRow({ course }: { course: CourseSummary }) {
     >
       <div className="flex min-w-0 items-center gap-3">
         <span
-          className={cn("grid size-11 shrink-0 place-items-center rounded-2xl", meta.tint)}
-          style={{ color: meta.color }}
+          className={cn(
+            "grid size-11 shrink-0 place-items-center rounded-2xl border",
+            meta.tint,
+          )}
+          style={{ color: meta.color, borderColor: `${meta.color}33` }}
         >
           <Icon className="size-5" />
         </span>
@@ -167,8 +171,8 @@ function CourseRow({ course }: { course: CourseSummary }) {
             </p>
             <div className="mt-1.5 h-1.5 w-full max-w-[130px] overflow-hidden rounded-full bg-brand-panel">
               <div
-                className="h-full rounded-full bg-[#7C5CFF]"
-                style={{ width: `${mastery}%` }}
+                className="h-full rounded-full"
+                style={{ width: `${mastery}%`, backgroundColor: meta.color }}
               />
             </div>
           </>
@@ -299,29 +303,37 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground">
-        <span>
-          <span className="font-semibold text-brand-ink">{sets?.length ?? 0}</span>{" "}
-          sets
-        </span>
-        <span aria-hidden>·</span>
-        <span>
-          <span className="font-semibold text-brand-ink">{stats.mastery}%</span> of
-          cards known
-        </span>
-        <span aria-hidden>·</span>
-        <span>
-          <span className="font-semibold text-brand-ink">{stats.due}</span> due now
-        </span>
-        {study && (
-          <>
-            <span aria-hidden>·</span>
-            <span>
-              {study.todayCount}/{study.goal} reviewed today
-            </span>
-          </>
-        )}
-      </p>
+      <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
+        <div className="rounded-2xl border border-[#DDD4FB] bg-[#F3F0FF] px-4 py-3">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[#6B4EE6]">
+            Study sets
+          </p>
+          <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
+            {sets?.length ?? 0}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[#CFEBDD] bg-[#F1FBF6] px-4 py-3">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[#0C6B4C]">
+            Cards known
+          </p>
+          <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
+            {stats.mastery}%
+          </p>
+        </div>
+        <div className="rounded-2xl border border-[#F5E2C4] bg-[#FFF7EC] px-4 py-3">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[#96560C]">
+            Due now
+          </p>
+          <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
+            {stats.due}
+            {study && (
+              <span className="ml-2 text-[0.68rem] font-medium text-muted-foreground">
+                {study.todayCount}/{study.goal} reviewed today
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
 
       {ai && !ai.configured && (
         <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.8rem] font-medium text-[#96650A]">
@@ -335,7 +347,7 @@ export default function Dashboard() {
           <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
             Courses
           </h2>
-          <span className="rounded-full bg-[#191B27] px-2 py-0.5 text-[0.64rem] font-bold tabular-nums text-white">
+          <span className="rounded-full bg-[#EAFBF4] px-2 py-0.5 text-[0.64rem] font-bold tabular-nums text-[#0C6B4C]">
             {courseRows?.length ?? 0}
           </span>
           <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
@@ -381,7 +393,7 @@ export default function Dashboard() {
           <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
             Study sets
           </h2>
-          <span className="rounded-full bg-brand-panel px-2 py-0.5 text-[0.64rem] font-bold tabular-nums text-brand-ink/60">
+          <span className="rounded-full bg-[#FFF4E8] px-2 py-0.5 text-[0.64rem] font-bold tabular-nums text-[#96560C]">
             {sets?.length ?? 0}
           </span>
           <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />

@@ -447,7 +447,7 @@ export default function StudySet() {
               </TabsContent>
               <TabsContent value="tutor" className="mt-1">
                 <TutorChat
-                  setId={set._id}
+                  scope={{ kind: "set", setId: set._id }}
                   title={set.title}
                   qualification={qualification}
                 />

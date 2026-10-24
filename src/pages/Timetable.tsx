@@ -367,7 +367,9 @@ export default function Timetable() {
   const plan = useQuery(api.timetable.getMine);
   const openTopic = useMutation(api.courses.createTopicSet);
   const [busy, setBusy] = useState<string | null>(null);
-  const [weekIndex, setWeekIndex] = useState(0);
+  // null follows the first scheduled session; a number is a week the student
+  // has explicitly paged to.
+  const [weekIndex, setWeekIndex] = useState<number | null>(null);
 
   const courseSettings = useMemo(() => {
     if (!plan) return [];
@@ -399,7 +401,27 @@ export default function Timetable() {
   }, [plan]);
 
   const weeks = useMemo(() => (plan ? buildTimetableWeeks(plan) : []), [plan]);
-  const currentWeekIndex = Math.min(weekIndex, Math.max(0, weeks.length - 1));
+  /**
+   * Open on the week that holds the first session. A plan can start in a week
+   * with no revision days (a start date mid-holiday, or a three-day week), and
+   * landing on that empty grid reads as a broken timetable.
+   */
+  const firstEntryWeek = useMemo(() => {
+    if (!plan || plan.entries.length === 0) return 0;
+    const first = plan.entries.reduce(
+      (earliest, entry) => (entry.date < earliest ? entry.date : earliest),
+      plan.entries[0]!.date,
+    );
+    const index = weeks.findIndex((week) =>
+      week.days.some((day) => day.date === first),
+    );
+    return index >= 0 ? index : 0;
+  }, [plan, weeks]);
+
+  const currentWeekIndex = Math.min(
+    weekIndex ?? firstEntryWeek,
+    Math.max(0, weeks.length - 1),
+  );
   const currentWeek = weeks[currentWeekIndex];
 
   const totalMinutes = useMemo(

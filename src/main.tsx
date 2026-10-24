@@ -213,6 +213,19 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
+              {/* The builder runs as four pages; the step is in the URL so each
+                  one can be linked, reloaded and navigated back. */}
+              <Route
+                path="/timetable/new/:step"
+                element={
+                  <RequireAuth
+                    title="Sign in to build a revision timetable"
+                    description="Timetables are built from your own courses and exam dates."
+                  >
+                    <TimetableBuilder />
+                  </RequireAuth>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

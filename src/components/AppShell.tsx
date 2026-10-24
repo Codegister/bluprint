@@ -16,11 +16,32 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
+/** Each destination keeps its own colour, so the sidebar reads as a map. */
 const navItems = [
-  { to: "/dashboard", label: "Home" },
-  { to: "/dashboard#courses", label: "My courses" },
-  { to: "/dashboard#sets", label: "My sets" },
-  { to: "/timetable", label: "Revision timetable" },
+  {
+    to: "/dashboard",
+    label: "Home",
+    active: "bg-[#F3F0FF] text-[#5130D8]",
+    dot: "bg-[#7C5CFF]",
+  },
+  {
+    to: "/dashboard#courses",
+    label: "My courses",
+    active: "bg-[#EAFBF4] text-[#0C6B4C]",
+    dot: "bg-[#128A4C]",
+  },
+  {
+    to: "/dashboard#sets",
+    label: "My sets",
+    active: "bg-[#FFF4E8] text-[#96560C]",
+    dot: "bg-[#F0A03C]",
+  },
+  {
+    to: "/timetable",
+    label: "Revision timetable",
+    active: "bg-[#EAF4FD] text-[#1B5C8A]",
+    dot: "bg-[#2B7FB8]",
+  },
 ] as const;
 
 function DeckRow({
@@ -83,7 +104,11 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
-      <div className="px-5 pt-6 pb-5">
+      <div className="relative overflow-hidden px-5 pb-5 pt-6">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -top-20 h-40 bg-[radial-gradient(circle_at_35%_65%,rgba(124,92,255,0.20),transparent_70%)]"
+        />
         <Brand onNavigate={onNavigate} />
       </div>
 
@@ -103,12 +128,19 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               to={item.to}
               onClick={onNavigate}
               className={cn(
-                "rounded-xl px-3 py-2 text-[0.95rem] font-medium transition-colors",
+                "flex items-center gap-2 rounded-xl px-3 py-2 text-[0.95rem] font-medium transition-colors",
                 active
-                  ? "bg-[#191B27] text-white"
+                  ? `font-semibold ${item.active}`
                   : "text-brand-ink/75 hover:bg-brand-panel hover:text-brand-ink",
               )}
             >
+              <span
+                aria-hidden
+                className={cn(
+                  "size-1.5 rounded-full",
+                  active ? item.dot : "bg-brand-ink/20",
+                )}
+              />
               {item.label}
             </Link>
           );

@@ -128,6 +128,11 @@
   body {
     @apply bg-background font-sans text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    /* Faint colour wash so large white surfaces never read as a blank page. */
+    background-image:
+      radial-gradient(900px 520px at 105% -10%, rgba(124, 92, 255, 0.1), transparent 62%),
+      radial-gradient(760px 420px at -10% 8%, rgba(18, 184, 166, 0.09), transparent 60%);
+    background-attachment: fixed;
   }
   h1,
   h2,

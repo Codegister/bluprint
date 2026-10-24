@@ -7,7 +7,6 @@ import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import {
   SUBJECT_GROUPS,
   SUBJECTS,
-  poetryThemesFor,
   subjectMeta,
   tierChoices,
   tierLabel,
@@ -27,7 +26,6 @@ type CourseDraft = {
   examBoard: string;
   tier?: string;
   variant?: string;
-  poetryTheme?: string;
 };
 
 const levelHints: Record<string, string> = {
@@ -50,11 +48,6 @@ function defaultBoardFor(level: string): string {
 function defaultTierFor(level: string, subject: string): string | undefined {
   const { tiers } = tierChoices(level, subject);
   return tiers.includes("Higher") ? "Higher" : tiers[0];
-}
-
-/** Power and Conflict stays the default; students can switch anthology theme. */
-function defaultPoetryThemeFor(level: string, subject: string): string | undefined {
-  return poetryThemesFor(level, subject)[0];
 }
 
 /** A small segmented control, used for tiers and routes inside a course row. */
@@ -114,7 +107,6 @@ function CourseRow({
   onActivate,
   onRemove,
   onBoard,
-  onPoetryTheme,
   onTier,
 }: {
   name: string;
@@ -124,12 +116,10 @@ function CourseRow({
   onActivate: () => void;
   onRemove: () => void;
   onBoard: (board: string) => void;
-  onPoetryTheme: (theme: string) => void;
   onTier: (field: "tier" | "variant", value: string) => void;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
   const { variants, tiers } = tierChoices(level, name);
-  const poetryThemes = poetryThemesFor(level, name);
   const selected = Boolean(draft);
   const meta = subjectMeta(name);
   const Icon = meta.icon;
@@ -139,7 +129,6 @@ function CourseRow({
     details.push(draft.examBoard);
     if (draft.tier) details.push(tierLabel(draft.tier));
     if (draft.variant) details.push(draft.variant);
-    if (draft.poetryTheme) details.push(draft.poetryTheme);
   }
 
   return (
@@ -235,24 +224,6 @@ function CourseRow({
                 />
               )}
 
-              {poetryThemes.length > 0 && (
-                <label className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-                  Poems
-                  <select
-                    aria-label={`Poetry theme for ${name}`}
-                    value={draft.poetryTheme ?? poetryThemes[0]}
-                    onChange={(event) => onPoetryTheme(event.target.value)}
-                    className="h-8 rounded-lg border border-border bg-white px-1.5 text-[0.72rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#7C5CFF]"
-                  >
-                    {poetryThemes.map((theme) => (
-                      <option key={theme} value={theme}>
-                        {theme}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
               <button
                 type="button"
                 onClick={onRemove}
@@ -320,7 +291,6 @@ export default function CourseSetup() {
         [clean]: {
           examBoard: board,
           tier: defaultTierFor(level, clean),
-          poetryTheme: defaultPoetryThemeFor(level, clean),
         },
       };
     });
@@ -364,7 +334,6 @@ export default function CourseSetup() {
           {
             examBoard: nextBoard,
             tier: defaultTierFor(next, name),
-            poetryTheme: defaultPoetryThemeFor(next, name),
           },
         ]),
       ),
@@ -389,13 +358,6 @@ export default function CourseSetup() {
     setSelected((current) => ({
       ...current,
       [name]: { ...current[name]!, examBoard: next },
-    }));
-  };
-
-  const setCoursePoetryTheme = (name: string, theme: string) => {
-    setSelected((current) => ({
-      ...current,
-      [name]: { ...current[name]!, poetryTheme: theme },
     }));
   };
 
@@ -435,7 +397,6 @@ export default function CourseSetup() {
           examBoard: selected[subject]!.examBoard,
           tier: selected[subject]!.tier,
           variant: selected[subject]!.variant,
-          poetryTheme: selected[subject]!.poetryTheme,
         })),
       });
 
@@ -579,9 +540,6 @@ export default function CourseSetup() {
                       onActivate={() => activate(subject.name)}
                       onRemove={() => removeCourse(subject.name)}
                       onBoard={(next) => setCourseBoard(subject.name, next)}
-                      onPoetryTheme={(theme) =>
-                        setCoursePoetryTheme(subject.name, theme)
-                      }
                       onTier={(field, value) =>
                         setCourseTier(subject.name, field, value)
                       }

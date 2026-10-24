@@ -17,23 +17,51 @@ const SUGGESTIONS = [
 ];
 
 /**
- * Per-set tutor chat.
+ * What a tutor conversation is grounded in. A study set uses its saved notes; a
+ * course uses its scraped pathway, optionally narrowed to one unit.
+ */
+export type TutorScope =
+  | { kind: "set"; setId: Id<"studySets"> }
+  | { kind: "course"; courseId: Id<"courses">; unitTitle?: string };
+
+/**
+ * Tutor chat for a study set, a course, or a single course unit.
  *
- * The whole thread lives on the server (`tutorMessages`), so switching tabs,
- * reloading, or signing back in keeps the conversation. While a reply is in
- * flight the student's question is shown locally so the wait has context.
+ * The whole thread lives on the server, so switching tabs, reloading, or
+ * signing back in keeps the conversation. While a reply is in flight the
+ * student's question is shown locally so the wait has context.
  */
 export function TutorChat({
-  setId,
+  scope,
   title,
   qualification,
 }: {
-  setId: Id<"studySets">;
+  scope: TutorScope;
   title: string;
   qualification?: string;
 }) {
-  const messages = useQuery(api.tutor.listMessages, { setId });
+  // Both subscriptions are declared unconditionally; Convex skips the one that
+  // does not belong to this scope.
+  const setMessages = useQuery(
+    api.tutor.listMessages,
+    scope.kind === "set" ? { setId: scope.setId } : "skip",
+  );
+  const courseMessages = useQuery(
+    api.tutor.listCourseMessages,
+    scope.kind === "course"
+      ? { courseId: scope.courseId, unitTitle: scope.unitTitle }
+      : "skip",
+  );
+  const messages = scope.kind === "set" ? setMessages : courseMessages;
   const askTutor = useAction(api.ai.askTutor);
+  const askCourseTutor = useAction(api.ai.askCourseTutor);
+
+  const groundedIn =
+    scope.kind === "set"
+      ? "Grounded in this set's notes"
+      : scope.unitTitle
+        ? "Grounded in this unit's specification"
+        : "Grounded in this course's specification";
 
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -57,7 +85,15 @@ export function TutorChat({
     setDraft("");
 
     try {
-      await askTutor({ setId, question });
+      if (scope.kind === "set") {
+        await askTutor({ setId: scope.setId, question });
+      } else {
+        await askCourseTutor({
+          courseId: scope.courseId,
+          unitTitle: scope.unitTitle,
+          question,
+        });
+      }
     } catch (sendError) {
       setError(
         readableError(sendError, "The tutor could not answer that. Please try again."),
@@ -80,7 +116,8 @@ export function TutorChat({
             AI tutor
           </p>
           <p className="truncate text-[0.74rem] text-muted-foreground">
-            {qualification ? `${qualification} · ` : ""}Grounded in this set's notes
+            {qualification ? `${qualification} · ` : ""}
+            {groundedIn}
           </p>
         </header>
 
@@ -180,7 +217,11 @@ export function TutorChat({
                   void send();
                 }
               }}
-              placeholder="Ask anything about this set…"
+              placeholder={
+                scope.kind === "set"
+                  ? "Ask anything about this set…"
+                  : "Ask anything about this course…"
+              }
               aria-label="Ask the AI tutor"
               rows={2}
               maxLength={1200}

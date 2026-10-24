@@ -41,9 +41,9 @@ select every subject you are taking in one pass (up to 12). Selecting a subject 
 board and tier controls directly beneath it, so a school that uses AQA for Biology and
 Edexcel for Maths is handled without a second setup. GCSE courses also show an explicit
 **Higher tier** / **Foundation tier** choice, with Higher preselected. Combined Science is
-its own subject, so there is no separate Triple/Combined toggle; IB adds HL/SL. GCSE English
-Language and English Literature also offer a poetry theme choice: **Power and Conflict** or
-**Love and Relationships**.
+its own subject, so there is no separate Triple/Combined toggle; IB adds HL/SL. Poetry is
+not chosen in the picker: every anthology cluster the board publishes arrives as its own
+unit, and the ones your school does not teach are removed from the pathway.
 
 Bluprint queues each course immediately and maps the current specification server-side. It
 starts from the published outline on [Cognito](https://cognito.org) for that exact level,
@@ -56,10 +56,15 @@ points, and exam skill — a long summary, 20 detail-heavy cards, a ten-question
 four exam questions — linked back to the course. Ticking topics off tracks course progress;
 the next unrevised topic is always offered at the top of the course page.
 
-The mapping happens in two passes: an outline, then detail for one unit at a time. Free
-models are busy occasionally, so the app tries the models in order, then NVIDIA, and fills
-any topic a model skips from the outline itself. A course never lands in a "needs a retry"
-state.
+Every unit and topic has its own **remove** control. Removing something edits only the
+pathway: study sets already built from it stay in the library, and a rebuild brings the
+full published outline back. That is how a student keeps one poetry cluster, drops an
+optional unit, or skips a paper their school does not enter them for.
+
+The mapping is deterministic: Cognito's published outline is scraped, then each topic's
+summary and key points are assembled from its own subtopics. No model is consulted, so a
+slow or rate-limited AI provider can never leave a course half-mapped or invent a topic. A
+course never lands in a "needs a retry" state.
 
 ### 2. Upload your own material
 
@@ -88,10 +93,11 @@ niche, exam-distinguishing detail rather than broad topic headings.
    returns in ten minutes, a card you recall returns tomorrow and then at widening
    intervals (×2.5 ease, capped at 180 days). Each deck shows how many cards are due.
 6. **Keep a habit** — the dashboard shows how many cards you have reviewed today against your daily goal.
-7. **Ask the tutor** — every set has an AI tutor tab. It answers using that set's notes,
-   knows the course, board, and level, and keeps the conversation saved so you can come
-   back to it. Suggested first questions get you started; exam practice is one question at
-   a time.
+7. **Ask the tutor** — the tutor can be pointed at a study set, a whole course, or one
+   unit of a course. A set thread reads that set's notes; a course or unit thread reads the
+   scraped pathway for that scope. It knows the course, board, and level, and keeps each
+   conversation saved separately, so a question about one unit never blends into another.
+   Suggested first questions get you started; exam practice is one question at a time.
 8. **Edit and rebuild** — **Set settings** next to a set's title changes its name, course,
    board, or level. "Save and rebuild" regenerates the summary, cards, quiz, and exam
    questions so the new board conventions apply; your notes and uploads are kept.
@@ -146,11 +152,13 @@ it. Sets built from a course topic link back to that course.
   International answers use B1/M1/A1 points, IB extended answers use markband
   descriptors, and AQA, Edexcel, OCR, WJEC, and SQA answers earn one mark per creditable
   bullet.
-- **The tutor is set-scoped.** It reads the current set's notes (up to 12,000 characters)
-  and the last ten saved turns, has no web access, and is not a general-purpose chatbot.
-  That keeps answers aligned with your material and keeps token cost predictable.
-- **Tutor history is saved in the database**, one thread per set and account. There is no
-  clear-thread button yet; deleting the set deletes its conversation with it.
+- **The tutor has three scopes.** A study set reads that set's notes (up to 12,000
+  characters); a course reads the whole scraped pathway; a unit reads only that unit's
+  topics. Each scope keeps the last ten saved turns, has no web access, and is not a
+  general-purpose chatbot. That keeps answers aligned with your material and keeps token
+  cost predictable.
+- **Tutor history is saved in the database**, one thread per set, per course, and per unit.
+  There is no clear-thread button yet; deleting a set or course deletes its conversations.
 
 ## Run it
 
@@ -283,10 +291,11 @@ same rate-limit messages as the rest of the app.
 
 ## How a revision timetable is built
 
-- The builder asks for subjects, a session length for each subject (25, 45, 60, or 90
-  minutes), a paper for each subject (Paper 1, Paper 2, or both), one daily revision budget
-  (30, 60, 90, or 120 minutes), revision days per week (three, five, or seven), a session
-  start time, a start date, and the first exam date.
+- The builder is four separate pages, each with its own URL and a **Next** button:
+  subjects; a session length and paper for each subject (25, 45, 60, or 90 minutes; Paper 1,
+  Paper 2, or both); one daily revision budget (30, 60, 90, or 120 minutes), revision days
+  per week (three, five, or seven) and a session start time; then the start date and first
+  exam date. The four answers stay in place while paging, and the final page builds.
 - The server fills each school day up to the chosen budget with interleaved subject
   sessions, respecting each subject's own length. A short subject can share a day with a
   long one; a subject that no longer fits waits for the next revision day. A different
@@ -307,7 +316,8 @@ same rate-limit messages as the rest of the app.
   instantly and cannot fail on a model rate limit.
 - The saved plan is rendered as a real week table: days run across the top, start times
   run down the left, and each cell holds that day's session or a hatched **Free** block.
-  One week is shown at a time with previous/next controls. Each subject has a colour,
+  One week is shown at a time with previous/next controls, and it opens on the week that
+  holds the first scheduled session rather than an empty calendar week. Each subject has a colour,
   every session shows its start and end time, duration, paper and topic, and bank
   holidays and school breaks are labelled with the longer day they carry.
 - Every entry is clickable. It calls the same topic-to-study-set mutation as the course
@@ -323,7 +333,7 @@ src/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
     Dashboard.tsx        primary actions, course table, and saved study sets
-    CourseSetup.tsx      level, board, poetry theme, and multi-subject course picker
+    CourseSetup.tsx      level, board, tier, and multi-subject course picker
     Course.tsx           one course workspace: units, topics, progress, topic sets
     StudySet.tsx         set detail, compile progress, and the five study tabs
     TimetableBuilder.tsx subjects, per-subject time and paper, daily budget, and exam dates

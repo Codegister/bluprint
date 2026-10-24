@@ -6,6 +6,7 @@ import {
   internalQuery,
   mutation,
   query,
+  type MutationCtx,
 } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 
@@ -141,7 +142,6 @@ export const createMany = mutation({
         examBoard: v.optional(v.string()),
         tier: v.optional(v.string()),
         variant: v.optional(v.string()),
-        poetryTheme: v.optional(v.string()),
       }),
     ),
   },
@@ -167,7 +167,6 @@ export const createMany = mutation({
           level === "GCSE"
             ? undefined
             : course.variant?.trim().slice(0, 40) || undefined,
-        poetryTheme: course.poetryTheme?.trim().slice(0, 80) || undefined,
       }))
       .filter((course) => course.subject.length > 0)
       .slice(0, MAX_COURSES_PER_SETUP);
@@ -186,14 +185,14 @@ export const createMany = mutation({
     const known = new Set(
       existing.map(
         (course) =>
-          `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.poetryTheme ?? ""}`.toLowerCase(),
+          `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}`.toLowerCase(),
       ),
     );
 
     const now = Date.now();
     const ids: Id<"courses">[] = [];
     for (const course of requested) {
-      const key = `${course.subject}|${level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.poetryTheme ?? ""}`.toLowerCase();
+      const key = `${course.subject}|${level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}`.toLowerCase();
       if (known.has(key)) continue;
       known.add(key);
 
@@ -204,7 +203,6 @@ export const createMany = mutation({
         examBoard: course.examBoard!,
         tier: course.tier,
         variant: course.variant,
-        poetryTheme: course.poetryTheme,
         status: "queued",
         progress: "Queued",
         completedTopics: [],
@@ -250,6 +248,94 @@ export const setTopicDone = mutation({
       lastStudiedAt: now,
       updatedAt: now,
     });
+  },
+});
+
+/**
+ * A removed topic's set stays in the library but no longer claims a pathway
+ * topic, so the course page does not show a "Study this topic" button for
+ * something the student has deleted.
+ */
+async function unlinkTopicSets(
+  ctx: MutationCtx,
+  courseId: Id<"courses">,
+  userId: Id<"users">,
+  topicIds: Set<string>,
+) {
+  const sets = await ctx.db
+    .query("studySets")
+    .withIndex("by_course", (q) => q.eq("courseId", courseId))
+    .collect();
+  for (const set of sets) {
+    if (set.userId !== userId) continue;
+    if (set.topicId && topicIds.has(set.topicId)) {
+      await ctx.db.patch(set._id, { courseId: undefined, topicId: undefined });
+    }
+  }
+}
+
+/**
+ * Removes one topic the student does not study — the common case being an
+ * anthology cluster or optional unit their school did not enter them for. The
+ * pathway is the only thing edited, and a rebuild brings the topic back.
+ */
+export const removeTopic = mutation({
+  args: { courseId: v.id("courses"), topicId: v.string() },
+  handler: async (ctx, { courseId, topicId }) => {
+    const userId = await requireUserId(ctx);
+    const course = await ctx.db.get(courseId);
+    if (!course || course.userId !== userId) throw new Error("Course not found.");
+    const pathway = course.pathway;
+    if (!pathway) throw new Error("This pathway is still being built.");
+
+    const removed = pathway.units
+      .flatMap((unit) => unit.topics)
+      .find((topic) => topic.id === topicId);
+    if (!removed) throw new Error("That topic is not part of this pathway.");
+
+    const units = pathway.units
+      .map((unit) => ({
+        ...unit,
+        topics: unit.topics.filter((topic) => topic.id !== topicId),
+      }))
+      .filter((unit) => unit.topics.length > 0);
+
+    await ctx.db.patch(courseId, {
+      pathway: { ...pathway, units },
+      completedTopics: course.completedTopics.filter((id) => id !== topicId),
+      updatedAt: Date.now(),
+    });
+    await unlinkTopicSets(ctx, courseId, userId, new Set([topicId]));
+    return { title: removed.title };
+  },
+});
+
+/** Removes a whole unit, such as a poetry cluster the student is not studying. */
+export const removeUnit = mutation({
+  args: { courseId: v.id("courses"), unitIndex: v.number() },
+  handler: async (ctx, { courseId, unitIndex }) => {
+    const userId = await requireUserId(ctx);
+    const course = await ctx.db.get(courseId);
+    if (!course || course.userId !== userId) throw new Error("Course not found.");
+    const pathway = course.pathway;
+    if (!pathway) throw new Error("This pathway is still being built.");
+
+    const unit = pathway.units[unitIndex];
+    if (!unit || !Number.isInteger(unitIndex)) {
+      throw new Error("That unit is not part of this pathway.");
+    }
+
+    const removedIds = new Set(unit.topics.map((topic) => topic.id));
+    await ctx.db.patch(courseId, {
+      pathway: {
+        ...pathway,
+        units: pathway.units.filter((_, index) => index !== unitIndex),
+      },
+      completedTopics: course.completedTopics.filter((id) => !removedIds.has(id)),
+      updatedAt: Date.now(),
+    });
+    await unlinkTopicSets(ctx, courseId, userId, removedIds);
+    return { title: unit.title, topics: unit.topics.length };
   },
 });
 

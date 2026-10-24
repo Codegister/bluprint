@@ -1558,31 +1558,33 @@ export const gradeExamAnswer = action({
 
 /**
  * The tutor teaches instead of only answering: it explains the reasoning, ties
- * the idea back to the set's notes, and speaks in the command words of the
- * student's exam board. Plain text keeps the chat rendering simple.
+ * the idea back to the material it was pointed at, and speaks in the command
+ * words of the student's exam board. Plain text keeps the chat rendering simple.
  */
 const TUTOR_SYSTEM_PROMPT =
   "You are Bluprint's AI tutor: a patient, precise subject teacher working one-to-one with a student. " +
   "Explain the reasoning rather than only the conclusion, and use a concrete example when it helps. " +
-  "Use the student's notes as the primary source. If the notes do not cover something, say so plainly before giving the standard explanation, and never invent content and attribute it to the notes. " +
+  "Use the provided study material as the primary source. If it does not cover something, say so plainly before giving the standard explanation, and never invent content and attribute it to the material. " +
   "Answer in plain text with short paragraphs and hyphen bullets. No markdown headings, tables, or code fences. " +
   "Be direct and warm, not effusive. Keep answers under 250 words unless the student asks for a model answer or a step-by-step walkthrough.";
 
+/** What the tutor is pointed at, already reduced to plain text. */
+type TutorContext = {
+  /** Set title, or "Subject · Unit" for a pathway conversation. */
+  title: string;
+  material: string;
+  course?: string;
+  examBoard?: string;
+  level?: string;
+  messages: Array<{ role: string; content: string }>;
+};
+
 async function answerAsTutor(
   apiKeys: string[],
-  context: {
-    set: {
-      title: string;
-      notes: string;
-      course?: string;
-      examBoard?: string;
-      level?: string;
-    };
-    messages: Array<{ role: string; content: string }>;
-  },
+  context: TutorContext,
   question: string,
 ): Promise<string> {
-  const qualification = qualificationText(context.set);
+  const qualification = qualificationText(context);
   const history = context.messages
     .map(
       (message) =>
@@ -1597,14 +1599,14 @@ async function answerAsTutor(
       {
         role: "user",
         content:
-          `${materialBlock(context.set.notes)}\n\n` +
-          `<set_title>${context.set.title}</set_title>\n` +
+          `${materialBlock(context.material)}\n\n` +
+          `<material_title>${context.title}</material_title>\n` +
           `<qualification>${qualification || "Not specified"}</qualification>\n` +
-          (context.set.examBoard
-            ? `<mark_scheme_style>${markSchemeStyle(context.set.examBoard)}</mark_scheme_style>\n`
+          (context.examBoard
+            ? `<mark_scheme_style>${markSchemeStyle(context.examBoard)}</mark_scheme_style>\n`
             : "") +
-          (context.set.level
-            ? `Pitch the explanation at ${context.set.level} depth and use that qualification's command words when discussing exam technique.\n`
+          (context.level
+            ? `Pitch the explanation at ${context.level} depth and use that qualification's command words when discussing exam technique.\n`
             : "") +
           `<conversation>\n${history || "(this is the student's first question)"}\n</conversation>\n\n` +
           `<student_question>${question}</student_question>\n\n` +
@@ -1642,11 +1644,65 @@ export const askTutor = action({
     if (!context) throw new Error("Study set not found.");
 
     const apiKeys = resolveNvidiaKeys();
-    const reply = await answerAsTutor(apiKeys, context, text);
+    const reply = await answerAsTutor(
+      apiKeys,
+      {
+        title: context.set.title,
+        material: context.set.notes,
+        course: context.set.course,
+        examBoard: context.set.examBoard,
+        level: context.set.level,
+        messages: context.messages,
+      },
+      text,
+    );
 
     await ctx.runMutation(internal.tutor.saveExchange, {
       setId,
       userId,
+      question: text,
+      answer: reply,
+    });
+
+    return { reply };
+  },
+});
+
+/**
+ * Answers a question pointed at a whole course or one unit of it, using that
+ * scope's scraped pathway as context. A unit thread and a course thread are
+ * stored separately, so follow-ups stay about what the student opened.
+ */
+export const askCourseTutor = action({
+  args: {
+    courseId: v.id("courses"),
+    unitTitle: v.optional(v.string()),
+    question: v.string(),
+  },
+  handler: async (ctx, { courseId, unitTitle, question }): Promise<{ reply: string }> => {
+    const userId = await requireUserId(ctx);
+    const text = question.trim();
+    if (text.length < 3) {
+      throw new Error("Write a question for the tutor first.");
+    }
+    if (text.length > 1200) {
+      throw new Error("Keep the question under 1,200 characters.");
+    }
+
+    const context = await ctx.runQuery(internal.tutor.getCourseTutorContext, {
+      courseId,
+      unitTitle,
+      userId,
+    });
+    if (!context) throw new Error("Course not found.");
+
+    const apiKeys = resolveNvidiaKeys();
+    const reply = await answerAsTutor(apiKeys, context, text);
+
+    await ctx.runMutation(internal.tutor.saveCourseExchange, {
+      courseId,
+      userId,
+      unitTitle,
       question: text,
       answer: reply,
     });
