@@ -49,9 +49,10 @@ with Higher preselected; A-Level asks for a board only; IB asks HL or SL; KS3, A
 university modules have nothing to ask, so tapping one simply adds it. **The first board
 and tier you answer become the default** for every subject added afterwards: after the
 first subject, a new one is added straight away with that board and tier, and the row
-shows the choice so you can see it. Clicking an already-added subject reopens its
-questions so a subject with a different board or tier can be changed (changing it then
-updates only that subject, not the default). KS3 stores no board
+shows the choice with a small star, and the row is briefly highlighted as it appears.
+Clicking an already-added subject reopens its questions so a subject with a different
+board or tier can be changed (changing it then updates only that subject, not the
+default), and finishing the questions returns you to the same scroll position in the list. KS3 stores no board
 or tier and is scraped from Cognito's KS3 subject pages. Combined Science is its own
 subject, so there is no separate Triple/Combined toggle. Poetry is
 not chosen in the picker: every anthology cluster the board publishes arrives as its own

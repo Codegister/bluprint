@@ -13,8 +13,17 @@ import {
 } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
-import { Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, X } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Plus,
+  Search,
+  Star,
+  X,
+} from "lucide-react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -82,11 +91,17 @@ function SubjectRow({
   name,
   draft,
   active,
+  isDefault,
+  flashed,
   onOpen,
 }: {
   name: string;
   draft?: CourseDraft;
   active: boolean;
+  /** True when the row's board and tier are the remembered defaults. */
+  isDefault: boolean;
+  /** Briefly ring the row when it was just added without questions. */
+  flashed: boolean;
   onOpen: () => void;
 }) {
   const meta = subjectMeta(name);
@@ -111,9 +126,11 @@ function SubjectRow({
         "flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
         active
           ? "border-[#7C5CFF]/50 bg-white shadow-[0_8px_20px_-18px_rgba(22,24,31,0.6)]"
-          : selected
-            ? "border-border bg-white"
-            : "border-transparent hover:border-border hover:bg-white",
+          : flashed
+            ? "border-[#7C5CFF] bg-[#FAF8FF] ring-2 ring-[#7C5CFF]/20"
+            : selected
+              ? "border-border bg-white"
+              : "border-transparent hover:border-border hover:bg-white",
       )}
     >
       <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg", meta.tint)}>
@@ -124,8 +141,18 @@ function SubjectRow({
           {name}
         </span>
         {detail && (
-          <span className="mt-0.5 block truncate text-[0.68rem] text-muted-foreground">
-            {detail}
+          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[0.68rem] text-muted-foreground">
+            {isDefault && (
+              <>
+                <Star
+                  className="size-2.5 shrink-0 text-[#7C5CFF]"
+                  fill="currentColor"
+                  aria-hidden
+                />
+                <span className="sr-only">Default board and tier:</span>
+              </>
+            )}
+            <span className="min-w-0 truncate">{detail}</span>
           </span>
         )}
       </span>
@@ -165,6 +192,11 @@ export default function CourseSetup() {
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The row that was just added with the defaults, so it can be rung briefly.
+  const [flashed, setFlashed] = useState<string | null>(null);
+  const flashTimer = useRef<number | null>(null);
+  // Where the list was scrolled to before its questions replaced it.
+  const listScroll = useRef(0);
 
   const selectedNames = Object.keys(selected);
   const selectedCount = selectedNames.length;
@@ -176,6 +208,20 @@ export default function CourseSetup() {
   const distinctBoards = boardsInUse.size;
   // The summary reflects the courses actually chosen, not just the default.
   const summaryBoard = distinctBoards === 1 ? [...boardsInUse][0]! : board;
+
+  /** True when a row's answers are exactly the remembered defaults. */
+  const usesDefaults = (draft?: CourseDraft) => {
+    if (!draft || (!rememberedBoard && !rememberedTier)) return false;
+    if (rememberedBoard && draft.examBoard !== rememberedBoard) return false;
+    if (
+      rememberedTier &&
+      draft.tier !== rememberedTier &&
+      draft.variant !== rememberedTier
+    ) {
+      return false;
+    }
+    return true;
+  };
 
   const ordered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -242,8 +288,13 @@ export default function CourseSetup() {
 
   /** Back to the list; the last answer is already saved. */
   const finishQuestions = () => {
+    const top = listScroll.current;
     setActive(null);
     setQuestionIndex(0);
+    // The question card is much shorter than the list, so the browser pulls the
+    // page upward while it is open. Put the student back where they were once
+    // the list is back in the DOM.
+    requestAnimationFrame(() => window.scrollTo({ top }));
   };
 
   const openSubject = (name: string) => {
@@ -291,8 +342,15 @@ export default function CourseSetup() {
     );
     if (needed.length === 0 || (!existing && alreadyAnswered)) {
       setActive(null);
+      if (!existing && alreadyAnswered) {
+        // Show that the subject picked up the remembered options.
+        setFlashed(clean);
+        if (flashTimer.current) window.clearTimeout(flashTimer.current);
+        flashTimer.current = window.setTimeout(() => setFlashed(null), 1400);
+      }
       return;
     }
+    if (!active) listScroll.current = window.scrollY;
     setQuestionIndex(0);
     setActive(clean);
   };
@@ -526,9 +584,7 @@ export default function CourseSetup() {
           <p className="mt-3 text-[0.74rem] text-muted-foreground">
             {asking
               ? "One answer at a time. Bluprint saves it and puts you back on the subject list."
-              : rememberedBoard || rememberedTier
-                ? "The first board and tier you picked are the default for new subjects. Click an added subject to change just that one."
-                : "The subjects most students take are listed first. Click a subject to add it and answer its options."}
+              : "The subjects most students take are listed first. Click a subject to add it."}
           </p>
 
           <div className="mt-2 max-w-2xl pb-16">
@@ -681,6 +737,8 @@ export default function CourseSetup() {
                           name={subject.name}
                           draft={selected[subject.name]}
                           active={false}
+                          isDefault={usesDefaults(selected[subject.name])}
+                          flashed={flashed === subject.name}
                           onOpen={() => openSubject(subject.name)}
                         />
                       </Fragment>
