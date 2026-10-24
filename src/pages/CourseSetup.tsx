@@ -54,6 +54,49 @@ type CourseDraft = {
 /** The questions asked after a subject is tapped, in order. */
 type Question = "board" | "tier";
 
+type CourseDraft = {
+  examBoard: string;
+  tier?: string;
+  variant?: string;
+  rsRoute?: string;
+  rsReligion?: string;
+  rsSpec?: string;
+};
+
+const RS_ROUTES = ["Edexcel Religious Studies A", "Edexcel Religious Studies B"] as const;
+
+const RS_SPEC_A_TITLES = [
+  "Religion and Life",
+  "Religion and Society",
+  "Religion and Crime and Punishment",
+  "Religion and Peace and Conflict",
+];
+
+const RS_SPEC_B_TITLES = [
+  "Believing in God",
+  "Religion and Ethics",
+];
+
+const RS_RELIGIONS_A = [
+  "Christianity",
+  "Catholic Christianity",
+  "Islam",
+  "Judaism",
+  "Sikhism",
+];
+
+const RS_SPEC_A_LABELS = new Map([
+  [RS_SPEC_A_TITLES[0], "Religion and Life"],
+  [RS_SPEC_A_TITLES[1], "Religion and Society"],
+  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
+  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
+]);
+
+const RS_SPEC_B_LABELS = new Map([
+  [RS_SPEC_B_TITLES[0], "Believing in God"],
+  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
+]);
+
 const levelHints: Record<string, string> = {
   GCSE: "Years 10–11",
   KS3: "Years 7–9",
@@ -62,6 +105,51 @@ const levelHints: Record<string, string> = {
   AP: "Advanced Placement",
   Undergraduate: "University",
 };
+
+type CourseDraft = {
+  examBoard: string;
+  tier?: string;
+  variant?: string;
+  rsRoute?: string;
+  rsReligion?: string;
+  rsSpec?: string;
+};
+
+const RS_ROUTES = ["Edexcel Religious Studies A", "Edexcel Religious Studies B"] as const;
+
+const RS_SPEC_A_TITLES = [
+  "Religion and Life",
+  "Religion and Society",
+  "Religion and Crime and Punishment",
+  "Religion and Peace and Conflict",
+];
+
+const RS_SPEC_B_TITLES = [
+  "Believing in God",
+  "Religion and Ethics",
+];
+
+const RS_RELIGIONS_A = [
+  "Christianity",
+  "Catholic Christianity",
+  "Islam",
+  "Judaism",
+  "Sikhism",
+];
+
+const RS_SPEC_A_LABELS = new Map([
+  [RS_SPEC_A_TITLES[0], "Religion and Life"],
+  [RS_SPEC_A_TITLES[1], "Religion and Society"],
+  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
+  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
+]);
+
+const RS_SPEC_B_LABELS = new Map([
+  [RS_SPEC_B_TITLES[0], "Believing in God"],
+  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
+]);
+
+
 
 /** Religious Studies Edexcel GCSE route choices. These are separate from the
  *  generic tier/variant machinery because RS schools follow very different
@@ -300,8 +388,11 @@ export default function CourseSetup() {
   const activeMeta = active ? subjectMeta(active) : null;
   const activeChoices = active && level ? tierChoices(level, active) : null;
   const questions = active && level ? questionsFor(level, active) : [];
-  const currentQuestion: Question | null =
+  const currentQuestion: Question | "rs" | null =
     questions[Math.min(questionIndex, Math.max(0, questions.length - 1))] ?? null;
+  const rsChoices = currentQuestion === "rs"
+    ? rsRouteChoices(activeDraft)
+    : null;
   const rsChoices = active && level === "GCSE" && active === "Religious Studies"
     ? rsRouteChoices(activeDraft)
     : null;
@@ -392,6 +483,19 @@ export default function CourseSetup() {
         { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
       ],
     };
+  };
+
+  const answerRs = (key: "rsRoute" | "rsReligion" | "rsSpec", value: string) => {
+    if (!active) return;
+    setSelected((current) => {
+      const course = current[active];
+      if (!course) return current;
+      return {
+        ...current,
+        [active]: { ...course, [key]: value },
+      };
+    });
+    setError(null);
   };
 
   const openSubject = (name: string) => {
@@ -510,6 +614,20 @@ export default function CourseSetup() {
     if (!active) return;
     setCourseTier(active, next);
     if (!rememberedTier) setRememberedTier(next);
+    advance();
+  };
+
+  const answerRs = (key: "rsRoute" | "rsReligion" | "rsSpec", value: string) => {
+    if (!active) return;
+    setSelected((current) => {
+      const course = current[active];
+      if (!course) return current;
+      return {
+        ...current,
+        [active]: { ...course, [key]: value },
+      };
+    });
+    setError(null);
     advance();
   };
 

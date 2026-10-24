@@ -1090,9 +1090,6 @@ function outlineFromPage(page: CognitoOutline): CourseOutline {
           .map((topic) => ({
             title: cleanTitle(topic.title, 160),
             ...(topic.reference ? { reference: topic.reference.slice(0, 20) } : {}),
-            ...(course.subject === "Religious Studies" && course.level === "GCSE" && course.examBoard.toLowerCase().includes("edexcel")
-              ? { reference: `Edexcel GCSE RS` }
-              : undefined),
             subtopics: topic.subtopics
               .map((sub) =>
                 [(sub.reference ?? "").trim(), cleanTitle(sub.title, 160)]
