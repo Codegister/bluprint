@@ -13,8 +13,8 @@ import {
 } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
-import { Check, ChevronRight, Loader2, Plus, Search, X } from "lucide-react";
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Plus, Search, X } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -186,7 +186,6 @@ export default function CourseSetup() {
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const panelRef = useRef<HTMLElement | null>(null);
 
   const selectedNames = Object.keys(selected);
   const selectedCount = selectedNames.length;
@@ -268,14 +267,6 @@ export default function CourseSetup() {
     );
     setActive(clean);
     setError(null);
-
-    // On a phone the panel sits below the list, so bring the settings the
-    // student just opened into view.
-    if (window.matchMedia("(max-width: 1023px)").matches) {
-      window.requestAnimationFrame(() => {
-        panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
   };
 
   const addCustom = () => {
@@ -289,11 +280,9 @@ export default function CourseSetup() {
       delete next[name];
       return next;
     });
-    setActive((current) => {
-      if (current !== name) return current;
-      const remaining = selectedNames.filter((entry) => entry !== name);
-      return remaining[0] ?? null;
-    });
+    // Removing the subject being edited returns to the list rather than
+    // opening a different subject the student did not ask for.
+    setActive((current) => (current === name ? null : current));
     setError(null);
   };
 
@@ -471,7 +460,7 @@ export default function CourseSetup() {
               </span>
             </button>
 
-            <div className="relative sm:ml-auto sm:w-64">
+            <div className={cn("relative sm:ml-auto sm:w-64", active && "hidden")}>
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
                 aria-hidden
@@ -497,12 +486,15 @@ export default function CourseSetup() {
           </div>
 
           <p className="mt-3 text-[0.74rem] text-muted-foreground">
-            The subjects most students take are listed first. Click any subject
-            to set its exam board{level === "KS3" ? "" : " and tier"} in the panel.
+            {active
+              ? "Set this course's options below, then choose Done. Your other courses are on the subject list."
+              : "The subjects most students take are listed first. Click a subject to switch this panel to its options."}
           </p>
 
-          <div className="mt-2 grid items-start gap-4 pb-16 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <div>
+          <div className="mt-2 max-w-2xl pb-16">
+            {/* The list and the settings swap in the same place, so choosing a
+                subject never sends anyone scrolling down the page. */}
+            <div className={cn(activeDraft && "hidden")}>
               {ordered.length === 0 && !showCustom ? (
                 <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
                   <p className="text-[0.85rem] text-muted-foreground">
@@ -551,13 +543,19 @@ export default function CourseSetup() {
               )}
             </div>
 
-            <aside
-              ref={panelRef}
-              className="scroll-mt-4 lg:sticky lg:top-20 lg:self-start"
-            >
-              <div className="rounded-[1.6rem] border border-border bg-white p-4 shadow-[0_16px_40px_-34px_rgba(22,24,31,0.5)]">
+            <aside className={cn(!activeDraft && "hidden")}>
+              <div className="rounded-[1.6rem] border border-border bg-white p-4 shadow-[0_16px_40px_-34px_rgba(22,24,31,0.5)] sm:p-5">
                 {active && activeDraft && activeMeta && activeTiers ? (
                   <>
+                    <button
+                      type="button"
+                      onClick={() => setActive(null)}
+                      className="mb-3 flex items-center gap-1 text-[0.74rem] font-semibold text-muted-foreground transition-colors hover:text-brand-ink"
+                    >
+                      <ChevronLeft className="size-3.5" aria-hidden />
+                      All subjects
+                    </button>
+
                     <div className="flex items-start gap-2.5">
                       <span
                         className={cn(
@@ -646,17 +644,7 @@ export default function CourseSetup() {
                         </button>
                       )}
                   </>
-                ) : (
-                  <div className="px-1 py-8 text-center">
-                    <p className="font-display text-[0.95rem] font-bold text-brand-ink">
-                      Pick a subject
-                    </p>
-                    <p className="mx-auto mt-1 max-w-[15rem] text-[0.76rem] leading-relaxed text-muted-foreground">
-                      Its exam board{level === "KS3" ? "" : ", tier"} and route
-                      appear here, one subject at a time.
-                    </p>
-                  </div>
-                )}
+                ) : null}
 
                 {selectedCount > 0 && (
                   <div className="mt-4 border-t border-border pt-3">
@@ -691,6 +679,13 @@ export default function CourseSetup() {
                     </ul>
                   </div>
                 )}
+
+                <Button
+                  onClick={() => setActive(null)}
+                  className="mt-4 h-9 w-full rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+                >
+                  Done
+                </Button>
               </div>
             </aside>
           </div>
