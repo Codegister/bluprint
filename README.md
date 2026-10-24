@@ -292,10 +292,14 @@ same rate-limit messages as the rest of the app.
   minutes), a paper for each subject (Paper 1, Paper 2, or both), one daily revision budget
   (30, 60, 90, or 120 minutes), revision days per week (three, five, or seven), a session
   start time, a start date, and the first exam date.
-- The server fills each revision day up to the daily budget with interleaved subject
+- The server fills each school day up to the chosen budget with interleaved subject
   sessions, respecting each subject's own length. A short subject can share a day with a
   long one; a subject that no longer fits waits for the next revision day. A different
   subject starts each day so the same course does not always occupy the first slot.
+- Weekends and school-holiday weekdays get **at least 50% more time** than a school
+  day, with a floor that guarantees one extra whole session, so a seven-day plan naturally
+  puts more work into Saturday, Sunday, and half-term. Bank holidays are skipped entirely
+  instead of being given extra time.
 - Three-day plans use Monday/Wednesday/Friday, five-day plans use weekdays, and seven-day
   plans use every day. The selected paper rotates between Paper 1 and Paper 2 when the
   student chooses to cover both.
@@ -305,9 +309,11 @@ same rate-limit messages as the rest of the app.
 - Sessions run from the start date up to the day before the first exam, capped at 60
   revision days. A plan is deterministic and does not call an AI model, so it builds
   instantly and cannot fail on a model rate limit.
-- The saved plan is rendered as a weekly Monday-to-Sunday calendar. Each subject has a
-  colour, every session shows its start time, duration, paper and topic, and bank holidays
-  are marked as paused days.
+- The saved plan is rendered as a real week table: days run across the top, start times
+  run down the left, and each cell holds that day's session or a hatched **Free** block.
+  One week is shown at a time with previous/next controls. Each subject has a colour,
+  every session shows its start and end time, duration, paper and topic, and bank
+  holidays are marked as paused days.
 - Every entry is clickable. It calls the same topic-to-study-set mutation as the course
   page, reusing an existing set for that topic or creating one and opening it.
 - Only one plan is stored per account. Building again replaces it, so the sidebar never
@@ -372,6 +378,12 @@ src/
 - **Timetable holidays cover England and Wales.** Scotland and Northern Ireland have
   different bank holiday dates; supporting those would need a region choice, which version 1
   leaves out to keep the setup short.
+- **School-break dates are typical England term dates, not an official local-authority
+  calendar.** The planner uses the common Monday-to-Friday windows for autumn, Christmas,
+  February, Easter, May, and summer breaks. Local authorities can differ by a week; the
+  table labels the break it used, and rebuilding after checking your school calendar is the
+  simplest adjustment. Weekends and these break weekdays receive the same 50% capacity
+  boost (at least 50%, plus one whole extra session); bank holidays remain paused.
 - **Paper choices label sessions, not separate sets.** A session marked Paper 1 or Paper 2
   opens the topic's study set; the set still covers the whole specification topic. Choosing
   "both" alternates the paper label between sessions so the plan covers both papers over

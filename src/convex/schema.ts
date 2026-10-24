@@ -192,6 +192,16 @@ const schema = defineSchema(
           }),
         ),
       ),
+      // Typical England school breaks. These get the same extra capacity as a
+      // weekend, unlike bank holidays, which are skipped.
+      schoolHolidays: v.optional(
+        v.array(
+          v.object({
+            date: v.string(),
+            name: v.string(),
+          }),
+        ),
+      ),
       topicTotal: v.number(),
       scheduledTopics: v.number(),
       // True when the plan stops at the session cap before the exam date.

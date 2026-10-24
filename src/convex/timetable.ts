@@ -7,16 +7,25 @@ import { requireUserId } from "./lib/requireUser";
  * Revision timetables.
  *
  * The planner fills each revision day with several subject sessions, using the
- * duration chosen for that subject, until the student's daily time budget is
- * used. It skips UK bank holidays and stores the resolved sessions with start
- * times so the frontend can render a weekly grid rather than a long list.
+ * duration chosen for that subject, until the day's time budget is used. Bank
+ * holidays are skipped, and weekends/school holidays get more time than a
+ * school day. Sessions are stored with start times so the frontend can render
+ * a real week grid rather than a long list.
  */
 
 const MAX_DAYS = 60;
-const MAX_ENTRIES = 280;
+// Extra weekend/holiday capacity means a plan can hold more sessions than the
+// old flat-budget limit. The document stays comfortably below Convex's size
+// limit even with a short session length across all 60 revision days.
+const MAX_ENTRIES = 480;
 
 const SESSION_LENGTHS = [25, 45, 60, 90];
 const DAILY_LENGTHS = [30, 60, 90, 120];
+// A school day uses the chosen budget. Weekends and school holidays get 50%
+// more, because there is no school day to work around. Bank holidays are
+// skipped entirely. This is deliberately a simple multiplier rather than a
+// minute-by-minute model of a student's calendar.
+const EXTENDED_DAY_MULTIPLIER = 1.5;
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
 const DAYS_PER_WEEK = [3, 5, 7];
 
@@ -166,6 +175,104 @@ function bankHolidaysBetween(start: Date, end: Date) {
   return [...seen.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, name]) => ({ date, name }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* School holidays (typical England term breaks)                               */
+/* -------------------------------------------------------------------------- */
+
+function mondayOnOrAfter(value: Date): Date {
+  const offset = (1 - value.getUTCDay() + 7) % 7;
+  return addDays(value, offset);
+}
+
+function nthMonday(year: number, monthIndex: number, occurrence: number): Date {
+  const first = mondayOnOrAfter(new Date(Date.UTC(year, monthIndex, 1)));
+  return addDays(first, (occurrence - 1) * 7);
+}
+
+const schoolHolidayCache = new Map<number, Map<string, string>>();
+
+/**
+ * Typical England school break dates. Local authorities differ by a week in
+ * places, so these are the common Monday-to-Friday windows rather than an
+ * official calendar. They are used to give holiday weekdays the same extra
+ * capacity as a weekend.
+ */
+function schoolHolidaysForYear(year: number): Map<string, string> {
+  const cached = schoolHolidayCache.get(year);
+  if (cached) return cached;
+
+  const holidays = new Map<string, string>();
+  const addRange = (start: Date, end: Date, name: string) => {
+    for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) {
+      const weekday = cursor.getUTCDay();
+      if (weekday !== 0 && weekday !== 6) {
+        holidays.set(toDateKey(cursor), name);
+      }
+    }
+  };
+
+  addRange(lastMonday(year, 9), addDays(lastMonday(year, 9), 4), "Autumn half-term");
+  addRange(
+    mondayOnOrAfter(new Date(Date.UTC(year, 11, 19))),
+    new Date(Date.UTC(year + 1, 0, 1)),
+    "Christmas break",
+  );
+  const february = nthMonday(year, 1, 3);
+  addRange(february, addDays(february, 4), "February half-term");
+  const easter = easterSunday(year);
+  addRange(addDays(easter, 1), addDays(easter, 14), "Easter break");
+  addRange(lastMonday(year, 4), addDays(lastMonday(year, 4), 4), "May half-term");
+  const summer = nthMonday(year, 6, 3);
+  addRange(summer, new Date(Date.UTC(year, 7, 31)), "Summer break");
+
+  schoolHolidayCache.set(year, holidays);
+  return holidays;
+}
+
+function schoolHolidayName(date: Date): string | null {
+  const key = toDateKey(date);
+  return (
+    schoolHolidaysForYear(date.getUTCFullYear()).get(key) ??
+    // The Christmas range starts in the previous calendar year and can include
+    // the first day of January.
+    schoolHolidaysForYear(date.getUTCFullYear() - 1).get(key) ??
+    null
+  );
+}
+
+function schoolHolidaysBetween(start: Date, end: Date) {
+  const seen = new Map<string, string>();
+  for (let year = start.getUTCFullYear() - 1; year <= end.getUTCFullYear(); year += 1) {
+    for (const [date, name] of schoolHolidaysForYear(year)) {
+      if (date >= toDateKey(start) && date < toDateKey(end) && !seen.has(date)) {
+        seen.set(date, name);
+      }
+    }
+  }
+  return [...seen.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, name]) => ({ date, name }));
+}
+
+/**
+ * The time budget for a date: the school-day budget, or at least 50% more in a
+ * break. The `base + minSession` floor guarantees the extra capacity fits a
+ * whole extra session, even when 1.5x still rounds to the same number of
+ * sessions (for example, a 60-minute day with 60-minute subjects).
+ */
+function dailyCapacity(
+  date: Date,
+  schoolDayMinutes: number,
+  minSessionMinutes: number,
+): number {
+  const isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
+  if (!isWeekend && schoolHolidayName(date) === null) return schoolDayMinutes;
+  const multiplied = Math.round(
+    (schoolDayMinutes * EXTENDED_DAY_MULTIPLIER) / 5,
+  ) * 5;
+  return Math.max(multiplied, schoolDayMinutes + minSessionMinutes);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -378,6 +485,7 @@ export const build = mutation({
     let cursor = parseDateKey(start);
     let revisionDays = 0;
     let truncated = false;
+    const minSession = Math.min(...states.map((state) => state.minutes));
 
     while (cursor < examDate) {
       const dayIsHoliday = bankHolidayName(cursor) !== null;
@@ -388,7 +496,7 @@ export const build = mutation({
         }
         const sessions = scheduleDay(
           states,
-          args.dailyMinutes,
+          dailyCapacity(cursor, args.dailyMinutes, minSession),
           args.startMinutes,
           revisionDays,
         );
@@ -437,6 +545,7 @@ export const build = mutation({
       }),
       entries,
       holidays: bankHolidaysBetween(parseDateKey(start), examDate),
+      schoolHolidays: schoolHolidaysBetween(parseDateKey(start), examDate),
       topicTotal,
       scheduledTopics,
       truncated,

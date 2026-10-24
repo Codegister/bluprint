@@ -136,6 +136,41 @@ export function formatTime(minutes: number): string {
   return `${displayHour}:${minute.toString().padStart(2, "0")} ${suffix}`;
 }
 
+/** 24-hour clock used by the timetable grid, e.g. 17:05. */
+export function formatTime24(minutes: number): string {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+}
+
+export function formatTimeRange(startMinutes: number, duration: number): string {
+  return `${formatTime24(startMinutes)}–${formatTime24(startMinutes + duration)}`;
+}
+
+/**
+ * The extra capacity used for weekends and school holidays. Must match the
+ * backend: at least 1.5x the school-day budget, and always enough for one
+ * extra session of the shortest selected length.
+ */
+export function extendedDailyMinutes(
+  schoolDayMinutes: number,
+  minSessionMinutes = 25,
+): number {
+  return Math.max(
+    Math.round((schoolDayMinutes * 1.5) / 5) * 5,
+    schoolDayMinutes + minSessionMinutes,
+  );
+}
+
+export function formatDayHeading(value: string): string {
+  return new Date(`${value}T00:00:00.000Z`).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export function formatDayLabel(value: string): string {
   return new Date(`${value}T00:00:00.000Z`).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -159,8 +194,11 @@ export type TimetableDay = {
   date: string;
   label: string;
   dayNumber: string;
+  isWeekend: boolean;
   isHoliday: boolean;
   holidayName: string | null;
+  isSchoolHoliday: boolean;
+  schoolHolidayName: string | null;
   isExamDay: boolean;
   entries: RevisionEntry[];
   minutes: number;
@@ -202,6 +240,9 @@ export function buildTimetableWeeks(plan: RevisionPlan): TimetableWeek[] {
   const holidaysByDate = new Map(
     (plan.holidays ?? []).map((holiday) => [holiday.date, holiday.name]),
   );
+  const schoolHolidaysByDate = new Map(
+    (plan.schoolHolidays ?? []).map((holiday) => [holiday.date, holiday.name]),
+  );
   const lastEntryDate = plan.entries.reduce(
     (latest, entry) => (entry.date > latest ? entry.date : latest),
     plan.startDate,
@@ -222,6 +263,7 @@ export function buildTimetableWeeks(plan: RevisionPlan): TimetableWeek[] {
     const days: TimetableDay[] = WEEKDAY_NAMES.map((_, offset) => {
       const date = addDaysKey(weekStart, offset);
       const entries = entriesByDate.get(date) ?? [];
+      const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
       return {
         date,
         label: formatDayLabel(date),
@@ -229,8 +271,11 @@ export function buildTimetableWeeks(plan: RevisionPlan): TimetableWeek[] {
           day: "numeric",
           timeZone: "UTC",
         }),
+        isWeekend: weekday === 0 || weekday === 6,
         isHoliday: holidaysByDate.has(date),
         holidayName: holidaysByDate.get(date) ?? null,
+        isSchoolHoliday: schoolHolidaysByDate.has(date),
+        schoolHolidayName: schoolHolidaysByDate.get(date) ?? null,
         isExamDay: date === plan.examDate,
         entries,
         minutes: entries.reduce((sum, entry) => sum + entry.minutes, 0),

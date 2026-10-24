@@ -6,17 +6,20 @@ import { daysUntilInput } from "@/lib/format";
 import {
   buildTimetableWeeks,
   colorForCourses,
+  extendedDailyMinutes,
+  formatDayHeading,
   formatDayLabel,
   formatLongDate,
-  formatTime,
+  formatTime24,
+  formatTimeRange,
   SUBJECT_COLORS,
   type RevisionEntry,
   type SubjectColor,
-  type TimetableDay,
+  type TimetableWeek,
 } from "@/lib/timetable";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
-import { Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -42,6 +45,7 @@ function SessionBlock({
   disabled: boolean;
   onOpen: () => void;
 }) {
+  const start = entry.startMinutes ?? 17 * 60;
   return (
     <button
       type="button"
@@ -49,107 +53,299 @@ function SessionBlock({
       disabled={disabled}
       title={`${entry.unit} · ${entry.topic}`}
       aria-label={`Study ${entry.topic} from ${entry.course}`}
-      className={cn(
-        "relative w-full overflow-hidden rounded-xl border py-1.5 pl-3 pr-2 text-left transition-shadow hover:shadow-[0_6px_16px_-10px_rgba(22,24,31,0.55)] disabled:opacity-60",
-        color.tint,
-        color.border,
-      )}
+      className="group relative flex min-h-[78px] w-full flex-col overflow-hidden rounded-xl border border-border bg-white py-1.5 pl-3 pr-2 text-left shadow-[0_1px_2px_rgba(22,24,31,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#CFC7E8] hover:shadow-[0_8px_18px_-12px_rgba(22,24,31,0.5)] disabled:opacity-60"
     >
       <span
         aria-hidden
         className={cn("absolute inset-y-0 left-0 w-1.5", color.bar)}
       />
       <span className="flex items-center justify-between gap-1">
-        <span className={cn("text-[0.62rem] font-bold", color.text)}>
-          {formatTime(entry.startMinutes ?? 17 * 60)}
-        </span>
-        <span className="text-[0.58rem] font-medium text-muted-foreground">
-          {durationLabel(entry.minutes)}
-        </span>
-      </span>
-      <span className="mt-0.5 block text-[0.7rem] font-semibold leading-snug text-brand-ink line-clamp-2">
-        {entry.topic}
-      </span>
-      <span className="mt-0.5 block truncate text-[0.6rem] text-muted-foreground">
-        {entry.course}
-      </span>
-      <span className="mt-1 flex items-center gap-1">
-        <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[0.55rem] font-semibold text-brand-ink/70">
-          {entry.paper ?? "All papers"}
+        <span className="text-[0.54rem] font-semibold tabular-nums text-muted-foreground">
+          {formatTimeRange(start, entry.minutes)}
         </span>
         {loading && (
           <Loader2 className="size-3 animate-spin text-muted-foreground" />
         )}
       </span>
+      <span className="mt-1 line-clamp-2 text-[0.7rem] font-bold leading-snug text-brand-ink">
+        {entry.topic}
+      </span>
+      <span className="mt-auto truncate pt-1 text-[0.58rem] font-medium text-muted-foreground">
+        {entry.course}
+      </span>
+      <span
+        className={cn(
+          "mt-1 w-fit rounded-full px-1.5 py-0.5 text-[0.5rem] font-semibold",
+          color.tint,
+          color.text,
+        )}
+      >
+        {entry.paper ?? "All papers"}
+      </span>
     </button>
   );
 }
 
-function DaySessions({
-  day,
+const FREE_CELL_STYLE = {
+  backgroundImage:
+    "repeating-linear-gradient(135deg, #F7F7FA 0 7px, #FCFCFD 7px 14px)",
+};
+
+function WeekTable({
+  week,
+  daysPerWeek,
   colorByCourse,
   busy,
   onOpen,
-  emptyLabel,
+  weekIndex,
+  weekCount,
+  onPrevious,
+  onNext,
 }: {
-  day: TimetableDay;
+  week: TimetableWeek;
+  daysPerWeek: number;
   colorByCourse: Map<string, SubjectColor>;
   busy: string | null;
   onOpen: (entry: RevisionEntry) => void;
-  emptyLabel: string;
+  weekIndex: number;
+  weekCount: number;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
-  return (
-    <>
-      {day.isHoliday && (
-        <div className="rounded-lg border border-[#EBD6AB] bg-[#FFF8EA] px-2 py-1.5">
-          <p className="text-[0.58rem] font-bold uppercase tracking-[0.05em] text-[#8A5D00]">
-            Bank holiday
-          </p>
-          <p className="mt-0.5 text-[0.62rem] font-medium leading-snug text-[#8A5D00]">
-            {day.holidayName}
-          </p>
-          <p className="mt-0.5 text-[0.56rem] text-[#8A5D00]/75">
-            Revision paused
-          </p>
-        </div>
-      )}
-      {day.isExamDay && (
-        <div className="rounded-lg border border-[#EDC4D2] bg-[#FAE9EF] px-2 py-1.5">
-          <p className="text-[0.58rem] font-bold uppercase tracking-[0.05em] text-[#98304F]">
-            First exam
-          </p>
-          <p className="mt-0.5 text-[0.56rem] text-[#98304F]/80">
-            No revision scheduled
-          </p>
-        </div>
-      )}
+  // Five- and three-day plans read as a school week. Seven-day plans add the
+  // weekend columns, which is where the extra capacity is most visible.
+  const days =
+    daysPerWeek === 7 ? week.days : week.days.filter((day) => !day.isWeekend);
+  const entriesByStart = new Map<number, Map<string, RevisionEntry[]>>();
+  for (const day of days) {
+    for (const entry of day.entries) {
+      const start = entry.startMinutes ?? 17 * 60;
+      const byDate = entriesByStart.get(start) ?? new Map<string, RevisionEntry[]>();
+      const list = byDate.get(day.date) ?? [];
+      list.push(entry);
+      byDate.set(day.date, list);
+      entriesByStart.set(start, byDate);
+    }
+  }
+  const starts = [...entriesByStart.keys()].sort((a, b) => a - b);
+  const today = new Date().toISOString().slice(0, 10);
+  const gridStyle = {
+    gridTemplateColumns: `76px repeat(${days.length}, minmax(0, 1fr))`,
+  };
+  const minimumWidth = days.length === 7 ? 1040 : 860;
 
-      <div className="mt-1.5 space-y-1.5">
-        {day.entries.map((entry) => {
-          const key = `${entry.date}:${entry.topicId}:${entry.startMinutes ?? 0}`;
-          return (
-            <SessionBlock
-              key={key}
-              entry={entry}
-              color={colorByCourse.get(entry.courseId) ?? SUBJECT_COLORS[0]}
-              loading={busy === key}
-              disabled={busy !== null}
-              onOpen={() => onOpen(entry)}
-            />
-          );
-        })}
-        {day.entries.length === 0 && !day.isHoliday && !day.isExamDay && (
-          <p className="px-1 py-5 text-center text-[0.64rem] text-muted-foreground/60">
-            {emptyLabel}
+  return (
+    <section className="mt-4 overflow-hidden rounded-[1.6rem] border border-border bg-white shadow-[0_18px_44px_-34px_rgba(22,24,31,0.35)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-[#FCFCFD] px-4 py-3">
+        <div>
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Week {weekIndex + 1} of {weekCount}
           </p>
-        )}
-        {day.entries.length === 0 && day.isExamDay && (
-          <p className="px-1 pt-1 text-center text-[0.56rem] text-muted-foreground/60">
-            {emptyLabel}
+          <p className="mt-0.5 text-[0.88rem] font-bold text-brand-ink">
+            {formatDayLabel(week.days[0].date)} – {formatDayLabel(week.days[6].date)}
           </p>
-        )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            onClick={onPrevious}
+            disabled={weekIndex === 0}
+            aria-label="Previous week"
+            className="rounded-full border-border bg-white shadow-none hover:bg-brand-panel"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <span className="text-[0.7rem] font-semibold text-muted-foreground">
+            {durationLabel(week.minutes)} planned
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            onClick={onNext}
+            disabled={weekIndex >= weekCount - 1}
+            aria-label="Next week"
+            className="rounded-full border-border bg-white shadow-none hover:bg-brand-panel"
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
       </div>
-    </>
+
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: minimumWidth }}>
+          <div
+            className="grid border-b border-border bg-[#FCFCFD]"
+            style={gridStyle}
+          >
+            <div className="sticky left-0 z-10 flex items-end bg-[#FCFCFD] px-2.5 py-2 text-[0.56rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Time
+            </div>
+            {days.map((day) => {
+              const isToday = day.date === today;
+              return (
+                <div
+                  key={day.date}
+                  className={cn(
+                    "border-l border-border/60 px-2 py-2.5 text-center",
+                    isToday ? "bg-[#2F6BFF] text-white" : "bg-[#FCFCFD]",
+                  )}
+                >
+                  <p className="text-[0.74rem] font-bold tracking-[-0.01em]">
+                    {formatDayHeading(day.date)}
+                  </p>
+                  <div className="mt-1 flex min-h-5 items-center justify-center">
+                    {day.isExamDay ? (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          isToday
+                            ? "bg-white/20 text-white"
+                            : "bg-[#FAE9EF] text-[#98304F]",
+                        )}
+                      >
+                        First exam
+                      </span>
+                    ) : day.isHoliday ? (
+                      <span
+                        className={cn(
+                          "truncate rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          isToday
+                            ? "bg-white/20 text-white"
+                            : "bg-[#FFF6E5] text-[#8A5D00]",
+                        )}
+                        title={day.holidayName ?? "Bank holiday"}
+                      >
+                        Bank holiday
+                      </span>
+                    ) : day.isSchoolHoliday ? (
+                      <span
+                        className={cn(
+                          "max-w-full truncate rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          isToday
+                            ? "bg-white/20 text-white"
+                            : "bg-[#E6F9F6] text-[#0A655C]",
+                        )}
+                        title={day.schoolHolidayName ?? "School holiday"}
+                      >
+                        {day.schoolHolidayName ?? "School holiday"}
+                      </span>
+                    ) : day.isWeekend ? (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          isToday
+                            ? "bg-white/20 text-white"
+                            : "bg-brand-panel text-muted-foreground",
+                        )}
+                      >
+                        Weekend
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          isToday
+                            ? "bg-white/20 text-white"
+                            : day.minutes > 0
+                              ? "bg-brand-panel text-muted-foreground"
+                              : "text-muted-foreground/60",
+                        )}
+                      >
+                        {day.minutes > 0 ? durationLabel(day.minutes) : "Free"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {starts.length === 0 ? (
+            <div className="px-6 py-12 text-center text-[0.8rem] text-muted-foreground">
+              No revision is scheduled in this week.
+            </div>
+          ) : (
+            starts.map((start) => (
+              <div
+                key={start}
+                className="grid border-b border-border/70 last:border-b-0"
+                style={gridStyle}
+              >
+                <div className="sticky left-0 z-10 flex items-start border-r border-border/60 bg-[#FCFCFD] px-2.5 py-2">
+                  <span className="text-[0.66rem] font-bold tabular-nums text-brand-ink">
+                    {formatTime24(start)}
+                  </span>
+                </div>
+                {days.map((day) => {
+                  const entries = entriesByStart.get(start)?.get(day.date) ?? [];
+                  const paused = day.isHoliday || day.isExamDay;
+                  // A previous row's longer session can still be running here.
+                  // Leave that cell blank rather than labelling it "Free".
+                  const covered = day.entries.some((entry) => {
+                    const entryStart = entry.startMinutes ?? 17 * 60;
+                    return entryStart < start && start < entryStart + entry.minutes;
+                  });
+                  return (
+                    <div
+                      key={`${day.date}:${start}`}
+                      className={cn(
+                        "min-h-[94px] border-l border-border/60 p-1.5",
+                        day.isHoliday
+                          ? "bg-[#FFFBF2]"
+                          : day.isExamDay
+                            ? "bg-[#FFF7F9]"
+                            : "bg-white",
+                      )}
+                    >
+                      {entries.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {entries.map((entry) => {
+                            const key = `${entry.date}:${entry.topicId}:${entry.startMinutes ?? 0}`;
+                            return (
+                              <SessionBlock
+                                key={key}
+                                entry={entry}
+                                color={
+                                  colorByCourse.get(entry.courseId) ??
+                                  SUBJECT_COLORS[0]
+                                }
+                                loading={busy === key}
+                                disabled={busy !== null}
+                                onOpen={() => onOpen(entry)}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : paused || covered ? (
+                        <div className="h-full min-h-[74px]" />
+                      ) : (
+                        <div
+                          className="flex h-full min-h-[74px] items-center justify-center rounded-lg border border-dashed border-border/70 text-[0.58rem] font-medium text-muted-foreground/50"
+                          style={FREE_CELL_STYLE}
+                        >
+                          Free
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-[#FCFCFD] px-4 py-2.5 text-[0.64rem] text-muted-foreground">
+        <span>Click a session to open its study set.</span>
+        <span>
+          {days.length} day{days.length === 1 ? "" : "s"} · {" "}
+          {durationLabel(week.minutes)} planned
+        </span>
+      </div>
+    </section>
   );
 }
 
@@ -158,6 +354,7 @@ export default function Timetable() {
   const plan = useQuery(api.timetable.getMine);
   const openTopic = useMutation(api.courses.createTopicSet);
   const [busy, setBusy] = useState<string | null>(null);
+  const [weekIndex, setWeekIndex] = useState(0);
 
   const courseSettings = useMemo(() => {
     if (!plan) return [];
@@ -180,7 +377,17 @@ export default function Timetable() {
     [courseSettings],
   );
 
+  const minSessionMinutes = useMemo(() => {
+    const minutes =
+      plan?.courseSettings?.map((setting) => setting.minutes) ??
+      plan?.entries.map((entry) => entry.minutes) ??
+      [];
+    return minutes.length > 0 ? Math.min(...minutes) : 25;
+  }, [plan]);
+
   const weeks = useMemo(() => (plan ? buildTimetableWeeks(plan) : []), [plan]);
+  const currentWeekIndex = Math.min(weekIndex, Math.max(0, weeks.length - 1));
+  const currentWeek = weeks[currentWeekIndex];
 
   const totalMinutes = useMemo(
     () => (plan?.entries ?? []).reduce((sum, entry) => sum + entry.minutes, 0),
@@ -258,6 +465,8 @@ export default function Timetable() {
   }
 
   const daysLeft = daysUntilInput(plan.examDate);
+  const holidayAware = plan.schoolHolidays !== undefined;
+  const schoolDayMinutes = plan.dailyMinutes ?? plan.sessionMinutes ?? 60;
 
   return (
     <AppShell>
@@ -293,7 +502,16 @@ export default function Timetable() {
         <span aria-hidden>·</span>
         <span>{durationLabel(totalMinutes)} total</span>
         <span aria-hidden>·</span>
-        <span>{plan.dailyMinutes ?? plan.sessionMinutes ?? 60} minutes a day</span>
+        <span>{schoolDayMinutes} min on school days</span>
+        {holidayAware && (
+          <>
+            <span aria-hidden>·</span>
+            <span>
+              {extendedDailyMinutes(schoolDayMinutes, minSessionMinutes)}{" "}
+              min on weekends &amp; holidays
+            </span>
+          </>
+        )}
         <span aria-hidden>·</span>
         <span>{plan.daysPerWeek} days a week</span>
         <span aria-hidden>·</span>
@@ -332,142 +550,34 @@ export default function Timetable() {
 
       {plan.truncated && (
         <p className="mt-3 rounded-2xl bg-[#FFF6E5] px-4 py-3 text-[0.8rem] leading-relaxed text-[#8A5D00]">
-          This plan reaches the 60 revision-day limit before your first exam. Build
-          it again nearer the exam to add more spaced review.
+          This plan reaches the planner's limit before your first exam. Build it
+          again nearer the exam to add more spaced review.
         </p>
       )}
 
-      {/* Desktop: a seven-column weekly calendar. */}
-      <div className="mt-4 hidden overflow-x-auto rounded-[1.6rem] border border-border bg-white shadow-[0_18px_44px_-34px_rgba(22,24,31,0.35)] xl:block">
-        <div className="min-w-[980px]">
-          <div className="grid grid-cols-[84px_repeat(7,minmax(0,1fr))] border-b border-border bg-[#FCFCFD]">
-            <div className="px-3 py-2.5 text-[0.6rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Week
-            </div>
-            {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map(
-              (day) => (
-                <div
-                  key={day}
-                  className="border-l border-border/60 px-2.5 py-2.5 text-center text-[0.64rem] font-semibold uppercase tracking-[0.06em] text-brand-ink/70"
-                >
-                  {day.slice(0, 3)}
-                </div>
-              ),
-            )}
-          </div>
+      {!holidayAware && (
+        <p className="mt-3 rounded-2xl bg-[#F3ECFF] px-4 py-3 text-[0.8rem] leading-relaxed text-[#5B3DF5]">
+          This timetable was built before holiday-aware scheduling. Build it again
+          to give weekends and school holidays at least 50% more time and to label
+          half-terms in the grid.
+        </p>
+      )}
 
-          {weeks.map((week, weekIndex) => (
-            <div
-              key={week.weekStart}
-              className="grid grid-cols-[84px_repeat(7,minmax(0,1fr))] border-b border-border last:border-b-0"
-            >
-              <div className="border-r border-border/60 bg-[#FCFCFD] px-3 py-4">
-                <p className="text-[0.68rem] font-bold text-brand-ink">
-                  Week {weekIndex + 1}
-                </p>
-                <p className="mt-0.5 text-[0.6rem] leading-snug text-muted-foreground">
-                  {formatDayLabel(week.weekStart)}
-                  <br />
-                  {formatDayLabel(week.days[6].date)}
-                </p>
-                {week.minutes > 0 && (
-                  <p className="mt-2 text-[0.58rem] font-semibold text-[#5B3DF5]">
-                    {durationLabel(week.minutes)}
-                  </p>
-                )}
-              </div>
-              {week.days.map((day) => (
-                <div
-                  key={day.date}
-                  className={cn(
-                    "min-h-[150px] border-l border-border/60 p-2",
-                    day.isHoliday
-                      ? "bg-[#FFFBF2]"
-                      : day.isExamDay
-                        ? "bg-[#FFF7F9]"
-                        : "bg-white",
-                  )}
-                >
-                  <div className="mb-1.5 flex items-center justify-between gap-1 px-0.5">
-                    <span className="text-[0.62rem] font-semibold text-brand-ink/75">
-                      {formatDayLabel(day.date)}
-                    </span>
-                    {day.minutes > 0 && (
-                      <span className="text-[0.56rem] font-medium text-muted-foreground">
-                        {durationLabel(day.minutes)}
-                      </span>
-                    )}
-                  </div>
-                  <DaySessions
-                    day={day}
-                    colorByCourse={colorByCourse}
-                    busy={busy}
-                    onOpen={(entry) => void handleOpen(entry)}
-                    emptyLabel="—"
-                  />
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Mobile and tablet: one card per week, with all seven days. */}
-      <div className="mt-4 space-y-3 xl:hidden">
-        {weeks.map((week, weekIndex) => (
-          <section
-            key={week.weekStart}
-            className="overflow-hidden rounded-[1.5rem] border border-border bg-white"
-          >
-            <div className="flex items-center justify-between gap-3 bg-[#FCFCFD] px-4 py-3">
-              <div>
-                <p className="text-[0.7rem] font-bold text-brand-ink">
-                  Week {weekIndex + 1}
-                </p>
-                <p className="mt-0.5 text-[0.66rem] text-muted-foreground">
-                  {formatDayLabel(week.weekStart)} – {formatDayLabel(week.days[6].date)}
-                </p>
-              </div>
-              {week.minutes > 0 && (
-                <span className="text-[0.66rem] font-semibold text-[#5B3DF5]">
-                  {durationLabel(week.minutes)}
-                </span>
-              )}
-            </div>
-
-            {week.days.map((day) => (
-              <div
-                key={day.date}
-                className={cn(
-                  "border-t border-border/60 px-3 py-3",
-                  day.isHoliday && "bg-[#FFFBF2]",
-                  day.isExamDay && !day.isHoliday && "bg-[#FFF7F9]",
-                )}
-              >
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-[0.76rem] font-semibold text-brand-ink">
-                    {day.label}
-                  </p>
-                  {day.minutes > 0 && (
-                    <span className="text-[0.62rem] font-medium text-muted-foreground">
-                      {durationLabel(day.minutes)}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1.5">
-                  <DaySessions
-                    day={day}
-                    colorByCourse={colorByCourse}
-                    busy={busy}
-                    onOpen={(entry) => void handleOpen(entry)}
-                    emptyLabel="No revision planned"
-                  />
-                </div>
-              </div>
-            ))}
-          </section>
-        ))}
-      </div>
+      {currentWeek && (
+        <WeekTable
+          week={currentWeek}
+          daysPerWeek={plan.daysPerWeek}
+          colorByCourse={colorByCourse}
+          busy={busy}
+          onOpen={(entry) => void handleOpen(entry)}
+          weekIndex={currentWeekIndex}
+          weekCount={weeks.length}
+          onPrevious={() => setWeekIndex(Math.max(0, currentWeekIndex - 1))}
+          onNext={() =>
+            setWeekIndex(Math.min(weeks.length - 1, currentWeekIndex + 1))
+          }
+        />
+      )}
 
       {visibleHolidays.length > 0 && (
         <section className="mt-4 rounded-2xl border border-[#EBD6AB] bg-[#FFFBF2] px-4 py-3">
@@ -490,7 +600,8 @@ export default function Timetable() {
       <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
         Each session opens the study set for that topic. If one does not exist yet,
         Bluprint builds it from the course pathway and takes you straight there.
-        Sessions on England and Wales bank holidays are left out of the plan.
+        Sessions on England and Wales bank holidays are left out. Weekends and
+        typical England school holidays get at least 50% more time than a school day.
       </p>
     </AppShell>
   );

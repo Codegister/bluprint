@@ -6,7 +6,11 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { dateInputValue, daysUntilInput } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
-import { formatTime, SUBJECT_COLORS } from "@/lib/timetable";
+import {
+  extendedDailyMinutes,
+  formatTime,
+  SUBJECT_COLORS,
+} from "@/lib/timetable";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { Loader2 } from "lucide-react";
@@ -73,6 +77,10 @@ export default function TimetableBuilder() {
   );
   const daysLeft = daysUntilInput(examDate);
   const datesInvalid = Boolean(startDate && examDate) && examDate <= startDate;
+  const minSessionMinutes =
+    settings.length > 0
+      ? Math.min(...settings.map((setting) => setting.minutes))
+      : 25;
 
   const toggle = (courseId: Id<"courses">) => {
     const alreadySelected = settings.some(
@@ -192,9 +200,10 @@ export default function TimetableBuilder() {
           Build a plan you can actually follow
         </h1>
         <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
-          Choose how long to spend on each subject and each day. Bluprint fills a
-          weekly calendar, skips England and Wales bank holidays, and links every
-          session to its study set.
+          Choose how long to spend on each subject and each school day. Bluprint
+          builds a weekly calendar, skips England and Wales bank holidays, and
+          gives weekends and school holidays more time. Every session links to
+          its study set.
         </p>
       </header>
 
@@ -400,13 +409,14 @@ export default function TimetableBuilder() {
               3. Daily revision time
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              Pick one daily budget. Bluprint fills it with as many subject
-              sessions as fit.
+              Pick a budget for a school day. Weekends and school holidays get at
+              least 50% more time automatically, because there is no school day to
+              work around.
             </p>
 
             <div className="mt-4">
               <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Time each revision day
+                Time on a school day
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {DAILY_MINUTES.map((minutes) => (
@@ -428,7 +438,9 @@ export default function TimetableBuilder() {
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
                 Bluprint fills the budget with whole sessions, so a day can finish a
-                few minutes early when the next session does not fit.
+                few minutes early when the next session does not fit. A school day
+                uses this budget; a weekend or school-holiday weekday uses at least{" "}
+                {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} minutes.
               </p>
             </div>
 
@@ -459,8 +471,8 @@ export default function TimetableBuilder() {
                   {daysPerWeek === 3
                     ? "Monday, Wednesday and Friday."
                     : daysPerWeek === 5
-                      ? "Monday to Friday, with weekends free."
-                      : "Every day."}
+                      ? "Monday to Friday. Weekends stay free."
+                      : "Every day, with longer weekend and holiday blocks."}
                 </p>
               </div>
 
@@ -487,7 +499,8 @@ export default function TimetableBuilder() {
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
               The plan runs up to the day before your first exam. England and Wales
-              bank holidays are skipped automatically.
+              bank holidays are skipped, while weekends and school holidays get
+              extra time. School breaks follow typical England term dates.
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -540,7 +553,10 @@ export default function TimetableBuilder() {
           <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[0.76rem] leading-relaxed text-muted-foreground">
               {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
-              {dailyMinutes} minutes a day · {daysPerWeek} days a week
+              {dailyMinutes} min on school days ·{" "}
+              {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} min on
+              weekends &amp; holidays ·{" "}
+              {daysPerWeek} days a week
             </p>
             <Button
               onClick={() => void submit()}
