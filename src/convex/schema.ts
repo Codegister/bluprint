@@ -101,9 +101,9 @@ const schema = defineSchema(
       subject: v.string(),
       level: v.string(),
       examBoard: v.string(),
-      // GCSE sciences use Triple/Combined and maths uses Higher/Foundation.
-      // `variant` stores the route (Triple, Combined, HL, SL) separately so a
-      // science can be "Triple, Higher" the way the boards describe it.
+      // GCSE uses Higher/Foundation, and IB uses HL/SL. `variant` stores the
+      // route (HL or SL) separately so a course can read "IB · HL" the way the
+      // boards describe it.
       tier: v.optional(v.string()),
       variant: v.optional(v.string()),
       status: v.union(

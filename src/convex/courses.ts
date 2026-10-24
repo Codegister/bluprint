@@ -150,13 +150,20 @@ export const createMany = mutation({
       throw new Error("Choose your level first.");
     }
 
+    // GCSE defaults to Higher. The picker sends this explicitly, but enforcing
+    // it here keeps older clients and direct calls consistent. GCSE routes are
+    // separate subjects now, so drop any legacy Triple/Combined variant.
+    const defaultTier = level === "GCSE" ? "Higher" : undefined;
     const requested = args.courses
       .map((course) => ({
         subject: course.subject.trim().slice(0, 80),
         examBoard:
           course.examBoard?.trim().slice(0, 60) || defaultBoard || undefined,
-        tier: course.tier?.trim().slice(0, 40) || undefined,
-        variant: course.variant?.trim().slice(0, 40) || undefined,
+        tier: course.tier?.trim().slice(0, 40) || defaultTier,
+        variant:
+          level === "GCSE"
+            ? undefined
+            : course.variant?.trim().slice(0, 40) || undefined,
       }))
       .filter((course) => course.subject.length > 0)
       .slice(0, MAX_COURSES_PER_SETUP);

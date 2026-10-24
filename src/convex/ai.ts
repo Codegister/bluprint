@@ -159,6 +159,8 @@ async function nvidiaChat(
      */
     disableThinking?: boolean;
     retries?: number;
+    /** Pathway builds can produce a large JSON document, so they need longer. */
+    timeoutMs?: number;
   },
 ): Promise<string> {
   const retries = options.retries ?? 2;
@@ -194,7 +196,7 @@ async function nvidiaChat(
             ? { chat_template_kwargs: { enable_thinking: false } }
             : {}),
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 120_000),
       });
     } catch (error) {
       // Never include the request object: it contains the Authorization header.
@@ -910,11 +912,13 @@ async function freeOpenRouterModels(): Promise<string[]> {
   }
 }
 
-/** Picks up to three models, preferring the known-good free models. */
+/**
+ * Picks up to four models, preferring the known-good free models. An
+ * OPENROUTER_MODEL override is tried first, but the free fallbacks stay in the
+ * list: a single model returning truncated JSON should not fail the build.
+ */
 async function pickOpenRouterModels(): Promise<string[]> {
   const override = readOpenRouterModelOverride();
-  if (override) return [override];
-
   const free = await freeOpenRouterModels();
   const preferred: string[] = [...OPENROUTER_PREFERRED_MODELS].filter(
     (model) => free.length === 0 || free.includes(model),
@@ -922,7 +926,8 @@ async function pickOpenRouterModels(): Promise<string[]> {
   const fallback = free.filter((model) => !preferred.includes(model));
   const chosen = preferred.length > 0 ? [...preferred, ...fallback] : free;
   const list = chosen.length > 0 ? chosen : [OPENROUTER_DEFAULT_MODEL];
-  return [...new Set(list)].slice(0, 3);
+  const pinned = override ? [override] : [];
+  return [...new Set([...pinned, ...list])].slice(0, 4);
 }
 
 function openRouterError(status: number): string {
@@ -945,11 +950,16 @@ function openRouterError(status: number): string {
  * Chat call against OpenRouter. Free models come and go, so a few candidates
  * are attempted in order. `reasoning` is capped where supported to stop hidden
  * thinking eating the JSON budget, and dropped if a model rejects the field.
+ *
+ * Each answer is parsed before it is accepted. A model that returns malformed
+ * or truncated JSON is skipped in favour of the next candidate instead of
+ * failing the whole build.
  */
-async function openRouterChat(
+async function openRouterChat<T>(
   messages: ChatMessage[],
   maxTokens: number,
-): Promise<string> {
+  parse: (raw: string) => T,
+): Promise<T> {
   const key = readOpenRouterKey();
   if (!key) {
     throw new Error(
@@ -980,7 +990,8 @@ async function openRouterChat(
             stream: false,
             ...(withReasoning ? { reasoning: { effort: "low" } } : {}),
           }),
-          signal: AbortSignal.timeout(100_000),
+          // A 16k-token pathway can take longer than a page summary.
+          signal: AbortSignal.timeout(180_000),
         });
       } catch (error) {
         lastError =
@@ -1000,7 +1011,18 @@ async function openRouterChat(
         const message = payload.choices?.[0]?.message;
         const content =
           typeof message?.content === "string" ? message.content.trim() : "";
-        if (content.length > 0) return content;
+        if (content.length > 0) {
+          try {
+            return parse(content);
+          } catch (parseError) {
+            lastError =
+              parseError instanceof Error
+                ? parseError.message
+                : "A pathway model returned an incomplete course map.";
+            // Move on to the next model rather than accepting bad JSON.
+            break;
+          }
+        }
         lastError =
           "The pathway model returned an empty answer. Retry the build to try another free model.";
         break;
@@ -1108,10 +1130,14 @@ function pathwayPrompt(course: {
     `<course>${course.subject}</course>\n` +
     `<qualification>${course.level}</qualification>\n` +
     `<exam_board>${course.examBoard}</exam_board>\n` +
-    (course.variant ? `<route>${course.variant}</route>\n` : "") +
+    // GCSE routes are separate subjects now (Combined Science is its own
+    // entry), so ignore a legacy Triple/Combined variant on old courses.
+    (course.level !== "GCSE" && course.variant
+      ? `<route>${course.variant}</route>\n`
+      : "") +
     (course.tier ? `<tier>${course.tier}</tier>\n` : "") +
     "\nUse the official specification for this exact course, route, tier and board as your source. " +
-    "Pitch the depth at the stated tier: Foundation omits higher-tier-only content, while Higher includes it. Triple and Combined courses differ in breadth, so follow the correct route. " +
+    "Pitch the depth at the stated tier: Foundation omits higher-tier-only content, while Higher includes it. If a route is given, follow that route. " +
     "Choose the current specification, not an old syllabus. If you are not certain a topic or reference is on the current specification, leave the reference blank rather than inventing one.\n\n" +
     "Rules:\n" +
     "- 6 to 10 units in teaching order. 4 to 6 topics per unit. Cover the whole course, including required practicals, case studies or set texts where the specification requires them.\n" +
@@ -1143,11 +1169,13 @@ async function generateCoursePathway(course: {
 
   if (readOpenRouterKey()) {
     try {
-      const raw = await openRouterChat(
+      // 16k leaves room for a full 10-unit map without the JSON being cut off
+      // mid-topic. Each candidate model is parse-checked inside openRouterChat.
+      return await openRouterChat(
         [system, { role: "user", content: prompt }],
-        9000,
+        16_000,
+        parsePathway,
       );
-      return parsePathway(raw);
     } catch (error) {
       const nvidiaKeys = readNvidiaKeys();
       if (nvidiaKeys.length === 0) throw error;
@@ -1165,9 +1193,10 @@ async function generateCoursePathway(course: {
   const raw = await nvidiaChat(nvidiaKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [system, { role: "user", content: prompt }],
-    maxTokens: 6000,
+    maxTokens: 12_000,
     temperature: 0.2,
     disableThinking: true,
+    timeoutMs: 180_000,
   });
   return parsePathway(raw);
 }

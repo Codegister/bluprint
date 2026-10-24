@@ -139,7 +139,7 @@ export function subjectMeta(name: string): SubjectMeta {
   );
 }
 
-/** One line under a course name: "GCSE · AQA, Higher". */
+/** One line under a course name: "GCSE · AQA, Higher tier" or "IB · HL". */
 export function courseSubtitle(course: {
   level: string;
   examBoard: string;
@@ -147,34 +147,29 @@ export function courseSubtitle(course: {
   variant?: string | null;
 }): string {
   const qualification = [course.level, course.examBoard].filter(Boolean).join(" · ");
-  return [qualification, course.variant, course.tier ? tierLabel(course.tier) : ""]
+  // Older GCSE courses may still carry a Triple/Combined variant. It is no
+  // longer a picker option, so do not surface it as if it were current.
+  const route = course.level === "GCSE" ? null : course.variant;
+  return [qualification, route, course.tier ? tierLabel(course.tier) : ""]
     .filter(Boolean)
     .join(", ");
 }
 
 export type TierChoices = {
-  /** Triple/Combined for GCSE sciences, HL/SL for IB. */
+  /** HL/SL for IB. GCSE routes are separate catalogue subjects now. */
   variants: string[];
   /** Higher/Foundation tier. Shown for every GCSE course, because schools
-   *  enter different subjects at different tiers. */
+   *  enter different subjects at different tiers. Higher is preselected. */
   tiers: string[];
 };
 
 /**
- * Tier choices depend on the qualification and subject. GCSE sciences also get
- * a route (Triple or Combined) on top of the tier, matching how the boards
- * describe those qualifications.
+ * Tier choices depend on the qualification. Combined Science is already a
+ * separate subject, so GCSE sciences do not need a Triple/Combined toggle.
  */
-export function tierChoices(level: string, subject: string): TierChoices {
-  const lower = subject.toLowerCase();
+export function tierChoices(level: string, _subject: string): TierChoices {
   if (level === "GCSE") {
-    const science = ["biology", "chemistry", "physics"].includes(lower);
-    return {
-      // Combined Science is already the route, so it does not need a
-      // Triple/Combined toggle of its own.
-      variants: science ? ["Triple", "Combined"] : [],
-      tiers: ["Higher", "Foundation"],
-    };
+    return { variants: [], tiers: ["Higher", "Foundation"] };
   }
   if (level === "IB") return { variants: ["HL", "SL"], tiers: [] };
   return { variants: [], tiers: [] };

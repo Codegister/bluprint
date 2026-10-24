@@ -41,6 +41,13 @@ function defaultBoardFor(level: string): string {
   return "AQA";
 }
 
+/** GCSE defaults to Higher; students only switch when their school enters them
+ *  for Foundation. Other qualifications have no tier. */
+function defaultTierFor(level: string, subject: string): string | undefined {
+  const { tiers } = tierChoices(level, subject);
+  return tiers.includes("Higher") ? "Higher" : tiers[0];
+}
+
 /**
  * A subject tile that opens its board and tier controls directly underneath.
  * Keeping the editor inside the picker means a chosen subject never sends the
@@ -231,7 +238,10 @@ export default function CourseSetup() {
         toast.error(`You can set up ${MAX_COURSES} courses at a time.`);
         return current;
       }
-      return { ...current, [name]: { examBoard: board } };
+      return {
+        ...current,
+        [name]: { examBoard: board, tier: defaultTierFor(level, name) },
+      };
     });
     setError(null);
   };
@@ -261,11 +271,16 @@ export default function CourseSetup() {
     setSelected((current) => {
       const course = current[name];
       if (!course) return current;
+      // A tier is a required choice once shown, so clicking the active tier
+      // keeps it. Routes such as IB HL/SL can still be toggled off.
+      if (field === "tier") {
+        return { ...current, [name]: { ...course, tier: value } };
+      }
       return {
         ...current,
         [name]: {
           ...course,
-          [field]: course[field] === value ? undefined : value,
+          variant: course.variant === value ? undefined : value,
         },
       };
     });
@@ -281,9 +296,13 @@ export default function CourseSetup() {
       toast.error(`You can set up ${MAX_COURSES} courses at a time.`);
       return;
     }
+    const nameSlice = name.slice(0, 80);
     setSelected((current) => ({
       ...current,
-      [name.slice(0, 80)]: { examBoard: board },
+      [nameSlice]: {
+        examBoard: board,
+        tier: defaultTierFor(level, nameSlice),
+      },
     }));
     setCustom("");
     setQuery("");
@@ -293,12 +312,15 @@ export default function CourseSetup() {
     const nextBoard = defaultBoardFor(next);
     setLevel(next);
     setBoard(nextBoard);
-    // Tier labels differ between qualifications (Triple, Higher, HL). Clear
-    // them rather than sending a stale one with the new level, and reset the
+    // Tier labels differ between qualifications (Higher, HL). Reset them to
+    // the new level's default rather than sending a stale one, and reset the
     // per-subject boards to the new qualification's default.
     setSelected((current) =>
       Object.fromEntries(
-        Object.keys(current).map((name) => [name, { examBoard: nextBoard }]),
+        Object.keys(current).map((name) => [
+          name,
+          { examBoard: nextBoard, tier: defaultTierFor(next, name) },
+        ]),
       ),
     );
   };
@@ -509,6 +531,10 @@ export default function CourseSetup() {
                 </Button>
               </div>
             </div>
+
+            <p className="mt-2 text-[0.74rem] text-muted-foreground">
+              Select a subject to set its exam board and tier directly below it.
+            </p>
 
             {error && (
               <p className="mt-3 rounded-xl bg-[#FFEEF0] px-3 py-2 text-[0.76rem] leading-relaxed text-[#C23B49]">
