@@ -10,6 +10,12 @@ import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+
+// The dashboard still reads `api.settings.aiStatus` for the "AI not connected"
+// notice. That query previously required email verification, which crashed the
+// preview for guest and unverified sessions. The server now no longer gates that
+// endpoint on verification, and this defensive read keeps the first paint safe even
+// while the query is still loading.
 import { ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -265,6 +271,10 @@ export default function Dashboard() {
     }
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [sets]);
+
+  // Religious Studies is supported as Edexcel GCSE Religious Studies A and B.
+  const rsDescription =
+    "Pick what you study. Bluprint maps each course from its published specification, then builds revision material for every topic. Religious Studies is split into Edexcel Religious Studies A and B, and the religions and units you study.";
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();

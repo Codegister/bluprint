@@ -30,6 +30,82 @@ import { toast } from "sonner";
 const MAX_COURSES = 12;
 
 /** One selected course while it is still being edited in the picker. */
+type CourseDraft = {
+  examBoard: string;
+  tier?: string;
+  variant?: string;
+  rsRoute?: string;
+  rsReligion?: string;
+  rsSpec?: string;
+};
+
+/** The questions asked after a subject is tapped, in order. */
+type Question = "board" | "tier";
+
+const RS_ROUTES = ["Edexcel Religious Studies A", "Edexcel Religious Studies B"] as const;
+
+const RS_SPEC_A_TITLES = [
+  "Religion and Life",
+  "Religion and Society",
+  "Religion and Crime and Punishment",
+  "Religion and Peace and Conflict",
+];
+
+const RS_SPEC_B_TITLES = [
+  "Believing in God",
+  "Religion and Ethics",
+];
+
+const RS_RELIGIONS_A = [
+  "Christianity",
+  "Catholic Christianity",
+  "Islam",
+  "Judaism",
+  "Sikhism",
+];
+
+const RS_SPEC_A_LABELS = new Map([
+  [RS_SPEC_A_TITLES[0], "Religion and Life"],
+  [RS_SPEC_A_TITLES[1], "Religion and Society"],
+  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
+  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
+]);
+
+const RS_SPEC_B_LABELS = new Map([
+  [RS_SPEC_B_TITLES[0], "Believing in God"],
+  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
+]);
+
+const levelHints: Record<string, string> = {
+  GCSE: "Years 10–11",
+  KS3: "Years 7–9",
+  "A-Level": "Years 12–13",
+  IB: "HL and SL",
+  AP: "Advanced Placement",
+  Undergraduate: "University",
+};
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Plus,
+  Search,
+  Star,
+  X,
+} from "lucide-react";
+import { Fragment, useMemo, useRef, useState } from "react";
+
+// The Religious Studies picker adds a route question to the subject picker for
+// Edexcel GCSE Religious Studies A and B. It does not change the rest of the
+// qualification machine; it just decides whether Religious Studies asks for its
+// route, second religion and units before being added.
+import { Link, useNavigate } from "react-router";
+import { toast } from "sonner";
+
+const MAX_COURSES = 12;
+
+/** One selected course while it is still being edited in the picker. */
 const RS_SPEC_A_LABELS = new Map([
   [RS_SPEC_A_TITLES[0], "Religion and Life"],
   [RS_SPEC_A_TITLES[1], "Religion and Society"],
