@@ -8,7 +8,8 @@ import {
   SUBJECT_GROUPS,
   SUBJECTS,
   subjectMeta,
-  tierOptions,
+  tierChoices,
+  tierLabel,
 } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -28,6 +29,13 @@ import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 const MAX_COURSES = 12;
+
+/** One selected course while it is still being edited in the picker. */
+type CourseDraft = {
+  examBoard: string;
+  tier?: string;
+  variant?: string;
+};
 
 const levelHints: Record<string, string> = {
   GCSE: "Years 10–11 · grades 9–1",
@@ -52,7 +60,7 @@ export default function CourseSetup() {
   const [step, setStep] = useState<1 | 2>(1);
   const [level, setLevel] = useState("GCSE");
   const [board, setBoard] = useState("AQA");
-  const [selected, setSelected] = useState<Record<string, string | undefined>>({});
+  const [selected, setSelected] = useState<Record<string, CourseDraft>>({});
   const [query, setQuery] = useState("");
   const [custom, setCustom] = useState("");
   const [saving, setSaving] = useState(false);
@@ -60,6 +68,9 @@ export default function CourseSetup() {
 
   const selectedNames = Object.keys(selected);
   const selectedCount = selectedNames.length;
+  const distinctBoards = new Set(
+    Object.values(selected).map((course) => course.examBoard),
+  ).size;
 
   const groups = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -86,16 +97,44 @@ export default function CourseSetup() {
         toast.error(`You can set up ${MAX_COURSES} courses at a time.`);
         return current;
       }
-      return { ...current, [name]: undefined };
+      return { ...current, [name]: { examBoard: board } };
     });
     setError(null);
   };
 
-  const setTier = (name: string, tier: string) => {
+  const chooseBoard = (next: string) => {
+    setBoard(next);
+    // Each subject can still be changed individually afterwards. Changing the
+    // default board updates every course that has not been customised yet.
+    setSelected((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([name, course]) => [
+          name,
+          { ...course, examBoard: next },
+        ]),
+      ),
+    );
+  };
+
+  const setCourseBoard = (name: string, next: string) => {
     setSelected((current) => ({
       ...current,
-      [name]: current[name] === tier ? undefined : tier,
+      [name]: { ...current[name]!, examBoard: next },
     }));
+  };
+
+  const setCourseTier = (name: string, field: "tier" | "variant", value: string) => {
+    setSelected((current) => {
+      const course = current[name];
+      if (!course) return current;
+      return {
+        ...current,
+        [name]: {
+          ...course,
+          [field]: course[field] === value ? undefined : value,
+        },
+      };
+    });
   };
 
   const addCustom = () => {
@@ -108,18 +147,25 @@ export default function CourseSetup() {
       toast.error(`You can set up ${MAX_COURSES} courses at a time.`);
       return;
     }
-    setSelected((current) => ({ ...current, [name.slice(0, 80)]: undefined }));
+    setSelected((current) => ({
+      ...current,
+      [name.slice(0, 80)]: { examBoard: board },
+    }));
     setCustom("");
     setQuery("");
   };
 
   const chooseLevel = (next: string) => {
+    const nextBoard = defaultBoardFor(next);
     setLevel(next);
-    setBoard(defaultBoardFor(next));
+    setBoard(nextBoard);
     // Tier labels differ between qualifications (Triple, Higher, HL). Clear
-    // them rather than sending a stale one with the new level.
+    // them rather than sending a stale one with the new level, and reset the
+    // per-subject boards to the new qualification's default.
     setSelected((current) =>
-      Object.fromEntries(Object.keys(current).map((name) => [name, undefined])),
+      Object.fromEntries(
+        Object.keys(current).map((name) => [name, { examBoard: nextBoard }]),
+      ),
     );
   };
 
@@ -136,7 +182,9 @@ export default function CourseSetup() {
         examBoard: board,
         courses: selectedNames.map((subject) => ({
           subject,
-          tier: selected[subject] || undefined,
+          examBoard: selected[subject]!.examBoard,
+          tier: selected[subject]!.tier,
+          variant: selected[subject]!.variant,
         })),
       });
 
@@ -279,10 +327,12 @@ export default function CourseSetup() {
 
           <div className="mt-6">
             <h2 className="font-display text-[1.15rem] font-bold text-brand-ink">
-              Which exam board?
+              Default exam board
             </h2>
             <p className="mt-1 text-[0.84rem] text-muted-foreground">
-              The pathway follows that board's specification and mark-scheme style.
+              Most schools use one board, but boards often differ by subject. Set
+              your usual board here, then change any subject individually in the
+              next step.
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {EXAM_BOARDS.map((option) => {
@@ -292,7 +342,7 @@ export default function CourseSetup() {
                     key={option}
                     type="button"
                     aria-pressed={active}
-                    onClick={() => setBoard(option)}
+                    onClick={() => chooseBoard(option)}
                     className={cn(
                       "rounded-full border px-3 py-1.5 text-[0.8rem] font-semibold transition-colors",
                       active
@@ -326,7 +376,8 @@ export default function CourseSetup() {
                   Pick your subjects
                 </h2>
                 <p className="mt-0.5 text-[0.82rem] text-muted-foreground">
-                  {level} · {board} · choose up to {MAX_COURSES}
+                  {level} · {distinctBoards > 1 ? "mixed exam boards" : board} ·
+                  choose up to {MAX_COURSES}
                 </p>
               </div>
               <button
@@ -388,7 +439,8 @@ export default function CourseSetup() {
                     </p>
                     <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                       {subjects.map((subject) => {
-                        const active = subject.name in selected;
+                        const draft = selected[subject.name];
+                        const active = Boolean(draft);
                         const Icon = subject.icon;
                         return (
                           <button
@@ -412,8 +464,17 @@ export default function CourseSetup() {
                             >
                               <Icon className="size-4" />
                             </span>
-                            <span className="min-w-0 flex-1 truncate text-[0.84rem] font-semibold text-brand-ink">
-                              {subject.name}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[0.84rem] font-semibold text-brand-ink">
+                                {subject.name}
+                              </span>
+                              {draft && (
+                                <span className="mt-0.5 block truncate text-[0.62rem] font-medium text-muted-foreground">
+                                  {draft.examBoard}
+                                  {draft.variant ? ` · ${draft.variant}` : ""}
+                                  {draft.tier ? ` · ${tierLabel(draft.tier)}` : ""}
+                                </span>
+                              )}
                             </span>
                             {active && (
                               <span className="grid size-4 shrink-0 place-items-center rounded-full bg-[#191B27] text-white">
@@ -439,6 +500,9 @@ export default function CourseSetup() {
                 {selectedCount}
               </span>
             </div>
+            <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
+              Set the exam board and tier for each subject.
+            </p>
 
             {selectedCount === 0 ? (
               <p className="mt-3 rounded-2xl border border-dashed border-border px-3 py-6 text-center text-[0.8rem] leading-relaxed text-muted-foreground">
@@ -449,13 +513,14 @@ export default function CourseSetup() {
                 {selectedNames.map((name) => {
                   const meta = subjectMeta(name);
                   const Icon = meta.icon;
-                  const tiers = tierOptions(level, name);
+                  const course = selected[name]!;
+                  const { variants, tiers } = tierChoices(level, name);
                   return (
                     <div
                       key={name}
                       className="rounded-2xl border border-border px-3 py-2.5"
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span
                           className={cn(
                             "grid size-7 shrink-0 place-items-center rounded-lg",
@@ -468,33 +533,76 @@ export default function CourseSetup() {
                         <span className="min-w-0 flex-1 truncate text-[0.82rem] font-semibold text-brand-ink">
                           {name}
                         </span>
+                        <select
+                          aria-label={`Exam board for ${name}`}
+                          value={course.examBoard}
+                          onChange={(event) => setCourseBoard(name, event.target.value)}
+                          className="h-7 max-w-[106px] shrink-0 rounded-lg border border-border bg-white px-1 text-[0.64rem] font-semibold text-brand-ink outline-none focus:border-[#B9A6FF]"
+                        >
+                          {EXAM_BOARDS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
                         <button
                           type="button"
                           aria-label={`Remove ${name}`}
                           onClick={() => toggle(name)}
-                          className="grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+                          className="grid size-6 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
                         >
                           <X className="size-3.5" />
                         </button>
                       </div>
-                      {tiers.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {tiers.map((tier) => (
-                            <button
-                              key={tier}
-                              type="button"
-                              aria-pressed={selected[name] === tier}
-                              onClick={() => setTier(name, tier)}
-                              className={cn(
-                                "rounded-full border px-2 py-0.5 text-[0.66rem] font-semibold transition-colors",
-                                selected[name] === tier
-                                  ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
-                                  : "border-border text-brand-ink/60 hover:bg-brand-panel",
-                              )}
-                            >
-                              {tier}
-                            </button>
-                          ))}
+
+                      {(variants.length > 0 || tiers.length > 0) && (
+                        <div className="mt-2 space-y-1.5 pl-9">
+                          {variants.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="mr-0.5 text-[0.58rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                                Route
+                              </span>
+                              {variants.map((variant) => (
+                                <button
+                                  key={variant}
+                                  type="button"
+                                  aria-pressed={course.variant === variant}
+                                  onClick={() => setCourseTier(name, "variant", variant)}
+                                  className={cn(
+                                    "rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold transition-colors",
+                                    course.variant === variant
+                                      ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
+                                      : "border-border text-brand-ink/60 hover:bg-brand-panel",
+                                  )}
+                                >
+                                  {variant}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {tiers.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="mr-0.5 text-[0.58rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                                Tier
+                              </span>
+                              {tiers.map((tier) => (
+                                <button
+                                  key={tier}
+                                  type="button"
+                                  aria-pressed={course.tier === tier}
+                                  onClick={() => setCourseTier(name, "tier", tier)}
+                                  className={cn(
+                                    "rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold transition-colors",
+                                    course.tier === tier
+                                      ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
+                                      : "border-border text-brand-ink/60 hover:bg-brand-panel",
+                                  )}
+                                >
+                                  {tierLabel(tier)}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -537,7 +645,7 @@ export default function CourseSetup() {
                   {selectedCount} course{selectedCount === 1 ? "" : "s"} selected
                 </p>
                 <p className="truncate text-[0.7rem] text-muted-foreground">
-                  {level} · {board}
+                  {level} · {distinctBoards > 1 ? `${distinctBoards} exam boards` : board}
                 </p>
               </div>
               <Button

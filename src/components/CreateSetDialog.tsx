@@ -88,6 +88,8 @@ export function CreateSetDialog({
   const [images, setImages] = useState<ImageDraft[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [text, setText] = useState("");
+  const [quizCount, setQuizCount] = useState(10);
+  const [examCount, setExamCount] = useState(4);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +118,8 @@ export function CreateSetDialog({
     setCustomCourseOpen(false);
     setExamBoard("");
     setLevel("");
+    setQuizCount(10);
+    setExamCount(4);
     setMode("photos");
     setStep("");
     setError(null);
@@ -249,6 +253,9 @@ export function CreateSetDialog({
         course: (customCourseOpen ? customCourse : course).trim() || undefined,
         examBoard: examBoard || undefined,
         level: level || undefined,
+        targetCardCount: 20,
+        targetQuizCount: quizCount,
+        targetExamCount: examCount,
         sourceImageIds,
       });
 
@@ -579,6 +586,78 @@ export function CreateSetDialog({
               </div>
             </TabsContent>
           </Tabs>
+
+          <div className="mt-5 rounded-3xl border border-border bg-[#FCFCFD] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-brand-ink">
+                  Study set length
+                </p>
+                <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
+                  Every set includes 20 detail-heavy flashcards that target niche, exam-distinguishing facts.
+                </p>
+              </div>
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.64rem] font-bold text-[#5B3DF5]">
+                <Sparkles className="size-3" />
+                20 cards
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="flex items-center justify-between text-[0.76rem] font-semibold text-brand-ink">
+                  Quiz questions
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[0.7rem] text-[#5B3DF5]">
+                    {quizCount}
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={5}
+                  max={20}
+                  step={1}
+                  value={quizCount}
+                  disabled={isLoading}
+                  onChange={(event) => setQuizCount(Number(event.target.value))}
+                  aria-label="Number of quiz questions"
+                  className="mt-2 w-full cursor-pointer accent-[#7C5CFF]"
+                />
+                <span className="flex justify-between text-[0.62rem] font-medium text-muted-foreground">
+                  <span>5</span>
+                  <span>20</span>
+                </span>
+              </label>
+
+              <label className="block">
+                <span className="flex items-center justify-between text-[0.76rem] font-semibold text-brand-ink">
+                  Exam questions
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[0.7rem] text-[#5B3DF5]">
+                    {examCount}
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={2}
+                  max={10}
+                  step={1}
+                  value={examCount}
+                  disabled={isLoading}
+                  onChange={(event) => setExamCount(Number(event.target.value))}
+                  aria-label="Number of exam-style questions"
+                  className="mt-2 w-full cursor-pointer accent-[#7C5CFF]"
+                />
+                <span className="flex justify-between text-[0.62rem] font-medium text-muted-foreground">
+                  <span>2</span>
+                  <span>10</span>
+                </span>
+              </label>
+            </div>
+
+            <p className="mt-3 text-[0.66rem] leading-relaxed text-muted-foreground">
+              Longer sets are generated in batches and take a little more time to
+              compile. Exam questions are written at 5-10 marks each.
+            </p>
+          </div>
 
           {error && (
             <div className="mt-4 flex items-start gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#C93C49]">

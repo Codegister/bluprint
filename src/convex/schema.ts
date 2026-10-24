@@ -77,6 +77,11 @@ const schema = defineSchema(
       cardCount: v.number(),
       quizCount: v.number(),
       examCount: v.number(),
+      // How many items the student asked for. Keeping the request means a
+      // rebuild produces the same length instead of dropping back to defaults.
+      targetCardCount: v.optional(v.number()),
+      targetQuizCount: v.optional(v.number()),
+      targetExamCount: v.optional(v.number()),
       knownCount: v.number(),
       updatedAt: v.number(),
       processingStartedAt: v.optional(v.number()),
@@ -97,7 +102,10 @@ const schema = defineSchema(
       level: v.string(),
       examBoard: v.string(),
       // GCSE sciences use Triple/Combined and maths uses Higher/Foundation.
+      // `variant` stores the route (Triple, Combined, HL, SL) separately so a
+      // science can be "Triple, Higher" the way the boards describe it.
       tier: v.optional(v.string()),
+      variant: v.optional(v.string()),
       status: v.union(
         v.literal("queued"),
         v.literal("processing"),

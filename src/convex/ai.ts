@@ -406,22 +406,18 @@ function parseSummary(raw: string): Summary {
   return { overview, keyPoints, examFocus };
 }
 
-function parseCards(raw: string): GeneratedCard[] {
+function parseCards(raw: string, limit = 12): GeneratedCard[] {
   const items = collectionItems(raw, "cards", (row) => typeof row.front === "string");
-  const cards = items
+  return items
     .map((card) => {
       const row = card as Partial<GeneratedCard>;
-      return { front: asText(row.front, 400), back: asText(row.back, 1200) };
+      return { front: asText(row.front, 400), back: asText(row.back, 1600) };
     })
     .filter((card) => card.front && card.back)
-    .slice(0, 12);
-  if (cards.length < 3) {
-    throw new Error("Not enough flashcards could be generated from this material. Add more notes and retry.");
-  }
-  return cards;
+    .slice(0, limit);
 }
 
-function parseQuiz(raw: string): GeneratedQuiz[] {
+function parseQuiz(raw: string, limit = 6): GeneratedQuiz[] {
   const items = collectionItems(
     raw,
     "questions",
@@ -448,14 +444,10 @@ function parseQuiz(raw: string): GeneratedQuiz[] {
       questions.push({ question, options, correctIndex, explanation });
     }
   }
-  const trimmed = questions.slice(0, 6);
-  if (trimmed.length < 3) {
-    throw new Error("Not enough quiz questions could be generated. Retry the build or add more material.");
-  }
-  return trimmed;
+  return questions.slice(0, limit);
 }
 
-function parseExams(raw: string): GeneratedExam[] {
+function parseExams(raw: string, limit = 4): GeneratedExam[] {
   const items = collectionItems(
     raw,
     "questions",
@@ -481,11 +473,7 @@ function parseExams(raw: string): GeneratedExam[] {
       questions.push({ question, marks, modelAnswer, markingGuide });
     }
   }
-  const trimmed = questions.slice(0, 4);
-  if (trimmed.length === 0) {
-    throw new Error("No exam-style questions could be generated from this material. Retry or add more notes.");
-  }
-  return trimmed;
+  return questions.slice(0, limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -587,80 +575,228 @@ async function summariseNotes(
   return parseSummary(raw);
 }
 
-async function generateCards(apiKeys: string[], notes: string): Promise<GeneratedCard[]> {
-  const raw = await nvidiaChat(apiKeys, {
-    model: NVIDIA_TEXT_MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content:
-          `${materialBlock(notes)}\n\n` +
-          "Create 10 revision flashcards covering the whole material. Fronts should be one clear question or term; backs should be a complete but concise answer (1-3 sentences). " +
-          'Return JSON exactly like: {"cards":[{"front":"...","back":"..."}]}',
-      },
-    ],
-    maxTokens: 2600,
-    temperature: 0.15,
-    topP: 1.0,
-    disableThinking: true,
-  });
-  return parseCards(raw);
+// Batches keep each JSON response short enough to finish. A 20-question quiz
+// is built from three smaller calls instead of one response that would run out
+// of tokens halfway through an array.
+const CARD_BATCH_SIZE = 20;
+const QUIZ_BATCH_SIZE = 20;
+const EXAM_BATCH_SIZE = 10;
+const MAX_BATCH_ATTEMPTS = 4;
+
+async function generateCards(
+  apiKeys: string[],
+  notes: string,
+  target: number,
+): Promise<GeneratedCard[]> {
+  const cards: GeneratedCard[] = [];
+  const seen = new Set<string>();
+
+  for (
+    let attempt = 0;
+    attempt < MAX_BATCH_ATTEMPTS && cards.length < target;
+    attempt += 1
+  ) {
+    const want = Math.min(CARD_BATCH_SIZE, target - cards.length);
+    const previous = cards
+      .slice(-12)
+      .map((card) => `- ${card.front}`)
+      .join("\n");
+
+    const raw = await nvidiaChat(apiKeys, {
+      model: NVIDIA_TEXT_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content:
+            `${materialBlock(notes)}\n\n` +
+            `Create ${want} revision flashcards from this material. Cover the breadth of the material, but prioritise the niche, exam-distinguishing details a student could actually be tested on: exact figures and dates, names, formulas, precise definitions, exceptions to rules, named examples and case studies, cause-and-effect chains, and common confusions. ` +
+            "Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific question. Backs must be 2-4 sentences and include the precise detail, plus a caveat where one exists. " +
+            (previous
+              ? `These flashcards already exist; write different, non-overlapping ones:\n${previous}\n`
+              : "") +
+            'Return JSON exactly like: {"cards":[{"front":"...","back":"..."}]}',
+        },
+      ],
+      maxTokens: 7000,
+      temperature: 0.2,
+      topP: 1.0,
+      disableThinking: true,
+    });
+
+    let batch: GeneratedCard[] = [];
+    try {
+      batch = parseCards(raw, want);
+    } catch (error) {
+      if (cards.length === 0) throw error;
+      break;
+    }
+
+    let added = 0;
+    for (const card of batch) {
+      const key = card.front.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cards.push(card);
+      added += 1;
+      if (cards.length >= target) break;
+    }
+    // A model that ignores the "do not repeat" instruction would otherwise
+    // loop until the attempt cap with no new cards.
+    if (added === 0) break;
+  }
+
+  if (cards.length < 6) {
+    throw new Error(
+      "Not enough flashcards could be generated from this material. Add more notes and retry.",
+    );
+  }
+  return cards.slice(0, target);
 }
 
-async function generateQuiz(apiKeys: string[], notes: string): Promise<GeneratedQuiz[]> {
-  const raw = await nvidiaChat(apiKeys, {
-    model: NVIDIA_TEXT_MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content:
-          `${materialBlock(notes)}\n\n` +
-          "Create 5 multiple-choice quiz questions of increasing difficulty. Each question needs exactly 4 plausible options, one correct index (0-3), and a 1-2 sentence explanation of why the answer is right. " +
-          'Return JSON exactly like: {"questions":[{"question":"...","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."}]}',
-      },
-    ],
-    // Five questions with explanations overflowed the old 2.8k budget, which
-    // truncated the JSON. Keep headroom; leftover truncation is recovered by
-    // collectionItems.
-    maxTokens: 4200,
-    temperature: 0.15,
-    topP: 1.0,
-    disableThinking: true,
-  });
-  return parseQuiz(raw);
+async function generateQuiz(
+  apiKeys: string[],
+  notes: string,
+  target: number,
+): Promise<GeneratedQuiz[]> {
+  const questions: GeneratedQuiz[] = [];
+  const seen = new Set<string>();
+
+  for (
+    let attempt = 0;
+    attempt < MAX_BATCH_ATTEMPTS && questions.length < target;
+    attempt += 1
+  ) {
+    const want = Math.min(QUIZ_BATCH_SIZE, target - questions.length);
+    const previous = questions
+      .slice(-12)
+      .map((question) => `- ${question.question}`)
+      .join("\n");
+
+    const raw = await nvidiaChat(apiKeys, {
+      model: NVIDIA_TEXT_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content:
+            `${materialBlock(notes)}\n\n` +
+            `Create ${want} multiple-choice quiz questions of increasing difficulty. Cover different parts of the material and include at least two questions that ask the student to apply a concept to a new example rather than recall a definition. Each question needs exactly 4 plausible options, one correct index (0-3), and a 1-2 sentence explanation of why the answer is right and the distractors are wrong. ` +
+            (previous
+              ? `Do not repeat these existing questions:\n${previous}\n`
+              : "") +
+            'Return JSON exactly like: {"questions":[{"question":"...","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."}]}',
+        },
+      ],
+      // A batch of eight with explanations needs far more room than the old
+      // five-question call. Collection recovery handles any truncation.
+      maxTokens: 9000,
+      temperature: 0.2,
+      topP: 1.0,
+      disableThinking: true,
+    });
+
+    let batch: GeneratedQuiz[] = [];
+    try {
+      batch = parseQuiz(raw, want);
+    } catch (error) {
+      if (questions.length === 0) throw error;
+      break;
+    }
+
+    let added = 0;
+    for (const question of batch) {
+      const key = question.question.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      questions.push(question);
+      added += 1;
+      if (questions.length >= target) break;
+    }
+    if (added === 0) break;
+  }
+
+  if (questions.length < 3) {
+    throw new Error(
+      "Not enough quiz questions could be generated. Retry the build or add more material.",
+    );
+  }
+  return questions.slice(0, target);
 }
 
 async function generateExams(
   apiKeys: string[],
   notes: string,
-  context?: StudyContext,
+  context: StudyContext | undefined,
+  target: number,
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText(context);
-  const raw = await nvidiaChat(apiKeys, {
-    model: NVIDIA_TEXT_MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content:
-          `${materialBlock(notes)}\n\n` +
-          (qualification ? `This set is for ${qualification}.\n` : "") +
-          "Create 3 exam-style short-answer questions that ask the student to explain, compare, or apply ideas from the material. Each is worth 4-8 marks. " +
-          "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
-          `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
-          "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
-          "Include a full-mark model answer that hits each bullet. " +
-          'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
-      },
-    ],
-    maxTokens: 3800,
-    temperature: 0.15,
-    topP: 1.0,
-    disableThinking: true,
-  });
-  return parseExams(raw);
+  const exams: GeneratedExam[] = [];
+  const seen = new Set<string>();
+
+  for (
+    let attempt = 0;
+    attempt < MAX_BATCH_ATTEMPTS && exams.length < target;
+    attempt += 1
+  ) {
+    const want = Math.min(EXAM_BATCH_SIZE, target - exams.length);
+    const previous = exams
+      .slice(-8)
+      .map((exam) => `- ${exam.question}`)
+      .join("\n");
+
+    const raw = await nvidiaChat(apiKeys, {
+      model: NVIDIA_TEXT_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content:
+            `${materialBlock(notes)}\n\n` +
+            (qualification ? `This set is for ${qualification}.\n` : "") +
+            `Create ${want} exam-style short-answer questions that ask the student to explain, compare, or apply ideas from the material. Each is worth 5-10 marks. Use the full depth of the material rather than one-line recall. ` +
+            "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
+            `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
+            "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
+            "Include a full-mark model answer that hits each bullet. " +
+            (previous
+              ? `Do not repeat these existing questions:\n${previous}\n`
+              : "") +
+            'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
+        },
+      ],
+      maxTokens: 9000,
+      temperature: 0.2,
+      topP: 1.0,
+      disableThinking: true,
+    });
+
+    let batch: GeneratedExam[] = [];
+    try {
+      batch = parseExams(raw, want);
+    } catch (error) {
+      if (exams.length === 0) throw error;
+      break;
+    }
+
+    let added = 0;
+    for (const exam of batch) {
+      const key = exam.question.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      exams.push(exam);
+      added += 1;
+      if (exams.length >= target) break;
+    }
+    if (added === 0) break;
+  }
+
+  if (exams.length === 0) {
+    throw new Error(
+      "No exam-style questions could be generated from this material. Retry or add more notes.",
+    );
+  }
+  return exams.slice(0, target);
 }
 
 // ---------------------------------------------------------------------------
@@ -965,14 +1101,17 @@ function pathwayPrompt(course: {
   level: string;
   examBoard: string;
   tier?: string;
+  variant?: string;
 }): string {
   return (
     `Design a complete revision pathway for this course.\n` +
     `<course>${course.subject}</course>\n` +
     `<qualification>${course.level}</qualification>\n` +
     `<exam_board>${course.examBoard}</exam_board>\n` +
+    (course.variant ? `<route>${course.variant}</route>\n` : "") +
     (course.tier ? `<tier>${course.tier}</tier>\n` : "") +
-    "\nUse the official specification for this exact course and board as your source. " +
+    "\nUse the official specification for this exact course, route, tier and board as your source. " +
+    "Pitch the depth at the stated tier: Foundation omits higher-tier-only content, while Higher includes it. Triple and Combined courses differ in breadth, so follow the correct route. " +
     "Choose the current specification, not an old syllabus. If you are not certain a topic or reference is on the current specification, leave the reference blank rather than inventing one.\n\n" +
     "Rules:\n" +
     "- 6 to 10 units in teaching order. 4 to 6 topics per unit. Cover the whole course, including required practicals, case studies or set texts where the specification requires them.\n" +
@@ -992,6 +1131,7 @@ async function generateCoursePathway(course: {
   level: string;
   examBoard: string;
   tier?: string;
+  variant?: string;
 }): Promise<CoursePathway> {
   const prompt = pathwayPrompt(course);
   const system: ChatMessage = {
@@ -1127,6 +1267,12 @@ export const processStudySet = action({
         level: existing.level,
       };
 
+      // Sets created before the sliders existed fall back to the longer
+      // defaults; older sets stay readable and can be rebuilt at any length.
+      const targetCards = Math.min(30, Math.max(10, existing.targetCardCount ?? 20));
+      const targetQuiz = Math.min(20, Math.max(5, existing.targetQuizCount ?? 10));
+      const targetExam = Math.min(10, Math.max(2, existing.targetExamCount ?? 4));
+
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: "Writing your summary…",
@@ -1135,21 +1281,21 @@ export const processStudySet = action({
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
-        progress: "Building flashcards…",
+        progress: `Building ${targetCards} detail-heavy flashcards…`,
       });
-      const cards = await generateCards(apiKeys, notes);
+      const cards = await generateCards(apiKeys, notes, targetCards);
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
-        progress: "Writing quiz questions…",
+        progress: `Writing ${targetQuiz} quiz questions…`,
       });
-      const quiz = await generateQuiz(apiKeys, notes);
+      const quiz = await generateQuiz(apiKeys, notes, targetQuiz);
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
-        progress: "Drafting exam questions…",
+        progress: `Drafting ${targetExam} exam questions…`,
       });
-      const exams = await generateExams(apiKeys, notes, context);
+      const exams = await generateExams(apiKeys, notes, context, targetExam);
 
       await ctx.runMutation(internal.studySets.completeGeneration, {
         setId,

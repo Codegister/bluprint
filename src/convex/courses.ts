@@ -61,6 +61,7 @@ export const listMine = query({
         level: course.level,
         examBoard: course.examBoard,
         tier: course.tier,
+        variant: course.variant,
         status: course.status,
         progress: course.progress,
         errorMessage: course.errorMessage,
@@ -133,28 +134,38 @@ export const createMany = mutation({
     courses: v.array(
       v.object({
         subject: v.string(),
+        // Each subject may sit with a different board. The top-level board is
+        // the fallback for anything that omits one.
+        examBoard: v.optional(v.string()),
         tier: v.optional(v.string()),
+        variant: v.optional(v.string()),
       }),
     ),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const level = args.level.trim().slice(0, 40);
-    const examBoard = args.examBoard.trim().slice(0, 60);
-    if (!level || !examBoard) {
-      throw new Error("Choose your level and exam board first.");
+    const defaultBoard = args.examBoard.trim().slice(0, 60);
+    if (!level) {
+      throw new Error("Choose your level first.");
     }
 
     const requested = args.courses
       .map((course) => ({
         subject: course.subject.trim().slice(0, 80),
+        examBoard:
+          course.examBoard?.trim().slice(0, 60) || defaultBoard || undefined,
         tier: course.tier?.trim().slice(0, 40) || undefined,
+        variant: course.variant?.trim().slice(0, 40) || undefined,
       }))
       .filter((course) => course.subject.length > 0)
       .slice(0, MAX_COURSES_PER_SETUP);
 
     if (requested.length === 0) {
       throw new Error("Pick at least one course.");
+    }
+    if (requested.some((course) => !course.examBoard)) {
+      throw new Error("Choose an exam board for every course.");
     }
 
     const existing = await ctx.db
@@ -164,14 +175,14 @@ export const createMany = mutation({
     const known = new Set(
       existing.map(
         (course) =>
-          `${course.subject}|${course.level}|${course.examBoard}|${course.tier ?? ""}`.toLowerCase(),
+          `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}`.toLowerCase(),
       ),
     );
 
     const now = Date.now();
     const ids: Id<"courses">[] = [];
     for (const course of requested) {
-      const key = `${course.subject}|${level}|${examBoard}|${course.tier ?? ""}`.toLowerCase();
+      const key = `${course.subject}|${level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}`.toLowerCase();
       if (known.has(key)) continue;
       known.add(key);
 
@@ -179,8 +190,9 @@ export const createMany = mutation({
         userId,
         subject: course.subject,
         level,
-        examBoard,
+        examBoard: course.examBoard!,
         tier: course.tier,
+        variant: course.variant,
         status: "queued",
         progress: "Queued",
         completedTopics: [],
@@ -264,7 +276,7 @@ export const createTopicSet = mutation({
 
     const notes = [
       `Course: ${course.level} ${course.subject}`,
-      `Exam board: ${course.examBoard}${course.tier ? ` · ${course.tier}` : ""}`,
+      `Exam board: ${course.examBoard}${course.variant ? ` · ${course.variant}` : ""}${course.tier ? ` · ${course.tier}` : ""}`,
       `Unit: ${unit.title}`,
       `Topic: ${topic.title}${topic.specReference ? ` (specification ${topic.specReference})` : ""}`,
       unit.summary ? `Unit overview: ${unit.summary}` : "",
@@ -297,6 +309,9 @@ export const createTopicSet = mutation({
       cardCount: 0,
       quizCount: 0,
       examCount: 0,
+      targetCardCount: 20,
+      targetQuizCount: 10,
+      targetExamCount: 4,
       knownCount: 0,
       updatedAt: now,
     });

@@ -144,25 +144,43 @@ export function courseSubtitle(course: {
   level: string;
   examBoard: string;
   tier?: string | null;
+  variant?: string | null;
 }): string {
   const qualification = [course.level, course.examBoard].filter(Boolean).join(" · ");
-  return course.tier ? `${qualification}, ${course.tier}` : qualification;
+  return [qualification, course.variant, course.tier ? tierLabel(course.tier) : ""]
+    .filter(Boolean)
+    .join(", ");
 }
 
+export type TierChoices = {
+  /** Triple/Combined for GCSE sciences, HL/SL for IB. */
+  variants: string[];
+  /** Higher/Foundation tier. Shown for every GCSE course, because schools
+   *  enter different subjects at different tiers. */
+  tiers: string[];
+};
+
 /**
- * Tier options depend on the qualification and subject: GCSE sciences pick
- * Triple or Combined, GCSE maths picks Higher or Foundation, IB picks HL or SL.
+ * Tier choices depend on the qualification and subject. GCSE sciences also get
+ * a route (Triple or Combined) on top of the tier, matching how the boards
+ * describe those qualifications.
  */
-export function tierOptions(level: string, subject: string): string[] {
+export function tierChoices(level: string, subject: string): TierChoices {
   const lower = subject.toLowerCase();
   if (level === "GCSE") {
-    if (["biology", "chemistry", "physics", "combined science"].includes(lower)) {
-      return ["Triple", "Combined"];
-    }
-    if (["mathematics", "statistics"].includes(lower)) {
-      return ["Higher", "Foundation"];
-    }
+    const science = ["biology", "chemistry", "physics"].includes(lower);
+    return {
+      // Combined Science is already the route, so it does not need a
+      // Triple/Combined toggle of its own.
+      variants: science ? ["Triple", "Combined"] : [],
+      tiers: ["Higher", "Foundation"],
+    };
   }
-  if (level === "IB") return ["HL", "SL"];
-  return [];
+  if (level === "IB") return { variants: ["HL", "SL"], tiers: [] };
+  return { variants: [], tiers: [] };
+}
+
+/** "Higher tier" reads better in the picker than a bare "Higher". */
+export function tierLabel(value: string): string {
+  return value === "Higher" || value === "Foundation" ? `${value} tier` : value;
 }

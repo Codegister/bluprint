@@ -40,6 +40,17 @@ function byOrder<T extends { order: number }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => a.order - b.order);
 }
 
+/** Keeps requested lengths inside the range the UI and prompts support. */
+function targetCount(
+  value: number | undefined,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const rounded = Math.round(value ?? fallback);
+  return Math.min(max, Math.max(min, rounded));
+}
+
 // ---------------------------------------------------------------------------
 // Review scheduling
 // ---------------------------------------------------------------------------
@@ -235,6 +246,9 @@ export const create = mutation({
     course: v.optional(v.string()),
     examBoard: v.optional(v.string()),
     level: v.optional(v.string()),
+    targetCardCount: v.optional(v.number()),
+    targetQuizCount: v.optional(v.number()),
+    targetExamCount: v.optional(v.number()),
     sourceImageIds: v.array(v.id("_storage")),
   },
   handler: async (ctx, args) => {
@@ -267,6 +281,9 @@ export const create = mutation({
       cardCount: 0,
       quizCount: 0,
       examCount: 0,
+      targetCardCount: targetCount(args.targetCardCount, 10, 30, 20),
+      targetQuizCount: targetCount(args.targetQuizCount, 5, 20, 10),
+      targetExamCount: targetCount(args.targetExamCount, 2, 10, 4),
       knownCount: 0,
       updatedAt: now,
     });
