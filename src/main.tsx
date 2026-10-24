@@ -84,10 +84,10 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-// Temporary migration override: the project's managed .env.local still points
-// at the disabled Freebuff deployment. Remove this once VITE_CONVEX_URL points
-// at the new project.
-const MIGRATION_CONVEX_URL = "https://honorable-lyrebird-974.convex.cloud";
+// Fallback only. The managed .env.local supplies VITE_CONVEX_URL for the
+// current production project; keeping this here means a missing build-time
+// variable cannot send the preview back to an old deployment.
+const FALLBACK_CONVEX_URL = "https://harmless-dog-538.convex.cloud";
 const configuredConvexUrl = (
   import.meta.env.VITE_CONVEX_URL as string | undefined
 )?.trim();
@@ -96,11 +96,10 @@ const configuredConvexUrl = (
 // Trim trailing slashes: Convex appends `/api/...` to this address, so an
 // address ending in `/` becomes `//api/...`, which returns 404 on the sync
 // WebSocket and leaves the app retrying forever.
-const convexUrl = (
-  configuredConvexUrl?.startsWith("https://honorable-lyrebird-974.convex.cloud")
-    ? configuredConvexUrl
-    : MIGRATION_CONVEX_URL
-).replace(/\/+$/, "");
+const candidateConvexUrl = configuredConvexUrl?.replace(/\/+$/, "");
+const convexUrl = candidateConvexUrl?.endsWith(".convex.cloud")
+  ? candidateConvexUrl
+  : FALLBACK_CONVEX_URL;
 const convex = new ConvexReactClient(convexUrl);
 
 
