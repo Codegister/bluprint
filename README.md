@@ -18,11 +18,10 @@ their own dashboard containing only their courses and study sets.
 - **Convex Auth (email one-time code)** — separate accounts without password management
 - **NVIDIA API** — study-set generation, vision, marking, and tutoring, through the
   OpenAI-compatible endpoint at `integrate.api.nvidia.com`
-- **Cognito (`cognito.org`)** — the published topic outline for each course, read at build
-  time so pathway maps follow the board's own specification headings
-- **OpenRouter** — fills in pathway detail with a larger free model, and writes the outline
-  for courses Cognito does not publish, falling back to NVIDIA when `OPENROUTER_API_KEY`
-  is absent
+- **Cognito (`cognito.org`, scraped)** — the published topic outline for each course. The
+  pathway builder follows Cognito's qualification → subject → exam board → tier route, so
+  the map matches the board's own specification headings exactly. No AI is used to build a
+  pathway.
 - **Bun** — package manager and scripts
 
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
@@ -107,7 +106,8 @@ niche, exam-distinguishing detail rather than broad topic headings.
 
 After signing in, the main screen is the **Home** dashboard. It keeps one primary action,
 **New study set**, for uploading notes, a **Build revision timetable** action for planning
-course topics, and one course action, **Add courses**, for building AI revision pathways.
+course topics, and one course action, **Add courses**, for building revision pathways from
+published specifications.
 Below those sit a course table with topic progress and material counts, and a saved-sets
 table with status, due counts, card mastery and last quiz score. The sidebar also links to
 the saved **Revision timetable**. Opening a set gives you five tabs — Summary, Flashcards,
@@ -116,12 +116,12 @@ it. Sets built from a course topic link back to that course.
 
 ## Assumptions
 
-- **Course pathways are AI-built, not licensed specification documents.** The model is
-  asked for the current specification for the chosen board and level, and it leaves a
-  reference blank when unsure. Always check the official specification; the course page
-  says this too. Topic material is generated lazily (one tap per topic) rather than
-  pre-building every deck in every course, which keeps a nine-course setup affordable on
-  free tiers.
+- **Course pathways are scraped from Cognito, not written by a model.** The builder reads
+  the published page for the exact qualification, subject, board and tier — including the
+  specification page when the notes page is not server-rendered. If Cognito has no page for
+  a course, Bluprint stores a small starter map instead of inventing topics. Always check
+  the official specification; the course page says this too. Topic study sets are generated
+  lazily (one tap per topic), which keeps a nine-course setup affordable on free tiers.
 - **The course picker is a curated catalogue plus custom entry.** It covers common GCSE,
   A-Level, IB, AP, and undergraduate subjects. Anything missing can be typed in. Every
   GCSE subject offers Higher tier and Foundation tier, defaulting to Higher because that is
@@ -214,28 +214,11 @@ and usage bills to whoever owns the keys.
 
 Get keys from [NVIDIA Build](https://build.nvidia.com/).
 
-### OpenRouter key for course pathways
+### Course pathways need no key
 
-Course pathways use a larger model from OpenRouter's free catalogue. The key is named
-**`OPENROUTER_API_KEY`** everywhere in the code, comments, and configuration. It is read
-only in the Convex server action and is never logged or returned to the browser.
-
-```bash
-npx convex env set OPENROUTER_API_KEY "sk-or-v1-..."
-```
-
-On Freebuff, add `OPENROUTER_API_KEY` in the project's **Keys** tab. If the variable is
-missing, pathways fall back to `NVIDIA_API_KEY`; the course page still works, but the map is
-less detailed. Set `OPENROUTER_MODEL` to try a specific model first; Bluprint still keeps a
-few free fallbacks so one bad response cannot fail the build. Without an override, the
-action reads OpenRouter's live catalogue and picks models whose prompt and completion prices
-are both zero. It prefers `nvidia/nemotron-3-ultra-550b-a55b:free`, then other free Nemotron
-and Gemma models, so a retired model does not break the app.
-
-OpenRouter's free tier is rate-limited. The action tries up to four free models with short
-backoffs and validates each response before moving on, then falls back to NVIDIA. It returns
-a clear message if all of them are busy. Queued courses are staggered ten seconds apart so a
-nine-course setup does not fire nine requests at once.
+Pathways are scraped from Cognito's published pages, so they build with no AI key at all.
+`NVIDIA_API_KEY` is used only to build study sets, mark exam answers and answer tutor
+questions.
 
 ### Optional model overrides
 
@@ -246,8 +229,6 @@ endpoints:
 | --- | --- | --- |
 | Summaries, cards, quizzes, exams | `NVIDIA_TEXT_MODEL` | `nvidia/nemotron-3.5-lightning-30b-a3b` |
 | Reading photos / video frames | `NVIDIA_VISION_MODEL` | `meta/llama-3.2-90b-vision-instruct` |
-| Course pathways | `OPENROUTER_MODEL` | live free-model discovery (prefers `nvidia/nemotron-3-ultra-550b-a55b:free`) |
-| Course pathways when OpenRouter is absent | `NVIDIA_TEXT_MODEL` | same NVIDIA text model as above |
 
 Set overrides on the Convex deployment the same way as `NVIDIA_API_KEY`. If a model is
 retired, the set shows a clear "model not available" message and the environment variable
@@ -278,18 +259,18 @@ same rate-limit messages as the rest of the app.
 
 - Choosing courses writes every course with status **queued** in one transaction, then
   schedules one Convex action per course, ten seconds apart. The browser is not held open.
-- The action reads the course outline from Cognito's published page for that level, subject
-  and exam board. Those pages carry the board's own paper, module, topic and subtopic
-  headings, which is what keeps a topic from being dropped.
-- When Cognito has no page for the course (its coverage is still growing), a free OpenRouter
-  model writes the outline as a bare index — titles and subtopics only — with NVIDIA as the
-  fallback. The outline stays small enough to finish in one answer.
-- Each unit is then filled in by its own call: a one-sentence unit summary, plus a summary,
-  2–6 key points and an exam skill for every topic. Three units run at a time. Every subtopic
-  in the outline has to be named in a key point, and a topic a model skips is written from
-  its outline entry, so the finished map covers the whole specification.
-- A build that cannot reach any model still stores a complete outline, and a rebuild keeps
-  the previous map until the new one is ready. Students are never asked to retry.
+- The builder walks Cognito's own route: qualification, subject, exam board, then tier. It
+  fetches `/courses/<level>/<subject>/<board>/<tier>/notes`, lets Cognito redirect to its
+  dated route (Biology → biology-triple) and reads the paper, module, topic and subtopic
+  headings from the page. IB uses its `ibhl` / `ibsl` route instead of a board segment.
+- If that notes page is a client-rendered shell, the specification page at
+  `/specifications/<level>/<subject>/<board>` supplies the numbered topic list instead.
+- The pathway is a direct mapping of those headings: summaries, key points and exam skills
+  are assembled from the scraped subtopics. Nothing is invented, so the map covers the
+  entire published specification and no unit needs a model call.
+- If Cognito has no page for a course, the deterministic starter map keeps it usable, and
+  a rebuild replaces it once Cognito publishes the course. Students are never asked to
+  retry.
 - **Study this topic** writes the topic's summary and key points into a study set and opens
   it. The existing compile pipeline takes over, so the topic set has the same summary,
   cards, quiz, exam marking, scheduling, and tutor as an uploaded set.
@@ -356,12 +337,11 @@ src/
     timetable.ts         deterministic revision-plan generation and saved-plan queries
     studySets.ts         ownership-checked queries/mutations + internal compile writes
     tutor.ts             saved tutor threads and the context the action reads
-    ai.ts                "use node" NVIDIA + OpenRouter calls, key rotation, OCR, JSON validation,
-                         marking, tutoring, and pathway generation
-    settings.ts          environment key-pool and pathway-model status for the UI
+    ai.ts                "use node" NVIDIA calls, key rotation, OCR, JSON validation, marking,
+                         tutoring, study-set generation, and the Cognito pathway actions
+    settings.ts          environment key-pool status for the UI
     lib/nvidiaConfig.ts  NVIDIA URL, model IDs, key parsing, notes limit
-    lib/openrouterConfig.ts  OpenRouter URL, key parsing, free-model preferences
-    lib/cognito.ts       reads the published topic outline for a course from cognito.org
+    lib/cognito.ts       scrapes the published outline for a course from cognito.org
   lib/
     media.ts             image compression and video frame sampling
     examBoards.ts        exam board and level choices, qualification labels
@@ -421,13 +401,8 @@ src/
 - **429** — the whole pool is cooling down. Wait about a minute, then retry the set.
 - **404 / 410 model not available** — NVIDIA retired that model. Set
   `NVIDIA_TEXT_MODEL` / `NVIDIA_VISION_MODEL` to a model currently listed on NVIDIA Build.
-- **"OPENROUTER_API_KEY is not set"** — add it to the Convex deployment environment, or
-  set `NVIDIA_API_KEY` and retry; pathways fall back to NVIDIA.
-- **"OpenRouter's free models are rate-limited"** — free capacity is shared. Wait a minute
-  and hit **Retry pathway**; builds are already staggered to reduce this.
-- **A pathway is missing a topic** — Cognito publishes an outline for most GCSE, A-Level
-  and IB courses, and Bluprint falls back to a model-written outline for the rest. Rebuild
-  the pathway, or set `OPENROUTER_MODEL` to a stronger free model; the course page always
-  links the current specification as the source of truth.
+- **A pathway is generic** — Cognito has no published page for that qualification yet, so
+  the starter map is used. Rebuild the pathway later to pick up the published outline. The
+  course page always links the current specification as the source of truth.
 - **Poor OCR** — use straighter, brighter photos; dark handwriting or blurry frames are
   the usual cause. Pasted text is the most reliable input.

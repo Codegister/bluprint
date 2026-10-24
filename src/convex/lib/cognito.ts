@@ -1,16 +1,16 @@
 /**
- * Cognito (cognito.org) publishes one revision page per qualification, exam
- * board and subject, laid out with the board's own paper and topic headings.
+ * Cognito (cognito.org) is the source of every course pathway.
  *
- * Pathways are built from that page instead of from a model's memory of the
- * specification. A model asked to recall a whole course will quietly merge or
- * skip topics; reading the published heading list first means every topic and
- * subtopic reaches the pathway, and the model is only used to describe them.
+ * The site's "Find my course" menu walks qualification → subject → exam board →
+ * tier, and each step has a URL that serves the same content. This module walks
+ * that path with those URLs, reads the published headings, and returns a
+ * complete outline. Cognito's notes page is preferred because it lists every
+ * subtopic; its specification page is the fallback when a notes page is served
+ * without its content.
  *
- * This module is deliberately dependency-free: it fetches the page, strips the
- * HTML down to text and reads the heading structure. If a course is not on
- * Cognito, or the page is rendered client-side only, it returns null and the
- * caller falls back to a model-written outline.
+ * No model is involved: a pathway is only ever the headings Cognito publishes
+ * for that exact course, which is what stops topics from being invented or
+ * dropped.
  */
 
 export type CognitoSubtopic = { reference?: string; title: string };
@@ -22,15 +22,26 @@ export type CognitoTopic = {
 export type CognitoSection = { title: string; topics: CognitoTopic[] };
 export type CognitoOutline = {
   sourceUrl: string;
+  /** "GCSE Computer Science (OCR)" as Cognito labels it. */
   label: string;
   specificationCode?: string;
+  /** Specification overview paragraph, when a specification page was read. */
+  intro?: string;
   sections: CognitoSection[];
 };
 
 const SITE = "https://cognito.org";
 const PAGE_TIMEOUT_MS = 20_000;
-/** Some subject pages nest user-facing filters; we only ever read the course. */
+/** Guard against an unexpectedly enormous page; real course pages are < 1 MB. */
 const MAX_HTML_CHARS = 4_000_000;
+
+export type CognitoCourse = {
+  subject: string;
+  level: string;
+  examBoard: string;
+  tier?: string;
+  variant?: string;
+};
 
 /** Qualification folder names used by cognito.org. */
 const LEVEL_SLUGS: Record<string, string> = {
@@ -69,6 +80,22 @@ async function fetchPage(url: string): Promise<{ url: string; html: string } | n
   } catch {
     return null;
   }
+}
+
+/**
+ * Specification pages put a numbered topic in one paragraph, so every tag is a
+ * line break there. Notes pages read better with tags collapsed to spaces.
+ */
+function htmlToBlockLines(html: string): string[] {
+  const stripped = html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<[^>]+>/g, "\n");
+  return decodeEntities(stripped)
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
 }
 
 function decodeEntities(text: string): string {
@@ -120,7 +147,7 @@ function containerLevel(word: string): number {
 }
 
 const IGNORED_HEADINGS =
-  /^(notes|quiz|flashcards|past papers?|study .*|build your own .*|add course|expand all|collapse all|overall progress:?|reject non-essential|accept all cookies|cookies?|faqs?|sign in|sign up|blog|courses|schools|contact|privacy|terms)$/i;
+  /^(notes|quiz|flashcards|past papers?|study .*|build your own .*|add course|expand all|collapse all|overall progress:?|reject non-essential|accept all cookies|cookies?|faqs?|sign in|sign up|blog|courses|schools|contact|privacy|terms|cheat sheets?|exam practice)$/i;
 
 /** A short title-like line, used for set-text names and other unlabelled headings. */
 function isPlainHeading(line: string): boolean {
@@ -134,9 +161,9 @@ function isPlainHeading(line: string): boolean {
 type SectionFrame = { level: number; title: string };
 
 /**
- * Reads the heading list out of a Cognito course page.
+ * Reads the heading list out of a Cognito notes page.
  *
- * The pages mix three shapes, all of which appear here:
+ * Those pages mix several shapes, all of which appear here:
  *   - Paper/Year/Module headings that group topics ("Paper 1 - Computer Systems")
  *   - numbered topic headings with a title on the next line ("Topic 1" / "- Memory")
  *   - dotted subtopics ("2.1 - Primary Storage (RAM & ROM)")
@@ -144,14 +171,21 @@ type SectionFrame = { level: number; title: string };
  */
 export function parseCognitoPage(html: string, sourceUrl: string): CognitoOutline | null {
   const lines = htmlToLines(html);
-  const start = lines.findIndex((line) => /^study any\b/i.test(line));
+  // Most pages open with a "Study any subtopic…" blurb. Some (IB, tiered GCSE)
+  // print the outline without it, so the first paper or topic heading anchors
+  // the outline — and a paper heading above it is kept.
+  const intro = lines.findIndex((line) => /^study any\b/i.test(line));
+  const start =
+    intro >= 0
+      ? intro
+      : lines.findIndex((line) => CONTAINER_RE.test(line) || TOPIC_RE.test(line));
   if (start === -1) return null;
 
   // The outline runs from the course blurb to the FAQ block.
   const end = lines.findIndex(
     (line, index) => index > start && /^(faqs?|frequently asked)/i.test(line),
   );
-  const body = lines.slice(start + 1, end === -1 ? undefined : end);
+  const body = lines.slice(intro >= 0 ? start + 1 : start, end === -1 ? undefined : end);
 
   const label = lines[0] ?? "";
   const specificationCode = /\(([A-Z]{2,4}\s?\d{3,5})\)/.exec(lines[start] ?? "")?.[1];
@@ -174,17 +208,16 @@ export function parseCognitoPage(html: string, sourceUrl: string): CognitoOutlin
     currentTopic = null;
   };
 
-  // `currentTopic` is assigned inside the helpers below, so reading it through
-  // a function keeps the type checker from narrowing it to null at the point
-  // of use.
-  const openTopicNode = (): CognitoTopic | null => currentTopic;
-
   const ensureSection = (includePlainHeading = true): CognitoSection => {
     if (currentSection) return currentSection;
+    // Pages with no paper or set-text grouping (Biology, IB) still get a
+    // readable unit name from the course label at the top of the page.
     const title =
       [...frames.map((frame) => frame.title), includePlainHeading ? plainHeading : null]
         .filter(Boolean)
-        .join(" · ") || "Course content";
+        .join(" · ") ||
+      label ||
+      "Course content";
     const section: CognitoSection = { title, topics: [] };
     sections.push(section);
     currentSection = section;
@@ -203,6 +236,11 @@ export function parseCognitoPage(html: string, sourceUrl: string): CognitoOutlin
     section.topics.push(topic);
     currentTopic = topic;
   };
+
+  // `currentTopic` is assigned inside the helpers below, so reading it through
+  // a function keeps the type checker from narrowing it to null at the point
+  // of use.
+  const openTopicNode = (): CognitoTopic | null => currentTopic;
 
   for (const line of body) {
     const container = CONTAINER_RE.exec(line);
@@ -249,9 +287,11 @@ export function parseCognitoPage(html: string, sourceUrl: string): CognitoOutlin
     if (subtopic) {
       const title = subtopic[2]!.trim();
       if (!title) continue;
-      const section = ensureSection(false);
+      // A section whose content starts straight at 1.1, with no topic heading
+      // (a physics module, or a poetry anthology). Its own heading names both
+      // the unit and its single topic.
+      const section = ensureSection();
       if (!openTopicNode()) {
-        // A module whose content starts straight at 1.1, with no topic heading.
         startTopic(moduleTopicTitle ?? plainHeading ?? section.title);
       }
       openTopicNode()!.subtopics.push({ reference: subtopic[1], title });
@@ -267,8 +307,7 @@ export function parseCognitoPage(html: string, sourceUrl: string): CognitoOutlin
     }
 
     // A new heading can start once the previous topic has its subtopics, or
-    // before any content has been seen. `currentTopic` is assigned inside a
-    // helper, so read it through a widened local for the type checker.
+    // before any content has been seen.
     const canStartHeading = !currentSection || Boolean(openTopicNode()?.subtopics.length);
     if (canStartHeading && isPlainHeading(line)) {
       closeSection();
@@ -286,7 +325,7 @@ export function parseCognitoPage(html: string, sourceUrl: string): CognitoOutlin
 
   const topicCount = cleaned.reduce((sum, section) => sum + section.topics.length, 0);
   // A page that produced only a heading or two was probably not server-rendered
-  // with its outline; let the model build one instead of shipping a stub.
+  // with its outline; the caller tries the specification page instead.
   if (cleaned.length === 0 || topicCount < 3) return null;
 
   return {
@@ -294,6 +333,82 @@ export function parseCognitoPage(html: string, sourceUrl: string): CognitoOutlin
     label,
     ...(specificationCode ? { specificationCode } : {}),
     sections: cleaned,
+  };
+}
+
+/**
+ * Reads the numbered "subject content" list from a Cognito specification page.
+ * This is coarser than a notes page (topics with a couple of summary bullets),
+ * but it still carries the official topic list, so it is used only when the
+ * notes page has no readable outline.
+ */
+export function parseSpecificationPage(
+  html: string,
+  sourceUrl: string,
+): CognitoOutline | null {
+  const lines = htmlToBlockLines(html);
+  const first = lines[0] ?? "";
+  const label =
+    first
+      .split(/\s+[–-]\s+/)[0]
+      ?.replace(/\s+specification$/i, "")
+      .trim() || "";
+  const specificationCode = /\(([A-Z0-9]{4,6})\)/.exec(first)?.[1];
+
+  // The page repeats "specification overview" as a heading and a section label.
+  const overviewIndex = lines.findIndex((line) => /^specification overview$/i.test(line));
+  const intro =
+    overviewIndex >= 0 && (lines[overviewIndex + 1]?.length ?? 0) > 80
+      ? lines[overviewIndex + 1]!.slice(0, 1200)
+      : undefined;
+
+  const topicStarts: number[] = [];
+  for (let index = 0; index < lines.length - 3; index += 1) {
+    if (!/^\d{1,2}$/.test(lines[index]!)) continue;
+    if (lines[index + 1] !== ".") continue;
+    // Some boards label every topic "All papers" rather than one paper.
+    if (!/papers?\b/i.test(lines[index + 3] ?? "")) continue;
+    const title = lines[index + 2] ?? "";
+    if (title.length < 3 || title.length > 120) continue;
+    topicStarts.push(index);
+  }
+  if (topicStarts.length < 3) return null;
+
+  const byPaper = new Map<string, CognitoTopic[]>();
+  for (let position = 0; position < topicStarts.length; position += 1) {
+    const start = topicStarts[position]!;
+    const stop = topicStarts[position + 1] ?? lines.length;
+    const reference = lines[start]!;
+    const title = lines[start + 2]!;
+    const rawPaperLabel = lines[start + 3]!.replace(/\s+section\s+[a-z0-9]+$/i, "").trim();
+    // "All papers" is a single specification-wide list, so it becomes one unit
+    // named after the course instead of a unit called "All papers".
+    const paperLabel = /^(all|both)\s+papers?$/i.test(rawPaperLabel) ? "" : rawPaperLabel;
+    const subtopics: CognitoSubtopic[] = [];
+
+    for (let cursor = start + 4; cursor < stop; cursor += 1) {
+      if (lines[cursor] !== "•") continue;
+      const text = lines[cursor + 1]?.trim();
+      if (text && text !== "•") subtopics.push({ title: text.slice(0, 160) });
+    }
+
+    const sectionTitle = paperLabel.replace(/^papers?\s+/i, "Paper ").replace(/\s+/g, " ");
+    const topics = byPaper.get(sectionTitle) ?? [];
+    topics.push({ reference, title, subtopics });
+    byPaper.set(sectionTitle, topics);
+  }
+
+  if (byPaper.size === 0) return null;
+
+  return {
+    sourceUrl,
+    label,
+    ...(specificationCode ? { specificationCode } : {}),
+    ...(intro ? { intro } : {}),
+    sections: [...byPaper.entries()].map(([title, topics]) => ({
+      title: title || label || "Course content",
+      topics,
+    })),
   };
 }
 
@@ -305,35 +420,68 @@ function words(value: string): string[] {
     .filter((word) => word.length > 1 && !["and", "the", "of", "for"].includes(word));
 }
 
+/** Subject names Cognito files under a different word. */
+const SUBJECT_SLUG_ALIASES: Record<string, string> = {
+  mathematics: "maths",
+  "further mathematics": "further-maths",
+};
+
 /** Matches "Mathematics" to "maths", "Biology" to "biology-triple", and so on. */
 function subjectScore(subject: string, slug: string): number {
   const wanted = words(subject);
   if (wanted.length === 0) return 0;
   const offered = words(slug.replace(/-/g, " "));
   const hits = wanted.filter((word) =>
-    offered.some((candidate) => candidate === word || candidate.startsWith(word) || word.startsWith(candidate)),
+    offered.some(
+      (candidate) =>
+        candidate === word || candidate.startsWith(word) || word.startsWith(candidate),
+    ),
   ).length;
   return hits / wanted.length;
 }
 
-async function findSubjectPath(levelSlug: string, subject: string): Promise<string | null> {
-  const index = await fetchPage(`${SITE}/courses/${levelSlug}`);
-  if (!index) return null;
+/** A queued batch of courses shares one subject index fetch. */
+const subjectIndexCache = new Map<string, { at: number; html: string }>();
+
+async function subjectIndex(levelSlug: string): Promise<string | null> {
+  const cached = subjectIndexCache.get(levelSlug);
+  if (cached && Date.now() - cached.at < 10 * 60 * 1000) return cached.html;
+  const page = await fetchPage(`${SITE}/courses/${levelSlug}`);
+  if (!page) return null;
+  subjectIndexCache.set(levelSlug, { at: Date.now(), html: page.html });
+  return page.html;
+}
+
+export async function findSubjectSlug(
+  levelSlug: string,
+  subject: string,
+): Promise<string | null> {
+  const html = await subjectIndex(levelSlug);
+  if (!html) return null;
   const prefix = `/courses/${levelSlug}/`;
-  const paths = [...index.html.matchAll(/href="(\/courses\/[a-z0-9-]+\/[a-z0-9-]+)"/g)]
+  const paths = [...html.matchAll(/href="(\/courses\/[a-z0-9-]+\/[a-z0-9-]+)"/g)]
     .map((match) => match[1]!)
     .filter((path) => path.startsWith(prefix));
   const unique = [...new Set(paths)];
 
-  let best: { path: string; score: number } | null = null;
+  const alias = SUBJECT_SLUG_ALIASES[subject.trim().toLowerCase().replace(/\s+/g, " ")];
+  if (alias && unique.includes(`${prefix}${alias}`)) return alias;
+
+  let best: { slug: string; score: number } | null = null;
   for (const path of unique) {
     const slug = path.slice(prefix.length);
-    const score = subjectScore(subject, slug);
-    if (!best || score > best.score) best = { path, score };
+    const exact = words(subject).join("-");
+    // "Mathematics" scores 1 against both "maths" and "further-maths", so the
+    // shorter, non-prefixed slug wins the tie.
+    const score =
+      subjectScore(subject, slug) +
+      (slug === exact ? 0.5 : 0) -
+      Math.min(0.4, slug.split("-").length * 0.05);
+    if (!best || score > best.score) best = { slug, score };
   }
   // Every word in the subject name must appear in the slug, otherwise Cognito
   // is probably offering a different course (e.g. Biology for Environmental Science).
-  return best && best.score >= 0.999 ? best.path : null;
+  return best && subjectScore(subject, best.slug) >= 0.999 ? best.slug : null;
 }
 
 function boardSlugFor(board: string): string | null {
@@ -342,41 +490,66 @@ function boardSlugFor(board: string): string | null {
 }
 
 /**
- * Looks up the published outline for one course. Returns null when Cognito does
- * not list the subject, the board is not covered, or the page has no readable
- * outline — every caller treats that as "write the outline with a model".
+ * The tier / route segment Cognito adds below the exam board. GCSE uses
+ * higher/foundation; IB uses ibhl/ibsl instead of a board.
  */
-export async function fetchCognitoOutline(course: {
-  subject: string;
-  level: string;
-  examBoard: string;
-}): Promise<CognitoOutline | null> {
+export function routeSlugs(course: CognitoCourse): string[] {
+  const tier = (course.tier ?? "").trim().toLowerCase();
+  if (tier.includes("foundation")) return ["foundation"];
+  if (tier.includes("higher")) return ["higher"];
+  const variant = (course.variant ?? "").trim().toLowerCase();
+  if (variant === "hl") return ["ibhl"];
+  if (variant === "sl") return ["ibsl"];
+  return [];
+}
+
+/**
+ * Walks the same route as "Find my course": qualification, subject, exam board,
+ * then tier. Cognito redirects dated routes (biology → biology-triple) itself,
+ * so the candidate URLs are tried in order and the first readable outline wins.
+ */
+export async function fetchCognitoOutline(
+  course: CognitoCourse,
+): Promise<CognitoOutline | null> {
   const levelSlug = LEVEL_SLUGS[course.level.trim()];
   if (!levelSlug) return null;
 
-  const subjectPath = await findSubjectPath(levelSlug, course.subject);
-  if (!subjectPath) return null;
+  const subjectSlug = await findSubjectSlug(levelSlug, course.subject);
+  if (!subjectSlug) return null;
 
   const boardSlug = boardSlugFor(course.examBoard);
-  const subjectPage = await fetchPage(`${SITE}${subjectPath}`);
-  if (!subjectPage) return null;
+  const routes = routeSlugs(course);
+  const candidates: string[] = [];
 
-  // The subject page links to each board's notes page. Only the board the
-  // student is actually sitting is relevant: specifications differ.
-  const boardPages = new Map<string, string>();
-  for (const match of subjectPage.html.matchAll(/href="([^"]*\/notes)"/g)) {
-    const path = match[1]!;
-    const boardMatch = /\/([a-z-]+)\/notes$/.exec(path);
-    if (boardMatch) boardPages.set(boardMatch[1]!, path);
+  if (boardSlug) {
+    for (const route of routes) {
+      candidates.push(`/courses/${levelSlug}/${subjectSlug}/${boardSlug}/${route}/notes`);
+    }
+    candidates.push(`/courses/${levelSlug}/${subjectSlug}/${boardSlug}/notes`);
+  }
+  // IB has no board segment; its route is the whole path.
+  for (const route of routes) {
+    candidates.push(`/courses/${levelSlug}/${subjectSlug}/${route}/notes`);
   }
 
-  const notesPath = boardSlug ? boardPages.get(boardSlug) : undefined;
-  if (!notesPath) return null;
+  for (const path of [...new Set(candidates)]) {
+    const page = await fetchPage(`${SITE}${path}`);
+    if (!page) continue;
+    const outline = parseCognitoPage(page.html, page.url);
+    if (outline) return outline;
+  }
 
-  const notesPage = await fetchPage(
-    notesPath.startsWith("http") ? notesPath : `${SITE}${notesPath}`,
-  );
-  if (!notesPage) return null;
+  // The notes page is a client-rendered shell for some courses. The
+  // specification page still lists the official topics.
+  if (boardSlug) {
+    const spec = await fetchPage(
+      `${SITE}/specifications/${levelSlug}/${subjectSlug}/${boardSlug}`,
+    );
+    if (spec) {
+      const outline = parseSpecificationPage(spec.html, spec.url);
+      if (outline) return outline;
+    }
+  }
 
-  return parseCognitoPage(notesPage.html, notesPage.url);
+  return null;
 }

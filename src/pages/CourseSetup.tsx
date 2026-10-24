@@ -13,7 +13,7 @@ import {
   tierLabel,
 } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Loader2, Plus, Search, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -270,7 +270,6 @@ function CourseRow({
 
 export default function CourseSetup() {
   const navigate = useNavigate();
-  const ai = useQuery(api.settings.aiStatus);
   const createMany = useMutation(api.courses.createMany);
 
   const [level, setLevel] = useState("GCSE");
@@ -548,15 +547,6 @@ export default function CourseSetup() {
           )}
         </div>
       </div>
-
-      {ai?.pathway?.configured === false && (
-        <p className="mt-3 rounded-xl bg-[#FFF6E5] px-3 py-2 text-[0.78rem] leading-relaxed text-[#8A5D00]">
-          Course pathways need <code className="font-semibold">OPENROUTER_API_KEY</code>{" "}
-          (or <code className="font-semibold">NVIDIA_API_KEY</code> as a fallback)
-          on the deployment. Picks still save, and the specification map fills in
-          once a key is added.
-        </p>
-      )}
 
       <p className="mt-4 text-[0.72rem] text-muted-foreground">
         {selectedCount === 0

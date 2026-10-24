@@ -326,7 +326,7 @@ export default function Dashboard() {
       {ai && !ai.configured && (
         <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.8rem] font-medium text-[#96650A]">
           AI is not connected on this deployment. Add NVIDIA_API_KEY to build new
-          sets or OPENROUTER_API_KEY for course pathways. Saved material still works.
+          study sets. Pathways are scraped and saved material still works.
         </p>
       )}
 
@@ -357,8 +357,8 @@ export default function Dashboard() {
             </div>
           ) : courseRows.length === 0 ? (
             <p className="px-5 py-6 text-[0.82rem] leading-relaxed text-muted-foreground">
-              No courses yet. Choose your qualification and subjects to get an
-              AI-built revision pathway for each one.
+              No courses yet. Choose your qualification and subjects to get a
+              revision pathway built from each published specification.
             </p>
           ) : (
             <>

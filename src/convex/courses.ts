@@ -126,7 +126,7 @@ export const getDetails = query({
 
 /**
  * Queues a batch of courses. The first build starts immediately and the rest
- * are staggered so a nine-course setup does not hit a free model's rate limit
+ * are staggered so a nine-course setup makes one Cognito request at a time
  * all at once.
  */
 export const createMany = mutation({
@@ -217,7 +217,7 @@ export const createMany = mutation({
     // Stagger server-side builds. They continue even if the student closes the
     // tab, and the course page updates reactively when each one finishes.
     for (const [index, courseId] of ids.entries()) {
-      await ctx.scheduler.runAfter(index * 10_000, internal.ai.buildCoursePathway, {
+      await ctx.scheduler.runAfter(index * 1_500, internal.ai.buildCoursePathway, {
         courseId,
       });
     }
@@ -299,7 +299,7 @@ export const createTopicSet = mutation({
       ...topic.keyPoints.map((point) => `- ${point}`),
       topic.examSkill ? `\nExam skill: ${topic.examSkill}` : "",
       `\nCourse context: ${course.pathway.overview}`,
-      "\nWrite revision material for this topic at the depth and command-word style of this qualification. Stay within the specification for this course.",
+      "\nWrite revision material for this topic at the depth and command-word style of this qualification. Stay within the specification for this course, cover every key point above, and use the listed subtopics as the depth guide.",
     ]
       .filter((line) => line !== "")
       .join("\n");
