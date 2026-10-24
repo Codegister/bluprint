@@ -20,6 +20,7 @@ import {
   OPENROUTER_TUTOR_MODEL,
   readOpenRouterKey,
 } from "./lib/openrouterConfig";
+import { searchWeb, webResultsBlock, type WebResult } from "./lib/webSearch";
 import {
   MAX_NOTES_CHARS,
   NVIDIA_CHAT_URL,
@@ -1853,7 +1854,11 @@ type TutorContext = {
 };
 
 /** The question as the tutor's prompt, with the material and any web results. */
-function tutorPrompt(context: TutorContext, question: string): ChatMessage[] {
+function tutorPrompt(
+  context: TutorContext,
+  question: string,
+  web: WebResult[] = [],
+): ChatMessage[] {
   const qualification = qualificationText(context);
   const history = context.messages
     .map(
@@ -1868,6 +1873,7 @@ function tutorPrompt(context: TutorContext, question: string): ChatMessage[] {
       role: "user",
       content:
         `${materialBlock(context.material)}\n\n` +
+        (web.length > 0 ? `${webResultsBlock(web)}\n\n` : "") +
         `<material_title>${context.title}</material_title>\n` +
         `<qualification>${qualification || "Not specified"}</qualification>\n` +
         (context.examBoard
@@ -2102,13 +2108,21 @@ async function streamWebAnswer(
   return result;
 }
 
+/** Turns search hits into the citation list saved beside the message. */
+function sourcesFrom(results: WebResult[]): StreamSource[] {
+  return results.map((result) => ({ title: result.title, url: result.url }));
+}
+
 /**
  * Answers as the tutor, streaming into `onSnapshot`.
  *
- * With web access on, OpenRouter's web-connected model researches the question
- * and cites pages. If that path is unavailable — no key, no credits, an outage
- * — the answer falls back to NVIDIA using the student's own material, so the
- * tutor still replies instead of failing.
+ * With web access on, the free sources are searched first: Wikipedia, Wikibooks,
+ * Stack Exchange and DuckDuckGo's instant answers. If they cover the question,
+ * NVIDIA writes the answer from them and the pages become the citations. If they
+ * cannot, a keyed provider (Tavily, Exa, Serper) is tried by `searchWeb`; if the
+ * question still has no sources, OpenRouter's browsing model gets a go; and if
+ * that is unavailable the tutor answers from the student's material alone, so a
+ * web failure never breaks the conversation.
  */
 async function streamTutorAnswer(
   apiKeys: string[],
@@ -2117,17 +2131,35 @@ async function streamTutorAnswer(
   useWeb: boolean,
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
-  const messages = tutorPrompt(context, question);
-
-  if (useWeb) {
-    try {
-      return await streamWebAnswer(messages, onSnapshot);
-    } catch {
-      // Fall through to the NVIDIA path below.
-    }
+  if (!useWeb) {
+    return await streamNvidiaAnswer(
+      apiKeys,
+      tutorPrompt(context, question),
+      onSnapshot,
+    );
   }
 
-  return await streamNvidiaAnswer(apiKeys, messages, onSnapshot);
+  const search = await searchWeb(question, context.course).catch(() => null);
+  const results = search?.results ?? [];
+
+  if (results.length > 0) {
+    const grounded = await streamNvidiaAnswer(
+      apiKeys,
+      tutorPrompt(context, question, results),
+      onSnapshot,
+    );
+    return { text: grounded.text, sources: sourcesFrom(results) };
+  }
+
+  try {
+    return await streamWebAnswer(tutorPrompt(context, question), onSnapshot);
+  } catch {
+    return await streamNvidiaAnswer(
+      apiKeys,
+      tutorPrompt(context, question),
+      onSnapshot,
+    );
+  }
 }
 
 /** Trims and validates a tutor question; the UI and the action agree on limits. */

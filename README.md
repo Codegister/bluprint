@@ -247,24 +247,69 @@ and usage bills to whoever owns the keys.
 
 Get keys from [NVIDIA Build](https://build.nvidia.com/).
 
-### Web access for the tutor (optional)
+### Web access for the tutor
 
-When the tutor's **Web** switch is on, the question is answered by a web-connected model
-through [OpenRouter](https://openrouter.ai/) instead of NVIDIA, because OpenRouter's web
-plugin can search and return the pages it cited. That uses a second key, stored on the
-Convex deployment as **`OPENROUTER_API_KEY`**:
+The tutor's **Web** switch searches the internet in four tiers, cheapest first. Every tier
+is optional except the last, so the app works with no search credentials at all.
+
+1. **Keyless sources (free, no account).** Wikipedia search plus article introductions,
+   Wikibooks, DuckDuckGo's Instant Answer API, and Stack Exchange (biology, chemistry,
+   physics, maths, computer science, English, history, chosen from the course). These run
+   first on every question.
+2. **Live-information questions skip tier 1.** Dates, timetables, prices, "latest", "this
+   year" and any year from 2025 onwards cannot be answered by an encyclopedia, so those go
+   straight to a real search provider instead of being grounded in an article about "GCSE".
+3. **Keyed search providers, only when the free sources were thin.** Tavily, then Exa, then
+   Serper, whichever have keys set. A provider that returns 429 (rate limit) or 402 (no
+   credit) is parked for ten minutes and the next one takes over, so a used-up free tier
+   degrades into the next provider rather than into an error.
+4. **OpenRouter's browsing model**, only when no search provider found anything at all
+   (typically a live question with no search keys configured). This is the paid fallback.
+
+If none of them produce sources, the tutor answers from the student's own material. A
+search outage never blocks an answer; the reply simply has no citations.
+
+Results are cached for 15 minutes per question, and a Wikimedia rate limit parks the wiki
+providers for ten minutes on their own.
+
+#### Setting the keys
+
+All are optional; add any one and its tier switches on.
+
+| Provider | Environment variable | Free allowance | Get a key |
+| --- | --- | --- | --- |
+| Tavily | `TAVILY_API_KEY` | 1,000 credits/month, no card | <https://app.tavily.com> |
+| Exa | `EXA_API_KEY` | $10 of credits/month, no card | <https://dashboard.exa.ai> |
+| Serper | `SERPER_API_KEY` | 2,500 queries once | <https://serper.dev> |
+| OpenRouter | `OPENROUTER_API_KEY` | Paid web plugin (last resort) | <https://openrouter.ai/keys> |
+| Wikimedia | `WIKIMEDIA_CONTACT` | Not a key — your email, for a higher rate limit | — |
 
 ```bash
-npx convex env set OPENROUTER_API_KEY "sk-or-..."
+npx convex env set TAVILY_API_KEY "tvly-..."
+npx convex env set EXA_API_KEY "..."
+npx convex env set SERPER_API_KEY "..."
+npx convex env set WIKIMEDIA_CONTACT "you@example.com"
 ```
 
-On Freebuff, add `OPENROUTER_API_KEY` in the **Keys** tab. The key is read on the server
-only and is never sent to the browser. The web plugin is a paid OpenRouter feature, so the
-account needs a small credit balance; free models generally reject the plugin.
+On Freebuff, add the same names in the project's **Keys** tab. Keys are read only on the
+Convex server and never reach the browser. Adding `WIKIMEDIA_CONTACT` matters: Wikimedia
+allows unnamed clients about ten requests a minute, and a cloud IP is shared with other
+traffic, so a compliant contact raises that limit considerably.
 
-If the key is missing, out of credit, or OpenRouter is unreachable, the tutor falls back to
-NVIDIA and answers from the student's own material. Nothing breaks — the answer simply has
-no web sources.
+#### Other providers considered
+
+| Provider | Free tier | Why it is not wired in |
+| --- | --- | --- |
+| You.com | Keyless MCP search, 100 queries/day | Non-standard endpoint; would need an MCP client |
+| Linkup | $20/month credits for professional email accounts | Free tier depends on the account type |
+| Firecrawl | 1,000 credits/month | Terms restrict commercial use of the free tier |
+| Jina Search | 10M free tokens (~1,000 searches) | Reader models are CC-BY-NC; commercial licence needed |
+| Brave Search | $5 monthly credit, card required | Terms forbid using results to build AI services |
+| Perplexity Sonar | None | Pay-as-you-go only |
+
+Keyless scraping of DuckDuckGo, Mojeek, Startpage, Ecosia, Qwant or Google is deliberately
+not used: they return bot challenges (DuckDuckGo answers HTTP 202 with no results), and
+Startpage and Qwant forbid automated retrieval in their terms.
 
 ### Course pathways need no key
 
@@ -485,9 +530,13 @@ src/
   course page always links the current specification as the source of truth.
 - **Poor OCR** — use straighter, brighter photos; dark handwriting or blurry frames are
   the usual cause. Pasted text is the most reliable input.
-- **Tutor answers have no web sources** — the Web switch is off, or `OPENROUTER_API_KEY` is
-  missing / out of credit, so the tutor fell back to NVIDIA. The answer is still valid, it
-  just did not search. Add credit or leave web off deliberately.
+- **Tutor answers have no web sources** — either the Web switch is off, or the question was
+  a live one (an exam date, a timetable) that the keyless sources deliberately skip and no
+  search provider key is set. Add `TAVILY_API_KEY` (free) and it will be searched properly;
+  the answer itself is still valid, it just did not have sources.
+- **Keyless search got slower or stopped** — Wikimedia rate limits unnamed clients per IP.
+  Set `WIKIMEDIA_CONTACT` to your email, and add a search provider key so questions keep
+  working when Wikipedia is parked.
 - **Tutor reply stops mid-sentence** — the stream was cut off by a timeout. Ask again; the
   half-written reply is removed automatically before the next question.
 - **A session is missing from the timetable** — it would have run past 8:00 pm, so it moved
