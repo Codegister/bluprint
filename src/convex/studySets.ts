@@ -531,6 +531,7 @@ export const claimForProcessing = internalMutation({
     await ctx.db.patch(setId, {
       status: "processing",
       progress: "Reading your material…",
+      progressPercent: 2,
       errorMessage: undefined,
       processingStartedAt: now,
       updatedAt: now,
@@ -540,9 +541,19 @@ export const claimForProcessing = internalMutation({
 });
 
 export const setProgress = internalMutation({
-  args: { setId: v.id("studySets"), progress: v.string() },
-  handler: async (ctx, { setId, progress }) => {
-    await ctx.db.patch(setId, { progress });
+  args: {
+    setId: v.id("studySets"),
+    progress: v.string(),
+    // Optional for older callers; the build screen falls back to a queued bar.
+    percent: v.optional(v.number()),
+  },
+  handler: async (ctx, { setId, progress, percent }) => {
+    await ctx.db.patch(setId, {
+      progress,
+      ...(percent === undefined
+        ? {}
+        : { progressPercent: Math.max(0, Math.min(99, Math.round(percent))) }),
+    });
   },
 });
 

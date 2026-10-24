@@ -67,6 +67,31 @@ function MissingCard() {
   );
 }
 
+/**
+ * The pipeline's real stages. The server writes one of these percentages each
+ * time it moves on, and writes a batch percentage inside flashcards, quiz and
+ * exam questions. `seconds` is only used to guess how far the current stage
+ * has got between those writes.
+ */
+type BuildStage = { at: number; label: string; seconds: number };
+
+const BUILD_STAGES: readonly BuildStage[] = [
+  { at: 2, label: "Reading your material", seconds: 20 },
+  { at: 14, label: "Writing your summary", seconds: 18 },
+  { at: 24, label: "Building flashcards", seconds: 45 },
+  { at: 58, label: "Writing the quiz", seconds: 25 },
+  { at: 80, label: "Drafting exam questions", seconds: 22 },
+  { at: 97, label: "Saving your set", seconds: 4 },
+];
+
+function stageFor(percent: number) {
+  let stage: BuildStage = BUILD_STAGES[0];
+  for (const candidate of BUILD_STAGES) {
+    if (percent >= candidate.at) stage = candidate;
+  }
+  return stage;
+}
+
 function BuildingPanel({
   set,
   stale,
@@ -78,6 +103,76 @@ function BuildingPanel({
   onRetry: () => void;
   retrying: boolean;
 }) {
+  // Queued runs have not written a percentage yet. Never show 100 here: the
+  // completed panel takes over as soon as the set is ready.
+  const serverPercent = Math.max(
+    2,
+    Math.min(99, Math.round(set.progressPercent ?? (set.status === "queued" ? 3 : 8))),
+  );
+  const buildKey = `${set._id}:${set.processingStartedAt ?? 0}`;
+
+  // Percentages arrive in bursts (one per stage, then one per batch). The bar is
+  // driven from those values and only interpolates the wait *between* them, so
+  // it always moves without claiming work the server has not reached.
+  const confirmed = useRef(serverPercent);
+  const confirmedAt = useRef(Date.now());
+  // A queued set has not started yet, so its bar waits at the reported value.
+  const running = useRef(set.status !== "queued");
+  const [displayPercent, setDisplayPercent] = useState(serverPercent);
+
+  useEffect(() => {
+    running.current = set.status !== "queued";
+  }, [set.status]);
+
+  // A rebuild restarts the run from 2%.
+  useEffect(() => {
+    confirmed.current = serverPercent;
+    confirmedAt.current = Date.now();
+    setDisplayPercent(serverPercent);
+    // Only reset when the run changes, not on every progress write.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildKey]);
+
+  useEffect(() => {
+    if (serverPercent > confirmed.current) {
+      confirmed.current = serverPercent;
+      confirmedAt.current = Date.now();
+    }
+  }, [serverPercent]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDisplayPercent((shown) => {
+        const reported = confirmed.current;
+        if (!running.current || shown >= 99) return shown;
+        // While the run is alive the bar never goes backwards, and it always
+        // catches up quickly once a new server value lands.
+        if (shown < reported) {
+          return Math.min(reported, shown + Math.max(0.35, (reported - shown) * 0.18));
+        }
+
+        const stage = stageFor(reported);
+        const nextBoundary =
+          BUILD_STAGES.find((candidate) => candidate.at > reported)?.at ?? 99;
+        const elapsed = (Date.now() - confirmedAt.current) / 1000;
+        // Fraction of this stage we expect to have used up by now. Capped below
+        // 1 so the bar coasts into the boundary instead of parking on it.
+        const used = Math.min(0.92, elapsed / Math.max(stage.seconds, 1));
+        const guess = reported + (nextBoundary - reported) * used;
+        const ceiling = Math.max(reported, Math.min(nextBoundary - 0.5, guess));
+        return shown >= ceiling
+          ? shown
+          : Math.min(ceiling, shown + Math.max(0.08, (ceiling - shown) * 0.1));
+      });
+    }, 300);
+    return () => clearInterval(timer);
+  }, []);
+
+  // The label follows what the server has actually reached, so it never names a
+  // stage the build is not on yet.
+  const stage = stageFor(confirmed.current);
+  const shownPercent = Math.floor(displayPercent);
+
   return (
     <div className="mt-6 overflow-hidden rounded-[2rem] border border-border bg-card p-6 sm:p-7">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
@@ -98,10 +193,28 @@ function BuildingPanel({
             seconds. You can leave this page — the run continues on the server.
           </p>
 
-          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-brand-panel">
+          <div className="mt-4 flex items-baseline justify-between gap-3">
+            <p className="text-[0.72rem] font-semibold text-brand-ink/70">
+              {stage.label}
+              <span className="ml-2 font-medium text-brand-ink/35 tabular-nums">
+                Step {BUILD_STAGES.indexOf(stage) + 1} of {BUILD_STAGES.length}
+              </span>
+            </p>
+            <p className="font-display text-[0.95rem] font-bold tabular-nums text-brand-ink">
+              {shownPercent}%
+            </p>
+          </div>
+          <div
+            className="mt-1.5 h-2 overflow-hidden rounded-full bg-brand-panel"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={shownPercent}
+            aria-label="Study set build progress"
+          >
             <div
-              className="h-full w-1/3 animate-pulse rounded-full bg-[#7C5CFF]"
-              aria-hidden
+              className="progress-live h-full rounded-full transition-[width] duration-300 ease-linear"
+              style={{ width: `${displayPercent}%` }}
             />
           </div>
 

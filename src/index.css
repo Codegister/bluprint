@@ -274,6 +274,22 @@
   }
 }
 
+/* Moving sheen on the study-set build bar, so a slow batch still looks alive. */
+@keyframes progress-sheen {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+.progress-live {
+  background-image: linear-gradient(90deg, #7c5cff, #12b8a6, #7c5cff);
+  background-size: 200% 100%;
+  animation: progress-sheen 2.4s linear infinite;
+}
+
 @keyframes soft-pop {
   0% {
     opacity: 0;
@@ -310,7 +326,8 @@
 @media (prefers-reduced-motion: reduce) {
   .mascot-float,
   .animate-caret,
-  .animate-soft-pop {
+  .animate-soft-pop,
+  .progress-live {
     animation: none;
   }
 }

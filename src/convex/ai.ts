@@ -666,6 +666,9 @@ const EXAM_BATCH_SIZE = 10;
 /** One deck can ask for up to this many of each item (see the builder sliders). */
 const MAX_REQUESTED_ITEMS = 100;
 
+/** Reports batch completion to the build screen. Cosmetic; failures are ignored. */
+type BatchProgress = (completed: number, target: number) => Promise<void> | void;
+
 /**
  * How many items the material can honestly support. A student can ask for 100
  * of everything, but two paragraphs cannot yield 100 exam-style questions;
@@ -705,6 +708,7 @@ async function generateCards(
   // A wall-clock guard: Convex stops an action that runs too long, so stop
   // asking for new batches and save what exists instead.
   deadline = Number.POSITIVE_INFINITY,
+  onProgress?: BatchProgress,
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
   const seen = new Set<string>();
@@ -763,6 +767,13 @@ async function generateCards(
       added += 1;
       if (cards.length >= target) break;
     }
+    if (added > 0) {
+      try {
+        await onProgress?.(cards.length, target);
+      } catch {
+        // A progress write must never lose generated cards.
+      }
+    }
     // A model that ignores the "do not repeat" instruction would otherwise
     // loop until the attempt cap with no new cards.
     if (added === 0) break;
@@ -781,6 +792,7 @@ async function generateQuiz(
   notes: string,
   target: number,
   deadline = Number.POSITIVE_INFINITY,
+  onProgress?: BatchProgress,
 ): Promise<GeneratedQuiz[]> {
   const questions: GeneratedQuiz[] = [];
   const seen = new Set<string>();
@@ -838,6 +850,13 @@ async function generateQuiz(
       added += 1;
       if (questions.length >= target) break;
     }
+    if (added > 0) {
+      try {
+        await onProgress?.(questions.length, target);
+      } catch {
+        // Cosmetic only.
+      }
+    }
     if (added === 0) break;
   }
 
@@ -855,6 +874,7 @@ async function generateExams(
   context: StudyContext | undefined,
   target: number,
   deadline = Number.POSITIVE_INFINITY,
+  onProgress?: BatchProgress,
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText(context);
   const exams: GeneratedExam[] = [];
@@ -915,6 +935,13 @@ async function generateExams(
       exams.push(exam);
       added += 1;
       if (exams.length >= target) break;
+    }
+    if (added > 0) {
+      try {
+        await onProgress?.(exams.length, target);
+      } catch {
+        // Cosmetic only.
+      }
     }
     if (added === 0) break;
   }
@@ -1443,6 +1470,7 @@ export const processStudySet = action({
         await ctx.runMutation(internal.studySets.setProgress, {
           setId,
           progress: "Reading the text in your uploads…",
+          percent: 8,
         });
         const extracted = await readSourceImages(ctx, apiKeys, existing.sourceImageIds);
         if (extracted.trim().length > notes.length) {
@@ -1487,9 +1515,12 @@ export const processStudySet = action({
       // Leave room inside Convex's action limit for the final writes.
       const deadline = Date.now() + 8 * 60 * 1000;
 
+      // Percentages are stage boundaries; batches report their own progress
+      // inside the cards, quiz and exam stages.
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: "Writing your summary…",
+        percent: 14,
       });
       const generatedSummary = await summariseNotes(apiKeys, notes, context).catch(
         () => null,
@@ -1498,29 +1529,62 @@ export const processStudySet = action({
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: `Building ${targetCards} detail-heavy flashcards…`,
+        percent: 24,
       });
-      const cards = await generateCards(apiKeys, notes, targetCards, deadline).catch(
-        () => [],
-      );
+      const reportCards: BatchProgress = async (done, target) => {
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId,
+          progress: `Building flashcards… ${done} of ${target}`,
+          percent: 24 + (done / Math.max(1, target)) * 32,
+        });
+      };
+      const cards = await generateCards(
+        apiKeys,
+        notes,
+        targetCards,
+        deadline,
+        reportCards,
+      ).catch(() => []);
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: `Writing ${targetQuiz} quiz questions…`,
+        percent: 58,
       });
-      const quiz = await generateQuiz(apiKeys, notes, targetQuiz, deadline).catch(
-        () => [],
-      );
+      const reportQuiz: BatchProgress = async (done, target) => {
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId,
+          progress: `Writing quiz questions… ${done} of ${target}`,
+          percent: 58 + (done / Math.max(1, target)) * 20,
+        });
+      };
+      const quiz = await generateQuiz(
+        apiKeys,
+        notes,
+        targetQuiz,
+        deadline,
+        reportQuiz,
+      ).catch(() => []);
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: `Drafting ${targetExam} exam questions…`,
+        percent: 80,
       });
+      const reportExams: BatchProgress = async (done, target) => {
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId,
+          progress: `Drafting exam questions… ${done} of ${target}`,
+          percent: 80 + (done / Math.max(1, target)) * 14,
+        });
+      };
       const exams = await generateExams(
         apiKeys,
         notes,
         context,
         targetExam,
         deadline,
+        reportExams,
       ).catch(() => []);
 
       // A failed stage should not lose the rest of the set. Only a run where
@@ -1560,6 +1624,11 @@ export const processStudySet = action({
         .filter(Boolean)
         .join(" ");
 
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId,
+        progress: "Saving your set…",
+        percent: 97,
+      });
       await ctx.runMutation(internal.studySets.completeGeneration, {
         setId,
         summary,

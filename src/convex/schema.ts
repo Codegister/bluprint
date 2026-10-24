@@ -66,6 +66,9 @@ const schema = defineSchema(
         v.literal("error"),
       ),
       progress: v.optional(v.string()),
+      // 0–100 for the build screen. Written as each stage and batch finishes,
+      // so the bar reflects real work instead of a fixed animation.
+      progressPercent: v.optional(v.number()),
       errorMessage: v.optional(v.string()),
       // Explains a build that hit the material's realistic limit or where one
       // section failed, without hiding the sections that did generate.
