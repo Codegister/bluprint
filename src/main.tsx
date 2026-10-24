@@ -88,10 +88,19 @@ class RootErrorBoundary extends React.Component<
 // at the disabled Freebuff deployment. Remove this once VITE_CONVEX_URL points
 // at the new project.
 const MIGRATION_CONVEX_URL = "https://honorable-lyrebird-974.convex.cloud";
-const configuredConvexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
-const convexUrl = configuredConvexUrl?.includes("honorable-lyrebird-974")
-  ? configuredConvexUrl
-  : MIGRATION_CONVEX_URL;
+const configuredConvexUrl = (
+  import.meta.env.VITE_CONVEX_URL as string | undefined
+)?.trim();
+// Only accept the deployment URL (convex.cloud). The auth site URL
+// (convex.site) is not a valid Convex client endpoint and would hang on connect.
+// Trim trailing slashes: Convex appends `/api/...` to this address, so an
+// address ending in `/` becomes `//api/...`, which returns 404 on the sync
+// WebSocket and leaves the app retrying forever.
+const convexUrl = (
+  configuredConvexUrl?.startsWith("https://honorable-lyrebird-974.convex.cloud")
+    ? configuredConvexUrl
+    : MIGRATION_CONVEX_URL
+).replace(/\/+$/, "");
 const convex = new ConvexReactClient(convexUrl);
 
 
