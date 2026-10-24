@@ -30,10 +30,25 @@ import { toast } from "sonner";
 const MAX_COURSES = 12;
 
 /** One selected course while it is still being edited in the picker. */
+const RS_SPEC_A_LABELS = new Map([
+  [RS_SPEC_A_TITLES[0], "Religion and Life"],
+  [RS_SPEC_A_TITLES[1], "Religion and Society"],
+  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
+  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
+]);
+
+const RS_SPEC_B_LABELS = new Map([
+  [RS_SPEC_B_TITLES[0], "Believing in God"],
+  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
+]);
+
 type CourseDraft = {
   examBoard: string;
   tier?: string;
   variant?: string;
+  rsRoute?: string;
+  rsReligion?: string;
+  rsSpec?: string;
 };
 
 /** The questions asked after a subject is tapped, in order. */
@@ -47,6 +62,33 @@ const levelHints: Record<string, string> = {
   AP: "Advanced Placement",
   Undergraduate: "University",
 };
+
+/** Religious Studies Edexcel GCSE route choices. These are separate from the
+ *  generic tier/variant machinery because RS schools follow very different
+ *  schemes of work; the picker keeps them as one extra branch for this subject
+ *  only and sends them as extra fields on the course draft.
+ */
+const RS_ROUTES = ["Edexcel Religious Studies A", "Edexcel Religious Studies B"] as const;
+
+const RS_SPEC_A_TITLES = [
+  "Religion and Life",
+  "Religion and Society",
+  "Religion and Crime and Punishment",
+  "Religion and Peace and Conflict",
+] as const;
+
+const RS_SPEC_B_TITLES = [
+  "Believing in God",
+  "Religion and Ethics",
+] as const;
+
+const RS_RELIGIONS_A = [
+  "Christianity",
+  "Catholic Christianity",
+  "Islam",
+  "Judaism",
+  "Sikhism",
+] as const;
 
 /** KS3 has no exam board; the empty string keeps the label clean. */
 function boardLabel(board: string): string {
@@ -80,6 +122,13 @@ function questionsFor(level: string, subject: string): Question[] {
   if (level === "GCSE" || level === "A-Level") questions.push("board");
   const { tiers, variants } = tierChoices(level, subject);
   if (tiers.length > 0 || variants.length > 0) questions.push("tier");
+  if (
+    level === "GCSE" &&
+    subject === "Religious Studies" &&
+    (variants.length === 0 && tiers.length > 0)
+  ) {
+    questions.push("rs");
+  }
   return questions;
 }
 
@@ -253,6 +302,9 @@ export default function CourseSetup() {
   const questions = active && level ? questionsFor(level, active) : [];
   const currentQuestion: Question | null =
     questions[Math.min(questionIndex, Math.max(0, questions.length - 1))] ?? null;
+  const rsChoices = active && level === "GCSE" && active === "Religious Studies"
+    ? rsRouteChoices(activeDraft)
+    : null;
 
   const chooseQualification = (next: string) => {
     const nextBoard = defaultBoardFor(next);
@@ -295,6 +347,51 @@ export default function CourseSetup() {
     // page upward while it is open. Put the student back where they were once
     // the list is back in the DOM.
     requestAnimationFrame(() => window.scrollTo({ top }));
+  };
+
+  const rsRouteChoices = (
+    draft?: CourseDraft,
+  ): {
+    route: Array<{ value: string; label: string }>;
+    religion?: Array<{ value: string; label: string }>;
+    spec?: Array<{ value: string; label: string }>;
+  } | null => {
+    if (level !== "GCSE" || active !== "Religious Studies") return null;
+    const currentRoute = draft?.rsRoute;
+    if (currentRoute === "Edexcel Religious Studies A") {
+      return {
+        route: [
+          { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
+          { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
+        ],
+        religion: RS_RELIGIONS_A.map((name) => ({
+          value: name,
+          label: name,
+        })),
+        spec: [...RS_SPEC_A_TITLES].map((key) => ({
+          value: key,
+          label: RS_SPEC_A_LABELS.get(key) ?? key,
+        })),
+      };
+    }
+    if (currentRoute === "Edexcel Religious Studies B") {
+      return {
+        route: [
+          { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
+          { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
+        ],
+        spec: [...RS_SPEC_B_TITLES].map((key) => ({
+          value: key,
+          label: RS_SPEC_B_LABELS.get(key) ?? key,
+        })),
+      };
+    }
+    return {
+      route: [
+        { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
+        { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
+      ],
+    };
   };
 
   const openSubject = (name: string) => {
@@ -416,6 +513,46 @@ export default function CourseSetup() {
     advance();
   };
 
+  const answerRsRoute = (value: string) => {
+    if (!active) return;
+    setCourseRsRoute(active, "rsRoute", value);
+    // A new RS subject should pick its default route immediately; an existing
+    // RS subject just switches route.
+    if (!rememberedTier) {
+      // No generic RS tier is stored globally; the route is the school-specific
+      // choice here.
+    }
+    advance();
+  };
+
+  const answerRsReligion = (value: string) => {
+    if (!active) return;
+    setCourseRsRoute(active, "rsReligion", value);
+    advance();
+  };
+
+  const answerRsSpec = (value: string) => {
+    if (!active) return;
+    setCourseRsRoute(active, "rsSpec", value);
+    advance();
+  };
+
+  const setCourseRsRoute = (
+    name: string,
+    key: "rsRoute" | "rsReligion" | "rsSpec",
+    value: string,
+  ) => {
+    setSelected((current) => {
+      const course = current[name];
+      if (!course) return current;
+      return {
+        ...current,
+        [name]: { ...course, [key]: value },
+      };
+    });
+    setError(null);
+  };
+
   const buildLabel = saving
     ? "Queuing pathways…"
     : selectedCount === 0
@@ -442,6 +579,9 @@ export default function CourseSetup() {
           examBoard: selected[subject]!.examBoard,
           tier: selected[subject]!.tier,
           variant: selected[subject]!.variant,
+          rsRoute: selected[subject]!.rsRoute,
+          rsReligion: selected[subject]!.rsReligion,
+          rsSpec: selected[subject]!.rsSpec,
         })),
       });
 
