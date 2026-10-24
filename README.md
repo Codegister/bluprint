@@ -258,7 +258,7 @@ same rate-limit messages as the rest of the app.
 ## How a course pathway is built
 
 - Choosing courses writes every course with status **queued** in one transaction, then
-  schedules one Convex action per course, ten seconds apart. The browser is not held open.
+  schedules one Convex action per course, 1.5 seconds apart. The browser is not held open.
 - The builder walks Cognito's own route: qualification, subject, exam board, then tier. It
   fetches `/courses/<level>/<subject>/<board>/<tier>/notes`, lets Cognito redirect to its
   dated route (Biology → biology-triple) and reads the paper, module, topic and subtopic
