@@ -129,7 +129,8 @@ says so on the set page; it never silently pretends the request was met.
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
 10. **Plan your revision** — **Build revision timetable** asks which subjects to revise, how
-    long each study session should be, which paper to cover, how long a school day and a day off
+    long each study session should be, one paper choice for the whole plan, how long a school
+    day and a day off
     should be, how many days a week you can work, and when your first exam is. Sessions are
     separated by breaks as long as the session before them, nothing runs past 8:00 pm, and
     if the topics will not fit the date you chose, the plan starts earlier rather than
@@ -395,8 +396,8 @@ same rate-limit messages as the rest of the app.
 ## How a revision timetable is built
 
 - The builder is four separate pages, each with its own URL and a **Next** button:
-  subjects; **one session length for the whole timetable** (25, 45, 60, or 90 minutes) with
-  a paper choice (Paper 1, Paper 2, or both) for each subject; a school-day study budget
+  subjects; **one session length for the whole timetable** (25, 45, 60, or 90 minutes) and
+  **one paper choice** for every subject (Paper 1, Paper 2, or both); a school-day study budget
   (30, 60, 90, or 120 minutes), a day-off study budget (1, 1½, 2, 3, or 4 hours), revision
   days per week (three, five, or seven) and a session start time; then the start date and
   first exam date. The four answers stay in place while paging, and the final page builds.
@@ -433,7 +434,9 @@ same rate-limit messages as the rest of the app.
   One week is shown at a time with previous/next controls, and it opens on the week that
   holds the first scheduled session rather than an empty calendar week. Each subject has a colour,
   every session shows its start and end time, duration, paper and topic, and bank
-  holidays and school breaks are labelled with the longer day they carry.
+  holidays and school breaks are labelled with the longer day they carry. The grid is
+  fluid rather than fixed-width, so the whole week fits the screen (a narrower time
+  gutter and compact session cards on phones) with no horizontal scrolling.
 - Every entry is clickable. It calls the same topic-to-study-set mutation as the course
   page, reusing an existing set for that topic or creating one and opening it.
 - Only one plan is stored per account. Building again replaces it, so the sidebar never
@@ -450,7 +453,7 @@ src/
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
     Course.tsx           one course workspace: units, topics, progress, topic sets
     StudySet.tsx         set detail, compile progress, and the five study tabs
-    TimetableBuilder.tsx subjects, per-subject time and paper, daily budget, and exam dates
+    TimetableBuilder.tsx subjects, session length, one paper answer, budgets, exam dates
     Timetable.tsx        colour-coded weekly plan with holidays and clickable sessions
   components/
     AppShell.tsx         sidebar / mobile navigation for signed-in pages
@@ -511,9 +514,10 @@ src/
   of "a break as long as the study before it", and it means a longer session buys a longer
   break rather than a shorter one.
 - **One session length for the whole plan.** Sessions are the same length for every
-  subject, because a study block is a habit rather than a per-subject setting. The paper
-  label still varies by subject. A session that does not fit the day's remaining budget or
-  would cross 8:00 pm moves to the next revision day.
+  subject, because a study block is a habit rather than a per-subject setting. **One paper
+  answer covers the whole timetable** instead of a paper per subject, since friends revise
+  the same paper across their subjects. A session that does not fit the day's remaining
+  budget or would cross 8:00 pm moves to the next revision day.
 - **Paper choices label sessions, not separate sets.** A session marked Paper 1 or Paper 2
   opens the topic's study set; the set still covers the whole specification topic. Choosing
   "both" alternates the paper label between sessions so the plan covers both papers over

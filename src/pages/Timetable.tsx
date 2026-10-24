@@ -20,7 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -53,27 +53,36 @@ function SessionBlock({
       disabled={disabled}
       title={`${entry.unit} · ${entry.topic}`}
       aria-label={`Study ${entry.topic} from ${entry.course}`}
-      className="group relative flex min-h-[78px] w-full flex-col overflow-hidden rounded-xl border border-border bg-white py-1.5 pl-3 pr-2 text-left shadow-[0_1px_2px_rgba(22,24,31,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#CFC7E8] hover:shadow-[0_8px_18px_-12px_rgba(22,24,31,0.5)] disabled:opacity-60"
+      className="group relative flex min-h-[62px] w-full flex-col overflow-hidden rounded-lg border border-border bg-white py-1 pl-2 pr-1 text-left shadow-[0_1px_2px_rgba(22,24,31,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#CFC7E8] hover:shadow-[0_8px_18px_-12px_rgba(22,24,31,0.5)] disabled:opacity-60 sm:min-h-[78px] sm:rounded-xl sm:py-1.5 sm:pl-3 sm:pr-2"
     >
       <span
         aria-hidden
-        className={cn("absolute inset-y-0 left-0 w-1.5", color.bar)}
+        className={cn("absolute inset-y-0 left-0 w-1 sm:w-1.5", color.bar)}
       />
-      <span className="flex items-center justify-between gap-1">
-        <span className="text-[0.54rem] font-semibold tabular-nums text-muted-foreground">
+      {/* On phones the start time is in the row's gutter, so the range only
+          appears where there is room for it. */}
+      <span
+        className={cn(
+          "flex items-center justify-between gap-1",
+          !loading && "hidden sm:flex",
+        )}
+      >
+        <span className="hidden text-[0.54rem] font-semibold tabular-nums text-muted-foreground sm:block">
           {formatTimeRange(start, entry.minutes)}
         </span>
         {loading && (
           <Loader2 className="size-3 animate-spin text-muted-foreground" />
         )}
       </span>
-      <span className="mt-1 line-clamp-2 text-[0.7rem] font-bold leading-snug text-brand-ink">
+      <span className="mt-0.5 line-clamp-3 text-[0.58rem] font-bold leading-tight text-brand-ink sm:mt-1 sm:line-clamp-2 sm:text-[0.7rem] sm:leading-snug">
         {entry.topic}
       </span>
-      <span className="mt-auto truncate pt-1 text-[0.58rem] font-medium text-muted-foreground">
+      {/* The subject is already in the legend and the colour bar; on a phone
+          the topic needs the lines more than the repeating name does. */}
+      <span className="mt-auto hidden truncate pt-1 text-[0.58rem] font-medium text-muted-foreground sm:block">
         {entry.course}
       </span>
-      <span className="mt-1 flex flex-wrap items-center gap-1">
+      <span className="mt-1 hidden flex-wrap items-center gap-1 sm:flex">
         <span
           className={cn(
             "w-fit rounded-full px-1.5 py-0.5 text-[0.5rem] font-semibold",
@@ -136,10 +145,9 @@ function WeekTable({
   }
   const starts = [...entriesByStart.keys()].sort((a, b) => a - b);
   const today = new Date().toISOString().slice(0, 10);
-  const gridStyle = {
-    gridTemplateColumns: `76px repeat(${days.length}, minmax(0, 1fr))`,
-  };
-  const minimumWidth = days.length === 7 ? 1040 : 860;
+  // The grid is fluid (see .week-grid in index.css): the time gutter narrows on
+  // phones so all seven days fit, and no horizontal scrolling is needed.
+  const gridVars = { "--week-days": days.length } as CSSProperties;
 
   return (
     <section className="mt-4 overflow-hidden rounded-[1.6rem] border border-border bg-white shadow-[0_18px_44px_-34px_rgba(22,24,31,0.35)]">
@@ -181,33 +189,37 @@ function WeekTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: minimumWidth }}>
-          <div
-            className="grid border-b border-border bg-[#FCFCFD]"
-            style={gridStyle}
-          >
-            <div className="sticky left-0 z-10 flex items-end bg-[#FCFCFD] px-2.5 py-2 text-[0.56rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Time
-            </div>
+      <div>
+        <div
+          className="week-grid border-b border-border bg-[#FCFCFD]"
+          style={gridVars}
+        >
+          <div className="flex items-end bg-[#FCFCFD] px-1 py-2 text-[0.52rem] font-semibold uppercase tracking-[0.04em] text-muted-foreground sm:px-2.5 sm:text-[0.56rem] sm:tracking-[0.08em]">
+            Time
+          </div>
             {days.map((day) => {
               const isToday = day.date === today;
               return (
                 <div
                   key={day.date}
                   className={cn(
-                    "border-l border-border/60 px-2 py-2.5 text-center",
+                    "border-l border-border/60 px-0.5 py-2 text-center sm:px-2 sm:py-2.5",
                     isToday ? "bg-[#2F6BFF] text-white" : "bg-[#FCFCFD]",
                   )}
                 >
-                  <p className="text-[0.74rem] font-bold tracking-[-0.01em]">
-                    {formatDayHeading(day.date)}
+                  <p className="truncate text-[0.6rem] font-bold tracking-[-0.01em] sm:text-[0.74rem]">
+                    <span className="sm:hidden">
+                      {formatDayHeading(day.date).split(" ")[0]}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {formatDayHeading(day.date)}
+                    </span>
                   </p>
                   <div className="mt-1 flex min-h-5 flex-col items-center justify-center gap-0.5">
                     {day.isExamDay ? (
                       <span
                         className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          "max-w-full truncate rounded-full px-1 py-0.5 text-[0.46rem] font-semibold sm:px-1.5 sm:text-[0.52rem]",
                           isToday
                             ? "bg-white/20 text-white"
                             : "bg-[#FAE9EF] text-[#98304F]",
@@ -218,7 +230,7 @@ function WeekTable({
                     ) : day.isHoliday ? (
                       <span
                         className={cn(
-                          "truncate rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          "max-w-full truncate rounded-full px-1 py-0.5 text-[0.46rem] font-semibold sm:px-1.5 sm:text-[0.52rem]",
                           isToday
                             ? "bg-white/20 text-white"
                             : "bg-[#FFF6E5] text-[#8A5D00]",
@@ -230,7 +242,7 @@ function WeekTable({
                     ) : day.isSchoolHoliday ? (
                       <span
                         className={cn(
-                          "max-w-full truncate rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          "max-w-full truncate rounded-full px-1 py-0.5 text-[0.46rem] font-semibold sm:px-1.5 sm:text-[0.52rem]",
                           isToday
                             ? "bg-white/20 text-white"
                             : "bg-[#E6F9F6] text-[#0A655C]",
@@ -242,7 +254,7 @@ function WeekTable({
                     ) : day.isWeekend ? (
                       <span
                         className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          "max-w-full truncate rounded-full px-1 py-0.5 text-[0.46rem] font-semibold sm:px-1.5 sm:text-[0.52rem]",
                           isToday
                             ? "bg-white/20 text-white"
                             : "bg-brand-panel text-muted-foreground",
@@ -253,7 +265,7 @@ function WeekTable({
                     ) : (
                       <span
                         className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[0.52rem] font-semibold",
+                          "max-w-full truncate rounded-full px-1 py-0.5 text-[0.46rem] font-semibold sm:px-1.5 sm:text-[0.52rem]",
                           isToday
                             ? "bg-white/20 text-white"
                             : day.minutes > 0
@@ -270,7 +282,7 @@ function WeekTable({
                       day.minutes > 0 && (
                         <span
                           className={cn(
-                            "text-[0.54rem] font-semibold tabular-nums",
+                            "text-[0.5rem] font-semibold tabular-nums sm:text-[0.54rem]",
                             isToday ? "text-white/75" : "text-muted-foreground",
                           )}
                         >
@@ -291,11 +303,11 @@ function WeekTable({
             starts.map((start) => (
               <div
                 key={start}
-                className="grid border-b border-border/70 last:border-b-0"
-                style={gridStyle}
+                className="week-grid border-b border-border/70 last:border-b-0"
+                style={gridVars}
               >
-                <div className="sticky left-0 z-10 flex items-start border-r border-border/60 bg-[#FCFCFD] px-2.5 py-2">
-                  <span className="text-[0.66rem] font-bold tabular-nums text-brand-ink">
+                <div className="flex items-start border-r border-border/60 bg-[#FCFCFD] px-1 py-2 sm:px-2.5">
+                  <span className="text-[0.58rem] font-bold tabular-nums text-brand-ink sm:text-[0.66rem]">
                     {formatTime24(start)}
                   </span>
                 </div>
@@ -312,7 +324,7 @@ function WeekTable({
                     <div
                       key={`${day.date}:${start}`}
                       className={cn(
-                        "min-h-[94px] border-l border-border/60 p-1.5",
+                        "min-h-[76px] border-l border-border/60 p-1 sm:min-h-[94px] sm:p-1.5",
                         day.isHoliday
                           ? "bg-[#FFFBF2]"
                           : day.isExamDay
@@ -340,10 +352,10 @@ function WeekTable({
                           })}
                         </div>
                       ) : paused || covered ? (
-                        <div className="h-full min-h-[74px]" />
+                        <div className="h-full min-h-[64px] sm:min-h-[74px]" />
                       ) : (
                         <div
-                          className="flex h-full min-h-[74px] items-center justify-center rounded-lg border border-dashed border-border/70 text-[0.58rem] font-medium text-muted-foreground/50"
+                          className="flex h-full min-h-[64px] items-center justify-center rounded-lg border border-dashed border-border/70 text-[0.52rem] font-medium text-muted-foreground/50 sm:min-h-[74px] sm:text-[0.58rem]"
                           style={FREE_CELL_STYLE}
                         >
                           Free
@@ -356,7 +368,6 @@ function WeekTable({
             ))
           )}
         </div>
-      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-[#FCFCFD] px-4 py-2.5 text-[0.64rem] text-muted-foreground">
         <span>Click a session to open its study set.</span>

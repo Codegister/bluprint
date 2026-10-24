@@ -29,14 +29,13 @@ const MAX_COURSES = 12;
 /** The builder runs as four pages; each has its own URL and one decision. */
 const STEPS = [
   { title: "Subjects", color: "#128A4C", tint: "bg-[#EAFBF4]" },
-  { title: "Session length", color: "#6B4DBE", tint: "bg-[#F3F0FF]" },
+  { title: "Length and papers", color: "#6B4DBE", tint: "bg-[#F3F0FF]" },
   { title: "Daily plan", color: "#2B7FB8", tint: "bg-[#EAF4FD]" },
   { title: "Exam dates", color: "#B7791F", tint: "bg-[#FFF7EC]" },
 ] as const;
 
 type CourseSetting = {
   courseId: Id<"courses">;
-  paper: string;
 };
 
 function defaults() {
@@ -82,6 +81,8 @@ export default function TimetableBuilder() {
   const [sessionMinutes, setSessionMinutes] = useState(45);
   const [startMinutes, setStartMinutes] = useState(17 * 60);
   const [daysPerWeek, setDaysPerWeek] = useState(5);
+  // One paper answer for the whole timetable instead of a choice per subject.
+  const [paper, setPaper] = useState("Paper 1");
   const [settings, setSettings] = useState<CourseSetting[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,17 +111,8 @@ export default function TimetableBuilder() {
       if (current.some((setting) => setting.courseId === courseId)) {
         return current.filter((setting) => setting.courseId !== courseId);
       }
-      return [...current, { courseId, paper: "Paper 1" }];
+      return [...current, { courseId }];
     });
-    setError(null);
-  };
-
-  const updateSetting = (courseId: Id<"courses">, patch: Partial<CourseSetting>) => {
-    setSettings((current) =>
-      current.map((setting) =>
-        setting.courseId === courseId ? { ...setting, ...patch } : setting,
-      ),
-    );
     setError(null);
   };
 
@@ -185,7 +177,10 @@ export default function TimetableBuilder() {
         dayOffMinutes,
         startMinutes,
         sessionMinutes,
-        courseSettings: settings,
+        courseSettings: settings.map((setting) => ({
+          courseId: setting.courseId,
+          paper,
+        })),
       });
       if (result.startedEarlier) {
         toast.success(
@@ -430,68 +425,39 @@ export default function TimetableBuilder() {
               </p>
             </div>
 
-            {settings.length === 0 ? (
-              <p className="mt-4 rounded-2xl border border-dashed border-border px-4 py-5 text-[0.82rem] text-muted-foreground">
-                Select at least one subject above to choose its papers.
+            <div className="mt-5">
+              <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Papers
               </p>
-            ) : (
-              <div className="mt-5">
-                <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Papers
-                </p>
-                <div className="mt-2 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-white">
-                  {settings.map((setting) => {
-                    const course = ready.find(
-                      (item) => item._id === setting.courseId,
-                    );
-                    if (!course) return null;
-                    const index = settings.indexOf(setting);
-                    const color = SUBJECT_COLORS[index % SUBJECT_COLORS.length];
-                    return (
-                      <div
-                        key={setting.courseId}
-                        className="flex flex-wrap items-center gap-2 px-3.5 py-2.5"
-                      >
-                        <span
-                          className={cn("size-2.5 shrink-0 rounded-full", color.dot)}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[0.86rem] font-semibold text-brand-ink">
-                            {course.subject}
-                          </p>
-                          <p className="mt-0.5 truncate text-[0.7rem] text-muted-foreground">
-                            {courseSubtitle(course)}
-                          </p>
-                        </div>
-                        <select
-                          value={setting.paper}
-                          aria-label={`${course.subject} paper`}
-                          onChange={(event) =>
-                            updateSetting(setting.courseId, {
-                              paper: event.target.value,
-                            })
-                          }
-                          className="h-8 w-[150px] rounded-lg border border-border bg-white px-2 text-[0.76rem] font-medium text-brand-ink outline-none focus:border-[#B9A6FF]"
-                        >
-                          {PAPERS.map((paper) => (
-                            <option key={paper} value={paper}>
-                              {paperLabel(paper)}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => toggle(course._id)}
-                          className="text-[0.7rem] font-semibold text-muted-foreground underline-offset-2 hover:text-destructive hover:underline"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+              <h3 className="mt-1 font-display text-[1rem] font-bold text-brand-ink">
+                Which paper are you revising?
+              </h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {PAPERS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={paper === option}
+                    onClick={() => {
+                      setPaper(option);
+                      setError(null);
+                    }}
+                    className={cn(
+                      "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
+                      paper === option
+                        ? "border-[#6B4EE6] bg-[#F3ECFF] text-[#5130D8]"
+                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                    )}
+                  >
+                    {paperLabel(option)}
+                  </button>
+                ))}
               </div>
-            )}
+              <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                One answer for every subject. “Papers 1 and 2” alternates the two
+                across sessions so the whole timetable covers both.
+              </p>
+            </div>
           </section>
 
           <section
