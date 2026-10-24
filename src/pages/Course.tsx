@@ -18,7 +18,7 @@ import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { ChevronDown, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -60,13 +60,9 @@ function MissingCard() {
 function BuildingPanel({
   course,
   stale,
-  onRetry,
-  retrying,
 }: {
   course: Doc<"courses">;
   stale: boolean;
-  onRetry: () => void;
-  retrying: boolean;
 }) {
   return (
     <section className="mt-6 overflow-hidden rounded-[2rem] border border-border bg-white p-6 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-8">
@@ -92,54 +88,30 @@ function BuildingPanel({
       </p>
 
       {stale && (
-        <div className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-3">
-          <p className="text-[0.8rem] leading-relaxed text-[#8A5D00]">
-            This build has been running for a while. Retry it to start fresh.
-          </p>
-          <Button
-            onClick={onRetry}
-            disabled={retrying}
-            className="mt-2 h-9 rounded-full bg-[#8A5D00] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#704B00]"
-          >
-            {retrying ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Retry build
-          </Button>
-        </div>
+        <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-3 text-[0.8rem] leading-relaxed text-[#8A5D00]">
+          This is taking longer than usual. Bluprint will restart it
+          automatically — no action is needed.
+        </p>
       )}
     </section>
   );
 }
 
-function ErrorPanel({
-  course,
-  onRetry,
-  retrying,
-}: {
-  course: Doc<"courses">;
-  onRetry: () => void;
-  retrying: boolean;
-}) {
+function RecoveringPanel({ course }: { course: Doc<"courses"> }) {
   return (
-    <section className="mt-6 rounded-[2rem] border border-[#F6C9CE] bg-[#FFF7F7] p-6 sm:p-7">
-      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#C23B49]">
-        Pathway needs a retry
+    <section className="mt-6 rounded-[2rem] border border-border bg-white p-6 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-8">
+      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
+        Preparing pathway
       </p>
-      <h2 className="mt-1 font-display text-[1.25rem] font-bold text-brand-ink">
-        Bluprint couldn't finish this map
+      <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
+        Putting the finishing touches on {course.subject}
       </h2>
-      <p className="mt-2 max-w-2xl text-[0.86rem] leading-relaxed text-[#8C3A44]">
-        {course.errorMessage ||
-          "The pathway model didn't return a complete course map. Retry to try another free model."}
+      <p className="mt-2 max-w-2xl text-[0.86rem] leading-relaxed text-muted-foreground">
+        Bluprint is completing this map automatically. You can leave this page —
+        it will be ready when you come back.
       </p>
-      <div className="mt-4">
-        <Button
-          onClick={onRetry}
-          disabled={retrying}
-          className="h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
-        >
-          {retrying ? <Loader2 className="size-4 animate-spin" /> : null}
-          Retry pathway
-        </Button>
+      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
+        <div className="h-full w-1/3 animate-pulse rounded-full bg-[#7C5CFF]" />
       </div>
     </section>
   );
@@ -156,7 +128,22 @@ export default function Course() {
   const createTopicSet = useMutation(api.courses.createTopicSet);
   const setTopicDone = useMutation(api.courses.setTopicDone);
   const removeCourse = useMutation(api.courses.remove);
+  const recoverCourses = useMutation(api.courses.recoverMine);
   const rebuild = useAction(api.ai.rebuildCoursePathway);
+
+  const recoveryRequested = useRef(false);
+  useEffect(() => {
+    if (!details) return;
+    if (details.course.status !== "error" && !details.processingStale) {
+      recoveryRequested.current = false;
+      return;
+    }
+    if (recoveryRequested.current) return;
+    recoveryRequested.current = true;
+    void recoverCourses().catch(() => {
+      recoveryRequested.current = false;
+    });
+  }, [details, recoverCourses]);
 
   const [retrying, setRetrying] = useState(false);
   const [busyTopic, setBusyTopic] = useState<string | null>(null);
@@ -301,14 +288,9 @@ export default function Course() {
         </div>
 
         {course.status === "error" ? (
-          <ErrorPanel course={course} onRetry={handleRetry} retrying={retrying} />
+          <RecoveringPanel course={course} />
         ) : course.status !== "ready" || !pathway ? (
-          <BuildingPanel
-            course={course}
-            stale={details.processingStale}
-            onRetry={handleRetry}
-            retrying={retrying}
-          />
+          <BuildingPanel course={course} stale={details.processingStale} />
         ) : (
           <>
             <section className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -542,7 +524,7 @@ export default function Course() {
                                     {set.status === "ready"
                                       ? `${set.cardCount} cards`
                                       : set.status === "error"
-                                        ? "Needs retry"
+                                        ? "Build interrupted"
                                         : "Building"}
                                   </span>
                                 )}

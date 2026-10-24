@@ -8,10 +8,10 @@ import { qualificationLabel } from "@/lib/examBoards";
 import { displayName, percent, relativeDate } from "@/lib/format";
 import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { ChevronRight, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 type SetSummary = FunctionReturnType<typeof api.studySets.listMine>[number];
@@ -29,7 +29,7 @@ function StatusText({ set }: { set: SetSummary }) {
   if (set.status === "error") {
     return (
       <span className="text-[0.72rem] font-semibold text-[#C23B49]">
-        Needs a retry
+        Build interrupted
       </span>
     );
   }
@@ -69,7 +69,7 @@ function SetRow({ set }: { set: SetSummary }) {
           </p>
         ) : set.status === "error" ? (
           <p className="mt-1.5 text-[0.72rem] text-muted-foreground">
-            Open to review what went wrong and retry.
+            Open to rebuild this set.
           </p>
         ) : (
           <div className="mt-2 flex items-center gap-2.5">
@@ -101,7 +101,7 @@ function SetRow({ set }: { set: SetSummary }) {
             </p>
           </>
         ) : (
-          <p>{processing ? "In progress" : "Open to retry"}</p>
+          <p>{processing ? "In progress" : "Open to rebuild"}</p>
         )}
       </div>
 
@@ -153,7 +153,9 @@ function CourseRow({ course }: { course: CourseSummary }) {
             {course.progress || "Building"}
           </p>
         ) : course.status === "error" ? (
-          <p className="text-[0.76rem] font-semibold text-[#C23B49]">Needs a retry</p>
+          <p className="flex items-center gap-1.5 text-[0.76rem] font-medium text-[#96650A]">
+            <Loader2 className="size-3 animate-spin" /> Finishing map
+          </p>
         ) : (
           <>
             <p className="text-[0.8rem] font-semibold text-brand-ink">
@@ -187,7 +189,7 @@ function CourseRow({ course }: { course: CourseSummary }) {
           </div>
         ) : (
           <p className="text-[0.76rem] text-muted-foreground">
-            {course.status === "error" ? "Open to retry" : "Mapping specification"}
+            {course.status === "error" ? "Preparing pathway" : "Mapping specification"}
           </p>
         )}
       </div>
@@ -203,6 +205,8 @@ export default function Dashboard() {
   const courseRows = useQuery(api.courses.listMine);
   const ai = useQuery(api.settings.aiStatus);
   const study = useQuery(api.studySets.studyStats);
+  const recoverCourses = useMutation(api.courses.recoverMine);
+  const recoveryRequested = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState<string>("all");
@@ -211,6 +215,29 @@ export default function Dashboard() {
   const setDialogOpen = (open: boolean) => {
     setSearchParams(open ? { new: "1" } : {}, { replace: true });
   };
+
+  // Recover courses left failed by an older build. This runs once per page
+  // load and means the student never has to press a retry button.
+  useEffect(() => {
+    if (!courseRows) return;
+    const now = Date.now();
+    const needsRecovery = courseRows.some(
+      (course) =>
+        course.status === "error" ||
+        (course.status === "processing" &&
+          (course.processingStartedAt === undefined ||
+            now - course.processingStartedAt > 10 * 60 * 1000)),
+    );
+    if (!needsRecovery) {
+      recoveryRequested.current = false;
+      return;
+    }
+    if (recoveryRequested.current) return;
+    recoveryRequested.current = true;
+    void recoverCourses().catch(() => {
+      recoveryRequested.current = false;
+    });
+  }, [courseRows, recoverCourses]);
 
   const stats = useMemo(() => {
     const list = sets ?? [];

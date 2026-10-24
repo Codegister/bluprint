@@ -1048,19 +1048,47 @@ async function openRouterChat<T>(
 }
 
 function parsePathway(raw: string): CoursePathway {
+  const cleaned = stripReasoning(raw);
+  const recovered = parsedObjects(cleaned);
   const parsed =
     tryParseJson<Record<string, unknown>>(raw) ??
-    parsedObjects(stripReasoning(raw)).find((row) => Array.isArray(row.units)) ??
+    recovered.find((row) => Array.isArray(row.units)) ??
     null;
-  if (!parsed) {
+
+  let rawUnits: unknown[] =
+    parsed && Array.isArray(parsed.units) ? parsed.units : [];
+  if (rawUnits.length === 0) {
+    // A truncated outer object can still leave complete unit objects behind.
+    // Recover those instead of throwing away an otherwise useful map.
+    const recoveredUnits = recovered.filter(
+      (row) => Array.isArray(row.topics) && typeof row.title === "string",
+    );
+    if (recoveredUnits.length > 0) {
+      rawUnits = recoveredUnits;
+    } else {
+      // Last resort: group the complete topics that did arrive.
+      const recoveredTopics = recovered.filter(
+        (row) => Array.isArray(row.keyPoints) && typeof row.title === "string",
+      );
+      if (recoveredTopics.length > 0) {
+        rawUnits = [
+          {
+            title: "Recovered topics",
+            summary: "Topics recovered from a partial pathway response.",
+            topics: recoveredTopics,
+          },
+        ];
+      }
+    }
+  }
+  if (rawUnits.length === 0) {
     throw new Error(
-      "The pathway model returned something Bluprint couldn't read. Retry, or check OPENROUTER_MODEL on the deployment.",
+      "The pathway model returned something Bluprint couldn't read. It will try a more compact map.",
     );
   }
 
-  const overview = asText(parsed.overview, 1600);
-  const examFormat = asText(parsed.examFormat, 1200);
-  const rawUnits = Array.isArray(parsed.units) ? parsed.units : [];
+  const overview = asText(parsed?.overview, 1600);
+  const examFormat = asText(parsed?.examFormat, 1200);
   const units: PathwayUnit[] = [];
 
   for (const [unitIndex, entry] of rawUnits.slice(0, 12).entries()) {
@@ -1101,9 +1129,9 @@ function parsePathway(raw: string): CoursePathway {
   }
 
   const topicCount = units.reduce((sum, unit) => sum + unit.topics.length, 0);
-  if (units.length < 3 || topicCount < 8) {
+  if (units.length === 0 || topicCount < 2) {
     throw new Error(
-      "The pathway model returned an incomplete course map. Retry the build to try another free model.",
+      "The pathway model returned an incomplete course map. It will try a more compact map.",
     );
   }
 
@@ -1118,14 +1146,17 @@ function parsePathway(raw: string): CoursePathway {
   };
 }
 
-function pathwayPrompt(course: {
-  subject: string;
-  level: string;
-  examBoard: string;
-  tier?: string;
-  variant?: string;
-  poetryTheme?: string;
-}): string {
+function pathwayPrompt(
+  course: {
+    subject: string;
+    level: string;
+    examBoard: string;
+    tier?: string;
+    variant?: string;
+    poetryTheme?: string;
+  },
+  compact = false,
+): string {
   return (
     `Design a complete revision pathway for this course.\n` +
     `<course>${course.subject}</course>\n` +
@@ -1147,27 +1178,184 @@ function pathwayPrompt(course: {
       : "") +
     "Choose the current specification, not an old syllabus. If you are not certain a topic or reference is on the current specification, leave the reference blank rather than inventing one.\n\n" +
     "Rules:\n" +
-    "- 6 to 10 units in teaching order. 4 to 6 topics per unit. Cover the whole course, including required practicals, case studies or set texts where the specification requires them.\n" +
-    "- Use official unit and topic names. Keep titles under 12 words.\n" +
-    "- Each topic gets a one-sentence summary (max 30 words), 2 to 4 key points (max 22 words each), and one examSkill sentence describing how it is examined or what exam technique it demands.\n" +
-    "- examFormat: name the papers/components and their weighting and duration where you are confident. Otherwise say: Check your specification for paper structure and weighting.\n" +
-    "- overview: 2 to 3 sentences on what the course covers and the best way to revise it.\n" +
-    "- No markdown, no commentary, no extra keys. Strict JSON only.\n\n" +
+    (compact
+      ? "- 4 to 6 units in teaching order. 3 topics per unit. Cover the whole course, including required practicals, case studies or set texts where the specification requires them.\n" +
+        "- Use official unit and topic names. Keep titles under 12 words.\n" +
+        "- Each topic gets a one-sentence summary (max 20 words), 2 key points (max 16 words each), and one examSkill sentence (max 20 words).\n" +
+        "- examFormat: name the papers/components only if confident. Otherwise say: Check your specification for paper structure and weighting.\n" +
+        "- overview: 1 to 2 sentences on what the course covers and how to revise it.\n" +
+        "- No markdown, no commentary, no extra keys. Strict JSON only. Keep the answer compact enough to finish in one response.\n\n"
+      : "- 5 to 7 units in teaching order. 3 to 4 topics per unit. Cover the whole course, including required practicals, case studies or set texts where the specification requires them.\n" +
+        "- Use official unit and topic names. Keep titles under 12 words.\n" +
+        "- Each topic gets a one-sentence summary (max 25 words), 2 to 3 key points (max 18 words each), and one examSkill sentence describing how it is examined or what exam technique it demands.\n" +
+        "- examFormat: name the papers/components and their weighting and duration where you are confident. Otherwise say: Check your specification for paper structure and weighting.\n" +
+        "- overview: 2 sentences on what the course covers and the best way to revise it.\n" +
+        "- No markdown, no commentary, no extra keys. Strict JSON only.\n\n") +
     "Return this exact shape:\n" +
     '{"overview":"...","examFormat":"...","units":[{"title":"...","summary":"...","topics":[{"title":"...","specReference":"4.1.2","summary":"...","keyPoints":["..."],"examSkill":"..."}]}]}'
   );
 }
 
-/** Uses OpenRouter first, then NVIDIA, so a missing free-model key is not fatal. */
-async function generateCoursePathway(course: {
+/**
+ * A deterministic map used only when every model attempt fails. Courses must
+ * stay usable: a student should never be told to retry a build. These topics
+ * are broad enough to generate study sets from, and a later deliberate rebuild
+ * can replace them with a full specification map.
+ */
+function fallbackPathway(course: {
   subject: string;
   level: string;
   examBoard: string;
   tier?: string;
   variant?: string;
   poetryTheme?: string;
-}): Promise<CoursePathway> {
-  const prompt = pathwayPrompt(course);
+}): CoursePathway {
+  const subject = course.subject.trim() || "This course";
+  const board = course.examBoard.trim() || "your exam board";
+  const level = course.level.trim() || "your qualification";
+  const tier = course.tier ? ` (${course.tier} tier)` : "";
+
+  const unit = (
+    title: string,
+    summary: string,
+    topics: Array<Omit<PathwayTopic, "id">>,
+  ): PathwayUnit => ({
+    title,
+    summary,
+    topics: topics.map((topic, index) => ({ ...topic, id: `t${index + 1}` })),
+  });
+
+  const units: PathwayUnit[] = [
+    unit(
+      `${subject}: specification essentials`,
+      `The core framework of ${level} ${subject}${tier}, mapped to ${board}.`,
+      [
+        {
+          title: "Specification structure and assessment objectives",
+          summary: `How ${board} organises ${subject} and what the examiner rewards.`,
+          keyPoints: [
+            `List the papers, sections and assessment objectives for ${board} ${subject}.`,
+            "Know which topics are examined in each paper.",
+            "Check the current specification for set texts, practicals or case studies.",
+          ],
+          examSkill: "Read the command word and the mark allocation before you write.",
+        },
+        {
+          title: "Core concepts and terminology",
+          summary: `The definitions, processes and models that underpin ${subject}.`,
+          keyPoints: [
+            "Write precise definitions for the central terms in each unit.",
+            "Explain each process as a sequence of cause and effect.",
+            "Prepare one worked example or named case study per concept.",
+          ],
+          examSkill: "Use the technical term first, then explain it in a full sentence.",
+        },
+        {
+          title: "Exam skills and command words",
+          summary: `How ${board} phrases questions and what each command word requires.`,
+          keyPoints: [
+            "Match the command word to the depth of answer it requires.",
+            "Plan longer answers before writing to avoid repetition.",
+            "Check the number of marks against the number of points you make.",
+          ],
+          examSkill: "Underline the command word and the focus of every question.",
+        },
+      ],
+    ),
+    unit(
+      `${subject}: exam practice`,
+      `Turn specification knowledge into marks under exam conditions.`,
+      [
+        {
+          title: "Past paper questions",
+          summary: `Practice questions written for ${board} ${subject}.`,
+          keyPoints: [
+            "Work through papers in specification order, then mixed papers.",
+            "Time each section to match the real paper.",
+            "Mark every answer against the published mark scheme.",
+          ],
+          examSkill: "Attempt the question before reading the mark scheme.",
+        },
+        {
+          title: "Mark scheme analysis",
+          summary: "Learn how examiners award marks and where answers lose them.",
+          keyPoints: [
+            "Highlight the creditable point behind each mark-scheme bullet.",
+            "Note the accepted alternatives and the required context.",
+            "Rewrite weak answers using the mark-scheme wording.",
+          ],
+          examSkill: "Build answers from separable, credit-worthy points.",
+        },
+        {
+          title: "Common mistakes and improvements",
+          summary: "The recurring errors that separate a good answer from full marks.",
+          keyPoints: [
+            "Keep an error log from every practice paper.",
+            "Identify whether each lost mark was knowledge, application or technique.",
+            "Re-test the same weakness after a week.",
+          ],
+          examSkill: "Correct the cause of each lost mark, not just the answer.",
+        },
+      ],
+    ),
+  ];
+
+  if (course.poetryTheme) {
+    units.push(
+      unit(
+        `Poetry anthology: ${course.poetryTheme}`,
+        `The poems, themes and comparisons for the ${course.poetryTheme} cluster.`,
+        [
+          {
+            title: "Poems and their meanings",
+            summary: `Know each poem in the ${course.poetryTheme} collection.`,
+            keyPoints: [
+              "Summarise each poem in two sentences.",
+              "Learn three quotations per poem.",
+              "Link form, structure and language to meaning.",
+            ],
+            examSkill: "Integrate short quotations into an argument rather than listing them.",
+          },
+          {
+            title: "Themes and comparisons",
+            summary: `Compare the poems around the central ideas of ${course.poetryTheme}.`,
+            keyPoints: [
+              "Group the poems by theme, tone and viewpoint.",
+              "Prepare comparative pairs with contrasting interpretations.",
+              "Use contextual detail only where it sharpens the reading.",
+            ],
+            examSkill: "Compare writers' methods, not just their subject matter.",
+          },
+        ],
+      ),
+    );
+  }
+
+  return {
+    overview: `A starter revision pathway for ${level} ${subject}${tier} with ${board}. Open a topic to build a study set, or rebuild this map later for a fuller specification-specific version.`,
+    examFormat: `Check the current ${board} specification for paper structure, durations and weightings.`,
+    units: units.map((entry, unitIndex) => ({
+      ...entry,
+      topics: entry.topics.map((topic, topicIndex) => ({
+        ...topic,
+        id: `u${unitIndex + 1}t${topicIndex + 1}`,
+      })),
+    })),
+  };
+}
+
+/** Uses OpenRouter first, then NVIDIA, so a missing free-model key is not fatal. */
+async function generateCoursePathway(
+  course: {
+    subject: string;
+    level: string;
+    examBoard: string;
+    tier?: string;
+    variant?: string;
+    poetryTheme?: string;
+  },
+  allowFallback = true,
+): Promise<CoursePathway> {
   const system: ChatMessage = {
     role: "system",
     content:
@@ -1175,38 +1363,49 @@ async function generateCoursePathway(course: {
       "Return strict JSON only, with no markdown fences or commentary.",
   };
 
+  // Free models often stop at a fixed output cap. The full map is tried first;
+  // if it is truncated or unreadable, a smaller map is requested from the same
+  // provider before moving on. The smaller map is still a complete course.
   if (readOpenRouterKey()) {
-    try {
-      // 16k leaves room for a full 10-unit map without the JSON being cut off
-      // mid-topic. Each candidate model is parse-checked inside openRouterChat.
-      return await openRouterChat(
-        [system, { role: "user", content: prompt }],
-        16_000,
-        parsePathway,
-      );
-    } catch (error) {
-      const nvidiaKeys = readNvidiaKeys();
-      if (nvidiaKeys.length === 0) throw error;
-      // Fall through to NVIDIA rather than failing a whole course on a free
-      // model's rate limit.
+    for (const compact of [false, true]) {
+      try {
+        return await openRouterChat(
+          [system, { role: "user", content: pathwayPrompt(course, compact) }],
+          compact ? 9_000 : 16_000,
+          parsePathway,
+        );
+      } catch {
+        // Try the compact prompt, then NVIDIA.
+      }
     }
   }
 
   const nvidiaKeys = readNvidiaKeys();
-  if (nvidiaKeys.length === 0) {
-    throw new Error(
-      "Course pathways need OPENROUTER_API_KEY (or NVIDIA_API_KEY as a fallback). Add one to the server environment and retry.",
-    );
+  if (nvidiaKeys.length > 0) {
+    for (const compact of [false, true]) {
+      try {
+        const raw = await nvidiaChat(nvidiaKeys, {
+          model: NVIDIA_TEXT_MODEL,
+          messages: [
+            system,
+            { role: "user", content: pathwayPrompt(course, compact) },
+          ],
+          maxTokens: compact ? 8_000 : 12_000,
+          temperature: 0.2,
+          disableThinking: true,
+          timeoutMs: 180_000,
+        });
+        return parsePathway(raw);
+      } catch {
+        // Fall through to the deterministic map below.
+      }
+    }
   }
-  const raw = await nvidiaChat(nvidiaKeys, {
-    model: NVIDIA_TEXT_MODEL,
-    messages: [system, { role: "user", content: prompt }],
-    maxTokens: 12_000,
-    temperature: 0.2,
-    disableThinking: true,
-    timeoutMs: 180_000,
-  });
-  return parsePathway(raw);
+
+  if (!allowFallback) {
+    throw new Error("Every pathway model attempt failed.");
+  }
+  return fallbackPathway(course);
 }
 
 /**
@@ -1215,7 +1414,10 @@ async function generateCoursePathway(course: {
  */
 export const buildCoursePathway = internalAction({
   args: { courseId: v.id("courses") },
-  handler: async (ctx, { courseId }) => {
+  handler: async (
+    ctx,
+    { courseId },
+  ): Promise<{ ok: boolean; fallback?: boolean; retrying?: boolean }> => {
     const course = await ctx.runQuery(internal.courses.getForBuild, { courseId });
     if (!course) return { ok: false };
     if (course.status === "ready") return { ok: true };
@@ -1224,16 +1426,32 @@ export const buildCoursePathway = internalAction({
     if (!claim.claimed) return { ok: false };
 
     try {
-      const pathway = await generateCoursePathway(course);
+      // A rebuild keeps its previous map if every model fails; only a brand-new
+      // course is allowed to fall back to the starter outline.
+      const pathway = await generateCoursePathway(course, !course.pathway);
       await ctx.runMutation(internal.courses.completeBuild, { courseId, pathway });
       return { ok: true };
-    } catch (error) {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : "The pathway could not be built. Please retry.";
-      await ctx.runMutation(internal.courses.failBuild, { courseId, message });
-      return { ok: false };
+    } catch {
+      // Never leave a course in a state that asks the student to retry. Keep the
+      // existing map when there is one; otherwise store a usable starter map.
+      try {
+        await ctx.runMutation(internal.courses.completeBuild, {
+          courseId,
+          pathway: course.pathway ?? fallbackPathway(course),
+        });
+        return { ok: true, fallback: !course.pathway };
+      } catch {
+        // If even the fallback cannot be saved, keep the build moving in the
+        // background rather than surfacing an error.
+        await ctx.runMutation(internal.courses.queueRetry, {
+          courseId,
+          message: "Preparing a fresh pathway…",
+        });
+        await ctx.scheduler.runAfter(45_000, internal.ai.buildCoursePathway, {
+          courseId,
+        });
+        return { ok: false, retrying: true };
+      }
     }
   },
 });

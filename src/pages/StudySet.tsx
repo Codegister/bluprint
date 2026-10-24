@@ -122,7 +122,7 @@ function BuildingPanel({
                 ) : (
                   <RotateCcw className="size-3.5" />
                 )}
-                Retry build
+                Rebuild set
               </Button>
             </div>
           )}
@@ -153,7 +153,7 @@ function ErrorPanel({
           </h2>
           <p className="mt-2 whitespace-pre-wrap text-[0.9rem] leading-relaxed text-muted-foreground">
             {set.errorMessage ??
-              "NVIDIA could not finish this set. Your source is still saved, so you can retry whenever you like."}
+              "NVIDIA could not finish this set. Your source is still saved, so you can rebuild it whenever you like."}
           </p>
 
           <Button
@@ -166,12 +166,12 @@ function ErrorPanel({
             ) : (
               <RotateCcw className="size-4" />
             )}
-            Retry build
+            Rebuild set
           </Button>
 
           <p className="mt-3 text-[0.78rem] text-muted-foreground">
-            If NVIDIA is rate-limiting, wait a minute before retrying. Your upload is
-            saved.
+            If NVIDIA is rate-limiting, wait a minute before rebuilding. Your upload
+            is saved.
           </p>
         </div>
       </div>

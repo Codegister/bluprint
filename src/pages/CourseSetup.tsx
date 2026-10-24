@@ -471,8 +471,8 @@ export default function CourseSetup() {
         <div className="mt-5 rounded-2xl bg-[#FFF6E5] px-4 py-3 text-[0.82rem] leading-relaxed text-[#8A5D00]">
           Course pathways need <code className="font-semibold">OPENROUTER_API_KEY</code>{" "}
           (or <code className="font-semibold">NVIDIA_API_KEY</code> as a fallback) on
-          the deployment. You can still pick courses now; builds will retry once a
-          key is added.
+          the deployment. You can still pick courses now; Bluprint will use a
+          starter map until a key is added.
         </div>
       )}
 

@@ -66,6 +66,7 @@ export const listMine = query({
         status: course.status,
         progress: course.progress,
         errorMessage: course.errorMessage,
+        processingStartedAt: course.processingStartedAt,
         topicCount: countTopics(course.pathway),
         completedCount,
         unitCount: course.pathway?.units.length ?? 0,
@@ -117,8 +118,8 @@ export const getDetails = query({
         })),
       processingStale:
         course.status === "processing" &&
-        course.processingStartedAt !== undefined &&
-        Date.now() - course.processingStartedAt > 10 * 60 * 1000,
+        (course.processingStartedAt === undefined ||
+          Date.now() - course.processingStartedAt > 10 * 60 * 1000),
     };
   },
 });
@@ -477,5 +478,98 @@ export const resetBuild = internalMutation({
       processingStartedAt: undefined,
       updatedAt: Date.now(),
     });
+  },
+});
+
+/**
+ * Keeps a build moving in the background when even the fallback pathway could
+ * not be stored. It never writes the `error` status, so the UI never asks the
+ * student to retry.
+ */
+export const queueRetry = internalMutation({
+  args: { courseId: v.id("courses"), message: v.string() },
+  handler: async (ctx, { courseId, message }) => {
+    const course = await ctx.db.get(courseId);
+    if (!course) return;
+    await ctx.db.patch(courseId, {
+      status: "queued",
+      progress: message.slice(0, 160),
+      errorMessage: undefined,
+      processingStartedAt: undefined,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Repairs courses left in a failed or stale state by an older build. The
+ * dashboard and course page call this automatically, so a student never has to
+ * press a retry button.
+ */
+export const recoverMine = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+      .collect();
+
+    const now = Date.now();
+    let recovered = 0;
+    for (const course of courses) {
+      const stale =
+        course.status === "processing" &&
+        (course.processingStartedAt === undefined ||
+          now - course.processingStartedAt > 10 * 60 * 1000);
+      if (course.status !== "error" && !stale) continue;
+
+      await ctx.db.patch(course._id, {
+        status: "queued",
+        progress: "Preparing a fresh pathway…",
+        errorMessage: undefined,
+        processingStartedAt: undefined,
+        updatedAt: now,
+      });
+      await ctx.scheduler.runAfter(
+        recovered * 20_000,
+        internal.ai.buildCoursePathway,
+        { courseId: course._id },
+      );
+      recovered += 1;
+    }
+    return { recovered };
+  },
+});
+
+/** One-off repair for deployments that predate automatic recovery. */
+export const recoverAllFailed = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const courses = await ctx.db.query("courses").collect();
+    const now = Date.now();
+    let recovered = 0;
+    for (const course of courses) {
+      const stale =
+        course.status === "processing" &&
+        (course.processingStartedAt === undefined ||
+          now - course.processingStartedAt > 10 * 60 * 1000);
+      if (course.status !== "error" && !stale) continue;
+
+      await ctx.db.patch(course._id, {
+        status: "queued",
+        progress: "Preparing a fresh pathway…",
+        errorMessage: undefined,
+        processingStartedAt: undefined,
+        updatedAt: now,
+      });
+      await ctx.scheduler.runAfter(
+        recovered * 20_000,
+        internal.ai.buildCoursePathway,
+        { courseId: course._id },
+      );
+      recovered += 1;
+    }
+    return { recovered };
   },
 });
