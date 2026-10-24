@@ -6,12 +6,12 @@ import { defineConfig } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), vlyPlugin(), tailwindcss()],
+  plugins: [vlyPlugin(), react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    // Force a single copy of React across all packages (including vlyPlugin).
+    // Force a single copy of React across all packages (including the preview runtime).
     // Without this, @vly-ai/integrations can resolve its own React copy, which
     // triggers "Invalid hook call" errors at runtime.
     dedupe: ["react", "react/jsx-runtime", "react-dom", "react-dom/client"],
@@ -85,20 +85,19 @@ export default defineConfig({
       'react-router',
       '@convex-dev/auth/react',
       'framer-motion',
-      // vlyPlugin() injects this import at serve time, so the dep scanner
-      // never sees it. Without it here the first page load discovers it,
-      // re-optimizes and full-reloads the preview mid-screenshot.
+      // Loaded by src/vly-runtime.ts from index.html. Including it here means
+      // the first page load does not discover it and full-reload mid-screenshot.
       '@vly-ai/integrations',
     ],
   },
   // Performance hints
-  server: { allowedHosts: true,
+  server: {
+    allowedHosts: true,
     // Bind to all interfaces so the browser runtime's server-ready event fires.
     host: true,
     port: 5173,
-    // Keep HMR on, but disable full-screen error overlay
-    hmr: {
-      overlay: false,
-    },
+    // Freebuff requires HMR to stay off. It also avoids stale module requests
+    // after the managed dev server restarts.
+    hmr: false,
   },
 });

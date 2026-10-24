@@ -18,17 +18,11 @@
     rel="stylesheet"
   />
   <title>Bluprint — notes in, revision out</title>
+  <script type="module" src="/src/vly-runtime.ts"></script>
 </head>
-
 
 <body>
   <div id="root"></div>
-  <script type="module">
-    // Mark the document as live before the React bundle arrives. Keeping this
-    // inline also gives Vite a stable third HTML proxy module, so a preview tab
-    // left open across an index.html edit cannot request a missing proxy.
-    document.documentElement.dataset.bluprintBoot = "true";
-  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
