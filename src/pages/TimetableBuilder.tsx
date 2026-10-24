@@ -201,8 +201,8 @@ export default function TimetableBuilder() {
         </h1>
         <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
           Choose how long to spend on each subject and each school day. Bluprint
-          builds a weekly calendar, skips England and Wales bank holidays, and
-          gives weekends and school holidays more time. Every session links to
+          builds a weekly calendar, and gives bank holidays, weekends and school
+          holidays double the school-day time. Every session links to
           its study set.
         </p>
       </header>
@@ -409,9 +409,9 @@ export default function TimetableBuilder() {
               3. Daily revision time
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              Pick a budget for a school day. Weekends and school holidays get at
-              least 50% more time automatically, because there is no school day to
-              work around.
+              Pick a budget for a school day. Bank holidays, weekends and school
+              holidays get double that automatically, because there is no school day
+              to work around.
             </p>
 
             <div className="mt-4">
@@ -439,7 +439,8 @@ export default function TimetableBuilder() {
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
                 Bluprint fills the budget with whole sessions, so a day can finish a
                 few minutes early when the next session does not fit. A school day
-                uses this budget; a weekend or school-holiday weekday uses at least{" "}
+                uses this budget; a bank holiday, weekend or school-holiday weekday
+                can use up to{" "}
                 {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} minutes.
               </p>
             </div>
@@ -499,8 +500,8 @@ export default function TimetableBuilder() {
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
               The plan runs up to the day before your first exam. England and Wales
-              bank holidays are skipped, while weekends and school holidays get
-              extra time. School breaks follow typical England term dates.
+              bank holidays, weekends and school holidays all get double the
+              school-day time. School breaks follow typical England term dates.
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -553,9 +554,8 @@ export default function TimetableBuilder() {
           <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[0.76rem] leading-relaxed text-muted-foreground">
               {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
-              {dailyMinutes} min on school days ·{" "}
-              {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} min on
-              weekends &amp; holidays ·{" "}
+              {dailyMinutes} min on school days · up to{" "}
+              {extendedDailyMinutes(dailyMinutes, minSessionMinutes)} min on days off ·{" "}
               {daysPerWeek} days a week
             </p>
             <Button

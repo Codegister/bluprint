@@ -7,10 +7,11 @@ import { requireUserId } from "./lib/requireUser";
  * Revision timetables.
  *
  * The planner fills each revision day with several subject sessions, using the
- * duration chosen for that subject, until the day's time budget is used. Bank
- * holidays are skipped, and weekends/school holidays get more time than a
- * school day. Sessions are stored with start times so the frontend can render
- * a real week grid rather than a long list.
+ * duration chosen for that subject, until the day's time budget is used. A
+ * school day gets the chosen budget; bank holidays, weekends and school
+ * holidays get double, because there is no school day to work around. Sessions
+ * are stored with start times so the frontend can render a real week grid
+ * rather than a long list.
  */
 
 const MAX_DAYS = 60;
@@ -21,11 +22,11 @@ const MAX_ENTRIES = 480;
 
 const SESSION_LENGTHS = [25, 45, 60, 90];
 const DAILY_LENGTHS = [30, 60, 90, 120];
-// A school day uses the chosen budget. Weekends and school holidays get 50%
-// more, because there is no school day to work around. Bank holidays are
-// skipped entirely. This is deliberately a simple multiplier rather than a
-// minute-by-minute model of a student's calendar.
-const EXTENDED_DAY_MULTIPLIER = 1.5;
+// A school day uses the chosen budget. Bank holidays, weekends and school
+// holidays get double, because there is no school day to work around. This is
+// deliberately a simple multiplier rather than a minute-by-minute model of a
+// student's calendar.
+const EXTENDED_DAY_MULTIPLIER = 2;
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
 const DAYS_PER_WEEK = [3, 5, 7];
 
@@ -257,22 +258,30 @@ function schoolHolidaysBetween(start: Date, end: Date) {
 }
 
 /**
- * The time budget for a date: the school-day budget, or at least 50% more in a
- * break. The `base + minSession` floor guarantees the extra capacity fits a
- * whole extra session, even when 1.5x still rounds to the same number of
- * sessions (for example, a 60-minute day with 60-minute subjects).
+ * The time budget for a date: the school-day budget, or double on a day off.
+ * The `base + minSession` floor guarantees the extra capacity fits a whole
+ * extra session, so a day off is never merely equal to a school day.
  */
+/** The capacity given to any day off, regardless of its date. */
+function dayOffCapacity(schoolDayMinutes: number, minSessionMinutes: number): number {
+  const multiplied = Math.round(
+    (schoolDayMinutes * EXTENDED_DAY_MULTIPLIER) / 5,
+  ) * 5;
+  return Math.max(multiplied, schoolDayMinutes + minSessionMinutes);
+}
+
 function dailyCapacity(
   date: Date,
   schoolDayMinutes: number,
   minSessionMinutes: number,
 ): number {
   const isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
-  if (!isWeekend && schoolHolidayName(date) === null) return schoolDayMinutes;
-  const multiplied = Math.round(
-    (schoolDayMinutes * EXTENDED_DAY_MULTIPLIER) / 5,
-  ) * 5;
-  return Math.max(multiplied, schoolDayMinutes + minSessionMinutes);
+  const isDayOff =
+    isWeekend ||
+    schoolHolidayName(date) !== null ||
+    bankHolidayName(date) !== null;
+  if (!isDayOff) return schoolDayMinutes;
+  return dayOffCapacity(schoolDayMinutes, minSessionMinutes);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -488,8 +497,7 @@ export const build = mutation({
     const minSession = Math.min(...states.map((state) => state.minutes));
 
     while (cursor < examDate) {
-      const dayIsHoliday = bankHolidayName(cursor) !== null;
-      if (weekdays.has(cursor.getUTCDay()) && !dayIsHoliday) {
+      if (weekdays.has(cursor.getUTCDay())) {
         if (revisionDays >= MAX_DAYS || entries.length >= MAX_ENTRIES) {
           truncated = true;
           break;
@@ -532,6 +540,7 @@ export const build = mutation({
       startDate: start,
       examDate: exam,
       dailyMinutes: args.dailyMinutes,
+      dayOffMinutes: dayOffCapacity(args.dailyMinutes, minSession),
       startMinutes: args.startMinutes,
       daysPerWeek: args.daysPerWeek,
       courseSettings: ordered.map((course) => {

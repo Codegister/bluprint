@@ -196,7 +196,7 @@ function WeekTable({
                   <p className="text-[0.74rem] font-bold tracking-[-0.01em]">
                     {formatDayHeading(day.date)}
                   </p>
-                  <div className="mt-1 flex min-h-5 items-center justify-center">
+                  <div className="mt-1 flex min-h-5 flex-col items-center justify-center gap-0.5">
                     {day.isExamDay ? (
                       <span
                         className={cn(
@@ -257,6 +257,19 @@ function WeekTable({
                         {day.minutes > 0 ? durationLabel(day.minutes) : "Free"}
                       </span>
                     )}
+                    {/* The extra time on a day off was previously hidden behind
+                        the badge, which made a longer holiday block look empty. */}
+                    {(day.isHoliday || day.isSchoolHoliday || day.isWeekend) &&
+                      day.minutes > 0 && (
+                        <span
+                          className={cn(
+                            "text-[0.54rem] font-semibold tabular-nums",
+                            isToday ? "text-white/75" : "text-muted-foreground",
+                          )}
+                        >
+                          {durationLabel(day.minutes)}
+                        </span>
+                      )}
                   </div>
                 </div>
               );
@@ -281,7 +294,7 @@ function WeekTable({
                 </div>
                 {days.map((day) => {
                   const entries = entriesByStart.get(start)?.get(day.date) ?? [];
-                  const paused = day.isHoliday || day.isExamDay;
+                  const paused = day.isExamDay;
                   // A previous row's longer session can still be running here.
                   // Leave that cell blank rather than labelling it "Free".
                   const covered = day.entries.some((entry) => {
@@ -467,6 +480,16 @@ export default function Timetable() {
   const daysLeft = daysUntilInput(plan.examDate);
   const holidayAware = plan.schoolHolidays !== undefined;
   const schoolDayMinutes = plan.dailyMinutes ?? plan.sessionMinutes ?? 60;
+  // Plans built before day-off minutes were stored used a 1.5x boost, so report
+  // what those plans actually hold rather than today's doubled figure.
+  const dayOffMinutes =
+    plan.dayOffMinutes ??
+    (holidayAware
+      ? Math.max(
+          Math.round((schoolDayMinutes * 1.5) / 5) * 5,
+          schoolDayMinutes + minSessionMinutes,
+        )
+      : extendedDailyMinutes(schoolDayMinutes, minSessionMinutes));
 
   return (
     <AppShell>
@@ -507,8 +530,7 @@ export default function Timetable() {
           <>
             <span aria-hidden>·</span>
             <span>
-              {extendedDailyMinutes(schoolDayMinutes, minSessionMinutes)}{" "}
-              min on weekends &amp; holidays
+              up to {dayOffMinutes} min on days off
             </span>
           </>
         )}
@@ -558,8 +580,8 @@ export default function Timetable() {
       {!holidayAware && (
         <p className="mt-3 rounded-2xl bg-[#F3ECFF] px-4 py-3 text-[0.8rem] leading-relaxed text-[#5B3DF5]">
           This timetable was built before holiday-aware scheduling. Build it again
-          to give weekends and school holidays at least 50% more time and to label
-          half-terms in the grid.
+          to double the time on bank holidays, weekends and school holidays, and to
+          label half-terms in the grid.
         </p>
       )}
 
@@ -582,7 +604,7 @@ export default function Timetable() {
       {visibleHolidays.length > 0 && (
         <section className="mt-4 rounded-2xl border border-[#EBD6AB] bg-[#FFFBF2] px-4 py-3">
           <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8A5D00]">
-            England and Wales bank holidays skipped
+Bank holidays · double time
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {visibleHolidays.map((holiday) => (
@@ -600,8 +622,8 @@ export default function Timetable() {
       <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
         Each session opens the study set for that topic. If one does not exist yet,
         Bluprint builds it from the course pathway and takes you straight there.
-        Sessions on England and Wales bank holidays are left out. Weekends and
-        typical England school holidays get at least 50% more time than a school day.
+        School days use the budget you chose. Bank holidays, weekends and typical
+        England school holidays get double that, so days off carry more work.
       </p>
     </AppShell>
   );

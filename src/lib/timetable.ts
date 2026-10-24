@@ -149,16 +149,16 @@ export function formatTimeRange(startMinutes: number, duration: number): string 
 }
 
 /**
- * The extra capacity used for weekends and school holidays. Must match the
- * backend: at least 1.5x the school-day budget, and always enough for one
- * extra session of the shortest selected length.
+ * The capacity used on a day off (bank holiday, weekend or school holiday).
+ * Must match the backend: double the school-day budget, and always enough for
+ * one extra session of the shortest selected length.
  */
 export function extendedDailyMinutes(
   schoolDayMinutes: number,
   minSessionMinutes = 25,
 ): number {
   return Math.max(
-    Math.round((schoolDayMinutes * 1.5) / 5) * 5,
+    Math.round((schoolDayMinutes * 2) / 5) * 5,
     schoolDayMinutes + minSessionMinutes,
   );
 }

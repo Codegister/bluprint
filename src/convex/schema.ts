@@ -156,6 +156,10 @@ const schema = defineSchema(
       // Legacy: plans built before the per-subject grid used one session length.
       sessionMinutes: v.optional(v.number()),
       dailyMinutes: v.optional(v.number()),
+      // Capacity used on bank holidays, weekends and school holidays. Stored so
+      // the timetable shows the budget it was actually built with, not today's
+      // multiplier.
+      dayOffMinutes: v.optional(v.number()),
       // Minutes from midnight, e.g. 16 * 60 for a 16:00 start.
       startMinutes: v.optional(v.number()),
       daysPerWeek: v.number(),
