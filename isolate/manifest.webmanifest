@@ -1,0 +1,17 @@
+{
+  "name": "Bluprint — notes in, revision out",
+  "short_name": "Bluprint",
+  "description": "Compile notes, photos and video frames into summaries, flashcards, quizzes and AI-marked exam questions.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#070b10",
+  "theme_color": "#070b10",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

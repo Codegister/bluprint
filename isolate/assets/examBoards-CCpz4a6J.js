@@ -1,0 +1,1 @@
+const o=["AQA","Pearson Edexcel","OCR","WJEC / Eduqas","Cambridge International","IB","SQA","College Board AP","Other"],r=["GCSE","KS3","A-Level","IB","AP","Undergraduate"];function l(e){return[e.examBoard,e.level,e.course].map(a=>a?.trim()).filter(a=>!!a).join(" · ")}export{o as E,r as S,l as q};
