@@ -153,8 +153,23 @@ const schema = defineSchema(
       userId: v.id("users"),
       startDate: v.string(),
       examDate: v.string(),
-      sessionMinutes: v.number(),
+      // Legacy: plans built before the per-subject grid used one session length.
+      sessionMinutes: v.optional(v.number()),
+      dailyMinutes: v.optional(v.number()),
+      // Minutes from midnight, e.g. 16 * 60 for a 16:00 start.
+      startMinutes: v.optional(v.number()),
       daysPerWeek: v.number(),
+      courseSettings: v.optional(
+        v.array(
+          v.object({
+            courseId: v.id("courses"),
+            subject: v.string(),
+            minutes: v.number(),
+            // Paper 1, Paper 2, or Both. Entries store the resolved paper.
+            paper: v.string(),
+          }),
+        ),
+      ),
       entries: v.array(
         v.object({
           date: v.string(),
@@ -164,7 +179,18 @@ const schema = defineSchema(
           topicId: v.string(),
           topic: v.string(),
           minutes: v.number(),
+          paper: v.optional(v.string()),
+          startMinutes: v.optional(v.number()),
         }),
+      ),
+      // UK bank holidays in the plan window, shown in empty day columns.
+      holidays: v.optional(
+        v.array(
+          v.object({
+            date: v.string(),
+            name: v.string(),
+          }),
+        ),
       ),
       topicTotal: v.number(),
       scheduledTopics: v.number(),

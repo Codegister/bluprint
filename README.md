@@ -5,7 +5,7 @@ maps each specification into units and topics, then builds study material for an
 upload photos of your notes, sample a video, or paste text and compile a study set directly.
 Every set gets a summary, flashcards, a multiple-choice quiz, and exam-style questions with
 AI marking, plus an AI tutor that knows the material. Courses can also be turned into a
-day-by-day revision timetable, with every session linked to a topic study set.
+colour-coded weekly revision timetable, with every session linked to a topic study set.
 
 Version 1 is built for a small group of friends. Each person signs in separately and gets
 their own dashboard containing only their courses and study sets.
@@ -94,10 +94,11 @@ niche, exam-distinguishing detail rather than broad topic headings.
 9. **Persist** — study sets, extracted notes, uploads, card progress, due dates, quiz
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
-10. **Plan your revision** — **Build revision timetable** asks which courses to revise, how
-    long each session should be, how many days a week you can work, and when your first exam
-    is. The schedule is saved to your account and appears in the sidebar; clicking a session
-    opens (or builds) the study set for that topic.
+10. **Plan your revision** — **Build revision timetable** asks which subjects to revise, how
+    long to spend on each one, which paper to cover, how long each revision day should be,
+    how many days a week you can work, and when your first exam is. The schedule is saved to
+    your account and appears in the sidebar as a colour-coded weekly timetable; clicking a
+    session opens (or builds) the study set for that topic.
 
 After signing in, the main screen is the **Home** dashboard. It keeps one primary action,
 **New study set**, for uploading notes, a **Build revision timetable** action for planning
@@ -284,14 +285,26 @@ same rate-limit messages as the rest of the app.
 
 ## How a revision timetable is built
 
-- The builder asks for courses, session length (25–90 minutes), revision days per week
-  (three, five, or seven), a start date, and the first exam date.
-- The server interleaves topics from the selected course pathways so subjects alternate
-  instead of stacking into one long block. Three-day plans use Monday/Wednesday/Friday;
-  five-day plans use weekdays; seven-day plans use every day.
-- Sessions run from the start date up to the day before the first exam, capped at 60. A plan
-  is deterministic and does not call an AI model, so it builds instantly and cannot fail on
-  a model rate limit.
+- The builder asks for subjects, a session length for each subject (25, 45, 60, or 90
+  minutes), a paper for each subject (Paper 1, Paper 2, or both), one daily revision budget
+  (30, 60, 90, or 120 minutes), revision days per week (three, five, or seven), a session
+  start time, a start date, and the first exam date.
+- The server fills each revision day up to the daily budget with interleaved subject
+  sessions, respecting each subject's own length. A short subject can share a day with a
+  long one; a subject that no longer fits waits for the next revision day. A different
+  subject starts each day so the same course does not always occupy the first slot.
+- Three-day plans use Monday/Wednesday/Friday, five-day plans use weekdays, and seven-day
+  plans use every day. The selected paper rotates between Paper 1 and Paper 2 when the
+  student chooses to cover both.
+- The planner skips **England and Wales bank holidays** automatically, including substitute
+  days for Christmas and New Year. Dates are calculated per year (Easter is derived, not
+  hard-coded), so the plan stays correct across different exam seasons.
+- Sessions run from the start date up to the day before the first exam, capped at 60
+  revision days. A plan is deterministic and does not call an AI model, so it builds
+  instantly and cannot fail on a model rate limit.
+- The saved plan is rendered as a weekly Monday-to-Sunday calendar. Each subject has a
+  colour, every session shows its start time, duration, paper and topic, and bank holidays
+  are marked as paused days.
 - Every entry is clickable. It calls the same topic-to-study-set mutation as the course
   page, reusing an existing set for that topic or creating one and opening it.
 - Only one plan is stored per account. Building again replaces it, so the sidebar never
@@ -308,8 +321,8 @@ src/
     CourseSetup.tsx      level, board, poetry theme, and multi-subject course picker
     Course.tsx           one course workspace: units, topics, progress, topic sets
     StudySet.tsx         set detail, compile progress, and the five study tabs
-    TimetableBuilder.tsx course, session, and exam-date questions for a revision plan
-    Timetable.tsx        saved day-by-day plan with clickable topic sessions
+    TimetableBuilder.tsx subjects, per-subject time and paper, daily budget, and exam dates
+    Timetable.tsx        colour-coded weekly plan with holidays and clickable sessions
   components/
     AppShell.tsx         sidebar / mobile navigation for signed-in pages
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
@@ -349,12 +362,19 @@ src/
   timetable can mix AQA, Edexcel, OCR, and Cambridge. The level is shared across a setup
   batch; add another batch for a different qualification.
 - **There is one active revision timetable per account.** Rebuilding replaces the previous
-  plan. It schedules one topic per revision day, covers up to 60 sessions, and cycles back
-  through topics if there are more revision days than topics. If there are more topics than
-  sessions, the page states how many are covered so the plan is not mistaken for a complete
-  pass.
+  plan. It fills up to 60 revision days with as many subject sessions as the daily budget
+  allows, and cycles back through topics if there are more revision days than topics. If
+  there are more topics than sessions, the page states how many are covered so the plan is
+  not mistaken for a complete pass.
+- **Timetable holidays cover England and Wales.** Scotland and Northern Ireland have
+  different bank holiday dates; supporting those would need a region choice, which version 1
+  leaves out to keep the setup short.
+- **Paper choices label sessions, not separate sets.** A session marked Paper 1 or Paper 2
+  opens the topic's study set; the set still covers the whole specification topic. Choosing
+  "both" alternates the paper label between sessions so the plan covers both papers over
+  time.
 - **Timetable dates are UTC calendar keys.** They are stored as `YYYY-MM-DD` and rendered
-  with a local weekday label, so a plan built in one timezone still shows the same dates for
+  with a UTC weekday label, so a plan built in one timezone still shows the same dates for
   friends elsewhere.
 - **Accounts use email codes, not passwords.** Guest sign-in exists for quick demos, but
   guest sets only survive that browser session. Use email to keep sets recoverable.

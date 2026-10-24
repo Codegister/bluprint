@@ -6,16 +6,18 @@ import { requireUserId } from "./lib/requireUser";
 /**
  * Revision timetables.
  *
- * A plan is deliberately deterministic: the student supplies their courses,
- * session length, revision days and first exam date, and the server lays out
- * one topic per revision day. This keeps the timetable instant and reliable,
- * and every entry points back to a real course topic that can be turned into a
- * study set with one tap.
+ * The planner fills each revision day with several subject sessions, using the
+ * duration chosen for that subject, until the student's daily time budget is
+ * used. It skips UK bank holidays and stores the resolved sessions with start
+ * times so the frontend can render a weekly grid rather than a long list.
  */
 
-const MAX_COURSES = 12;
-const MAX_SESSIONS = 60;
-const SESSION_MINUTES = [25, 45, 60, 90];
+const MAX_DAYS = 60;
+const MAX_ENTRIES = 280;
+
+const SESSION_LENGTHS = [25, 45, 60, 90];
+const DAILY_LENGTHS = [30, 60, 90, 120];
+const PAPERS = ["Paper 1", "Paper 2", "Both"];
 const DAYS_PER_WEEK = [3, 5, 7];
 
 // 0 = Sunday. Three-day plans use Monday/Wednesday/Friday so subjects are
@@ -32,6 +34,16 @@ type TopicEntry = {
   unit: string;
   topicId: string;
   topic: string;
+};
+
+type SubjectState = {
+  courseId: Id<"courses">;
+  subject: string;
+  minutes: number;
+  paper: string;
+  topics: TopicEntry[];
+  topicIndex: number;
+  paperCount: number;
 };
 
 function dateKey(value: string): string | null {
@@ -55,6 +67,111 @@ function addDays(value: Date, days: number): Date {
   return next;
 }
 
+/* -------------------------------------------------------------------------- */
+/* UK bank holidays (England & Wales)                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Easter Sunday using the Meeus/Jones/Butcher algorithm. Good Friday and
+ * Easter Monday move every year, so hard-coding April dates would age badly.
+ */
+function easterSunday(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function firstMonday(year: number, monthIndex: number): Date {
+  const first = new Date(Date.UTC(year, monthIndex, 1));
+  const offset = (1 - first.getUTCDay() + 7) % 7;
+  return addDays(first, offset);
+}
+
+function lastMonday(year: number, monthIndex: number): Date {
+  const last = new Date(Date.UTC(year, monthIndex + 1, 0));
+  const back = (last.getUTCDay() + 6) % 7;
+  return addDays(last, -back);
+}
+
+function nextWeekday(value: Date): Date {
+  let next = value;
+  while (next.getUTCDay() === 0 || next.getUTCDay() === 6) {
+    next = addDays(next, 1);
+  }
+  return next;
+}
+
+function observedFixed(value: Date): Date {
+  if (value.getUTCDay() === 6) return addDays(value, 2);
+  if (value.getUTCDay() === 0) return addDays(value, 1);
+  return value;
+}
+
+const holidayCache = new Map<number, Map<string, string>>();
+
+function bankHolidaysForYear(year: number): Map<string, string> {
+  const cached = holidayCache.get(year);
+  if (cached) return cached;
+
+  const holidays = new Map<string, string>();
+  const add = (date: Date, name: string) => holidays.set(toDateKey(date), name);
+
+  add(observedFixed(new Date(Date.UTC(year, 0, 1))), "New Year's Day");
+  const easter = easterSunday(year);
+  add(addDays(easter, -2), "Good Friday");
+  add(addDays(easter, 1), "Easter Monday");
+  add(firstMonday(year, 4), "Early May bank holiday");
+  add(lastMonday(year, 4), "Spring bank holiday");
+  add(lastMonday(year, 7), "Summer bank holiday");
+
+  const christmas = observedFixed(new Date(Date.UTC(year, 11, 25)));
+  let boxing = observedFixed(new Date(Date.UTC(year, 11, 26)));
+  // When Christmas and Boxing Day both fall on a weekend, the substitute
+  // Boxing Day moves to the next weekday after the Christmas substitute.
+  if (toDateKey(boxing) === toDateKey(christmas)) {
+    boxing = nextWeekday(addDays(christmas, 1));
+  }
+  add(christmas, "Christmas Day");
+  add(boxing, "Boxing Day");
+
+  holidayCache.set(year, holidays);
+  return holidays;
+}
+
+function bankHolidayName(date: Date): string | null {
+  return bankHolidaysForYear(date.getUTCFullYear()).get(toDateKey(date)) ?? null;
+}
+
+function bankHolidaysBetween(start: Date, end: Date) {
+  const seen = new Map<string, string>();
+  for (let year = start.getUTCFullYear(); year <= end.getUTCFullYear(); year += 1) {
+    for (const [date, name] of bankHolidaysForYear(year)) {
+      if (date >= toDateKey(start) && date < toDateKey(end) && !seen.has(date)) {
+        seen.set(date, name);
+      }
+    }
+  }
+  return [...seen.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, name]) => ({ date, name }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Scheduling                                                                  */
+/* -------------------------------------------------------------------------- */
+
 function topicsFor(course: Doc<"courses">): TopicEntry[] {
   return (course.pathway?.units ?? []).flatMap((unit) =>
     unit.topics.map((topic) => ({
@@ -68,23 +185,60 @@ function topicsFor(course: Doc<"courses">): TopicEntry[] {
 }
 
 /**
- * Round-robin the selected courses so a five-subject plan does not put every
- * Biology topic back to back. Topics that are not revised are still included;
- * the plan is a first pass through the material.
+ * Fills one day up to `dailyMinutes`, rotating through subjects. Each subject's
+ * own session length is respected; a subject that no longer fits is skipped
+ * until the next day. Starting the rotation at a different subject each day
+ * stops the same subject always occupying the first slot.
  */
-function interleaveTopics(courses: Doc<"courses">[]): TopicEntry[] {
-  const groups = courses.map(topicsFor).filter((group) => group.length > 0);
-  if (groups.length === 0) return [];
+function scheduleDay(
+  states: SubjectState[],
+  dailyMinutes: number,
+  startMinutes: number,
+  dayIndex: number,
+) {
+  let remaining = dailyMinutes;
+  let clock = startMinutes;
+  let cursor = states.length > 0 ? dayIndex % states.length : 0;
+  const sessions: Array<
+    TopicEntry & { minutes: number; paper: string; startMinutes: number }
+  > = [];
 
-  const longest = Math.max(...groups.map((group) => group.length));
-  const pool: TopicEntry[] = [];
-  for (let index = 0; index < longest; index += 1) {
-    for (const group of groups) {
-      const entry = group[index];
-      if (entry) pool.push(entry);
+  while (remaining >= Math.min(...states.map((state) => state.minutes))) {
+    let picked = -1;
+    for (let offset = 0; offset < states.length; offset += 1) {
+      const index = (cursor + offset) % states.length;
+      const state = states[index];
+      if (state.topics.length > 0 && state.minutes <= remaining) {
+        picked = index;
+        break;
+      }
     }
+    if (picked === -1) break;
+
+    const state = states[picked];
+    const topic = state.topics[state.topicIndex % state.topics.length];
+    const paper =
+      state.paper === "Both"
+        ? state.paperCount % 2 === 0
+          ? "Paper 1"
+          : "Paper 2"
+        : state.paper;
+
+    sessions.push({
+      ...topic,
+      minutes: state.minutes,
+      paper,
+      startMinutes: clock,
+    });
+
+    state.topicIndex += 1;
+    state.paperCount += 1;
+    clock += state.minutes;
+    remaining -= state.minutes;
+    cursor = (picked + 1) % states.length;
   }
-  return pool;
+
+  return sessions;
 }
 
 /** Reads the saved plan for the signed-in account, or null if none exists. */
@@ -101,17 +255,24 @@ export const getMine = query({
 });
 
 /**
- * Replaces the account's timetable with a new plan. Rebuilding is destructive
- * by design: there is one current plan, so an old schedule cannot linger and
- * compete with the new one in the sidebar.
+ * Replaces the account's timetable with a new plan. The plan is built fully
+ * before the old one is deleted, so a validation failure cannot leave the
+ * student without a timetable.
  */
 export const build = mutation({
   args: {
     startDate: v.string(),
     examDate: v.string(),
-    sessionMinutes: v.number(),
     daysPerWeek: v.number(),
-    courseIds: v.array(v.id("courses")),
+    dailyMinutes: v.number(),
+    startMinutes: v.number(),
+    courseSettings: v.array(
+      v.object({
+        courseId: v.id("courses"),
+        minutes: v.number(),
+        paper: v.string(),
+      }),
+    ),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
@@ -122,17 +283,47 @@ export const build = mutation({
     if (parseDateKey(exam) <= parseDateKey(start)) {
       throw new Error("Your first exam needs to be after your start date.");
     }
-    if (!SESSION_MINUTES.includes(args.sessionMinutes)) {
-      throw new Error("Choose a session length between 25 and 90 minutes.");
-    }
     if (!DAYS_PER_WEEK.includes(args.daysPerWeek)) {
       throw new Error("Choose three, five, or seven revision days a week.");
     }
-
-    const courseIds = [...new Set(args.courseIds)].slice(0, MAX_COURSES);
-    if (courseIds.length === 0) {
+    if (!DAILY_LENGTHS.includes(args.dailyMinutes)) {
+      throw new Error("Choose between 30 and 120 minutes of revision a day.");
+    }
+    if (
+      !Number.isInteger(args.startMinutes) ||
+      args.startMinutes < 0 ||
+      args.startMinutes > 23 * 60 + 30
+    ) {
+      throw new Error("Choose a start time for your revision sessions.");
+    }
+    if (args.courseSettings.length === 0) {
       throw new Error("Choose at least one course to revise.");
     }
+
+    const settings = new Map<
+      Id<"courses">,
+      { courseId: Id<"courses">; minutes: number; paper: string }
+    >();
+    for (const setting of args.courseSettings) {
+      if (settings.has(setting.courseId)) {
+        throw new Error("Each course can only appear once in the timetable.");
+      }
+      if (!SESSION_LENGTHS.includes(setting.minutes)) {
+        throw new Error("Choose a valid session length for every course.");
+      }
+      if (!PAPERS.includes(setting.paper)) {
+        throw new Error("Choose Paper 1, Paper 2, or Both for every course.");
+      }
+      if (setting.minutes > args.dailyMinutes) {
+        throw new Error(
+          "A subject's session is longer than your daily revision time. Lower that subject's session length.",
+        );
+      }
+      settings.set(setting.courseId, setting);
+    }
+
+    const courseIds = [...settings.keys()];
+    if (courseIds.length > 12) throw new Error("Choose no more than 12 courses.");
 
     const docs = await Promise.all(courseIds.map((id) => ctx.db.get(id)));
     const courses = docs.filter(
@@ -141,7 +332,6 @@ export const build = mutation({
           course &&
             course.userId === userId &&
             course.status === "ready" &&
-            course.pathway &&
             topicsFor(course).length > 0,
         ),
     );
@@ -150,54 +340,71 @@ export const build = mutation({
         "One of those courses is still being built. Wait for its pathway to finish, then try again.",
       );
     }
-    // Keep the student's chosen order so the first session follows the order
-    // they picked in the setup form.
+
     const ordered = courseIds
       .map((id) => courses.find((course) => course._id === id))
       .filter((course): course is Doc<"courses"> => Boolean(course));
 
-    const topics = interleaveTopics(ordered);
-    if (topics.length === 0) {
+    const states: SubjectState[] = ordered.map((course) => {
+      const setting = settings.get(course._id)!;
+      return {
+        courseId: course._id,
+        subject: course.subject,
+        minutes: setting.minutes,
+        paper: setting.paper,
+        topics: topicsFor(course),
+        topicIndex: 0,
+        paperCount: 0,
+      };
+    });
+    const topicTotal = states.reduce((sum, state) => sum + state.topics.length, 0);
+    if (topicTotal === 0) {
       throw new Error("Those courses do not have any topics to schedule yet.");
     }
 
     const weekdays = new Set(WEEKDAYS[args.daysPerWeek]);
-    const dates: string[] = [];
-    let cursor = parseDateKey(start);
-    let truncated = false;
     const examDate = parseDateKey(exam);
+    const entries: Array<{
+      date: string;
+      courseId: Id<"courses">;
+      course: string;
+      unit: string;
+      topicId: string;
+      topic: string;
+      minutes: number;
+      paper: string;
+      startMinutes: number;
+    }> = [];
+    let cursor = parseDateKey(start);
+    let revisionDays = 0;
+    let truncated = false;
 
     while (cursor < examDate) {
-      if (weekdays.has(cursor.getUTCDay())) {
-        if (dates.length >= MAX_SESSIONS) {
+      const dayIsHoliday = bankHolidayName(cursor) !== null;
+      if (weekdays.has(cursor.getUTCDay()) && !dayIsHoliday) {
+        if (revisionDays >= MAX_DAYS || entries.length >= MAX_ENTRIES) {
           truncated = true;
           break;
         }
-        dates.push(toDateKey(cursor));
+        const sessions = scheduleDay(
+          states,
+          args.dailyMinutes,
+          args.startMinutes,
+          revisionDays,
+        );
+        revisionDays += 1;
+        for (const session of sessions) {
+          entries.push({ date: toDateKey(cursor), ...session });
+        }
       }
       cursor = addDays(cursor, 1);
     }
 
-    if (dates.length === 0) {
+    if (entries.length === 0) {
       throw new Error(
         "There are no revision days before your first exam. Choose a later exam date or more revision days.",
       );
     }
-
-    const entries = dates.map((date, index) => {
-      // If there are more revision days than topics, cycle back through the
-      // material for a second pass. The same topic still opens the same set.
-      const topic = topics[index % topics.length];
-      return {
-        date,
-        courseId: topic.courseId,
-        course: topic.course,
-        unit: topic.unit,
-        topicId: topic.topicId,
-        topic: topic.topic,
-        minutes: args.sessionMinutes,
-      };
-    });
 
     const scheduledTopics = new Set(
       entries.map((entry) => `${entry.courseId}:${entry.topicId}`),
@@ -216,16 +423,27 @@ export const build = mutation({
       userId,
       startDate: start,
       examDate: exam,
-      sessionMinutes: args.sessionMinutes,
+      dailyMinutes: args.dailyMinutes,
+      startMinutes: args.startMinutes,
       daysPerWeek: args.daysPerWeek,
+      courseSettings: ordered.map((course) => {
+        const setting = settings.get(course._id)!;
+        return {
+          courseId: course._id,
+          subject: course.subject,
+          minutes: setting.minutes,
+          paper: setting.paper,
+        };
+      }),
       entries,
-      topicTotal: topics.length,
+      holidays: bankHolidaysBetween(parseDateKey(start), examDate),
+      topicTotal,
       scheduledTopics,
       truncated,
       createdAt: now,
       updatedAt: now,
     });
 
-    return { sessions: entries.length, topics: topics.length };
+    return { sessions: entries.length, topics: topicTotal };
   },
 });

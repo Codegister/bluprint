@@ -4,9 +4,10 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
-import { courseSubtitle } from "@/lib/subjects";
-import { cn } from "@/lib/utils";
 import { dateInputValue, daysUntilInput } from "@/lib/format";
+import { courseSubtitle } from "@/lib/subjects";
+import { formatTime, SUBJECT_COLORS } from "@/lib/timetable";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -14,7 +15,17 @@ import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 const SESSION_MINUTES = [25, 45, 60, 90];
+const DAILY_MINUTES = [30, 60, 90, 120];
 const DAYS_PER_WEEK = [3, 5, 7];
+const PAPERS = ["Paper 1", "Paper 2", "Both"];
+const START_HOURS = [9, 10, 14, 16, 17, 18, 19, 20];
+const MAX_COURSES = 12;
+
+type CourseSetting = {
+  courseId: Id<"courses">;
+  minutes: number;
+  paper: string;
+};
 
 function defaults() {
   const start = new Date();
@@ -27,6 +38,20 @@ function defaults() {
   };
 }
 
+function paperLabel(value: string) {
+  return value === "Both" ? "Papers 1 and 2" : value;
+}
+
+/** Largest offered session length that fits inside the daily budget. */
+function sessionWithin(minutes: number): number {
+  const allowed = SESSION_MINUTES.filter((value) => value <= minutes);
+  return allowed[allowed.length - 1] ?? SESSION_MINUTES[0];
+}
+
+function defaultSessionMinutes(dailyMinutes: number): number {
+  return dailyMinutes >= 45 ? 45 : sessionWithin(dailyMinutes);
+}
+
 export default function TimetableBuilder() {
   const navigate = useNavigate();
   const courses = useQuery(api.courses.listMine);
@@ -36,9 +61,10 @@ export default function TimetableBuilder() {
   const initial = defaults();
   const [startDate, setStartDate] = useState(initial.startDate);
   const [examDate, setExamDate] = useState(initial.examDate);
-  const [sessionMinutes, setSessionMinutes] = useState(45);
+  const [dailyMinutes, setDailyMinutes] = useState(60);
+  const [startMinutes, setStartMinutes] = useState(17 * 60);
   const [daysPerWeek, setDaysPerWeek] = useState(5);
-  const [selected, setSelected] = useState<Id<"courses">[]>([]);
+  const [settings, setSettings] = useState<CourseSetting[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,16 +75,55 @@ export default function TimetableBuilder() {
   const datesInvalid = Boolean(startDate && examDate) && examDate <= startDate;
 
   const toggle = (courseId: Id<"courses">) => {
-    setSelected((current) =>
-      current.includes(courseId)
-        ? current.filter((id) => id !== courseId)
-        : [...current, courseId],
+    const alreadySelected = settings.some(
+      (setting) => setting.courseId === courseId,
+    );
+    if (!alreadySelected && settings.length >= MAX_COURSES) {
+      setError(`A timetable can hold up to ${MAX_COURSES} subjects.`);
+      return;
+    }
+    setSettings((current) => {
+      if (current.some((setting) => setting.courseId === courseId)) {
+        return current.filter((setting) => setting.courseId !== courseId);
+      }
+      return [
+        ...current,
+        {
+          courseId,
+          minutes: defaultSessionMinutes(dailyMinutes),
+          paper: "Paper 1",
+        },
+      ];
+    });
+    setError(null);
+  };
+
+  const updateSetting = (courseId: Id<"courses">, patch: Partial<CourseSetting>) => {
+    setSettings((current) =>
+      current.map((setting) =>
+        setting.courseId === courseId ? { ...setting, ...patch } : setting,
+      ),
+    );
+    setError(null);
+  };
+
+  const chooseDailyMinutes = (minutes: number) => {
+    setDailyMinutes(minutes);
+    // A subject cannot be revised for longer than the whole day's budget, and
+    // the replacement must still be one of the offered session lengths.
+    const longest = sessionWithin(minutes);
+    setSettings((current) =>
+      current.map((setting) => ({
+        ...setting,
+        minutes:
+          setting.minutes <= minutes ? setting.minutes : longest,
+      })),
     );
     setError(null);
   };
 
   const submit = async () => {
-    if (selected.length === 0) {
+    if (settings.length === 0) {
       setError("Choose at least one course to revise.");
       return;
     }
@@ -81,9 +146,10 @@ export default function TimetableBuilder() {
       await buildPlan({
         startDate,
         examDate,
-        sessionMinutes,
         daysPerWeek,
-        courseIds: selected,
+        dailyMinutes,
+        startMinutes,
+        courseSettings: settings,
       });
       toast.success("Revision timetable built.");
       navigate("/timetable");
@@ -126,9 +192,9 @@ export default function TimetableBuilder() {
           Build a plan you can actually follow
         </h1>
         <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
-          Choose what you are revising, how long each session should be, and when
-          your exams start. Bluprint will lay out one topic per revision day and
-          link every entry to a study set.
+          Choose how long to spend on each subject and each day. Bluprint fills a
+          weekly calendar, skips England and Wales bank holidays, and links every
+          session to its study set.
         </p>
       </header>
 
@@ -155,20 +221,27 @@ export default function TimetableBuilder() {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="font-display text-[1.12rem] font-bold text-brand-ink">
-                  1. What do you want to revise?
+                  1. Subjects to revise
                 </h2>
                 <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-                  Select the courses to draw revision topics from.
+                  Select a course for each subject you want on the timetable.
                 </p>
               </div>
               <span className="rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.72rem] font-bold text-[#5B3DF5]">
-                {selected.length} selected
+                {settings.length} selected
               </span>
             </div>
 
             <div className="mt-4 grid items-start gap-2 sm:grid-cols-2">
-              {ready.map((course) => {
-                const active = selected.includes(course._id);
+              {ready.map((course, index) => {
+                const selectedIndex = settings.findIndex(
+                  (setting) => setting.courseId === course._id,
+                );
+                const active = selectedIndex >= 0;
+                const color =
+                  SUBJECT_COLORS[
+                    (active ? selectedIndex : index) % SUBJECT_COLORS.length
+                  ];
                 return (
                   <button
                     key={course._id}
@@ -178,10 +251,16 @@ export default function TimetableBuilder() {
                     className={cn(
                       "flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors",
                       active
-                        ? "border-[#191B27] bg-[#FAFAFF]"
+                        ? `${color.tint} ${color.border}`
                         : "border-border bg-white hover:bg-brand-panel",
                     )}
                   >
+                    <span
+                      className={cn(
+                        "size-2.5 shrink-0 rounded-full",
+                        active ? color.dot : "bg-border",
+                      )}
+                    />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[0.86rem] font-semibold text-brand-ink">
                         {course.subject}
@@ -193,7 +272,7 @@ export default function TimetableBuilder() {
                     <span
                       className={cn(
                         "shrink-0 text-[0.7rem] font-semibold",
-                        active ? "text-[#128A4C]" : "text-[#5B3DF5]",
+                        active ? color.text : "text-[#5B3DF5]",
                       )}
                     >
                       {active ? "Selected" : "Add"}
@@ -206,74 +285,209 @@ export default function TimetableBuilder() {
 
           <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
             <h2 className="font-display text-[1.12rem] font-bold text-brand-ink">
-              2. How do you want to revise?
+              2. Time per subject and paper
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              Each revision day gets one focused session.
+              Each subject can have its own session length. Choose whether to revise
+              Paper 1, Paper 2, or alternate between both.
+            </p>
+
+            {settings.length === 0 ? (
+              <p className="mt-4 rounded-2xl border border-dashed border-border px-4 py-5 text-[0.82rem] text-muted-foreground">
+                Select at least one subject above to set its session length.
+              </p>
+            ) : (
+              <div className="mt-4 space-y-2.5">
+                {settings.map((setting) => {
+                  const course = ready.find(
+                    (item) => item._id === setting.courseId,
+                  );
+                  if (!course) return null;
+                  const index = settings.indexOf(setting);
+                  const color = SUBJECT_COLORS[index % SUBJECT_COLORS.length];
+                  return (
+                    <div
+                      key={setting.courseId}
+                      className={cn(
+                        "rounded-2xl border p-3.5 sm:p-4",
+                        color.border,
+                        color.tint,
+                      )}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className={cn("size-2.5 rounded-full", color.dot)} />
+                          <div className="min-w-0">
+                            <p className="truncate text-[0.88rem] font-semibold text-brand-ink">
+                              {course.subject}
+                            </p>
+                            <p className="mt-0.5 truncate text-[0.7rem] text-muted-foreground">
+                              {courseSubtitle(course)}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toggle(course._id)}
+                          className="text-[0.7rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+                        <div>
+                          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                            Session length
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {SESSION_MINUTES.map((minutes) => {
+                              const disabled = minutes > dailyMinutes;
+                              return (
+                                <button
+                                  key={minutes}
+                                  type="button"
+                                  disabled={disabled}
+                                  aria-pressed={setting.minutes === minutes}
+                                  onClick={() =>
+                                    updateSetting(setting.courseId, { minutes })
+                                  }
+                                  className={cn(
+                                    "rounded-full border px-3 py-1.5 text-[0.74rem] font-semibold transition-colors",
+                                    setting.minutes === minutes
+                                      ? "border-[#191B27] bg-[#191B27] text-white"
+                                      : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                                    disabled &&
+                                      "cursor-not-allowed opacity-40 hover:bg-white",
+                                  )}
+                                >
+                                  {minutes} min
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <label className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                          Paper
+                          <select
+                            value={setting.paper}
+                            aria-label={`${course.subject} paper`}
+                            onChange={(event) =>
+                              updateSetting(setting.courseId, {
+                                paper: event.target.value,
+                              })
+                            }
+                            className="mt-1.5 h-9 w-full rounded-xl border border-border bg-white px-2.5 text-[0.78rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9A6FF]"
+                          >
+                            {PAPERS.map((paper) => (
+                              <option key={paper} value={paper}>
+                                {paperLabel(paper)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+            <h2 className="font-display text-[1.12rem] font-bold text-brand-ink">
+              3. Daily revision time
+            </h2>
+            <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
+              Pick one daily budget. Bluprint fills it with as many subject
+              sessions as fit.
             </p>
 
             <div className="mt-4">
               <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Session length
+                Time each revision day
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {SESSION_MINUTES.map((minutes) => (
+                {DAILY_MINUTES.map((minutes) => (
                   <button
                     key={minutes}
                     type="button"
-                    aria-pressed={sessionMinutes === minutes}
-                    onClick={() => setSessionMinutes(minutes)}
+                    aria-pressed={dailyMinutes === minutes}
+                    onClick={() => chooseDailyMinutes(minutes)}
                     className={cn(
                       "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
-                      sessionMinutes === minutes
+                      dailyMinutes === minutes
                         ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
                         : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
                     )}
                   >
-                    {minutes} minutes
+                    {minutes < 60 ? `${minutes} min` : `${minutes / 60} hour${minutes === 60 ? "" : "s"}`}
                   </button>
                 ))}
               </div>
+              <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                Bluprint fills the budget with whole sessions, so a day can finish a
+                few minutes early when the next session does not fit.
+              </p>
             </div>
 
-            <div className="mt-5">
-              <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Revision days each week
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {DAYS_PER_WEEK.map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    aria-pressed={daysPerWeek === days}
-                    onClick={() => setDaysPerWeek(days)}
-                    className={cn(
-                      "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
-                      daysPerWeek === days
-                        ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
-                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
-                    )}
-                  >
-                    {days} days
-                  </button>
-                ))}
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Revision days each week
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {DAYS_PER_WEEK.map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      aria-pressed={daysPerWeek === days}
+                      onClick={() => setDaysPerWeek(days)}
+                      className={cn(
+                        "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
+                        daysPerWeek === days
+                          ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
+                          : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                      )}
+                    >
+                      {days} days
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[0.7rem] text-muted-foreground">
+                  {daysPerWeek === 3
+                    ? "Monday, Wednesday and Friday."
+                    : daysPerWeek === 5
+                      ? "Monday to Friday, with weekends free."
+                      : "Every day."}
+                </p>
               </div>
-              <p className="mt-2 text-[0.7rem] text-muted-foreground">
-                {daysPerWeek === 3
-                  ? "Monday, Wednesday and Friday."
-                  : daysPerWeek === 5
-                    ? "Monday to Friday, with weekends free."
-                    : "Every day."}
-              </p>
+
+              <label className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Sessions start at
+                <select
+                  value={startMinutes}
+                  onChange={(event) => setStartMinutes(Number(event.target.value))}
+                  className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9A6FF]"
+                >
+                  {START_HOURS.map((hour) => (
+                    <option key={hour} value={hour * 60}>
+                      {formatTime(hour * 60)}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           </section>
 
           <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
             <h2 className="font-display text-[1.12rem] font-bold text-brand-ink">
-              3. When are your exams?
+              4. Exam dates
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              The plan runs up to the day before your first exam.
+              The plan runs up to the day before your first exam. England and Wales
+              bank holidays are skipped automatically.
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -325,14 +539,14 @@ export default function TimetableBuilder() {
 
           <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[0.76rem] leading-relaxed text-muted-foreground">
-              {selected.length} course{selected.length === 1 ? "" : "s"} ·{" "}
-              {sessionMinutes} minutes · {daysPerWeek} days a week
+              {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
+              {dailyMinutes} minutes a day · {daysPerWeek} days a week
             </p>
             <Button
               onClick={() => void submit()}
               disabled={
                 saving ||
-                selected.length === 0 ||
+                settings.length === 0 ||
                 !startDate ||
                 !examDate ||
                 daysLeft <= 0 ||
