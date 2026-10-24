@@ -1,6 +1,5 @@
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
-import { requireVerifiedUser } from "./lib/authorization";
 import {
   NVIDIA_KEY_NAME,
   NVIDIA_TEXT_MODEL,
@@ -9,17 +8,19 @@ import {
 } from "./lib/nvidiaConfig";
 
 /**
- * Server-side status only. Key values are never returned to the client — just
- * whether AI is configured and which model names the server is using.
+ * Server-side AI status only. Key values are never returned to the client.
  *
- * This endpoint is authenticated and verified-user gated so unverified accounts
- * cannot use it to probe the deployment's secret configuration.
+ * This endpoint is authenticated so unauthenticated requests cannot probe the
+ * deployment's AI configuration, but it is deliberately NOT gated by email
+ * verification. Verifying the email address is required before this app sends
+ * sign-in codes and before it lets an account build study sets, but reading
+ * whether the server AI is configured is safe for an unverified guest account
+ * and should not block the app's status check.
  */
 export const aiStatus = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
-    await requireVerifiedUser(ctx, userId);
+    await requireUserId(ctx);
     const keys = readNvidiaKeys();
 
     // Course pathways are scraped, so they need no key. This status only
