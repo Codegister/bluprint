@@ -39,8 +39,10 @@ type CourseDraft = {
   rsSpec?: string;
 };
 
-/** The questions asked after a subject is tapped, in order. */
-type Question = "board" | "tier";
+/** The questions asked after a subject is tapped, in order. "rs" is the
+ *  Religious Studies route/religion/units step that GCSE RS asks after board
+ *  and tier. */
+type Question = "board" | "tier" | "rs";
 
 /** Edexcel GCSE Religious Studies has two separate routes (A and B) with
  *  different unit lists. When the user picks this subject we ask which route
@@ -340,42 +342,7 @@ export default function CourseSetup() {
     rsChoices.route.length > 0
   );
 
-  const advance = () => {
-    if (!active) return;
-    if (currentQuestion === "rs") {
-      if (rsChoices !== null && "rsRoute" in rsChoices) {
-        answerRsRoute(
-          rsChoices.route[0] ? rsChoices.route[0].value : "",
-        );
-        return;
-      }
-      if (rsChoices !== null && "rsReligion" in rsChoices && !!rsChoices.religion) {
-        answerRsReligion(
-          rsChoices.route[0] ? rsChoices.route[0].value : "",
-        );
-        return;
-      }
-      if (
-        rsChoices !== null &&
-        "rsSpec" in rsChoices &&
-        !!rsChoices.spec
-      ) {
-        answerRsSpec(
-          rsChoices.route[0] ? rsChoices.route[0].value : "",
-        );
-        return;
-      }
-      finishQuestions();
-      return;
-    }
-    if (questionIndex + 1 < questions.length) {
-      setQuestionIndex(questionIndex + 1);
-      return;
-    }
-    finishQuestions();
-  };
 
-  const answerBoard = (next: string) => {
 
   const chooseQualification = (next: string) => {
     const nextBoard = defaultBoardFor(next);
@@ -467,13 +434,11 @@ export default function CourseSetup() {
     setQuestionIndex(questionIndex + 1);
   };
 
-  const rsRouteChoices = (
-    draft?: CourseDraft,
-  ): {
+  function rsRouteChoices(draft?: CourseDraft): {
     route: Array<{ value: string; label: string }>;
     religion?: Array<{ value: string; label: string }>;
     spec?: Array<{ value: string; label: string }>;
-  } | null => {
+  } | null {
     if (level !== "GCSE" || active !== "Religious Studies") return null;
 
     const currentRoute = draft?.rsRoute ?? "Edexcel Religious Studies A";
@@ -515,7 +480,7 @@ export default function CourseSetup() {
           ],
         };
     }
-  };
+  }
 
   const answerRs = (
     key: "rsRoute" | "rsReligion" | "rsSpec",
@@ -717,64 +682,6 @@ export default function CourseSetup() {
     setCourseTier(active, next);
     if (!rememberedTier) setRememberedTier(next);
     advance();
-  };
-
-  const answerRs = (
-    key: "rsRoute" | "rsReligion" | "rsSpec",
-    value: string,
-  ) => {
-    if (!active) return;
-    setSelected((current) => {
-      const course = current[active];
-      if (!course) return current;
-      return {
-        ...current,
-        [active]: { ...course, [key]: value },
-      };
-    });
-    setError(null);
-    answerRsSetNext(key);
-  };
-
-  const answerRsSetNext = (
-    key: "rsRoute" | "rsReligion" | "rsSpec",
-  ) => {
-    if (!active) return;
-    if (
-      key === "rsRoute" &&
-      rsChoices !== null &&
-      !("rsReligion" in rsChoices && !!rsChoices.religion) &&
-      !("rsSpec" in rsChoices && !!rsChoices.spec)
-    ) {
-      finishQuestions();
-      return;
-    }
-    if (
-      key === "rsReligion" &&
-      rsChoices !== null &&
-      !("rsSpec" in rsChoices && !!rsChoices.spec)
-    ) {
-      setQuestionIndex((prev) => prev + 1);
-      return;
-    }
-    if (
-      key === "rsSpec" &&
-      rsChoices !== null &&
-      !("rsReligion" in rsChoices && !!rsChoices.religion)
-    ) {
-      finishQuestions();
-      return;
-    }
-    if (
-      key === "rsRoute" &&
-      rsChoices !== null &&
-      ("rsReligion" in rsChoices && !!rsChoices.religion ||
-        "rsSpec" in rsChoices && !!rsChoices.spec)
-    ) {
-      setQuestionIndex((prev) => prev + 1);
-      return;
-    }
-    setQuestionIndex((prev) => prev + 1);
   };
 
   // These are redundant with the shared answerRs above; kept so old call sites
