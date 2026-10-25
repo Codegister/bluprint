@@ -376,6 +376,136 @@ export const ANTHOLOGIES: AnthologyCluster[] = [
   POWER_AND_CONFLICT,
 ];
 
+/* -------------------------------------------------------------------------
+ * Merging the saved clusters into a built pathway
+ * ---------------------------------------------------------------------- */
+
+type PathwayTopicLike = {
+  id: string;
+  title: string;
+  specReference?: string;
+  summary: string;
+  keyPoints: string[];
+  examSkill: string;
+};
+
+type PathwayUnitLike = {
+  title: string;
+  summary: string;
+  topics: PathwayTopicLike[];
+};
+
+/** Only the parts of a pathway this module reads or replaces. */
+export type PathwayLike = {
+  overview: string;
+  examFormat: string;
+  units: PathwayUnitLike[];
+};
+
+function normaliseTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleWords(value: string): Set<string> {
+  return new Set(
+    normaliseTitle(value)
+      .split(" ")
+      .filter((word) => word.length > 2),
+  );
+}
+
+/**
+ * True when a topic is one of the anthology's poems. Scraped titles add the
+ * poet, punctuation or a subtitle, so this compares words rather than strings.
+ */
+function isPoemTopic(topicTitle: string, poemTitle: string): boolean {
+  const topic = normaliseTitle(topicTitle);
+  const poem = normaliseTitle(poemTitle);
+  if (topic === poem) return true;
+  if (poem.length > 3 && (topic.includes(poem) || poem.includes(topic))) return true;
+
+  const poemWords = titleWords(poemTitle);
+  if (poemWords.size === 0) return false;
+  const topicWords = titleWords(topicTitle);
+  let matched = 0;
+  for (const word of poemWords) if (topicWords.has(word)) matched += 1;
+  return matched / poemWords.size >= 0.6;
+}
+
+/**
+ * Completes the poetry clusters in an English Literature pathway.
+ *
+ * A scraped English Literature page lists only the poems it has notes for, and
+ * a starter pathway adds a generic "Poetry anthology" unit. Both would sit
+ * beside the saved cluster and duplicate it, so every anthologised unit and
+ * every poem topic is removed before the complete saved clusters are added
+ * back once. The result holds each poem exactly once, in anthology order.
+ */
+export function completeAnthology(
+  pathway: PathwayLike,
+  course: { subject: string; level: string; poetryTheme?: string },
+): PathwayLike {
+  if (course.subject.trim().toLowerCase() !== "english literature") return pathway;
+  if (!/gcse/i.test(course.level)) return pathway;
+
+  const candidates = clusterForTheme(course.poetryTheme);
+
+  // If the scraped page already names poems, complete only the cluster(s) it
+  // actually covers — a Peace and Conflict unit the school never sees is noise.
+  const referenced = candidates.filter((cluster) =>
+    pathway.units.some((unit) =>
+      unit.topics.some((topic) =>
+        cluster.poems.some((poem) => isPoemTopic(topic.title, poem.title)),
+      ),
+    ),
+  );
+  const clusters = referenced.length > 0 ? referenced : candidates;
+  if (clusters.length === 0) return pathway;
+
+  const clusterTitleKeys = new Set(
+    clusters.map((cluster) => normaliseTitle(cluster.title)),
+  );
+
+  const kept: PathwayUnitLike[] = [];
+  const seenUnitTitles = new Set<string>();
+  for (const unit of pathway.units) {
+    const unitKey = normaliseTitle(unit.title);
+
+    // A copy of the anthology itself (scraped or generic) is replaced, never
+    // kept alongside the saved cluster.
+    if (clusterTitleKeys.has(unitKey) || /anthology/.test(unitKey)) continue;
+
+    const topics = unit.topics.filter(
+      (topic) =>
+        !clusters.some((cluster) =>
+          cluster.poems.some((poem) => isPoemTopic(topic.title, poem.title)),
+        ),
+    );
+    if (topics.length === 0) continue;
+    if (seenUnitTitles.has(unitKey)) continue;
+    seenUnitTitles.add(unitKey);
+    kept.push({ ...unit, topics });
+  }
+
+  const anthologyUnits: PathwayUnitLike[] = clusters.map((cluster, clusterIndex) => ({
+    title: cluster.title,
+    summary: `${cluster.poems.length} poems, as published in the AQA anthology. One poem is printed in the exam and you compare it with another from the same cluster.`,
+    topics: cluster.poems.map((poem, poemIndex) => ({
+      id: `a${clusterIndex + 1}t${poemIndex + 1}`,
+      title: poem.title,
+      summary: `${poem.poet}: ${poem.about}`,
+      keyPoints: [`Poet: ${poem.poet}.`, ...poem.notes],
+      examSkill: `Revise ${poem.title} for a comparison answer: name a method, then link it to the question's theme.`,
+    })),
+  }));
+
+  return { ...pathway, units: [...kept, ...anthologyUnits] };
+}
+
 /** Matches a stored poetry theme to the saved cluster, if one is named. */
 export function clusterForTheme(theme?: string): AnthologyCluster[] {
   if (!theme) return ANTHOLOGIES;

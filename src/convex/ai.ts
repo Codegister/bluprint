@@ -15,7 +15,10 @@ import type { ActionCtx } from "./_generated/server";
 import { action, internalAction } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import { fetchCognitoOutline, type CognitoOutline } from "./lib/cognito";
-import { clusterForTheme } from "./lib/poetryAnthologies";
+import {
+  completeAnthology,
+  type PathwayLike,
+} from "./lib/poetryAnthologies";
 import { buildRsPathway } from "./lib/rsPathways";
 import {
   OPENROUTER_CHAT_URL,
@@ -1363,74 +1366,6 @@ function fallbackPathway(course: {
   };
 }
 
-/** Loose title comparison for a poem's name inside a scraped topic title. */
-function normaliseTitle(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function mentionsPoem(topicTitle: string, poemTitle: string): boolean {
-  const topic = normaliseTitle(topicTitle);
-  const poem = normaliseTitle(poemTitle);
-  return topic === poem || topic.includes(poem) || poem.includes(topic);
-}
-
-/**
- * Completes the AQA poetry anthology for English Literature.
- *
- * A scraped English Literature page only lists the poems it has notes for, so
- * Love and Relationships arrived with 10 of its 15 poems. The saved clusters in
- * lib/poetryAnthologies hold the full published list; a scraped unit that is
- * mostly poems from a cluster is replaced by the complete cluster, so the
- * anthology appears once, in the anthology's order, with every poem.
- */
-function withPoetryAnthology(
-  course: PathwayCourse,
-  pathway: CoursePathway,
-): CoursePathway {
-  if (course.subject.trim().toLowerCase() !== "english literature") return pathway;
-  if (!/gcse/i.test(course.level)) return pathway;
-
-  const clusters = clusterForTheme(course.poetryTheme);
-  if (clusters.length === 0) return pathway;
-
-  // Drop scraped units that are mostly poems from these clusters.
-  const replaced = new Set<string>();
-  for (const unit of pathway.units) {
-    const hits = clusters.some(
-      (cluster) =>
-        unit.topics.filter((topic) =>
-          cluster.poems.some((poem) => mentionsPoem(topic.title, poem.title)),
-        ).length >= 2,
-    );
-    if (hits) replaced.add(unit.title);
-  }
-  const kept = pathway.units.filter((unit) => !replaced.has(unit.title));
-
-  const anthologyUnits: PathwayUnit[] = clusters.map((cluster, clusterIndex) => ({
-    title: cluster.title,
-    summary: `${cluster.poems.length} poems, as published in the AQA anthology. One is printed in the exam; you compare it with another from the same cluster.`,
-    topics: cluster.poems.map((poem, poemIndex) => ({
-      id: `a${clusterIndex + 1}t${poemIndex + 1}`,
-      title: poem.title,
-      summary: `${poem.poet}: ${poem.about}`,
-      keyPoints: [
-        `Poet: ${poem.poet}.`,
-        ...poem.notes,
-      ],
-      examSkill: `Revise ${poem.title} for a comparison answer: name a method, then link it to the question's theme.`,
-    })),
-  }));
-
-  return {
-    ...pathway,
-    units: [...kept, ...anthologyUnits],
-  };
-}
-
 /**
  * Scrapes the pathway for one course. Cognito is the only source; the starter
  * map is used when the site does not publish that course, and no model is
@@ -1461,7 +1396,9 @@ async function generateCoursePathway(
     pathway = fallbackPathway(course);
   }
 
-  return withPoetryAnthology(course, pathway);
+  // English Literature always ends up with the full published poetry cluster,
+  // exactly once, whatever the scrape happened to list.
+  return completeAnthology(pathway as PathwayLike, course) as CoursePathway;
 }
 
 /**
