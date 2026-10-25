@@ -42,195 +42,10 @@ type CourseDraft = {
 /** The questions asked after a subject is tapped, in order. */
 type Question = "board" | "tier";
 
-const RS_ROUTES = ["Edexcel Religious Studies A", "Edexcel Religious Studies B"] as const;
-
-const RS_SPEC_A_TITLES = [
-  "Religion and Life",
-  "Religion and Society",
-  "Religion and Crime and Punishment",
-  "Religion and Peace and Conflict",
-];
-
-const RS_SPEC_B_TITLES = [
-  "Believing in God",
-  "Religion and Ethics",
-];
-
-const RS_RELIGIONS_A = [
-  "Christianity",
-  "Catholic Christianity",
-  "Islam",
-  "Judaism",
-  "Sikhism",
-];
-
-const RS_SPEC_A_LABELS = new Map([
-  [RS_SPEC_A_TITLES[0], "Religion and Life"],
-  [RS_SPEC_A_TITLES[1], "Religion and Society"],
-  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
-  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
-]);
-
-const RS_SPEC_B_LABELS = new Map([
-  [RS_SPEC_B_TITLES[0], "Believing in God"],
-  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
-]);
-
-const levelHints: Record<string, string> = {
-  GCSE: "Years 10–11",
-  KS3: "Years 7–9",
-  "A-Level": "Years 12–13",
-  IB: "HL and SL",
-  AP: "Advanced Placement",
-  Undergraduate: "University",
-};
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  Plus,
-  Search,
-  Star,
-  X,
-} from "lucide-react";
-import { Fragment, useMemo, useRef, useState } from "react";
-
-// The Religious Studies picker adds a route question to the subject picker for
-// Edexcel GCSE Religious Studies A and B. It does not change the rest of the
-// qualification machine; it just decides whether Religious Studies asks for its
-// route, second religion and units before being added.
-import { Link, useNavigate } from "react-router";
-import { toast } from "sonner";
-
-const MAX_COURSES = 12;
-
-/** One selected course while it is still being edited in the picker. */
-const RS_SPEC_A_LABELS = new Map([
-  [RS_SPEC_A_TITLES[0], "Religion and Life"],
-  [RS_SPEC_A_TITLES[1], "Religion and Society"],
-  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
-  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
-]);
-
-const RS_SPEC_B_LABELS = new Map([
-  [RS_SPEC_B_TITLES[0], "Believing in God"],
-  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
-]);
-
-type CourseDraft = {
-  examBoard: string;
-  tier?: string;
-  variant?: string;
-  rsRoute?: string;
-  rsReligion?: string;
-  rsSpec?: string;
-};
-
-/** The questions asked after a subject is tapped, in order. */
-type Question = "board" | "tier";
-
-type CourseDraft = {
-  examBoard: string;
-  tier?: string;
-  variant?: string;
-  rsRoute?: string;
-  rsReligion?: string;
-  rsSpec?: string;
-};
-
-const RS_ROUTES = ["Edexcel Religious Studies A", "Edexcel Religious Studies B"] as const;
-
-const RS_SPEC_A_TITLES = [
-  "Religion and Life",
-  "Religion and Society",
-  "Religion and Crime and Punishment",
-  "Religion and Peace and Conflict",
-];
-
-const RS_SPEC_B_TITLES = [
-  "Believing in God",
-  "Religion and Ethics",
-];
-
-const RS_RELIGIONS_A = [
-  "Christianity",
-  "Catholic Christianity",
-  "Islam",
-  "Judaism",
-  "Sikhism",
-];
-
-const RS_SPEC_A_LABELS = new Map([
-  [RS_SPEC_A_TITLES[0], "Religion and Life"],
-  [RS_SPEC_A_TITLES[1], "Religion and Society"],
-  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
-  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
-]);
-
-const RS_SPEC_B_LABELS = new Map([
-  [RS_SPEC_B_TITLES[0], "Believing in God"],
-  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
-]);
-
-const levelHints: Record<string, string> = {
-  GCSE: "Years 10–11",
-  KS3: "Years 7–9",
-  "A-Level": "Years 12–13",
-  IB: "HL and SL",
-  AP: "Advanced Placement",
-  Undergraduate: "University",
-};
-
-type CourseDraft = {
-  examBoard: string;
-  tier?: string;
-  variant?: string;
-  rsRoute?: string;
-  rsReligion?: string;
-  rsSpec?: string;
-};
-
-const RS_ROUTES = ["Edexcel Religious Studies A", "Edexcel Religious Studies B"] as const;
-
-const RS_SPEC_A_TITLES = [
-  "Religion and Life",
-  "Religion and Society",
-  "Religion and Crime and Punishment",
-  "Religion and Peace and Conflict",
-];
-
-const RS_SPEC_B_TITLES = [
-  "Believing in God",
-  "Religion and Ethics",
-];
-
-const RS_RELIGIONS_A = [
-  "Christianity",
-  "Catholic Christianity",
-  "Islam",
-  "Judaism",
-  "Sikhism",
-];
-
-const RS_SPEC_A_LABELS = new Map([
-  [RS_SPEC_A_TITLES[0], "Religion and Life"],
-  [RS_SPEC_A_TITLES[1], "Religion and Society"],
-  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
-  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
-]);
-
-const RS_SPEC_B_LABELS = new Map([
-  [RS_SPEC_B_TITLES[0], "Believing in God"],
-  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
-]);
-
-
-
-/** Religious Studies Edexcel GCSE route choices. These are separate from the
- *  generic tier/variant machinery because RS schools follow very different
- *  schemes of work; the picker keeps them as one extra branch for this subject
- *  only and sends them as extra fields on the course draft.
+/** Edexcel GCSE Religious Studies has two separate routes (A and B) with
+ *  different unit lists. When the user picks this subject we ask which route
+ *  they follow, then one extra religion (RS can test a second religion), then
+ *  the units they want to include on that route.
  */
 const RS_ROUTES = ["Edexcel Religious Studies A", "Edexcel Religious Studies B"] as const;
 
@@ -253,6 +68,34 @@ const RS_RELIGIONS_A = [
   "Judaism",
   "Sikhism",
 ] as const;
+
+/** Friendly labels for the RS spec titles so options read naturally. */
+const RS_SPEC_A_LABELS = new Map([
+  [RS_SPEC_A_TITLES[0], "Religion and Life"],
+  [RS_SPEC_A_TITLES[1], "Religion and Society"],
+  [RS_SPEC_A_TITLES[2], "Religion and Crime and Punishment"],
+  [RS_SPEC_A_TITLES[3], "Religion and Peace and Conflict"],
+]);
+
+const RS_SPEC_B_LABELS = new Map([
+  [RS_SPEC_B_TITLES[0], "Believing in God"],
+  [RS_SPEC_B_TITLES[1], "Religion and Ethics"],
+]);
+
+/** Quick lookup from RS route name to the same string. Kept separate from
+ *  RS_ROUTES so other parts of the picker can read it as a dictionary. */
+const RS_ROUTE_NAMES: Record<string, string> = {};
+RS_ROUTE_NAMES[RS_ROUTES[0]] = RS_ROUTES[0];
+RS_ROUTE_NAMES[RS_ROUTES[1]] = RS_ROUTES[1];
+
+const levelHints: Record<string, string> = {
+  GCSE: "Years 10–11",
+  KS3: "Years 7–9",
+  "A-Level": "Years 12–13",
+  IB: "HL and SL",
+  AP: "Advanced Placement",
+  Undergraduate: "University",
+};
 
 /** KS3 has no exam board; the empty string keeps the label clean. */
 function boardLabel(board: string): string {
@@ -280,6 +123,10 @@ function defaultTierFor(level: string, subject: string): string | undefined {
  * Only qualifications that actually have a choice are asked about: GCSE asks for
  * a board and a tier, A-Level asks for a board, IB asks for HL or SL, and KS3,
  * AP and university modules have nothing to ask — tapping one just adds it.
+ *
+ * Religious Studies GCSE is handled by the RS picker lower in the file, which
+ * can ask for a route, a second religion and the chosen spec titles on top of
+ * the generic board and tier questions above.
  */
 function questionsFor(level: string, subject: string): Question[] {
   const questions: Question[] = [];
@@ -330,6 +177,14 @@ function SubjectRow({
         .join(" · ")
     : "";
 
+  const rsDetail = draft?.rsRoute
+    ? ` · ${draft.rsRoute.replace("Edexcel ", "")}${
+        draft.rsReligion ? ` · ${draft.rsReligion}` : ""
+      }${
+        draft.rsSpec ? ` · ${draft.rsSpec}` : ""
+      }`
+    : "";
+
   return (
     <button
       type="button"
@@ -353,7 +208,7 @@ function SubjectRow({
         <span className="block truncate text-[0.86rem] font-semibold text-brand-ink">
           {name}
         </span>
-        {detail && (
+        {(detail || rsDetail) && (
           <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[0.68rem] text-muted-foreground">
             {isDefault && (
               <>
@@ -365,7 +220,10 @@ function SubjectRow({
                 <span className="sr-only">Default board and tier:</span>
               </>
             )}
-            <span className="min-w-0 truncate">{detail}</span>
+            <span className="min-w-0 truncate">
+              {detail}
+              {rsDetail}
+            </span>
           </span>
         )}
       </span>
@@ -464,14 +322,60 @@ export default function CourseSetup() {
   const activeMeta = active ? subjectMeta(active) : null;
   const activeChoices = active && level ? tierChoices(level, active) : null;
   const questions = active && level ? questionsFor(level, active) : [];
-  const currentQuestion: Question | "rs" | null =
-    questions[Math.min(questionIndex, Math.max(0, questions.length - 1))] ?? null;
-  const rsChoices = currentQuestion === "rs"
-    ? rsRouteChoices(activeDraft)
-    : null;
-  const rsChoices = active && level === "GCSE" && active === "Religious Studies"
-    ? rsRouteChoices(activeDraft)
-    : null;
+  const currentQuestionIndex =
+    Math.min(questionIndex, Math.max(0, questions.length - 1));
+  const currentQuestion: (Question | "rs") | null =
+    questions[currentQuestionIndex] ?? null;
+  const rsChoices =
+    active && level === "GCSE" && active === "Religious Studies"
+      ? rsRouteChoices(activeDraft)
+      : null;
+
+  const rsQuestionCount: number = 0;
+
+  const rsShowRoute = (
+    rsChoices !== null &&
+    questionIndex === 0 &&
+    questions.length > 0 &&
+    rsChoices.route.length > 0
+  );
+
+  const advance = () => {
+    if (!active) return;
+    if (currentQuestion === "rs") {
+      if (rsChoices !== null && "rsRoute" in rsChoices) {
+        answerRsRoute(
+          rsChoices.route[0] ? rsChoices.route[0].value : "",
+        );
+        return;
+      }
+      if (rsChoices !== null && "rsReligion" in rsChoices && !!rsChoices.religion) {
+        answerRsReligion(
+          rsChoices.route[0] ? rsChoices.route[0].value : "",
+        );
+        return;
+      }
+      if (
+        rsChoices !== null &&
+        "rsSpec" in rsChoices &&
+        !!rsChoices.spec
+      ) {
+        answerRsSpec(
+          rsChoices.route[0] ? rsChoices.route[0].value : "",
+        );
+        return;
+      }
+      finishQuestions();
+      return;
+    }
+    if (questionIndex + 1 < questions.length) {
+      setQuestionIndex(questionIndex + 1);
+      return;
+    }
+    finishQuestions();
+  };
+
+  const answerBoard = (next: string) => {
 
   const chooseQualification = (next: string) => {
     const nextBoard = defaultBoardFor(next);
@@ -516,6 +420,53 @@ export default function CourseSetup() {
     requestAnimationFrame(() => window.scrollTo({ top }));
   };
 
+  const totalQuestionCount = (
+    rsChoices === null
+      ? questions.length
+      : [
+          ...questions.length > 0 ? [questions.length] : [],
+          ["rsReligion" in rsChoices && !!rsChoices.religion ? 1 : 0],
+          ["rsSpec" in rsChoices && !!rsChoices.spec ? 1 : 0],
+        ].flat().reduce((sum, count) => sum + count, 0)
+  );
+
+  const rsPreflight = (
+    rsChoices: ReturnType<typeof rsRouteChoices>,
+    key: "rsRoute" | "rsReligion" | "rsSpec",
+  ): boolean => {
+    if (rsChoices === null) return false;
+    if ("rsRoute" in rsChoices) return false;
+    if ("rsReligion" in rsChoices && !!rsChoices.religion) {
+      return key === "rsReligion";
+    }
+    if ("rsSpec" in rsChoices && !!rsChoices.spec) {
+      return key === "rsSpec";
+    }
+    return false;
+  };
+
+  const advanceQuestion = () => {
+    if (currentQuestion === null) return;
+    if (currentQuestion === "rs") {
+      answerRs(
+        rsChoices !== null && "rsRoute" in rsChoices
+          ? "rsRoute"
+          : rsChoices !== null && "rsReligion" in rsChoices
+            ? "rsReligion"
+            : "rsSpec",
+        rsChoices !== null && rsChoices.route[0]
+          ? rsChoices.route[0].value
+          : "",
+      );
+      return;
+    }
+    if (questionIndex + 1 < questions.length) {
+      setQuestionIndex(questionIndex + 1);
+      return;
+    }
+    setQuestionIndex(questionIndex + 1);
+  };
+
   const rsRouteChoices = (
     draft?: CourseDraft,
   ): {
@@ -524,44 +475,52 @@ export default function CourseSetup() {
     spec?: Array<{ value: string; label: string }>;
   } | null => {
     if (level !== "GCSE" || active !== "Religious Studies") return null;
-    const currentRoute = draft?.rsRoute;
-    if (currentRoute === "Edexcel Religious Studies A") {
-      return {
-        route: [
-          { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
-          { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
-        ],
-        religion: RS_RELIGIONS_A.map((name) => ({
-          value: name,
-          label: name,
-        })),
-        spec: [...RS_SPEC_A_TITLES].map((key) => ({
-          value: key,
-          label: RS_SPEC_A_LABELS.get(key) ?? key,
-        })),
-      };
+
+    const currentRoute = draft?.rsRoute ?? "Edexcel Religious Studies A";
+    const isA = currentRoute === "Edexcel Religious Studies A";
+    const isB = currentRoute === "Edexcel Religious Studies B";
+
+    switch (true) {
+      case isA:
+        return {
+          route: [
+            { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
+            { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
+          ],
+          religion: RS_RELIGIONS_A.map((name) => ({
+            value: name,
+            label: name,
+          })),
+          spec: RS_SPEC_A_TITLES.map((key) => ({
+            value: key,
+            label: RS_SPEC_A_LABELS.get(key) ?? key,
+          })),
+        };
+      case isB:
+        return {
+          route: [
+            { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
+            { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
+          ],
+          spec: RS_SPEC_B_TITLES.map((key) => ({
+            value: key,
+            label: RS_SPEC_B_LABELS.get(key) ?? key,
+          })),
+        };
+      default:
+        return {
+          route: [
+            { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
+            { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
+          ],
+        };
     }
-    if (currentRoute === "Edexcel Religious Studies B") {
-      return {
-        route: [
-          { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
-          { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
-        ],
-        spec: [...RS_SPEC_B_TITLES].map((key) => ({
-          value: key,
-          label: RS_SPEC_B_LABELS.get(key) ?? key,
-        })),
-      };
-    }
-    return {
-      route: [
-        { value: "Edexcel Religious Studies A", label: "Religious Studies A" },
-        { value: "Edexcel Religious Studies B", label: "Religious Studies B" },
-      ],
-    };
   };
 
-  const answerRs = (key: "rsRoute" | "rsReligion" | "rsSpec", value: string) => {
+  const answerRs = (
+    key: "rsRoute" | "rsReligion" | "rsSpec",
+    value: string,
+  ) => {
     if (!active) return;
     setSelected((current) => {
       const course = current[active];
@@ -572,7 +531,44 @@ export default function CourseSetup() {
       };
     });
     setError(null);
+    answerRsSetNext(key);
   };
+
+  const answerRsSetNext = (
+    key: "rsRoute" | "rsReligion" | "rsSpec",
+  ) => {
+    if (
+      rsChoices === null ||
+      !("rsSpec" in rsChoices && !!rsChoices.spec) ||
+      key === "rsSpec"
+    ) {
+      setQuestionIndex((prev) => {
+        const next = prev + 1;
+        if (
+          totalQuestionCount > 0 &&
+          next >= questions.length +
+            ((rsChoices !== null &&
+              "rsReligion" in rsChoices &&
+              !!rsChoices.religion)
+              ? 1
+              : 0) +
+            ((rsChoices !== null &&
+              "rsSpec" in rsChoices &&
+              !!rsChoices.spec)
+              ? 1
+              : 0)
+        ) {
+          finishQuestions();
+          return prev;
+        }
+        return next;
+      });
+      return;
+    }
+    setQuestionIndex((prev) => prev + 1);
+  };
+
+  const sheets: Record<string, JSX.Element> = {};
 
   const openSubject = (name: string) => {
     const clean = name.trim().slice(0, 80);
@@ -670,6 +666,36 @@ export default function CourseSetup() {
   /** Move to the next question, or back to the list when this was the last. */
   const advance = () => {
     if (!active) return;
+    if (currentQuestion === "rs") {
+      if (
+        rsChoices !== null &&
+        "rsRoute" in rsChoices &&
+        rsChoices.route.length > 0
+      ) {
+        answerRsRoute(rsChoices.route[0].value);
+        return;
+      }
+      if (
+        rsChoices !== null &&
+        "rsReligion" in rsChoices &&
+        !!rsChoices.religion &&
+        rsChoices.route.length > 0
+      ) {
+        answerRsReligion(rsChoices.route[0].value);
+        return;
+      }
+      if (
+        rsChoices !== null &&
+        "rsSpec" in rsChoices &&
+        !!rsChoices.spec &&
+        rsChoices.route.length > 0
+      ) {
+        answerRsSpec(rsChoices.route[0].value);
+        return;
+      }
+      finishQuestions();
+      return;
+    }
     if (questionIndex + 1 < questions.length) {
       setQuestionIndex(questionIndex + 1);
       return;
@@ -693,7 +719,10 @@ export default function CourseSetup() {
     advance();
   };
 
-  const answerRs = (key: "rsRoute" | "rsReligion" | "rsSpec", value: string) => {
+  const answerRs = (
+    key: "rsRoute" | "rsReligion" | "rsSpec",
+    value: string,
+  ) => {
     if (!active) return;
     setSelected((current) => {
       const course = current[active];
@@ -704,32 +733,56 @@ export default function CourseSetup() {
       };
     });
     setError(null);
-    advance();
+    answerRsSetNext(key);
   };
 
-  const answerRsRoute = (value: string) => {
+  const answerRsSetNext = (
+    key: "rsRoute" | "rsReligion" | "rsSpec",
+  ) => {
     if (!active) return;
-    setCourseRsRoute(active, "rsRoute", value);
-    // A new RS subject should pick its default route immediately; an existing
-    // RS subject just switches route.
-    if (!rememberedTier) {
-      // No generic RS tier is stored globally; the route is the school-specific
-      // choice here.
+    if (
+      key === "rsRoute" &&
+      rsChoices !== null &&
+      !("rsReligion" in rsChoices && !!rsChoices.religion) &&
+      !("rsSpec" in rsChoices && !!rsChoices.spec)
+    ) {
+      finishQuestions();
+      return;
     }
-    advance();
+    if (
+      key === "rsReligion" &&
+      rsChoices !== null &&
+      !("rsSpec" in rsChoices && !!rsChoices.spec)
+    ) {
+      setQuestionIndex((prev) => prev + 1);
+      return;
+    }
+    if (
+      key === "rsSpec" &&
+      rsChoices !== null &&
+      !("rsReligion" in rsChoices && !!rsChoices.religion)
+    ) {
+      finishQuestions();
+      return;
+    }
+    if (
+      key === "rsRoute" &&
+      rsChoices !== null &&
+      ("rsReligion" in rsChoices && !!rsChoices.religion ||
+        "rsSpec" in rsChoices && !!rsChoices.spec)
+    ) {
+      setQuestionIndex((prev) => prev + 1);
+      return;
+    }
+    setQuestionIndex((prev) => prev + 1);
   };
 
-  const answerRsReligion = (value: string) => {
-    if (!active) return;
-    setCourseRsRoute(active, "rsReligion", value);
-    advance();
-  };
-
-  const answerRsSpec = (value: string) => {
-    if (!active) return;
-    setCourseRsRoute(active, "rsSpec", value);
-    advance();
-  };
+  // These are redundant with the shared answerRs above; kept so old call sites
+  // that were typed against the old split handlers still compile without a
+  // larger refactor of this file right now.
+  const answerRsRoute = (value: string) => answerRs("rsRoute", value);
+  const answerRsReligion = (value: string) => answerRs("rsReligion", value);
+  const answerRsSpec = (value: string) => answerRs("rsSpec", value);
 
   const setCourseRsRoute = (
     name: string,
@@ -746,6 +799,13 @@ export default function CourseSetup() {
     });
     setError(null);
   };
+
+  // Kept as a thin wrapper so any remaining typed call sites continue to
+  // compile without a wider refactor of this file right now.
+  const setCourseRsRouteAnswer = (
+    key: "rsRoute" | "rsReligion" | "rsSpec",
+    value: string,
+  ) => answerRs(key, value);
 
   const buildLabel = saving
     ? "Queuing pathways…"
@@ -957,8 +1017,8 @@ export default function CourseSetup() {
                       {active}
                     </p>
                     <p className="text-[0.72rem] text-muted-foreground">
-                      Question {Math.min(questionIndex + 1, questions.length)} of{" "}
-                      {questions.length}
+                      Question {Math.min(questionIndex + 1, totalQuestionCount)} of {" "}
+                      {totalQuestionCount}
                     </p>
                   </div>
                   <button
@@ -1051,6 +1111,175 @@ export default function CourseSetup() {
                     </div>
                   </>
                 )}
+
+                {currentQuestion === "rs" && rsChoices ? (
+                  <section className="mt-6 space-y-4">
+                    <h2 className="font-display text-[1.06rem] font-bold text-brand-ink">
+                      Which Religious Studies route?
+                    </h2>
+                    <p className="text-[0.78rem] text-muted-foreground">
+                      Religious Studies is split into Edexcel Religious Studies A and
+                      B. Pick the one your school follows; the units you revise and the
+                      exam paper titles change with it.
+                    </p>
+
+                    <div className="grid gap-1.5 sm:grid-cols-2">
+                      {rsChoices.route.map((option) => {
+                        const chosen =
+                          activeDraft?.rsRoute === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={chosen}
+                            onClick={() => answerRsRoute(option.value)}
+                            className={cn(
+                              "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
+                              chosen
+                                ? "border-[#191B27] bg-[#191B27] text-white"
+                                : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                            )}
+                          >
+                            <span className="truncate">{option.label}</span>
+                            {chosen && (
+                              <Check className="size-4 shrink-0" aria-hidden />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {activeDraft?.rsRoute === "Edexcel Religious Studies A"
+                      ? [
+                          <h2
+                            key="religion"
+                            className="mt-5 font-display text-[1.06rem] font-bold text-brand-ink"
+                          >
+                            Which religion do you study first?
+                          </h2>,
+                          <p key="religion-help" className="mt-1 text-[0.78rem] text-muted-foreground">
+                            Religious Studies can test a second religion as well.
+                            Choose the one your class studies before the others.
+                          </p>,
+                          <div
+                            key="religion-options"
+                            className="mt-3 grid gap-1.5 sm:grid-cols-2"
+                          >
+                            {rsChoices.religion?.map((option) => {
+                              const chosen =
+                                activeDraft?.rsReligion === option.value;
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  aria-pressed={chosen}
+                                  onClick={() => answerRsReligion(option.value)}
+                                  className={cn(
+                                    "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
+                                    chosen
+                                      ? "border-[#191B27] bg-[#191B27] text-white"
+                                      : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                  )}
+                                >
+                                  <span className="truncate">{option.label}</span>
+                                  {chosen && (
+                                    <Check className="size-4 shrink-0" aria-hidden />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>,
+                        ]
+                      : null}
+
+                    {activeDraft?.rsRoute === "Edexcel Religious Studies A"
+                      ? [
+                          <h2
+                            key="spec"
+                            className="mt-5 font-display text-[1.06rem] font-bold text-brand-ink"
+                          >
+                            Which Religion and Life units do you study?
+                          </h2>,
+                          <p key="spec-help" className="mt-1 text-[0.78rem] text-muted-foreground">
+                            Pick the Religion and Life units on your course. If you also
+                            do Religion and Society, switch to that in the route question
+                            above.
+                          </p>,
+                          <div
+                            key="spec-options"
+                            className="mt-3 grid gap-1.5 sm:grid-cols-2"
+                          >
+                            {rsChoices.spec?.map((option) => {
+                              const chosen =
+                                activeDraft?.rsSpec === option.value;
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  aria-pressed={chosen}
+                                  onClick={() => answerRsSpec(option.value)}
+                                  className={cn(
+                                    "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
+                                    chosen
+                                      ? "border-[#191B27] bg-[#191B27] text-white"
+                                      : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                  )}
+                                >
+                                  <span className="truncate">{option.label}</span>
+                                  {chosen && (
+                                    <Check className="size-4 shrink-0" aria-hidden />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>,
+                        ]
+                      : null}
+
+                    {activeDraft?.rsRoute === "Edexcel Religious Studies B"
+                      ? [
+                          <h2
+                            key="spec-b"
+                            className="mt-5 font-display text-[1.06rem] font-bold text-brand-ink"
+                          >
+                            Which Religion and Ethics units do you study?
+                          </h2>,
+                          <p key="spec-b-help" className="mt-1 text-[0.78rem] text-muted-foreground">
+                            Pick the Religion and Ethics units on your course. The two
+                            routes are separate specifications, so they do not share units.
+                          </p>,
+                          <div
+                            key="spec-b-options"
+                            className="mt-3 grid gap-1.5 sm:grid-cols-2"
+                          >
+                            {rsChoices.spec?.map((option) => {
+                              const chosen =
+                                activeDraft?.rsSpec === option.value;
+                              return (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  aria-pressed={chosen}
+                                  onClick={() => answerRsSpec(option.value)}
+                                  className={cn(
+                                    "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
+                                    chosen
+                                      ? "border-[#191B27] bg-[#191B27] text-white"
+                                      : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                  )}
+                                >
+                                  <span className="truncate">{option.label}</span>
+                                  {chosen && (
+                                    <Check className="size-4 shrink-0" aria-hidden />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>,
+                        ]
+                      : null}
+                  </section>
+                ) : null}
               </section>
             ) : (
               <>
