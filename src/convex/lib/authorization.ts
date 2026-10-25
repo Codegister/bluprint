@@ -60,7 +60,14 @@ export async function requireVerifiedUser(
   if (!user || typeof user !== "object") {
     throw new Error("Account not found.");
   }
-  if (!(user as { emailVerificationTime?: number | null }).emailVerificationTime) {
+  const record = user as {
+    emailVerificationTime?: number | null;
+    isAnonymous?: boolean | null;
+  };
+  // Guest (anonymous) sessions have no email address, so there is nothing to
+  // verify. The gate only applies to accounts that signed in with an email.
+  if (record.isAnonymous) return;
+  if (!record.emailVerificationTime) {
     throw new Error("Please verify your email before continuing.");
   }
 }
