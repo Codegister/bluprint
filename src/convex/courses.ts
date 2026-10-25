@@ -157,6 +157,12 @@ export const createMany = mutation({
         examBoard: v.optional(v.string()),
         tier: v.optional(v.string()),
         variant: v.optional(v.string()),
+        // Edexcel GCSE Religious Studies choices: route A or B, religion,
+        // third paper (A) or the two Areas of Study (B).
+        rsRoute: v.optional(v.string()),
+        rsReligion: v.optional(v.string()),
+        rsSpec: v.optional(v.string()),
+        rsSpec2: v.optional(v.string()),
       }),
     ),
   },
@@ -190,6 +196,10 @@ export const createMany = mutation({
           level === "GCSE" || isKs3
             ? undefined
             : safeCourseLabel(course.variant),
+        rsRoute: isKs3 ? undefined : safeCourseLabel(course.rsRoute),
+        rsReligion: isKs3 ? undefined : safeCourseLabel(course.rsReligion),
+        rsSpec: isKs3 ? undefined : safeCourseLabel(course.rsSpec),
+        rsSpec2: isKs3 ? undefined : safeCourseLabel(course.rsSpec2),
       }))
       .filter((course) => course.subject?.length ?? 0 > 0)
       .slice(0, MAX_COURSES_PER_SETUP);
@@ -205,17 +215,37 @@ export const createMany = mutation({
       .query("courses")
       .withIndex("by_user_updated", (q) => q.eq("userId", userId))
       .collect();
+    const signature = (course: {
+      subject?: string | null;
+      level?: string;
+      examBoard?: string | null;
+      variant?: string | null;
+      tier?: string | null;
+      rsRoute?: string | null;
+      rsSpec?: string | null;
+      rsSpec2?: string | null;
+    }) =>
+      `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.rsRoute ?? ""}|${course.rsSpec ?? ""}|${course.rsSpec2 ?? ""}`.toLowerCase();
+
     const known = new Set(
-      existing.map(
-        (course) =>
-          `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}`.toLowerCase(),
+      existing.map((course) =>
+        signature({
+          subject: course.subject,
+          level: course.level,
+          examBoard: course.examBoard,
+          variant: course.variant,
+          tier: course.tier,
+          rsRoute: course.rsRoute,
+          rsSpec: course.rsSpec,
+          rsSpec2: course.rsSpec2,
+        }),
       ),
     );
 
     const now = Date.now();
     const ids: Id<"courses">[] = [];
     for (const course of requested) {
-      const key = `${course.subject}|${level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}`.toLowerCase();
+      const key = signature({ ...course, level });
       if (known.has(key)) continue;
       known.add(key);
 
@@ -226,6 +256,10 @@ export const createMany = mutation({
         examBoard: course.examBoard!,
         tier: course.tier,
         variant: course.variant,
+        rsRoute: course.rsRoute,
+        rsReligion: course.rsReligion,
+        rsSpec: course.rsSpec,
+        rsSpec2: course.rsSpec2,
         status: "queued",
         progress: "Queued",
         completedTopics: [],

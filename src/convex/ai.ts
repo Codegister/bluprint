@@ -15,6 +15,7 @@ import type { ActionCtx } from "./_generated/server";
 import { action, internalAction } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import { fetchCognitoOutline, type CognitoOutline } from "./lib/cognito";
+import { buildRsPathway } from "./lib/rsPathways";
 import {
   OPENROUTER_CHAT_URL,
   OPENROUTER_TUTOR_MODEL,
@@ -1052,6 +1053,10 @@ type PathwayCourse = {
   tier?: string;
   variant?: string;
   poetryTheme?: string;
+  rsRoute?: string;
+  rsReligion?: string;
+  rsSpec?: string;
+  rsSpec2?: string;
 };
 type OutlineTopic = { title: string; reference?: string; subtopics: string[] };
 type OutlineSection = { title: string; topics: OutlineTopic[] };
@@ -1362,16 +1367,16 @@ function fallbackPathway(course: {
  * asked to fill the gap.
  */
 async function generateCoursePathway(
-  course: {
-    subject: string;
-    level: string;
-    examBoard: string;
-    tier?: string;
-    variant?: string;
-    poetryTheme?: string;
-  },
+  course: PathwayCourse,
   allowFallback = true,
 ): Promise<CoursePathway> {
+  // Religious Studies comes from the saved Edexcel A/B content in
+  // lib/rsPathways. Cognito has no page for it, and the generic starter map
+  // talked about mark schemes instead of the religion itself, so RS is never
+  // scraped and never generated.
+  const religiousStudies = buildRsPathway(course);
+  if (religiousStudies) return religiousStudies;
+
   try {
     const scraped = await scrapePathway(course);
     if (scraped) return scraped;

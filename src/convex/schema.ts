@@ -112,6 +112,13 @@ const schema = defineSchema(
       // boards describe it.
       tier: v.optional(v.string()),
       variant: v.optional(v.string()),
+      // Edexcel splits GCSE Religious Studies into A (Faith and Practice) and B
+      // (Beliefs in Action). The route, religions and paper/Area of Study
+      // choices change the units, so they are stored on the course.
+      rsRoute: v.optional(v.string()),
+      rsReligion: v.optional(v.string()),
+      rsSpec: v.optional(v.string()),
+      rsSpec2: v.optional(v.string()),
       // English Language/Literature poetry anthology studied at GCSE. Kept as
       // free text so older courses and other qualifications still load.
       poetryTheme: v.optional(v.string()),
