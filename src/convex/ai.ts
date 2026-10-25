@@ -1055,6 +1055,7 @@ type PathwayCourse = {
   poetryTheme?: string;
   rsRoute?: string;
   rsReligion?: string;
+  rsReligion2?: string;
   rsSpec?: string;
   rsSpec2?: string;
 };

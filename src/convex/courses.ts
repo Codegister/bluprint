@@ -161,6 +161,7 @@ export const createMany = mutation({
         // third paper (A) or the two Areas of Study (B).
         rsRoute: v.optional(v.string()),
         rsReligion: v.optional(v.string()),
+        rsReligion2: v.optional(v.string()),
         rsSpec: v.optional(v.string()),
         rsSpec2: v.optional(v.string()),
       }),
@@ -198,6 +199,7 @@ export const createMany = mutation({
             : safeCourseLabel(course.variant),
         rsRoute: isKs3 ? undefined : safeCourseLabel(course.rsRoute),
         rsReligion: isKs3 ? undefined : safeCourseLabel(course.rsReligion),
+        rsReligion2: isKs3 ? undefined : safeCourseLabel(course.rsReligion2),
         rsSpec: isKs3 ? undefined : safeCourseLabel(course.rsSpec),
         rsSpec2: isKs3 ? undefined : safeCourseLabel(course.rsSpec2),
       }))
@@ -222,10 +224,11 @@ export const createMany = mutation({
       variant?: string | null;
       tier?: string | null;
       rsRoute?: string | null;
+      rsReligion2?: string | null;
       rsSpec?: string | null;
       rsSpec2?: string | null;
     }) =>
-      `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.rsRoute ?? ""}|${course.rsSpec ?? ""}|${course.rsSpec2 ?? ""}`.toLowerCase();
+      `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.rsRoute ?? ""}|${course.rsReligion2 ?? ""}|${course.rsSpec ?? ""}|${course.rsSpec2 ?? ""}`.toLowerCase();
 
     const known = new Set(
       existing.map((course) =>
@@ -236,6 +239,7 @@ export const createMany = mutation({
           variant: course.variant,
           tier: course.tier,
           rsRoute: course.rsRoute,
+          rsReligion2: course.rsReligion2,
           rsSpec: course.rsSpec,
           rsSpec2: course.rsSpec2,
         }),
@@ -258,6 +262,7 @@ export const createMany = mutation({
         variant: course.variant,
         rsRoute: course.rsRoute,
         rsReligion: course.rsReligion,
+        rsReligion2: course.rsReligion2,
         rsSpec: course.rsSpec,
         rsSpec2: course.rsSpec2,
         status: "queued",

@@ -117,6 +117,9 @@ const schema = defineSchema(
       // choices change the units, so they are stored on the course.
       rsRoute: v.optional(v.string()),
       rsReligion: v.optional(v.string()),
+      // Both routes need a second religion: RS A examines it in Paper 2 and
+      // RS B takes each Area of Study with a different religion.
+      rsReligion2: v.optional(v.string()),
       rsSpec: v.optional(v.string()),
       rsSpec2: v.optional(v.string()),
       // English Language/Literature poetry anthology studied at GCSE. Kept as

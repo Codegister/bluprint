@@ -36,6 +36,7 @@ type CourseDraft = {
   variant?: string;
   rsRoute?: string;
   rsReligion?: string;
+  rsReligion2?: string;
   rsSpec?: string;
   rsSpec2?: string;
 };
@@ -113,11 +114,22 @@ const RS_RELIGIONS = [
 ] as const;
 
 /** The next RS question for a draft, or null when RS is fully answered. */
-type RsStep = "route" | "religion" | "thirdPaper" | "areaOne" | "areaTwo";
+type RsStep =
+  | "route"
+  | "religion"
+  | "religion2"
+  | "thirdPaper"
+  | "areaOne"
+  | "areaTwo";
 
+/**
+ * Both Edexcel routes need two religions: RS A examines the second one in
+ * Paper 2, and RS B must use a different religion for each Area of Study.
+ */
 function rsStepFor(draft?: CourseDraft): RsStep | null {
   if (!draft?.rsRoute) return "route";
   if (!draft.rsReligion) return "religion";
+  if (!draft.rsReligion2) return "religion2";
   if (draft.rsRoute === RS_ROUTE_B) {
     if (!draft.rsSpec) return "areaOne";
     if (!draft.rsSpec2) return "areaTwo";
@@ -218,9 +230,9 @@ function SubjectRow({
   const rsDetail = draft?.rsRoute
     ? ` · ${draft.rsRoute.replace("Edexcel ", "")}${
         draft.rsReligion ? ` · ${draft.rsReligion}` : ""
-      }${draft.rsSpec ? ` · ${draft.rsSpec}` : ""}${
-        draft.rsSpec2 ? ` · ${draft.rsSpec2}` : ""
-      }`
+      }${draft.rsReligion2 ? ` · ${draft.rsReligion2}` : ""}${
+        draft.rsSpec ? ` · ${draft.rsSpec}` : ""
+      }${draft.rsSpec2 ? ` · ${draft.rsSpec2}` : ""}`
     : "";
 
   return (
@@ -419,7 +431,7 @@ export default function CourseSetup() {
    * that asks its sub-questions in turn, so nothing here moves the card.
    */
   const setRs = (
-    key: "rsRoute" | "rsReligion" | "rsSpec" | "rsSpec2",
+    key: "rsRoute" | "rsReligion" | "rsReligion2" | "rsSpec" | "rsSpec2",
     value: string,
   ) => {
     if (!active) return;
@@ -431,8 +443,14 @@ export default function CourseSetup() {
       // clears the choices that only make sense on the other one.
       if (key === "rsRoute" && course.rsRoute !== value) {
         next.rsReligion = undefined;
+        next.rsReligion2 = undefined;
         next.rsSpec = undefined;
         next.rsSpec2 = undefined;
+      }
+      // The two religions must differ, so picking the same one twice clears
+      // the other slot instead of storing a duplicate.
+      if (key === "rsReligion") {
+        next.rsReligion2 = undefined;
       }
       if (key === "rsSpec") {
         next.rsSpec2 = undefined;
@@ -595,6 +613,7 @@ export default function CourseSetup() {
           variant: selected[subject]!.variant,
           rsRoute: selected[subject]!.rsRoute,
           rsReligion: selected[subject]!.rsReligion,
+          rsReligion2: selected[subject]!.rsReligion2,
           rsSpec: selected[subject]!.rsSpec,
           rsSpec2: selected[subject]!.rsSpec2,
         })),
@@ -930,12 +949,11 @@ export default function CourseSetup() {
                     {rsStep === "religion" ? (
                       <>
                         <h2 className="font-display text-[1.06rem] font-bold text-brand-ink">
-                          Which religion does your course cover?
+                          Which is your main religion?
                         </h2>
                         <p className="text-[0.78rem] text-muted-foreground">
-                          Pick the religion your lessons follow. You can add the
-                          same subject again if your school enters you for a second
-                          religion.
+                          This is the religion for Paper 1 — the study of religion.
+                          You will be asked for the second religion next.
                         </p>
                         <div className="grid gap-1.5 sm:grid-cols-2">
                           {RS_RELIGIONS.map((religion) => {
@@ -946,6 +964,46 @@ export default function CourseSetup() {
                                 type="button"
                                 aria-pressed={chosen}
                                 onClick={() => setRs("rsReligion", religion)}
+                                className={cn(
+                                  "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
+                                  chosen
+                                    ? "border-[#191B27] bg-[#191B27] text-white"
+                                    : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                )}
+                              >
+                                <span className="truncate">{religion}</span>
+                                {chosen && (
+                                  <Check className="size-4 shrink-0" aria-hidden />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : null}
+
+                    {rsStep === "religion2" ? (
+                      <>
+                        <h2 className="font-display text-[1.06rem] font-bold text-brand-ink">
+                          And your second religion?
+                        </h2>
+                        <p className="text-[0.78rem] text-muted-foreground">
+                          {activeDraft?.rsRoute === RS_ROUTE_B
+                            ? "Edexcel requires a different religion for each Area of Study."
+                            : "Paper 2 examines a second religion, worth 25% of the GCSE."}{" "}
+                          It must be different from {activeDraft?.rsReligion ?? "your main religion"}.
+                        </p>
+                        <div className="grid gap-1.5 sm:grid-cols-2">
+                          {RS_RELIGIONS.filter(
+                            (religion) => religion !== activeDraft?.rsReligion,
+                          ).map((religion) => {
+                            const chosen = activeDraft?.rsReligion2 === religion;
+                            return (
+                              <button
+                                key={religion}
+                                type="button"
+                                aria-pressed={chosen}
+                                onClick={() => setRs("rsReligion2", religion)}
                                 className={cn(
                                   "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
                                   chosen
@@ -1076,8 +1134,8 @@ export default function CourseSetup() {
                         </h2>
                         <p className="text-[0.78rem] text-muted-foreground">
                           {activeDraft?.rsRoute === RS_ROUTE_B
-                            ? `${activeDraft?.rsReligion ?? ""} · ${activeDraft?.rsSpec ?? ""} · ${activeDraft?.rsSpec2 ?? ""}`
-                            : `${activeDraft?.rsReligion ?? ""} · ${activeDraft?.rsSpec ?? ""}`}
+                            ? `${activeDraft?.rsSpec ?? ""} through ${activeDraft?.rsReligion ?? ""} · ${activeDraft?.rsSpec2 ?? ""} through ${activeDraft?.rsReligion2 ?? ""}`
+                            : `Paper 1: ${activeDraft?.rsReligion ?? ""} · Paper 2: ${activeDraft?.rsReligion2 ?? ""} · ${activeDraft?.rsSpec ?? ""}`}
                         </p>
                         <Button
                           type="button"

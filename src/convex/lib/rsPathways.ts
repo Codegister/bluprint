@@ -1364,6 +1364,8 @@ export type RsCourseInput = {
   examBoard: string;
   rsRoute?: string;
   rsReligion?: string;
+  /** The second religion: RS A Paper 2, and RS B's second Area of Study. */
+  rsReligion2?: string;
   rsSpec?: string;
   rsSpec2?: string;
 };
@@ -1382,6 +1384,17 @@ export function buildRsPathway(course: RsCourseInput): RsPathway | null {
   const route = course.rsRoute ?? "Edexcel Religious Studies A";
   const religionName = (course.rsReligion ?? "Christianity").trim();
   const religion = contentFor(religionName);
+  // Both routes need a second religion: RS A examines it in Paper 2, and RS B
+  // requires a different religion for each Area of Study.
+  const secondReligionName =
+    course.rsReligion2?.trim() &&
+    course.rsReligion2.trim().toLowerCase() !== religionName.toLowerCase()
+      ? course.rsReligion2.trim()
+      : RS_RELIGIONS.find(
+          (religionOption) =>
+            religionOption.toLowerCase() !== religionName.toLowerCase(),
+        ) ?? "Islam";
+  const secondReligion = contentFor(secondReligionName);
   const secondary = course.rsSpec2?.trim();
   const primary = course.rsSpec?.trim();
 
@@ -1478,35 +1491,33 @@ export function buildRsPathway(course: RsCourseInput): RsPathway | null {
     const units: RsPathwayUnit[] = [
       unit(
         `Beliefs and practices — ${religionName}`,
-        `The ${religionName} beliefs and practices that the two Areas of Study build on.`,
+        `The ${religionName} beliefs and practices that the ${first} Area of Study builds on.`,
         [...religion.beliefs, ...religion.practices],
         0,
         "Learn the belief or practice precisely, then link it to the ethical issue.",
       ),
       areaOfStudyUnit(first, religionName, 1),
-      areaOfStudyUnit(second, religionName, 2),
       unit(
-        "Living the religious life",
-        `How ${religionName} believers put these beliefs into practice.`,
-        religion.living,
-        3,
-        "Show how belief leads to action, with examples.",
+        `Beliefs and practices — ${secondReligionName}`,
+        `The ${secondReligionName} beliefs and practices that the ${second} Area of Study builds on.`,
+        [...secondReligion.beliefs, ...secondReligion.practices],
+        2,
+        "Keep the second religion's teaching separate from the first.",
       ),
+      areaOfStudyUnit(second, secondReligionName, 3),
       unit(
-        "Forms of expression and ways of life",
-        `The art, architecture, music and everyday expression of ${religionName}.`,
-        religion.expressions,
+        "Living the religious life and forms of expression",
+        `How ${religionName} and ${secondReligionName} believers live out these beliefs.`,
+        [...religion.living, ...religion.expressions],
         4,
-        "Explain what the form expresses about belief, not just what it looks like.",
+        "Show how belief leads to action, with examples.",
       ),
     ];
 
     return {
-      overview: `Edexcel GCSE Religious Studies B (Beliefs in Action) with ${religionName}: ${first} and ${second}, studied through ${
-        religion.scripture
-      }. This pathway is built from the saved specification content, so it is the same each time it is rebuilt.`,
+      overview: `Edexcel GCSE Religious Studies B (Beliefs in Action) with ${religionName} and ${secondReligionName}: ${first} through ${religionName}, ${second} through ${secondReligionName}. This pathway is built from the saved specification content, so it is the same each time it is rebuilt.`,
       examFormat:
-        "Two written papers, one for each Area of Study. Each paper covers beliefs, ethical issues and living the religious life for its religion.",
+        "Two written papers, one for each Area of Study, each taken with a different religion. Every paper covers beliefs, the ethical issue and living the religious life for its religion.",
       units,
     };
   }
@@ -1572,6 +1583,13 @@ export function buildRsPathway(course: RsCourseInput): RsPathway | null {
       3,
       "Link the form of expression to the belief it carries.",
     ),
+    unit(
+      `Paper 2: second religion — ${secondReligionName}`,
+      `The beliefs and practices Edexcel examines for ${secondReligionName} in Paper 2, worth 25% of the GCSE.`,
+      [...secondReligion.beliefs, ...secondReligion.practices],
+      4,
+      `Answer on ${secondReligionName} only, and keep its teaching separate from the Paper 1 religion.`,
+    ),
   ];
 
   const extra =
@@ -1590,11 +1608,11 @@ export function buildRsPathway(course: RsCourseInput): RsPathway | null {
   );
 
   return {
-    overview: `Edexcel GCSE Religious Studies A (Faith and Practice in the 21st Century) with ${religionName}. Beliefs, practices, sources of wisdom and forms of expression, plus ${
+    overview: `Edexcel GCSE Religious Studies A (Faith and Practice in the 21st Century) with ${religionName} and ${secondReligionName}. Paper 1 covers ${religionName} beliefs, practices, sources of wisdom and forms of expression; Paper 2 covers ${secondReligionName} beliefs and practices; the third paper is ${
       thirdPaper
-    }, built from the saved specification content so it is the same every time.`,
+    }. Built from the saved specification content so it is the same every time.`,
     examFormat:
-      "Three written papers: Paper 1 on the study of religion (50%), Paper 2 on a second religion (25%), and Paper 3 Philosophy and Ethics or Paper 4 Textual Studies (25%).",
+      "Three written papers: Paper 1 on the main religion (50%), Paper 2 on the second religion (25%), and Paper 3 Philosophy and Ethics or Paper 4 Textual Studies (25%).",
     units: allUnits,
   };
 }
