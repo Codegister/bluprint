@@ -1,5 +1,0 @@
-{ "todos": [
-  { "task": "Remove duplicate RS constants from CourseSetup.tsx", "completed": true },
-  { "task": "Wire RS route question into CourseSetup questionsFor/render", "completed": true },
-  { "task": "Fix next/back logic to include RS question slots", "completed": false }
-] }

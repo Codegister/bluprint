@@ -333,17 +333,6 @@ export default function CourseSetup() {
       ? rsRouteChoices(activeDraft)
       : null;
 
-  const rsQuestionCount: number = 0;
-
-  const rsShowRoute = (
-    rsChoices !== null &&
-    questionIndex === 0 &&
-    questions.length > 0 &&
-    rsChoices.route.length > 0
-  );
-
-
-
   const chooseQualification = (next: string) => {
     const nextBoard = defaultBoardFor(next);
     setLevel(next);
@@ -396,43 +385,6 @@ export default function CourseSetup() {
           ["rsSpec" in rsChoices && !!rsChoices.spec ? 1 : 0],
         ].flat().reduce((sum, count) => sum + count, 0)
   );
-
-  const rsPreflight = (
-    rsChoices: ReturnType<typeof rsRouteChoices>,
-    key: "rsRoute" | "rsReligion" | "rsSpec",
-  ): boolean => {
-    if (rsChoices === null) return false;
-    if ("rsRoute" in rsChoices) return false;
-    if ("rsReligion" in rsChoices && !!rsChoices.religion) {
-      return key === "rsReligion";
-    }
-    if ("rsSpec" in rsChoices && !!rsChoices.spec) {
-      return key === "rsSpec";
-    }
-    return false;
-  };
-
-  const advanceQuestion = () => {
-    if (currentQuestion === null) return;
-    if (currentQuestion === "rs") {
-      answerRs(
-        rsChoices !== null && "rsRoute" in rsChoices
-          ? "rsRoute"
-          : rsChoices !== null && "rsReligion" in rsChoices
-            ? "rsReligion"
-            : "rsSpec",
-        rsChoices !== null && rsChoices.route[0]
-          ? rsChoices.route[0].value
-          : "",
-      );
-      return;
-    }
-    if (questionIndex + 1 < questions.length) {
-      setQuestionIndex(questionIndex + 1);
-      return;
-    }
-    setQuestionIndex(questionIndex + 1);
-  };
 
   function rsRouteChoices(draft?: CourseDraft): {
     route: Array<{ value: string; label: string }>;
@@ -532,8 +484,6 @@ export default function CourseSetup() {
     }
     setQuestionIndex((prev) => prev + 1);
   };
-
-  const sheets: Record<string, JSX.Element> = {};
 
   const openSubject = (name: string) => {
     const clean = name.trim().slice(0, 80);
