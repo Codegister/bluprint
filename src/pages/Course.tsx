@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { SkeletonCoursePage } from "@/components/Skeletons";
 import { CognitoRealPapers } from "@/components/study/CognitoRealPapers";
 import { CognitoTopicNotes } from "@/components/study/CognitoTopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
@@ -114,16 +115,9 @@ function PathNode({
 }
 
 function LoadingCard() {
-  return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-[2rem] border border-border bg-card">
-      <div className="text-center">
-        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
-        <p className="mt-3 text-[0.82rem] text-muted-foreground">
-          Loading your pathway…
-        </p>
-      </div>
-    </div>
-  );
+  // A shape of the pathway page rather than a spinner, so the hero, progress
+  // card and unit rows appear in place instead of the layout jumping.
+  return <SkeletonCoursePage />;
 }
 
 function MissingCard() {

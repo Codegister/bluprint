@@ -1,4 +1,5 @@
-import { Loader2, TriangleAlert } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TriangleAlert } from "lucide-react";
 import {
   GlobalWorkerOptions,
   getDocument,
@@ -86,11 +87,26 @@ export function PdfViewer({ url, title }: { url: string; title: string }) {
           </p>
         </div>
       ) : !pdf ? (
-        <div className="flex min-h-[240px] items-center justify-center">
-          <p className="flex items-center gap-2 text-[0.82rem] text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-            Opening the paper…
-          </p>
+        <div
+          role="status"
+          aria-busy="true"
+          aria-live="polite"
+          className="space-y-4 pb-8"
+        >
+          <span className="sr-only">Opening the paper</span>
+          {[0, 1].map((index) => (
+            <div
+              key={index}
+              aria-hidden="true"
+              className="mx-auto w-full max-w-[720px] space-y-3 rounded-xl border border-border bg-card p-6"
+            >
+              <Skeleton className="h-3 w-1/3" />
+              <Skeleton className="h-2.5 w-full" />
+              <Skeleton className="h-2.5 w-11/12" />
+              <Skeleton className="h-2.5 w-4/5" />
+              <Skeleton className="mt-4 h-24 w-full rounded-lg" />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-4 pb-8">
@@ -199,8 +215,12 @@ function PdfPage({
           className="block max-w-full"
         />
         {drawing && (
-          <span className="absolute inset-0 grid place-items-center bg-white/70">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+          <span
+            aria-busy="true"
+            className="absolute inset-0 grid place-items-center bg-card/80"
+          >
+            <span className="sr-only">Drawing page {pageNumber}</span>
+            <span aria-hidden="true" className="absolute inset-3 animate-pulse rounded-lg bg-brand-panel" />
           </span>
         )}
       </div>

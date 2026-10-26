@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { SkeletonTimetablePage } from "@/components/Skeletons";
 import { EASE, Meter, enter, reveal } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import { readableError } from "@/lib/errors";
 import { daysUntilInput } from "@/lib/format";
@@ -36,6 +38,7 @@ import {
   Loader2,
   Plus,
   Sparkles,
+  Utensils,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -45,6 +48,7 @@ type DayView = NonNullable<FunctionReturnType<typeof api.timetable.getDayView>>;
 type Day = NonNullable<DayView["day"]>;
 type DaySession = Day["sessions"][number];
 type Blocked = DayView["blocked"][number];
+type Meal = DayView["meals"][number];
 
 /** The planner works in UTC calendar keys; keep the screen on the same clock. */
 function utcToday(): string {
@@ -306,6 +310,32 @@ function SessionRow({
   );
 }
 
+/**
+ * A meal the planner keeps free. Showing it explains why the afternoon has a
+ * gap instead of looking like unplanned time.
+ */
+function MealRow({ meal }: { meal: Meal }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-dashed border-[#EBD6AB] bg-[#FFFBF2] px-3 py-2 sm:gap-4 sm:px-4">
+      <span className="w-[62px] shrink-0 text-[0.66rem] font-semibold tabular-nums leading-relaxed text-muted-foreground">
+        <span className="block text-brand-ink/70">
+          {formatTime24(meal.startMinutes)}
+        </span>
+        <span className="block">{formatTime24(meal.endMinutes)}</span>
+      </span>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <Utensils className="size-3.5 shrink-0 text-[#B7791F]" aria-hidden />
+        <span className="truncate text-[0.78rem] font-medium text-brand-ink/70">
+          {meal.label} break
+        </span>
+      </span>
+      <span className="shrink-0 text-[0.62rem] font-medium text-muted-foreground">
+        Kept free
+      </span>
+    </div>
+  );
+}
+
 /** Blocked-out time, shown inline with the day's work. */
 function BlockedRow({ period }: { period: Blocked }) {
   return (
@@ -535,11 +565,12 @@ export default function Timetable() {
     [view],
   );
 
-  /** Sessions and blocked periods interleaved on one timeline. */
+  /** Sessions, meals and blocked periods interleaved on one timeline. */
   const timeline = useMemo(() => {
     const items: Array<
       | { kind: "session"; at: number; session: DaySession }
       | { kind: "blocked"; at: number; period: Blocked }
+      | { kind: "meal"; at: number; meal: Meal }
     > = [
       ...daySessions.map((session) => ({
         kind: "session" as const,
@@ -551,9 +582,14 @@ export default function Timetable() {
         at: period.startMinutes,
         period,
       })),
+      ...(view?.meals ?? []).map((meal) => ({
+        kind: "meal" as const,
+        at: meal.startMinutes,
+        meal,
+      })),
     ];
     return items.sort((a, b) => a.at - b.at);
-  }, [daySessions, blockedByTime]);
+  }, [daySessions, blockedByTime, view]);
 
   const doneCount = daySessions.filter((session) => session.done).length;
   const plannedMinutes = daySessions.reduce(
@@ -654,9 +690,7 @@ export default function Timetable() {
   if (plan === undefined || view === undefined) {
     return (
       <AppShell>
-        <div className="flex min-h-[320px] items-center justify-center rounded-[2rem] border border-border bg-white">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
-        </div>
+        <SkeletonTimetablePage />
       </AppShell>
     );
   }
@@ -842,12 +876,28 @@ export default function Timetable() {
             {!view.day ? (
               <div className="rounded-2xl border border-dashed border-border bg-[#FCFCFA] px-5 py-8 text-center">
                 {canGenerate ? (
-                  <>
-                    <Loader2 className="mx-auto size-4 animate-spin text-muted-foreground" />
-                    <p className="mt-2 text-[0.82rem] text-muted-foreground">
-                      Planning this day…
-                    </p>
-                  </>
+                  <div
+                    role="status"
+                    aria-busy="true"
+                    aria-live="polite"
+                    className="space-y-2"
+                  >
+                    <span className="sr-only">Planning this day</span>
+                    {[0, 1, 2].map((index) => (
+                      <div
+                        key={index}
+                        aria-hidden="true"
+                        className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3 sm:gap-4 sm:px-4"
+                      >
+                        <Skeleton className="h-9 w-[54px] shrink-0 rounded-lg" />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <Skeleton className="h-3 w-2/5" />
+                          <Skeleton className="h-2.5 w-1/4" />
+                          <Skeleton className="h-6 w-20 rounded-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <>
                     <p className="text-[0.86rem] font-semibold text-brand-ink">
@@ -895,6 +945,13 @@ export default function Timetable() {
                         onOpen={() => void handleOpen(item.session)}
                         onToggle={() => void toggleSession(item.session)}
                       />
+                    </motion.div>
+                  ) : item.kind === "meal" ? (
+                    <motion.div
+                      key={`meal-${item.meal.label}`}
+                      {...reveal(0.02 + index * 0.02, 10)}
+                    >
+                      <MealRow meal={item.meal} />
                     </motion.div>
                   ) : (
                     <motion.div
@@ -1003,9 +1060,15 @@ export default function Timetable() {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted-foreground">Sessions</dt>
+                <dt className="text-muted-foreground">Session length</dt>
+                <dd className="text-right font-semibold text-brand-ink">
+                  Up to {view.plan.sessionMinutes} min
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-muted-foreground">Breaks</dt>
                 <dd className="font-semibold text-brand-ink">
-                  {view.plan.sessionMinutes} min each
+                  10 min between
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -1047,10 +1110,12 @@ export default function Timetable() {
               How the day works
             </h2>
             <p className="mt-1.5 text-[0.74rem] leading-relaxed text-muted-foreground">
-              Each day is generated on its own from your courses, in the time you
-              have left after blocked periods. Unticked sessions from earlier days
-              are carried forward a couple at a time, so missed work is spread
-              across the next few days rather than piled into one.
+              Each day is built from your courses, rotating between subjects.
+              A short topic gets 20 minutes, a longer one up to your session
+              length. Sessions are spread across the day with a 10-minute break
+              between them, and lunch and dinner stay free. Unticked sessions
+              are caught up a couple at a time, so missed work never lands in
+              one long block.
             </p>
           </motion.section>
         </div>

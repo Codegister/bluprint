@@ -1,11 +1,13 @@
 import { Brand } from "@/components/Brand";
 import { Mascot } from "@/components/Mascot";
+import { SkeletonText } from "@/components/Skeletons";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Skeleton } from "@/components/ui/skeleton";
 import { enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
 
@@ -32,10 +34,26 @@ export function RequireAuth({
   const location = useLocation();
 
   if (isLoading) {
+    // The auth check is usually a blink. Sketch the sign-in card rather than a
+    // spinner, so the page settles into its real shape instead of jumping.
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
-        <Mascot size={112} />
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+      <main className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md">
+          <div className="flex justify-center">
+            <Mascot size={112} />
+          </div>
+          <div
+            role="status"
+            aria-busy="true"
+            className="gizmo-card mt-3 space-y-4 p-7 sm:p-9"
+          >
+            <span className="sr-only">Checking your session</span>
+            <Skeleton className="mx-auto h-6 w-3/4" />
+            <SkeletonText lines={2} className="mx-auto max-w-xs" />
+            <Skeleton className="h-12 w-full rounded-full" />
+            <Skeleton className="mx-auto h-9 w-2/3 rounded-full" />
+          </div>
+        </div>
       </main>
     );
   }

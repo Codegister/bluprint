@@ -1,4 +1,5 @@
 import { EASE, reveal } from "@/components/motion/Motion";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogClose,
@@ -14,7 +15,7 @@ import { cognitoPaperProxyUrl } from "@/lib/convexSite";
 import { readableError } from "@/lib/errors";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { FileText, Loader2, RotateCcw, X } from "lucide-react";
+import { FileText, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -98,10 +99,24 @@ export function CognitoRealPapers({
       </div>
 
       {(busy || cached === undefined) && (
-        <p className="mt-4 flex items-center gap-2 rounded-2xl bg-brand-panel px-4 py-3 text-[0.8rem] text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-          Reading Cognito&apos;s past-paper list for this course…
-        </p>
+        <div role="status" aria-busy="true" className="mt-4 space-y-2">
+          <span className="sr-only">
+            Reading Cognito&apos;s past-paper list for this course
+          </span>
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              aria-hidden="true"
+              className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-[#FCFCFD] px-4 py-3"
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <Skeleton className="size-4 shrink-0 rounded" />
+                <Skeleton className="h-3 w-2/5" />
+              </div>
+              <Skeleton className="h-7 w-28 shrink-0 rounded-full" />
+            </div>
+          ))}
+        </div>
       )}
 
       {error && (

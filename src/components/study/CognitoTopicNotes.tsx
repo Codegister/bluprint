@@ -1,10 +1,12 @@
+import { SkeletonText } from "@/components/Skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EASE } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { BookOpen, Loader2, RotateCcw } from "lucide-react";
+import { BookOpen, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -74,10 +76,15 @@ export function CognitoTopicNotes({
       </div>
 
       {(busy || cached === undefined) && (
-        <p className="mt-3 flex items-center gap-2 text-[0.78rem] text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" aria-hidden />
-          Reading the published notes…
-        </p>
+        <div
+          role="status"
+          aria-busy="true"
+          className="mt-4 space-y-3"
+        >
+          <span className="sr-only">Reading the published notes</span>
+          <Skeleton className="h-3 w-1/3" aria-hidden="true" />
+          <SkeletonText lines={5} />
+        </div>
       )}
 
       {error && (

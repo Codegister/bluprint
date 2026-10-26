@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { SkeletonPastPaperPage } from "@/components/Skeletons";
 import { enter, reveal } from "@/components/motion/Motion";
 import { PastPaperPractice } from "@/components/study/PastPaperPractice";
 import { Button } from "@/components/ui/button";
@@ -14,19 +15,6 @@ import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
-
-function LoadingCard() {
-  return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-[2rem] border border-border bg-card">
-      <div className="text-center">
-        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
-        <p className="mt-3 text-[0.82rem] text-muted-foreground">
-          Loading your past paper…
-        </p>
-      </div>
-    </div>
-  );
-}
 
 function MissingCard() {
   return (
@@ -82,7 +70,7 @@ export default function PastPaper() {
 
   const body = (() => {
     if (!validId) return <MissingCard />;
-    if (details === undefined) return <LoadingCard />;
+    if (details === undefined) return <SkeletonPastPaperPage />;
     if (details === null) return <MissingCard />;
 
     const { paper, course, questions } = details;

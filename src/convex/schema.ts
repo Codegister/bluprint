@@ -312,6 +312,11 @@ const schema = defineSchema(
           v.literal("mixed"),
         ),
       ),
+      // Bumped when day generation changes shape (for example, when sessions
+      // started following each topic's own length). Saved days from an older
+      // planner are rebuilt once when they are next opened, so a timetable
+      // does not keep yesterday's layout forever.
+      plannerVersion: v.optional(v.number()),
       // The start the student asked for. When every topic would not fit before
       // the first exam, the plan begins earlier and startDate is that earlier
       // date; this keeps the original so the timetable can explain the change.

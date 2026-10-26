@@ -3,13 +3,14 @@ import { useTheme } from "@/components/ThemeProvider";
 import { cn } from "@/lib/utils";
 
 /**
- * One-tap switch between the light paper theme and the high-contrast dark
- * theme. It is a plain <button> so it works with keyboard, screen readers and
- * every browser without a settings menu of its own.
+ * The theme switch.
  *
- * `withLabel` is for roomy spots (the sidebar); headers use the icon-only
- * version, which keeps the same 36-40px hit target as the other header
- * controls.
+ * It is deliberately a filled, labelled control rather than a quiet icon: the
+ * theme is a preference people look for, and a low-contrast ghost button in a
+ * sidebar is easy to miss. The fill follows the theme (ink on paper, pale
+ * violet on the dark page) so it stays the most obvious control in its corner.
+ *
+ * `withLabel` widens it for the sidebar and spells the mode out in full.
  */
 export function ThemeToggle({
   withLabel = false,
@@ -30,21 +31,42 @@ export function ThemeToggle({
       aria-label={label}
       title={label}
       className={cn(
-        "group inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-border bg-card font-semibold text-brand-ink transition-colors",
-        "hover:bg-brand-panel focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
-        withLabel ? "h-9 px-3.5 text-[0.8rem]" : "size-9",
+        "group inline-flex shrink-0 items-center gap-2 rounded-full border border-transparent font-semibold transition-colors",
+        "bg-[#191B27] text-white hover:bg-[#2A2D3E]",
+        "dark:bg-[#C3B2FF] dark:text-[#141025] dark:hover:bg-[#D8CCFF]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        withLabel ? "h-10 w-full justify-between px-4 text-[0.82rem]" : "h-9 px-3 text-[0.74rem]",
         className,
       )}
     >
-      {/* Both icons live in the same slot so the button never changes width. */}
-      <span className="grid size-4 place-items-center">
-        {isDark ? (
-          <Sun className="size-4 text-[#FFC163]" aria-hidden />
-        ) : (
-          <Moon className="size-4 text-[#5B3DF5]" aria-hidden />
-        )}
+      <span className="inline-flex items-center gap-2">
+        <span
+          className="grid size-4 place-items-center"
+          aria-hidden="true"
+        >
+          {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </span>
+        <span>{withLabel ? (isDark ? "Light mode" : "Dark mode") : isDark ? "Light" : "Dark"}</span>
       </span>
-      {withLabel && <span>{isDark ? "Light mode" : "Dark mode"}</span>}
+
+      {/* A tiny switch makes the current state legible at a glance, not just
+          after reading the label. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "relative h-4 w-7 shrink-0 rounded-full transition-colors",
+          isDark ? "bg-[#141025]/30" : "bg-white/30",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 size-3 rounded-full transition-all",
+            isDark
+              ? "left-[15px] bg-[#141025]"
+              : "left-0.5 bg-white",
+          )}
+        />
+      </span>
     </button>
   );
 }

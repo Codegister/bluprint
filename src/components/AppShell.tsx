@@ -7,6 +7,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
@@ -256,7 +257,14 @@ function Sidebar({
       </div>
 
       <div className="gizmo-scroll relative min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-        {decks.length === 0 ? (
+        {sets === undefined ? (
+          <div role="status" aria-busy="true" className="space-y-2 px-2 py-2">
+            <span className="sr-only">Loading your study sets</span>
+            {[0, 1, 2, 3].map((index) => (
+              <Skeleton key={index} className="h-8 rounded-xl" aria-hidden="true" />
+            ))}
+          </div>
+        ) : decks.length === 0 ? (
           <p className="px-3 py-3 text-[0.82rem] leading-relaxed text-muted-foreground">
             Nothing here yet. Add your notes or open a course topic to build your
             first set.

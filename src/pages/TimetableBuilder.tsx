@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { SkeletonBuilderPage } from "@/components/Skeletons";
 import { EASE, enter, reveal } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -414,9 +415,7 @@ export default function TimetableBuilder() {
   if (courses === undefined) {
     return (
       <AppShell>
-        <div className="flex min-h-[320px] items-center justify-center rounded-[2rem] border border-border bg-white">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
-        </div>
+        <SkeletonBuilderPage />
       </AppShell>
     );
   }
@@ -442,8 +441,9 @@ export default function TimetableBuilder() {
           {...enter(0.08)}
         >
           Four short steps. You choose the time you have, and when revision
-          starts, on school days and on days off. Bluprint fills that time with
-          evenly spaced sessions, and every session links to its study set.
+          starts, on school days and on days off. Bluprint spreads that time
+          across the day with 10-minute breaks and space for meals, and every
+          session links to its study set.
         </motion.p>
       </header>
 
@@ -624,9 +624,9 @@ export default function TimetableBuilder() {
               How do you want to study?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              Choose one route for the whole timetable. Each day is filled with
-              whole sessions until your time is used up, with an even gap between
-              one session and the next.
+              Choose one route for the whole timetable. Each day rotates between
+              your subjects, uses the time you have, and leaves a 10-minute
+              break between sessions.
             </p>
 
             <div className="mt-4">
@@ -680,7 +680,7 @@ export default function TimetableBuilder() {
               className={cn("mt-5", studyMethod === "papers" && "hidden")}
             >
               <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Session length
+                Longest session
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {SESSION_MINUTES.map((minutes) => {
@@ -706,7 +706,9 @@ export default function TimetableBuilder() {
                 })}
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-                Applies to every subject and to every day. Nothing runs past
+                A short topic needs about 20 minutes; a long one uses your full
+                length. Everything is set down with a 10-minute break between
+                sessions, and lunch and dinner are kept free. Nothing runs past
                 8:00 pm; a session that would cross that line waits for the next
                 revision day.
               </p>
@@ -770,7 +772,8 @@ export default function TimetableBuilder() {
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
               Pick the study time you realistically have and when you can start.
-              That time is filled with sessions, spaced equally apart.
+              Sessions are spread across that time rather than stacked at the
+              start, with 10-minute breaks and meals left free.
             </p>
 
             <div className="mt-4">
@@ -803,10 +806,10 @@ export default function TimetableBuilder() {
                 })}
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-                Bluprint fills this time with {sessionMinutes}-minute sessions, plus
-                a shorter final block when your time does not divide exactly, so the
-                whole budget is used. Choosing a day shorter than the session
-                shortens the session to the longest block that still fits.
+                Bluprint uses this as study time: whole topics, each taking what
+                its notes need (never less than 20 minutes and never more than
+                your longest session). It spreads them out with a 10-minute
+                break between each one, and keeps lunch and dinner free.
               </p>
             </div>
 
@@ -932,7 +935,8 @@ export default function TimetableBuilder() {
                 <span className="block text-[0.7rem] font-normal normal-case tracking-normal text-muted-foreground">
                   Nothing is scheduled to run past {"8:00 pm"}, so starting late
                   can leave part of the day's time unplanned. Sessions are spaced
-                  equally with a short gap between them.
+                  out through the day with a 10-minute break between them, and
+                  lunch and dinner are left free automatically.
                 </span>
               </div>
             </div>
@@ -1021,8 +1025,8 @@ export default function TimetableBuilder() {
                     : step === 4
                       ? `${settings.length} subject${settings.length === 1 ? "" : "s"} · ${methodLabel} · ${
                           studyMethod === "papers"
-                            ? "60 min papers"
-                            : `${sessionMinutes} min sessions`
+                        ? "60 min papers"
+                        : `${sessionMinutes} min max`
                         }`
                       : `${STEPS[step - 1]!.title}${
                           settings.length > 0

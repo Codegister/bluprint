@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { SkeletonChat } from "@/components/Skeletons";
 import { Mascot } from "@/components/Mascot";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { Check, Loader2, Sparkles } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -237,9 +238,9 @@ export default function TutorPage() {
           className="gizmo-scroll max-h-[70vh] min-h-[320px] overflow-y-auto px-4 py-5 sm:px-5"
         >
           {messages === undefined ? (
-            <div className="flex h-56 items-center justify-center">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            </div>
+            // Bubble-shaped placeholders keep the transcript's height steady
+            // while the history arrives, instead of a centred spinner.
+            <SkeletonChat />
           ) : empty ? (
             <motion.div
               className="flex flex-col items-center pb-2 text-center"

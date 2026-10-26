@@ -129,18 +129,19 @@
    that paint with semantic colours (bg-card, text-brand-ink, border-border,
    text-muted-foreground...) switch without knowing about the theme.
 
-   Contrast is deliberate: body copy on the page sits around 16:1, muted copy
-   around 9:1, borders stay visible at ~2.5:1, and accent text is lifted rather
-   than dimmed. That is what makes it "high contrast" rather than merely dark.
+   Contrast is deliberate and generous: body copy on a card sits above 16:1,
+   muted copy stays above 8:1, borders are visible rather than a faint hint,
+   and accent text is lifted rather than dimmed. That is what makes it "high
+   contrast" rather than merely dark.
    --------------------------------------------------------------------------- */
 .dark {
   color-scheme: dark;
 
-  --brand-ink: #f4f6fb;
-  --brand-cream: #07080b;
-  --brand-panel: #1b2029;
-  --brand-panel-2: #12151c;
-  --brand-void: #07080b;
+  --brand-ink: #f8fafc;
+  --brand-cream: #050608;
+  --brand-panel: #1c2230;
+  --brand-panel-2: #10141c;
+  --brand-void: #050608;
 
   /* Accents are brightened so they survive on a near-black page. */
   --brand-pink: #c3b2ff;
@@ -156,37 +157,37 @@
   --brand-butter: #3a2a08;
   --brand-blush: #3a1526;
 
-  --background: #07080b;
-  --foreground: #f4f6fb;
-  --card: #12151c;
-  --card-foreground: #f4f6fb;
-  --popover: #161a22;
-  --popover-foreground: #f4f6fb;
-  --primary: #f1f4f9;
-  --primary-foreground: #07080b;
-  --secondary: #1b2029;
-  --secondary-foreground: #f4f6fb;
-  --muted: #1b2029;
-  --muted-foreground: #b7c0d0;
-  --accent: #241c4a;
-  --accent-foreground: #d8ccff;
+  --background: #050608;
+  --foreground: #f8fafc;
+  --card: #10141c;
+  --card-foreground: #f8fafc;
+  --popover: #161b25;
+  --popover-foreground: #f8fafc;
+  --primary: #f4f7ff;
+  --primary-foreground: #050608;
+  --secondary: #1c2230;
+  --secondary-foreground: #f8fafc;
+  --muted: #1c2230;
+  --muted-foreground: #cbd5e4;
+  --accent: #2a2159;
+  --accent-foreground: #e2d9ff;
   --destructive: #ff6b7a;
-  --border: #3b4354;
-  --input: #4a5364;
-  --ring: #c3b2ff;
+  --border: #4b566c;
+  --input: #5c6880;
+  --ring: #d8ccff;
   --chart-1: #a78bfa;
   --chart-2: #6fe3ac;
   --chart-3: #ffc45c;
   --chart-4: #8fc2ff;
   --chart-5: #ff9da8;
-  --sidebar: #0b0d12;
-  --sidebar-foreground: #f4f6fb;
-  --sidebar-primary: #f1f4f9;
-  --sidebar-primary-foreground: #07080b;
-  --sidebar-accent: #1b2029;
-  --sidebar-accent-foreground: #f4f6fb;
-  --sidebar-border: #2b3140;
-  --sidebar-ring: #c3b2ff;
+  --sidebar: #080a0f;
+  --sidebar-foreground: #f8fafc;
+  --sidebar-primary: #f4f7ff;
+  --sidebar-primary-foreground: #050608;
+  --sidebar-accent: #1c2230;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #3a4457;
+  --sidebar-ring: #d8ccff;
 }
 
 @layer base {
@@ -849,7 +850,12 @@
   border-color: #6e2a34;
 }
 
-.dark :is([class~="border-[#F0DCB8]"], [class~="border-[#EBD9B4]"]) {
+.dark
+  :is(
+    [class~="border-[#F0DCB8]"],
+    [class~="border-[#EBD9B4]"],
+    [class~="border-[#EBD6AB]"]
+  ) {
   border-color: #6b4e1c;
 }
 
@@ -857,9 +863,65 @@
   border-color: #2c4b78;
 }
 
+/*
+   Opacity modifiers on ink text are the one place a "high contrast" theme can
+   quietly fail: 45% of near-white on a near-black card is a grey that reads as
+   disabled. Each group is lifted to the nearest accessible step, so hierarchy
+   is kept without sacrificing legibility. Applies to the .dark theme only.
+*/
+.dark
+  :is(
+    [class~="text-brand-ink/20"],
+    [class~="text-brand-ink/30"],
+    [class~="text-brand-ink/35"],
+    [class~="text-brand-ink/40"]
+  ) {
+  color: #96a2b8;
+}
+
+.dark
+  :is(
+    [class~="text-brand-ink/45"],
+    [class~="text-brand-ink/50"],
+    [class~="text-brand-ink/55"],
+    [class~="text-brand-ink/60"],
+    [class~="text-brand-ink/65"]
+  ) {
+  color: #bac5d8;
+}
+
+.dark
+  :is(
+    [class~="text-brand-ink/70"],
+    [class~="text-brand-ink/75"],
+    [class~="text-brand-ink/80"],
+    [class~="text-brand-ink/85"]
+  ) {
+  color: #e2e9f5;
+}
+
+.dark [class~="text-muted-foreground/60"] {
+  color: #a9b4c7;
+}
+
+.dark [class~="text-muted-foreground/80"] {
+  color: #dbe3f0;
+}
+
+/* Hairlines at 60-70% opacity are the default dividers; on the dark page they
+   need a little more weight to be seen at all. */
+.dark
+  :is(
+    [class~="border-border/60"],
+    [class~="border-border/70"],
+    [class~="border-border/80"]
+  ) {
+  border-color: #3d4759;
+}
+
 /* Focus rings keep their hue but gain brightness. */
 .dark [class~="ring-[#7C5CFF]"] {
-  --tw-ring-color: #c3b2ff;
+  --tw-ring-color: #d8ccff;
 }
 
 /* Hover states that would otherwise flash a light or near-black fill. */

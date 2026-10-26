@@ -1,8 +1,11 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Bluprint's study buddy: a small violet axolotl drawn in SVG so it stays
- * crisp at any size and needs no image assets. Purely decorative.
+ * Bluprint's study buddy, "Blu": a calm, rounded character drawn in SVG so it
+ * stays crisp at any size and needs no image assets. Built from a handful of
+ * clean shapes (blob, big friendly eyes, tiny arms) rather than a detailed
+ * creature, which reads better at 90px in a chat as well as 200px on a card.
+ * Purely decorative.
  */
 export function Mascot({
   size = 200,
@@ -22,110 +25,89 @@ export function Mascot({
       xmlns="http://www.w3.org/2000/svg"
       className={cn("shrink-0", float && "mascot-float", className)}
       role="img"
-      aria-label="Bluprint's axolotl study buddy"
+      aria-label="Blu, Bluprint's study buddy"
     >
       <defs>
-        <linearGradient id="blu-body" x1="74" y1="60" x2="176" y2="188">
+        <linearGradient id="blu-body" x1="56" y1="36" x2="186" y2="206">
           <stop offset="0" stopColor="#A78BFA" />
-          <stop offset="0.55" stopColor="#8B5CF6" />
-          <stop offset="1" stopColor="#6D5AF0" />
+          <stop offset="0.5" stopColor="#7C5CFF" />
+          <stop offset="1" stopColor="#5B3DF5" />
         </linearGradient>
-        <linearGradient id="blu-fin" x1="20" y1="120" x2="96" y2="176">
-          <stop offset="0" stopColor="#C4B5FD" />
-          <stop offset="1" stopColor="#8B5CF6" />
+        <linearGradient id="blu-foot" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#5B3DF5" />
+          <stop offset="1" stopColor="#4526C9" />
         </linearGradient>
-        <linearGradient id="blu-gill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#C4B5FD" />
-          <stop offset="1" stopColor="#A78BFA" />
+        <linearGradient id="blu-bookmark" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#FFD37A" />
+          <stop offset="1" stopColor="#F5A524" />
         </linearGradient>
       </defs>
 
       {/* soft ground shadow */}
-      <ellipse cx="122" cy="212" rx="52" ry="9" fill="#16181F" opacity="0.07" />
+      <ellipse cx="120" cy="214" rx="52" ry="9" fill="#16181F" opacity="0.08" />
 
-      {/* tail fin sweeping out behind the body */}
+      {/* bookmark tuft: a quiet nod to a page marker */}
       <path
-        d="M96 150c-22 12-48 6-62 26 18 12 40 16 56 8 10-5 12-24 6-34Z"
-        fill="url(#blu-fin)"
-        opacity="0.92"
+        d="M152 30h26a8 8 0 0 1 8 8v46l-21-14-21 14V38a8 8 0 0 1 8-8Z"
+        fill="url(#blu-bookmark)"
+        transform="rotate(12 168 58)"
       />
 
-      {/* gills: three fronds each side, behind the head */}
-      <g
-        stroke="url(#blu-gill)"
-        strokeWidth="9"
-        strokeLinecap="round"
-        opacity="0.95"
-      >
-        <path d="M74 78 46 58" />
-        <path d="M72 92 40 86" />
-        <path d="M76 104 48 112" />
-        <path d="M166 78 194 58" />
-        <path d="M168 92 200 86" />
-        <path d="M164 104 192 112" />
-      </g>
+      {/* little feet, tucked under the body */}
+      <ellipse cx="98" cy="208" rx="17" ry="10" fill="url(#blu-foot)" />
+      <ellipse cx="142" cy="208" rx="17" ry="10" fill="url(#blu-foot)" />
 
-      {/* body */}
+      {/* body: a tall rounded blob, wider at the base */}
       <path
-        d="M120 46c33 0 58 23 58 55 0 38-26 66-58 66s-58-28-58-66c0-32 25-55 58-55Z"
+        d="M120 32c40 0 68 26 68 66v50c0 38-30 62-68 62s-68-24-68-62V98c0-40 28-66 68-66Z"
         fill="url(#blu-body)"
       />
 
-      {/* belly highlight */}
+      {/* soft sheen across the top-left of the body */}
       <path
-        d="M120 148c-18 0-32-12-35-26 12 9 25 12 35 12s23-3 35-12c-3 14-17 26-35 26Z"
-        fill="#C4B5FD"
-        opacity="0.45"
-      />
-
-      {/* closed, content eyes */}
-      <path
-        d="M96 104c4-6 12-6 16 0"
-        stroke="#241650"
-        strokeWidth="4.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M130 104c4-6 12-6 16 0"
-        stroke="#241650"
-        strokeWidth="4.5"
-        strokeLinecap="round"
-      />
-
-      {/* smile + cheeks */}
-      <path
-        d="M112 122c4 5 12 5 16 0"
-        stroke="#241650"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-      <ellipse cx="84" cy="118" rx="8" ry="5" fill="#C4B5FD" opacity="0.7" />
-      <ellipse cx="156" cy="118" rx="8" ry="5" fill="#C4B5FD" opacity="0.7" />
-
-      {/* little arms */}
-      <path
-        d="M66 138c-8 6-10 14-6 20"
-        stroke="#8B5CF6"
-        strokeWidth="10"
-        strokeLinecap="round"
-      />
-      <path
-        d="M174 138c8 6 10 14 6 20"
-        stroke="#7C5CFF"
-        strokeWidth="10"
-        strokeLinecap="round"
-      />
-
-      {/* highlight */}
-      <ellipse
-        cx="100"
-        cy="70"
-        rx="12"
-        ry="8"
+        d="M120 32c-40 0-68 26-68 66 0-4 6-46 50-52 12-2 18-8 18-14Z"
         fill="#FFFFFF"
-        opacity="0.28"
-        transform="rotate(-18 100 70)"
+        opacity="0.18"
       />
+
+      {/* arms */}
+      <path
+        d="M54 138c-9 7-12 17-8 27"
+        stroke="#6B4BFF"
+        strokeWidth="13"
+        strokeLinecap="round"
+      />
+      <path
+        d="M186 138c9 7 12 17 8 27"
+        stroke="#6B4BFF"
+        strokeWidth="13"
+        strokeLinecap="round"
+      />
+
+      {/* eyes: big, bright and readable at small sizes */}
+      <ellipse cx="98" cy="106" rx="19" ry="21" fill="#FFFFFF" />
+      <ellipse cx="142" cy="106" rx="19" ry="21" fill="#FFFFFF" />
+      <circle cx="101" cy="110" r="9.5" fill="#1B1440" />
+      <circle cx="145" cy="110" r="9.5" fill="#1B1440" />
+      <circle cx="105" cy="104" r="3.4" fill="#FFFFFF" />
+      <circle cx="149" cy="104" r="3.4" fill="#FFFFFF" />
+
+      {/* cheeks and smile */}
+      <ellipse cx="70" cy="138" rx="11" ry="6.5" fill="#FFA9C4" opacity="0.6" />
+      <ellipse cx="170" cy="138" rx="11" ry="6.5" fill="#FFA9C4" opacity="0.6" />
+      <path
+        d="M105 144c9 10 21 10 30 0"
+        stroke="#1B1440"
+        strokeWidth="5"
+        strokeLinecap="round"
+      />
+
+      {/* sparkle: the little "got it" moment */}
+      <path
+        d="M196 84l4 10 10 4-10 4-4 10-4-10-10-4 10-4 4-10Z"
+        fill="#FFE6A3"
+      />
+      <circle cx="188" cy="120" r="3.5" fill="#FFE6A3" opacity="0.8" />
     </svg>
   );
 }

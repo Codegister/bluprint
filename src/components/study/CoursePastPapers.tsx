@@ -1,4 +1,5 @@
 import { EASE, Meter, reveal } from "@/components/motion/Motion";
+import { SkeletonRows } from "@/components/Skeletons";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -196,8 +197,8 @@ export function CoursePastPapers({
       </div>
 
       {papers === undefined ? (
-        <div className="mt-5 flex items-center justify-center rounded-2xl border border-dashed border-border bg-background px-4 py-8">
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <div className="mt-5 overflow-hidden rounded-2xl border border-dashed border-border bg-background">
+          <SkeletonRows rows={3} />
         </div>
       ) : list.length === 0 ? (
         <motion.div

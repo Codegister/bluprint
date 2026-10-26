@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { CreateSetDialog } from "@/components/CreateSetDialog";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
+import { SkeletonChat, SkeletonRows } from "@/components/Skeletons";
 import {
   Counter,
   EASE,
@@ -11,6 +12,7 @@ import {
 import { TutorChat } from "@/components/study/TutorChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { qualificationLabel } from "@/lib/examBoards";
@@ -475,8 +477,12 @@ export default function Dashboard() {
         </motion.p>
 
         {courseRows === undefined ? (
-          <div className="mt-3 flex min-h-[120px] items-center justify-center rounded-3xl border border-border bg-white">
-            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          <div className="mt-3 space-y-3 rounded-3xl border border-border bg-white p-4">
+            <div className="flex gap-2" aria-hidden="true">
+              <Skeleton className="h-7 w-24 rounded-full" />
+              <Skeleton className="h-7 w-20 rounded-full" />
+            </div>
+            <SkeletonChat bubbles={2} />
           </div>
         ) : !tutorCourse ? (
           <div className="mt-3 rounded-3xl border border-dashed border-border bg-white px-5 py-6">
@@ -559,8 +565,29 @@ export default function Dashboard() {
 
         <div className="mt-3 overflow-hidden rounded-3xl border border-border bg-white">
           {courseRows === undefined ? (
-            <div className="flex min-h-[120px] items-center justify-center">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            <div role="status" aria-busy="true" aria-live="polite">
+              <span className="sr-only">Loading your courses</span>
+              {[0, 1, 2].map((index) => (
+                <div
+                  key={index}
+                  aria-hidden="true"
+                  className="grid grid-cols-1 items-center gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_170px_160px_16px]"
+                >
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-9 shrink-0 rounded-xl" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton className="h-3 w-1/3" />
+                      <Skeleton className="h-2.5 w-1/2" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-2.5 w-24" />
+                    <Skeleton className="h-1.5 w-full max-w-[130px] rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="size-4 rounded" />
+                </div>
+              ))}
             </div>
           ) : courseRows.length === 0 ? (
             <p className="px-5 py-6 text-[0.82rem] leading-relaxed text-muted-foreground">
@@ -628,8 +655,9 @@ export default function Dashboard() {
 
         <div className="mt-3 overflow-hidden rounded-3xl border border-border bg-white">
           {sets === undefined ? (
-            <div className="flex min-h-[130px] items-center justify-center">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            <div role="status" aria-busy="true" aria-live="polite">
+              <span className="sr-only">Loading your study sets</span>
+              <SkeletonRows rows={5} withAvatar />
             </div>
           ) : sets.length === 0 ? (
             <div className="flex flex-col items-center gap-3 px-5 py-7 text-center sm:flex-row sm:text-left">

@@ -18,6 +18,12 @@ import { requireUserId } from "./lib/requireUser";
  * means missed sessions are carried into the next day the student actually
  * opens rather than being buried in a week grid.
  *
+ * A day is not one subject repeated: the plan rotates through the chosen
+ * courses, and each topic is given the time its own material needs — a short
+ * topic gets 20 minutes, a full section gets the student's maximum. Blocks are
+ * spread across the day with a 10-minute break between them, and lunch and
+ * dinner are kept free automatically.
+ *
  * Missed work is caught up over several days, never in one block: a day takes
  * at most two carried sessions, chosen oldest first. The rest stay in the
  * backlog for the following days.
@@ -40,15 +46,36 @@ const STUDY_METHODS = ["topics", "papers", "mixed"] as const;
 type StudyMethod = (typeof STUDY_METHODS)[number];
 /** A past paper is one hour, so every paper block is 60 minutes. */
 const PAPER_MINUTES = 60;
+/**
+ * Shape of a generated day. Older plans (no version) were filled with uniform
+ * session lengths, so their saved days are rebuilt once when next opened.
+ */
+const PLANNER_VERSION = 2;
 
 /**
  * Revision stops at 8pm. Evenings after that are for the rest of a student's
  * life, and a plan that runs to midnight is one nobody follows.
  */
 const LATEST_END_MINUTES = 20 * 60;
-/** A short breather between sessions, and the shortest block worth planning. */
+/** Every session is followed by a 10-minute break, so nothing runs together. */
 const GAP_MINUTES = 10;
 const MIN_BLOCK_MINUTES = 10;
+/**
+ * The shortest topic session. A topic with a couple of key points does not
+ * need a full session, so it takes 20 minutes and the time it saves goes to
+ * another topic.
+ */
+const MIN_TOPIC_MINUTES = 20;
+/**
+ * Meal times are kept free without being asked. They are only removed from the
+ * study window, so a plan that starts after dinner is unaffected.
+ */
+const MEALS = [
+  { label: "Lunch", startMinutes: 12 * 60 + 30, endMinutes: 13 * 60 + 15 },
+  { label: "Dinner", startMinutes: 18 * 60, endMinutes: 18 * 60 + 45 },
+] as const;
+/** The largest gap the spreader will leave between two sessions in one day. */
+const MAX_SPREAD_GAP = 120;
 /** A guard against a plan that would put an implausible number of sessions in
  *  one day (for example, a 25-minute session in a four-hour day off). */
 const MAX_SESSIONS_PER_DAY = 14;
@@ -77,6 +104,9 @@ type TopicEntry = {
   unit: string;
   topicId: string;
   topic: string;
+  /** Used to work out how long this topic needs. */
+  summary: string;
+  keyPoints: string[];
 };
 
 type ScheduledPaper = { paperId?: Id<"pastPapers">; title: string };
@@ -355,9 +385,68 @@ function freeWindows(
 }
 
 /**
+ * Meal windows that fall inside this day's study window. A meal that is
+ * already blocked out by the student is not listed twice, and a meal only
+ * counts when there is real study time on both sides of it - otherwise an
+ * 18:00 start would lose its whole evening to an automatic dinner.
+ */
+function mealsForDay(start: number, blocked: BlockedPeriod[]) {
+  return MEALS.filter(
+    (meal) =>
+      meal.startMinutes >= start + MIN_TOPIC_MINUTES &&
+      meal.endMinutes <= LATEST_END_MINUTES - MIN_TOPIC_MINUTES,
+  )
+    .filter(
+      (meal) =>
+        !blocked.some(
+          (period) =>
+            period.startMinutes < meal.endMinutes &&
+            period.endMinutes > meal.startMinutes,
+        ),
+    )
+    .map((meal) => ({ ...meal }));
+}
+
+/**
+ * Picks the best placement for a day: spread out with meals kept free if that
+ * fits, otherwise compact while still keeping meals free, and only as a last
+ * resort compact with a meal used. Meals give way before work is dropped.
+ */
+function placeDay(
+  blocks: Array<{ minutes: number }>,
+  windows: Window[],
+  windowsWithoutMeals: Window[],
+): Array<number | null> {
+  const spread = placeSpread(blocks, windows);
+  if (!spread.some((start) => start === null)) return spread;
+
+  const compact = placeBlocks(blocks, windows);
+  if (!compact.some((start) => start === null)) return compact;
+
+  const withoutMeals = placeBlocks(blocks, windowsWithoutMeals);
+  const placed = (starts: Array<number | null>) =>
+    starts.filter((start) => start !== null).length;
+  return placed(withoutMeals) > placed(compact) ? withoutMeals : compact;
+}
+
+/** Earliest slot at or after `from` that can hold `minutes`, or null. */
+function fitFrom(
+  windows: Window[],
+  from: number,
+  minutes: number,
+): number | null {
+  for (const window of windows) {
+    const start = Math.max(from, window.start);
+    if (start + minutes <= window.end) return start;
+  }
+  return null;
+}
+
+/**
  * Places sessions into the free windows in order, keeping a small gap between
  * them. Returns null when a block no longer fits, which is how a blocked-out
- * evening silently reduces the day instead of pushing sessions past 8pm.
+ * evening silently reduces the day instead of pushing sessions past 8pm. Used
+ * as the fallback when a day is too full to spread out.
  */
 function placeBlocks(
   blocks: Array<{ minutes: number }>,
@@ -381,15 +470,68 @@ function placeBlocks(
   });
 }
 
+/**
+ * Places sessions across the whole day instead of stacking them at the start.
+ * The spare time is shared evenly between sessions as extra breathing room
+ * (on top of the 10-minute break), so a four-hour day off does not put every
+ * topic in one morning block. Meal windows are part of the free windows, so a
+ * session never lands on lunch or dinner.
+ *
+ * If spreading means a block cannot fit, the day falls back to compact
+ * placement so no work is lost.
+ */
+function placeSpread(
+  blocks: Array<{ minutes: number }>,
+  windows: Window[],
+): Array<number | null> {
+  if (blocks.length === 0) return [];
+  const lastEnd = windows[windows.length - 1]?.end ?? 0;
+  const totalMinutes = blocks.reduce((sum, block) => sum + block.minutes, 0);
+  const totalBreaks = Math.max(0, blocks.length - 1) * GAP_MINUTES;
+  const free = windows.reduce((sum, window) => sum + (window.end - window.start), 0);
+  // A day with no spare room cannot be spread; pack it instead of hunting for
+  // gaps that do not exist.
+  if (free <= totalMinutes + totalBreaks) return placeBlocks(blocks, windows);
+
+  const starts: Array<number | null> = [];
+  let clock = windows[0]?.start ?? 0;
+
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!;
+    const start = fitFrom(windows, clock, block.minutes);
+    starts.push(start);
+    if (start === null) continue;
+
+    const end = start + block.minutes;
+    const rest = blocks.slice(index + 1);
+    const restMinutes = rest.reduce((sum, entry) => sum + entry.minutes, 0);
+    const restBreaks = rest.length * GAP_MINUTES;
+    // Whatever the remaining blocks do not need is shared out as extra
+    // breathing room. Meal time already counts: a session pushed past lunch
+    // has had its long break, so it does not get another one on top.
+    const spare = Math.max(0, lastEnd - end - restMinutes - restBreaks);
+    const gap =
+      GAP_MINUTES +
+      (rest.length > 0
+        ? Math.min(MAX_SPREAD_GAP, Math.floor(spare / (rest.length + 1)))
+        : 0);
+    clock = end + gap;
+  }
+
+  if (starts.some((start) => start === null)) {
+    return placeBlocks(blocks, windows);
+  }
+  return starts;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Session shapes                                                             */
 /* -------------------------------------------------------------------------- */
 
 /**
- * One day's study blocks. Whole sessions fill the budget, and a short final
- * block takes whatever is left when the budget does not divide exactly — a
- * two-hour evening of 25-minute sessions is four sessions plus twenty minutes,
- * not the 100 minutes that used to be scheduled.
+ * Conservative block count for the whole plan, used only to decide whether
+ * revision needs to start earlier. It assumes every topic fills a whole
+ * session, so it never promises more capacity than a plan really has.
  */
 function studyBlocks(budgetMinutes: number, sessionMinutes: number): number[] {
   const blocks: number[] = [];
@@ -406,15 +548,8 @@ function studyBlocks(budgetMinutes: number, sessionMinutes: number): number[] {
 
 type StudyBlock = { kind: "topic" | "paper"; minutes: number };
 
-/**
- * One day's blocks for the chosen study method.
- *
- * Past papers are whole one-hour sessions, so a paper day holds as many hours
- * as the budget allows. The mixed route alternates a paper with the student's
- * normal session length, and a leftover too short for a paper is still offered
- * to a topic block rather than left unplanned.
- */
-function dayBlocks(
+/** Estimate of one day's block count for the chosen study method. */
+function estimatedBlocks(
   method: StudyMethod,
   budgetMinutes: number,
   sessionMinutes: number,
@@ -461,6 +596,112 @@ function dayBlocks(
   return blocks;
 }
 
+/**
+ * How long one topic needs, judged by the material it actually covers: a topic
+ * with two key points takes 20 minutes, a full section takes the student's
+ * maximum. Lengths are rounded to five minutes so the timetable reads cleanly.
+ */
+function topicMinutes(topic: TopicEntry, maxMinutes: number): number {
+  const points = topic.keyPoints.length;
+  const words = topic.summary.trim()
+    ? topic.summary.trim().split(/\s+/).length
+    : 0;
+  const estimate = 15 + 5 * Math.round((points * 4 + words / 20) / 5);
+  const capped = Math.min(maxMinutes, Math.max(MIN_TOPIC_MINUTES, estimate));
+  return Math.max(MIN_TOPIC_MINUTES, Math.round(capped / 5) * 5);
+}
+
+/** One planned block of work, with its topic or paper already chosen. */
+type DayItem = {
+  kind: "topic" | "paper";
+  course: CoursePlan;
+  minutes: number;
+  paperLabel: string;
+  topic?: TopicEntry;
+  paper?: ScheduledPaper;
+  paperIndex?: number;
+};
+
+/**
+ * Builds one day's list of work.
+ *
+ * The day rotates through the chosen courses, so consecutive sessions are not
+ * the same subject, and every topic is given the time its own content needs.
+ * A paper route works through saved papers a whole hour at a time, and the
+ * mixed route alternates the two.
+ */
+function planDayItems(
+  courses: CoursePlan[],
+  method: StudyMethod,
+  budgetMinutes: number,
+  maxTopicMinutes: number,
+  dayIndex: number,
+  startCursor: number,
+  topicCount: Map<string, number>,
+  paperCount: Map<string, number>,
+): DayItem[] {
+  const items: DayItem[] = [];
+  if (courses.length === 0 || budgetMinutes < MIN_TOPIC_MINUTES) return items;
+
+  let cursor = startCursor;
+  let remaining = budgetMinutes;
+  let wantPaper =
+    method === "papers" || (method === "mixed" && dayIndex % 2 === 0);
+
+  while (remaining > 0 && items.length < MAX_SESSIONS_PER_DAY) {
+    if (wantPaper) {
+      if (remaining < PAPER_MINUTES) {
+        // A paper is a whole hour. Anything shorter still goes to a topic.
+        if (method === "papers") break;
+        wantPaper = false;
+        continue;
+      }
+      const picked = pickCourse(courses, cursor, "paper");
+      if (!picked) break;
+      const course = picked.course;
+      const index = paperCount.get(course.courseId) ?? 0;
+      const saved = course.papers[index % course.papers.length]!;
+      paperCount.set(course.courseId, index + 1);
+      items.push({
+        kind: "paper",
+        course,
+        minutes: PAPER_MINUTES,
+        paper: saved,
+        paperIndex: index,
+        paperLabel: resolvePaperLabel(course.paper, index),
+      });
+      cursor = picked.next;
+      if (method === "mixed") wantPaper = false;
+      remaining -= PAPER_MINUTES;
+      continue;
+    }
+
+    if (remaining < MIN_TOPIC_MINUTES) break;
+    const picked = pickCourse(courses, cursor, "topic");
+    if (!picked) break;
+    const course = picked.course;
+    const index = topicCount.get(course.courseId) ?? 0;
+    const topic = course.topics[index % course.topics.length]!;
+    topicCount.set(course.courseId, index + 1);
+    const minutes = Math.min(topicMinutes(topic, maxTopicMinutes), remaining);
+    items.push({
+      kind: "topic",
+      course,
+      minutes,
+      topic,
+      paperLabel: resolvePaperLabel(
+        course.paper,
+        paperCount.get(course.courseId) ?? 0,
+      ),
+    });
+    cursor = picked.next;
+    if (method === "mixed") wantPaper = true;
+    remaining -= minutes;
+  }
+
+  return items;
+}
+
 /** Pathway topics for one course, flattened with their unit. */
 function topicsFor(course: Doc<"courses">): TopicEntry[] {
   return (course.pathway?.units ?? []).flatMap((unit) =>
@@ -470,6 +711,8 @@ function topicsFor(course: Doc<"courses">): TopicEntry[] {
       unit: unit.title,
       topicId: topic.id,
       topic: topic.title,
+      summary: topic.summary,
+      keyPoints: topic.keyPoints,
     })),
   );
 }
@@ -662,7 +905,10 @@ async function generateDay(
   const blocked: BlockedPeriod[] = (plan.blockedPeriods ?? []).filter(
     (period) => period.date === date,
   );
-  const windows = freeWindows(start, LATEST_END_MINUTES, [
+  // Lunch and dinner are part of the free-window calculation, so the day is
+  // planned around them rather than straight through them.
+  const meals = mealsForDay(start, blocked);
+  const fixedPeriods = [
     ...blocked.map((period) => ({
       start: period.startMinutes,
       end: period.endMinutes,
@@ -670,6 +916,18 @@ async function generateDay(
     ...kept.map((session) => ({
       start: session.startMinutes,
       end: session.startMinutes + session.minutes,
+    })),
+  ];
+  const windowsWithoutMeals = freeWindows(
+    start,
+    LATEST_END_MINUTES,
+    fixedPeriods,
+  );
+  const windows = freeWindows(start, LATEST_END_MINUTES, [
+    ...fixedPeriods,
+    ...meals.map((meal) => ({
+      start: meal.startMinutes,
+      end: meal.endMinutes,
     })),
   ]);
 
@@ -738,17 +996,23 @@ async function generateDay(
     return { generated: false, reason: "no-courses" };
   }
 
-  const blocks = dayBlocks(
+  // Each block is a whole topic (or paper), so the day can hold several
+  // subjects and a mix of short and long topics.
+  const items = planDayItems(
+    courses,
     settings.method,
     remainingBudget,
     settings.sessionMinutes,
     revisionDayIndex(date, plan),
+    totalSessions % courses.length,
+    topicCount,
+    paperCount,
   );
 
   type Pending =
     | {
         kind: "new";
-        block: StudyBlock;
+        item: DayItem;
       }
     | {
         kind: "carry";
@@ -783,22 +1047,24 @@ async function generateDay(
   );
   const carried = backlog.slice(0, carryLimit);
 
-  const pending: Pending[] = blocks.map((block) => ({ kind: "new", block }));
+  const pending: Pending[] = items.map((item) => ({ kind: "new", item }));
   for (const origin of carried) {
     pending.push({ kind: "carry", origin });
   }
 
-  const starts = placeBlocks(
-    pending.map((item) =>
-      item.kind === "new"
-        ? { minutes: item.block.minutes }
-        : { minutes: item.origin.session.minutes },
+  // Spread the day out rather than stacking every block at the start. Meals
+  // and blocked time are already missing from `windows`.
+  const starts = placeDay(
+    pending.map((entry) =>
+      entry.kind === "new"
+        ? { minutes: entry.item.minutes }
+        : { minutes: entry.origin.session.minutes },
     ),
     windows,
+    windowsWithoutMeals,
   );
 
   const sessions: PlanSession[] = [...kept];
-  let cursor = courses.length > 0 ? totalSessions % courses.length : 0;
   const carriedOriginIds = new Map<string, Set<string>>();
 
   for (let index = 0; index < pending.length; index += 1) {
@@ -831,52 +1097,38 @@ async function generateDay(
       continue;
     }
 
-    if (item.block.kind === "paper") {
-      const chosen = pickCourse(courses, cursor, "paper");
-      if (!chosen) break;
-      const course = chosen.course;
-      const paperIndex = paperCount.get(course.courseId) ?? 0;
-      const saved = course.papers[paperIndex % course.papers.length]!;
-      paperCount.set(course.courseId, paperIndex + 1);
+    const work = item.item;
+    if (work.kind === "paper") {
+      const paperIndex = work.paperIndex ?? 0;
       sessions.push({
-        id: `${date}:${index}:paper:${course.courseId}`,
-        courseId: course.courseId,
-        course: course.subject,
+        id: `${date}:${index}:paper:${work.course.courseId}`,
+        courseId: work.course.courseId,
+        course: work.course.subject,
         unit: "Past paper",
-        topicId: `paper:${course.courseId}:${paperIndex}`,
-        topic: saved.title,
-        minutes: item.block.minutes,
-        paper: resolvePaperLabel(course.paper, paperIndex),
+        topicId: `paper:${work.course.courseId}:${paperIndex}`,
+        topic: work.paper?.title ?? "Past paper practice",
+        minutes: work.minutes,
+        paper: work.paperLabel,
         kind: "paper",
-        ...(saved.paperId ? { paperId: saved.paperId } : {}),
+        ...(work.paper?.paperId ? { paperId: work.paper.paperId } : {}),
         startMinutes,
       });
-      cursor = chosen.next;
       continue;
     }
 
-    const chosen = pickCourse(courses, cursor, "topic");
-    if (!chosen) break;
-    const course = chosen.course;
-    const topicIndex = topicCount.get(course.courseId) ?? 0;
-    const topic = course.topics[topicIndex % course.topics.length]!;
-    topicCount.set(course.courseId, topicIndex + 1);
+    const topic = work.topic!;
     sessions.push({
-      id: `${date}:${index}:topic:${course.courseId}`,
+      id: `${date}:${index}:topic:${work.course.courseId}`,
       courseId: topic.courseId,
       course: topic.course,
       unit: topic.unit,
       topicId: topic.topicId,
       topic: topic.topic,
-      minutes: item.block.minutes,
-      paper: resolvePaperLabel(
-        course.paper,
-        paperCount.get(course.courseId) ?? 0,
-      ),
+      minutes: work.minutes,
+      paper: work.paperLabel,
       kind: "topic",
       startMinutes,
     });
-    cursor = chosen.next;
   }
 
   const now = Date.now();
@@ -995,6 +1247,7 @@ export const getDayView = query({
 
     const settings = planSettings(plan);
     const off = isDayOff(parseDateKey(date));
+    const start = off ? settings.dayOffStartMinutes : settings.startMinutes;
 
     return {
       date,
@@ -1029,6 +1282,16 @@ export const getDayView = query({
         ),
       })),
       blocked,
+      // Meal times the planner kept free. Only meals with no session over them
+      // are listed, so the day never claims a break that was actually used.
+      meals: mealsForDay(start, blocked).filter(
+        (meal) =>
+          !(day?.sessions ?? []).some(
+            (session) =>
+              session.startMinutes < meal.endMinutes &&
+              session.startMinutes + session.minutes > meal.startMinutes,
+          ),
+      ),
       missed,
       reason,
       isDayOff: off,
@@ -1071,6 +1334,10 @@ export const ensureDay = mutation({
           new Date(`${today}T00:00:00.000Z`).getTime(),
     );
 
+    // A plan built before the planner changed shape has days stored with the
+    // old layout. Rebuild them once, as they are opened, then stamp the plan.
+    const outdatedPlanner = (plan.plannerVersion ?? 1) < PLANNER_VERSION;
+
     let cursor = parseDateKey(
       plan.startDate > today ? plan.startDate : today,
     );
@@ -1084,14 +1351,23 @@ export const ensureDay = mutation({
           userId,
           plan,
           key,
-          key === date
-            ? (args.force ?? false) || (key === today && refreshToday)
-            : key === today && refreshToday,
+          outdatedPlanner ||
+            (key === date
+              ? (args.force ?? false) || (key === today && refreshToday)
+              : key === today && refreshToday),
         );
         if (key === date) result = generated;
       }
       cursor = addDays(cursor, 1);
     }
+
+    if (outdatedPlanner) {
+      await ctx.db.patch(plan._id, {
+        plannerVersion: PLANNER_VERSION,
+        updatedAt: Date.now(),
+      });
+    }
+
     if (result) return result;
     return await generateDay(ctx, userId, plan, date, args.force ?? false);
   },
@@ -1409,7 +1685,7 @@ export const build = mutation({
         const start = off ? args.dayOffStartMinutes : args.startMinutes;
         if (start >= LATEST_END_MINUTES) continue;
         const budget = off ? args.dayOffMinutes : args.dailyMinutes;
-        slots += dayBlocks(
+        slots += estimatedBlocks(
           args.studyMethod,
           Math.min(budget, LATEST_END_MINUTES - start),
           args.sessionMinutes,
@@ -1457,6 +1733,7 @@ export const build = mutation({
       startDate: planStart,
       requestedStartDate: start,
       examDate: exam,
+      plannerVersion: PLANNER_VERSION,
       studyMethod: args.studyMethod,
       dailyMinutes: args.dailyMinutes,
       dayOffMinutes: args.dayOffMinutes,

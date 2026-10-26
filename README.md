@@ -158,11 +158,12 @@ earned. Four practice papers per course is the cap; remove one to build another.
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
 10. **Plan your revision** — **Build revision timetable** asks which subjects to revise,
-    which **study method** the plan uses (topics, past papers only, or a mix of both), how
-    long each topic session should be, one paper choice for the whole plan, how long a school
-    day and a day off should be, how many days a week you can work, and when your first exam
-    is. Sessions are separated by short gaps, nothing runs past 8:00 pm, and if the topics
-    will not fit the date you chose, the plan starts earlier rather than dropping topics.
+    which **study method** the plan uses (topics, past papers only, or a mix of both), the
+    **longest** a topic session can be, one paper choice for the whole plan, how long a
+    school day and a day off should be, how many days a week you can work, and when your
+    first exam is. Sessions are spread across the day with 10-minute breaks and lunch and
+    dinner kept free, nothing runs past 8:00 pm, and if the topics will not fit the date you
+    chose, the plan starts earlier rather than dropping topics.
     The schedule is saved to your account and appears in the sidebar as a colour-coded weekly
     timetable; clicking a topic session opens (or builds) its study set, and clicking a past
     paper session opens the saved paper.
@@ -484,8 +485,8 @@ same rate-limit messages as the rest of the app.
 
 - The builder is four separate pages, each with its own URL and a **Next** button:
   subjects; **one study method for the whole timetable** (topics, past papers only, or a mix
-  of both) plus a session length (25, 45, 60, or 90 minutes) and **one paper choice** for
-  every subject (Paper 1, Paper 2, or both); a school-day study budget (30, 60, 90, or 120
+  of both) plus a maximum session length (25, 45, 60, or 90 minutes) and **one paper
+  choice** for every subject (Paper 1, Paper 2, or both); a school-day study budget (30, 60, 90, or 120
   minutes), a day-off study budget (1, 1½, 2, 3, or 4 hours), revision days per week (three,
   five, or seven) and a session start time; then the start date and first exam date. The
   answers stay in place while paging, and the final page builds.
@@ -502,9 +503,22 @@ same rate-limit messages as the rest of the app.
   stores the settings; it does not pre-fill a whole calendar. Each generated day continues
   from the topics used by earlier generated days, so the plan still runs in a sensible
   sequence.
-- The day is filled up to the chosen budget with interleaved subject sessions, with a short
-  ten-minute gap between them. A different subject starts each day so the same course does
-  not always occupy the first slot.
+- The day is filled up to the chosen budget with sessions that rotate between the chosen
+  subjects, so consecutive blocks are not usually the same subject and a different subject
+  starts each day. A ten-minute break follows every session.
+- **Session length follows the topic.** The builder's session length is a ceiling, not a
+  fixed block: a topic is sized from the material it covers (its key points and summary),
+  with a **20-minute minimum** for a short topic and the chosen length for a full section.
+  This is why one day can hold a 20-minute definition, a 45-minute section and a paper,
+  instead of every topic taking the same time.
+- **The day is spread out, not stacked.** Spare time in the day is shared between sessions
+  as longer gaps (up to two hours), so four hours on a day off is not four hours back to
+  back. If the day has no spare room the planner packs it tightly instead, so no work is
+  lost.
+- **Meals are kept free automatically.** Lunch (12:30–13:15) and dinner (18:00–18:45) are
+  removed from the study window when there is real study time on both sides of them, and
+  the timetable screen shows them as breaks. If keeping a meal free would drop a session,
+  the session wins and that meal is not listed for the day.
 - **Nothing is scheduled to end after 8:00 pm.** A session that would cross that line is
   left out. The cutoff plus any blocked periods decide how many sessions fit; the builder
   disables start times too late for your session length, and the server rejects a plan whose

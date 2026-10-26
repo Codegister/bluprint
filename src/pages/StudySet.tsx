@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { Mascot } from "@/components/Mascot";
+import { SkeletonStudySetPage } from "@/components/Skeletons";
 import { EASE, enter } from "@/components/motion/Motion";
 import { ExamPractice } from "@/components/study/ExamPractice";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
@@ -41,17 +42,6 @@ const tabItems: Array<{ value: Tab; label: string }> = [
   { value: "exam", label: "Exam" },
   { value: "tutor", label: "Tutor" },
 ];
-
-function LoadingCard() {
-  return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-[2rem] border border-border bg-card">
-      <div className="text-center">
-        <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
-        <p className="mt-3 text-[0.82rem] text-muted-foreground">Loading your set…</p>
-      </div>
-    </div>
-  );
-}
 
 function MissingCard() {
   return (
@@ -461,7 +451,7 @@ export default function StudySet() {
 
   const body = (() => {
     if (!validId) return <MissingCard />;
-    if (details === undefined) return <LoadingCard />;
+    if (details === undefined) return <SkeletonStudySetPage />;
     if (details === null) return <MissingCard />;
 
     const set = details.set;
