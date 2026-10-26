@@ -3,6 +3,10 @@ import { SkeletonCoursePage } from "@/components/Skeletons";
 import { CognitoRealPapers } from "@/components/study/CognitoRealPapers";
 import { CognitoTopicNotes } from "@/components/study/CognitoTopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
+import {
+  PathwaySectionsDialog,
+  type SectionOption,
+} from "@/components/study/PathwaySectionsDialog";
 import { TutorChat } from "@/components/study/TutorChat";
 import {
   AlertDialog,
@@ -265,6 +269,12 @@ export default function Course() {
 
   const [retrying, setRetrying] = useState(false);
   const [busyTopic, setBusyTopic] = useState<string | null>(null);
+  // The topic chosen in the "how many sections" picker, with the sections a set
+  // can cover from there. Null while the picker is closed.
+  const [sectionTarget, setSectionTarget] = useState<{
+    topicId: string;
+    options: SectionOption[];
+  } | null>(null);
   const [tickingTopic, setTickingTopic] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -288,10 +298,14 @@ export default function Course() {
   const removeTopic = useMutation(api.courses.removeTopic);
   const removeUnit = useMutation(api.courses.removeUnit);
 
+  // A set can cover several sections of the pathway, so every one of its topics
+  // points at it. The newest set wins, which is why the query is newest first.
   const setsByTopic = useMemo(() => {
     const map = new Map<string, NonNullable<typeof details>["sets"][number]>();
     for (const set of details?.sets ?? []) {
-      if (set.topicId) map.set(set.topicId, set);
+      for (const topicId of set.topicIds) {
+        if (!map.has(topicId)) map.set(topicId, set);
+      }
     }
     return map;
   }, [details]);
@@ -320,25 +334,55 @@ export default function Course() {
     }
   };
 
-  const handleTopic = async (topicId: string) => {
+  const buildSet = async (topicId: string, sections: number) => {
     if (!validId) return;
-    const existing = setsByTopic.get(topicId);
-    if (existing) {
-      navigate(`/sets/${existing._id}`);
-      return;
-    }
     setBusyTopic(topicId);
     try {
       const result = await createTopicSet({
         courseId: courseId as Id<"courses">,
         topicId,
+        sections,
       });
+      setSectionTarget(null);
       navigate(`/sets/${result.setId}`);
     } catch (error) {
       toast.error(readableError(error, "Could not build material for that topic."));
     } finally {
       setBusyTopic(null);
     }
+  };
+
+  /** The topics a set could cover from `topicId` onwards, in pathway order. */
+  const sectionOptionsFrom = (topicId: string): SectionOption[] => {
+    const pathway = details?.course.pathway;
+    if (!pathway) return [];
+    const outline = pathway.units.flatMap((unit) =>
+      unit.topics.map((topic) => ({
+        id: topic.id,
+        title: topic.title,
+        unit: unit.title,
+      })),
+    );
+    const startIndex = outline.findIndex((entry) => entry.id === topicId);
+    if (startIndex === -1) return [];
+    // Twelve is the most the server will combine into one set.
+    return outline.slice(startIndex, startIndex + 12);
+  };
+
+  const handleTopic = (topicId: string) => {
+    if (!validId) return;
+    const existing = setsByTopic.get(topicId);
+    if (existing) {
+      navigate(`/sets/${existing._id}`);
+      return;
+    }
+    const options = sectionOptionsFrom(topicId);
+    // Nothing to choose when this is the last topic on the pathway.
+    if (options.length <= 1) {
+      void buildSet(topicId, 1);
+      return;
+    }
+    setSectionTarget({ topicId, options });
   };
 
   const toggleTopic = async (topicId: string, done: boolean) => {
@@ -601,7 +645,7 @@ export default function Course() {
                   </p>
                 </div>
                 <Button
-                  onClick={() => void handleTopic(nextTopic.topic.id)}
+                  onClick={() => handleTopic(nextTopic.topic.id)}
                   disabled={busyTopic !== null}
                   className="h-10 shrink-0 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
                 >
@@ -861,7 +905,7 @@ export default function Course() {
                                       )}
                                       <Button
                                         type="button"
-                                        onClick={() => void handleTopic(topic.id)}
+                                        onClick={() => handleTopic(topic.id)}
                                         disabled={busyTopic !== null}
                                         variant="outline"
                                         className={cn(
@@ -1139,6 +1183,21 @@ export default function Course() {
             </Tabs>
           </>
         )}
+
+        <PathwaySectionsDialog
+          // Keyed per topic so a new topic starts the section count at one.
+          key={sectionTarget?.topicId ?? "closed"}
+          open={sectionTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setSectionTarget(null);
+          }}
+          options={sectionTarget?.options ?? []}
+          busy={busyTopic !== null}
+          onBuild={(sections) => {
+            if (!sectionTarget) return;
+            void buildSet(sectionTarget.topicId, sections);
+          }}
+        />
 
         <AlertDialog
           open={removal !== null}

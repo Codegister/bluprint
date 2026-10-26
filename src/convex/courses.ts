@@ -145,6 +145,8 @@ export const getDetails = query({
           _id: set._id,
           title: set.title,
           topicId: set.topicId,
+          // Older sets have no topicIds list; their single topic is the set.
+          topicIds: set.topicIds ?? (set.topicId ? [set.topicId] : []),
           status: set.status,
           sourceType: set.sourceType,
           sourceLabel: set.sourceLabel,
@@ -355,9 +357,24 @@ async function unlinkTopicSets(
     .collect();
   for (const set of sets) {
     if (set.userId !== userId) continue;
-    if (set.topicId && topicIds.has(set.topicId)) {
-      await ctx.db.patch(set._id, { courseId: undefined, topicId: undefined });
+    const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
+    if (!covered.some((id) => topicIds.has(id))) continue;
+    const remaining = covered.filter((id) => !topicIds.has(id));
+    // A set that only covered removed sections is unlinked from the course but
+    // stays in the library. A set that still covers at least one section keeps
+    // its link and forgets the sections that no longer exist on the pathway.
+    if (remaining.length === 0) {
+      await ctx.db.patch(set._id, {
+        courseId: undefined,
+        topicId: undefined,
+        topicIds: undefined,
+      });
+      continue;
     }
+    await ctx.db.patch(set._id, {
+      topicIds: remaining,
+      topicId: remaining[0],
+    });
   }
 }
 
@@ -435,17 +452,38 @@ export const removeUnit = mutation({
   },
 });
 
+/** One pathway topic together with the unit it sits in. */
+type PathwaySection = {
+  unit: NonNullable<Doc<"courses">["pathway"]>["units"][number];
+  topic: NonNullable<
+    NonNullable<Doc<"courses">["pathway"]>["units"][number]["topics"]
+  >[number];
+};
+
 /**
- * Creates the study set for one pathway topic. The pathway already contains a
- * summary, key points and exam skill, so those become the source material for
- * the normal summary/flashcards/quiz/exam pipeline.
+ * The most sections one set can cover. Twelve keeps the source text well inside
+ * what the generator (and the screen that shows it) can handle.
+ */
+const MAX_SET_SECTIONS = 12;
+
+/**
+ * Creates the study set for one pathway section, or for a run of them. The
+ * pathway already contains a summary, key points and exam skill, so those
+ * become the source material for the normal summary/flashcards/quiz/exam
+ * pipeline.
+ *
+ * `sections` is how many sections the set should cover, counting the chosen
+ * topic first. It defaults to one and is clamped to what the pathway has left
+ * after that topic, so asking for six near the end of a course never creates an
+ * empty set.
  */
 export const createTopicSet = mutation({
   args: {
     courseId: v.id("courses"),
     topicId: v.string(),
+    sections: v.optional(v.number()),
   },
-  handler: async (ctx, { courseId, topicId }) => {
+  handler: async (ctx, { courseId, topicId, sections }) => {
     const userId = await requireUserId(ctx);
     const course = await requireOwner(
       await ctx.db.get(courseId),
@@ -453,38 +491,67 @@ export const createTopicSet = mutation({
     ) as Doc<"courses">;
     if (!course.pathway) throw new Error("This pathway is still being built.");
 
-    const unit = course.pathway.units.find(
-      (entry: { topics: Array<{ id: string }> }) =>
-        entry.topics.some((topic) => topic.id === topicId),
+    // Flatten the pathway into reading order so "sections" always means the
+    // next topics on the student's route, even across a unit boundary.
+    const outline: PathwaySection[] = course.pathway.units.flatMap((unit) =>
+      unit.topics.map((topic) => ({ unit, topic })),
     );
-    const topic = unit?.topics.find((entry: { id: string }) => entry.id === topicId);
-    if (!unit || !topic) throw new Error("That topic is not part of this pathway.");
+    const startIndex = outline.findIndex((entry) => entry.topic.id === topicId);
+    if (startIndex === -1) {
+      throw new Error("That topic is not part of this pathway.");
+    }
 
-    // Reuse an existing set for this topic so repeated taps never create
-    // duplicate decks.
+    const requested = Number.isFinite(sections) ? Math.floor(sections ?? 1) : 1;
+    const count = Math.min(
+      Math.max(1, requested),
+      MAX_SET_SECTIONS,
+      outline.length - startIndex,
+    );
+    const chosen = outline.slice(startIndex, startIndex + count);
+
+    // Reuse an existing set that covers exactly these sections, so repeated
+    // taps never create duplicate decks. Sets built before sections existed
+    // only have `topicId`, which is treated as a one-section set.
     const existing = await ctx.db
       .query("studySets")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))
       .collect();
-    const match = existing.find(
-      (set) => set.userId === userId && set.topicId === topicId,
-    );
-    if (match) return { setId: match._id, created: false };
+    const wanted = chosen.map((entry) => entry.topic.id).join("|");
+    const match = existing.find((set) => {
+      if (set.userId !== userId) return false;
+      const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
+      if (covered.join("|") === wanted) return true;
+      // A caller that did not ask for a length (the timetable opening a session)
+      // just wants the set for this topic, whichever build produced it.
+      return sections === undefined && covered.includes(topicId);
+    });
+    if (match) return { setId: match._id, created: false, sections: chosen.length };
 
-    const notes = buildTopicNotes(course, unit, topic);
+    const notes = buildTopicNotes(course, chosen);
+    const first = chosen[0]!.topic;
+    // One section keeps the topic's own name; a longer set is named after the
+    // first section so the library row still says what it covers.
+    const title =
+      chosen.length === 1
+        ? safeCourseLabel(first.title)
+        : safeCourseLabel(`${first.title} + ${chosen.length - 1} more`);
 
     const now = Date.now();
     const setId = await ctx.db.insert("studySets", {
       userId,
-      title: safeCourseLabel(topic.title) || "Revision topic",
+      title: title || "Revision topic",
       notes,
       sourceType: "text",
-      sourceLabel: "Course pathway",
+      sourceLabel:
+        chosen.length === 1
+          ? "Course pathway"
+          : `Course pathway · ${chosen.length} sections`,
       course: safeCourseLabel(course.subject),
       examBoard: safeCourseLabel(course.examBoard),
       level: safeCourseLabel(course.level),
       courseId,
       topicId,
+      topicIds: chosen.map((entry) => entry.topic.id),
       sourceImageIds: [],
       status: "queued",
       progress: "Queued",
@@ -499,35 +566,53 @@ export const createTopicSet = mutation({
     });
 
     await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
-    return { setId, created: true };
+    return { setId, created: true, sections: chosen.length };
   },
 });
 
 /**
- * Builds the source text for a topic set from the stored pathway. This text is
+ * Builds the source text for a pathway set from the stored pathway. This text is
  * later sent to NVIDIA, so avoid copying raw user-facing HTML and keep the
  * structure predictable.
+ *
+ * More than one section is written under numbered headings, so the generated
+ * material keeps each topic distinct instead of blending them together.
  */
 function buildTopicNotes(
   course: Doc<"courses">,
-  unit: NonNullable<Doc<"courses">["pathway"]>["units"][number],
-  topic: NonNullable<NonNullable<Doc<"courses">["pathway"]>["units"][number]["topics"]>[number],
+  sections: PathwaySection[],
 ): string {
   const parts = [
     `Course: ${course.level} ${course.subject}`,
     `Exam board: ${course.examBoard}${course.variant ? ` · ${course.variant}` : ""}${course.tier ? ` · ${course.tier}` : ""}`,
     course.poetryTheme ? `Poetry theme: ${course.poetryTheme}` : "",
-    `Unit: ${unit.title}`,
-    `Topic: ${topic.title}${topic.specReference ? ` (specification ${topic.specReference})` : ""}`,
-    unit.summary ? `Unit overview: ${unit.summary}` : "",
-    topic.summary,
-    "",
-    "Key points:",
-    ...topic.keyPoints.map((point) => `- ${point}`),
-    topic.examSkill ? `\nExam skill: ${topic.examSkill}` : "",
-    course.pathway ? `\nCourse context: ${course.pathway.overview}` : "",
-    "\nWrite revision material for this topic at the depth and command-word style of this qualification. Stay within the specification for this course, cover every key point above, and use the listed subtopics as the depth guide.",
   ];
+
+  sections.forEach(({ unit, topic }, index) => {
+    const heading =
+      sections.length === 1
+        ? `Topic: ${topic.title}`
+        : `Section ${index + 1}: ${topic.title}`;
+    parts.push(
+      "",
+      `${heading}${topic.specReference ? ` (specification ${topic.specReference})` : ""}`,
+      `Unit: ${unit.title}`,
+      unit.summary ? `Unit overview: ${unit.summary}` : "",
+      topic.summary,
+      "",
+      "Key points:",
+      ...topic.keyPoints.map((point) => `- ${point}`),
+      topic.examSkill ? `\nExam skill: ${topic.examSkill}` : "",
+    );
+  });
+
+  parts.push(
+    course.pathway ? `\nCourse context: ${course.pathway.overview}` : "",
+    sections.length === 1
+      ? "\nWrite revision material for this topic at the depth and command-word style of this qualification. Stay within the specification for this course, cover every key point above, and use the listed subtopics as the depth guide."
+      : `\nWrite revision material for all ${sections.length} sections above at the depth and command-word style of this qualification. Stay within the specification for this course, cover every key point in every section, and keep each section's material separate so cards and questions map back to the right topic.`,
+  );
+
   return parts.filter((line) => line !== "").join("\n");
 }
 
@@ -586,7 +671,11 @@ export const remove = mutation({
       .collect();
     for (const set of sets) {
       if (set.userId === userId) {
-        await ctx.db.patch(set._id, { courseId: undefined, topicId: undefined });
+        await ctx.db.patch(set._id, {
+          courseId: undefined,
+          topicId: undefined,
+          topicIds: undefined,
+        });
       }
     }
     await ctx.db.delete(courseId);

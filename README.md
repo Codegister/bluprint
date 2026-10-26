@@ -67,10 +67,12 @@ topic and subtopic in the specification reaches the map,
 then writes a summary, key points and an exam skill for each topic.
 
 Each course gets its own workspace on the dashboard, with topic-level progress. Open any
-topic and **Study this topic** creates a normal study set from that topic's summary, key
-points, and exam skill — a long summary, 20 detail-heavy cards, a ten-question quiz, and
-four exam questions — linked back to the course. Ticking topics off tracks course progress;
-the next unrevised topic is always offered at the top of the course page.
+topic and **Study this topic** asks how many sections of the pathway the set should cover
+(one topic, or a run of up to twelve), then creates a normal study set from those topics'
+summaries, key points, and exam skills — a long summary, 20 detail-heavy cards, a
+ten-question quiz, and four exam questions — linked back to the course. Ticking topics off
+tracks course progress; the next unrevised topic is always offered at the top of the course
+page.
 
 Every unit and topic has its own **remove** control. Removing something edits only the
 pathway: study sets already built from it stay in the library, and a rebuild brings the
@@ -86,8 +88,10 @@ course never lands in a "needs a retry" state.
 
 Use **Upload material** to add up to eight photos, a short video, or pasted notes. This keeps
 the upload compile flow and is the right path for a single handout, a textbook page, or
-notes that do not follow a specification. Three sliders choose the length separately:
-flashcards, quiz questions and exam-style questions, each from 1 to 100. If the notes
+notes that do not follow a specification. The dialog asks for two things only: the material
+itself, and how much to build. Three sliders choose the length separately: flashcards,
+quiz questions and exam-style questions, each from 1 to 100. The set is named after the
+source file or the first line of the notes, and can be renamed afterwards. If the notes
 cannot realistically support the number asked for, Bluprint builds the maximum it can and
 says so on the set page; it never silently pretends the request was met.
 
@@ -122,11 +126,13 @@ earned. Four practice papers per course is the cap; remove one to build another.
    ending the run.
 3. **Study** — flip and self-rate flashcards, take the quiz, and answer exam questions
    that are marked against the guide with feedback and a model answer.
-4. **Set the exam context** — tag a set with a course, an exam board (AQA, Pearson
-   Edexcel, OCR, WJEC / Eduqas, Cambridge International, IB, SQA, College Board AP), and a
-   level (GCSE, A-Level, IB, AP, Undergraduate). Board and level steer the summary's exam
-   focus, the phrasing of exam questions, and how written answers are marked. Course,
-   board, and level are filterable and searchable on the dashboard.
+4. **Tag the exam context afterwards** — a set opens with its settings button, where it can
+   be renamed and tagged with a course, an exam board (AQA, Pearson Edexcel, OCR, WJEC /
+   Eduqas, Cambridge International, IB, SQA, College Board AP), and a level (GCSE, A-Level,
+   IB, AP, Undergraduate). Board and level steer the summary's exam focus, the phrasing of
+   exam questions, and how written answers are marked. Course, board, and level are
+   filterable and searchable on the dashboard. Tagging is not part of the upload because a
+   student pasting notes usually wants the set, not a form.
 5. **Review on a schedule** — flashcards use a simplified SM-2 schedule: a card you miss
    returns in ten minutes, a card you recall returns tomorrow and then at widening
    intervals (×2.5 ease, capped at 180 days). Each deck shows how many cards are due.
@@ -475,9 +481,14 @@ same rate-limit messages as the rest of the app.
 - If there is no published page for a course, the deterministic starter map keeps it
   usable, and a rebuild replaces it once the outline is published. Students are never asked
   to retry.
-- **Study this topic** writes the topic's summary and key points into a study set and opens
-  it. The existing compile pipeline takes over, so the topic set has the same summary,
-  cards, quiz, exam marking, scheduling, and tutor as an uploaded set.
+- **Study this topic** asks how many sections the set should cover, then writes those
+  topics' summaries and key points into one study set and opens it. One section is a normal
+  topic set; up to twelve consecutive sections can be combined, which is how a student
+  revises a whole area without clicking through it topic by topic. The server clamps the
+  count to what is left on the pathway, and a set that already covers exactly the chosen
+  sections is reopened rather than rebuilt. The existing compile pipeline takes over, so a
+  pathway set has the same summary, cards, quiz, exam marking, scheduling, and tutor as an
+  uploaded set.
 - Marking topics complete is manual. A topic's linked study set, card counts, and course
   scores are derived from the set, not duplicated.
 
@@ -505,7 +516,13 @@ same rate-limit messages as the rest of the app.
   sequence.
 - The day is filled up to the chosen budget with sessions that rotate between the chosen
   subjects, so consecutive blocks are not usually the same subject and a different subject
-  starts each day. A ten-minute break follows every session.
+  starts each day. A ten-minute break follows every session. The block that closes a day is
+  the leftover time rather than a fresh topic, so it may be shorter than the 20-minute topic
+  minimum (a 60-minute day with 45-minute sessions is 45 + 15, not 45 and a quarter of the
+  day left empty). On a papers-only plan the minutes that cannot fill a whole hour go to a
+  short topic block, so a 90-minute day is a paper plus 30 minutes of revision rather than
+  an hour and a half-long gap. Only blocked time, the 8:00 pm cutoff and a remainder below
+  ten minutes leave part of a day unused.
 - **Session length follows the topic.** The builder's session length is a ceiling, not a
   fixed block: a topic is sized from the material it covers (its key points and summary),
   with a **20-minute minimum** for a short topic and the chosen length for a full section.

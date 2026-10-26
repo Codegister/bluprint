@@ -56,6 +56,11 @@ const schema = defineSchema(
       // original course is kept so progress can be shown on the course page.
       courseId: v.optional(v.id("courses")),
       topicId: v.optional(v.string()),
+      // Every pathway section the set covers, first one included. A set built
+      // from one topic keeps a single entry; a set built across several
+      // sections lists them all, so the course page can link each topic back to
+      // the same set.
+      topicIds: v.optional(v.array(v.string())),
       // Photos (or video frames) are kept in Convex file storage so the
       // original material can be revisited from the set page.
       sourceImageIds: v.array(v.id("_storage")),

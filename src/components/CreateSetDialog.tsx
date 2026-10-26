@@ -6,14 +6,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EASE } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
-import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import { compressImage, extractVideoFrames } from "@/lib/media";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -27,23 +25,6 @@ type ImageDraft = { file: File; preview: string };
 type Mode = "photos" | "video" | "text";
 
 const MAX_PHOTOS = 8;
-
-// Presets keep course entry to one tap; "Other" opens a free-text field for
-// anything the list misses (e.g. "A-Level Biology" or a university module).
-const COURSE_PRESETS = [
-  "Biology",
-  "Chemistry",
-  "Physics",
-  "Maths",
-  "Computer Science",
-  "Economics",
-  "History",
-  "Geography",
-  "English",
-  "Psychology",
-  "Business",
-  "Medicine",
-];
 
 function fileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -70,12 +51,6 @@ export function CreateSetDialog({
   const createSet = useMutation(api.studySets.create);
 
   const [mode, setMode] = useState<Mode>("photos");
-  const [title, setTitle] = useState("");
-  const [course, setCourse] = useState("");
-  const [customCourse, setCustomCourse] = useState("");
-  const [customCourseOpen, setCustomCourseOpen] = useState(false);
-  const [examBoard, setExamBoard] = useState("");
-  const [level, setLevel] = useState("");
   const [images, setImages] = useState<ImageDraft[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [text, setText] = useState("");
@@ -103,13 +78,7 @@ export function CreateSetDialog({
 
   const reset = () => {
     clearMedia();
-    setTitle("");
     setText("");
-    setCourse("");
-    setCustomCourse("");
-    setCustomCourseOpen(false);
-    setExamBoard("");
-    setLevel("");
     setCardCount(20);
     setQuizCount(10);
     setExamCount(4);
@@ -242,14 +211,14 @@ export function CreateSetDialog({
             : text.trim().split("\n")[0]?.slice(0, 60) ?? "Study set";
 
       setStep("Saving set…");
+      // The name, course and exam context are no longer asked for here: the set
+      // is named after its source file or first line, and the whole set can be
+      // renamed or re-tagged later from the set page.
       const setId = await createSet({
-        title: title.trim() || fallbackTitle || "New set",
+        title: fallbackTitle || "New set",
         notes,
         sourceType,
         sourceLabel,
-        course: (customCourseOpen ? customCourse : course).trim() || undefined,
-        examBoard: examBoard || undefined,
-        level: level || undefined,
         targetCardCount: cardCount,
         targetQuizCount: quizCount,
         targetExamCount: examCount,
@@ -308,155 +277,6 @@ export function CreateSetDialog({
               </p>
             </motion.div>
           )}
-
-          <div>
-            <label
-              htmlFor="set-title"
-              className="text-xs font-semibold text-brand-ink"
-            >
-              Set name <span className="font-normal text-muted-foreground">(optional)</span>
-            </label>
-            <Input
-              id="set-title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="e.g. Cell biology, Unit 2"
-              maxLength={80}
-              className="mt-2 h-11 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
-              disabled={isLoading}
-            />
-          </div>
-
-          <div className="mt-4">
-            <p className="text-xs font-semibold text-brand-ink">
-              Course <span className="font-normal text-muted-foreground">(optional)</span>
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {COURSE_PRESETS.map((preset) => {
-                const selected = !customCourseOpen && course === preset;
-                return (
-                  <motion.button
-                    key={preset}
-                    type="button"
-                    aria-pressed={selected}
-                    disabled={isLoading}
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.18, ease: EASE }}
-                    onClick={() => {
-                      setCourse(selected ? "" : preset);
-                      setCustomCourseOpen(false);
-                    }}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
-                      selected
-                        ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
-                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
-                    )}
-                  >
-                    {preset}
-                  </motion.button>
-                );
-              })}
-              <motion.button
-                type="button"
-                aria-pressed={customCourseOpen}
-                disabled={isLoading}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ duration: 0.18, ease: EASE }}
-                onClick={() => {
-                  setCustomCourseOpen((open) => !open);
-                  setCourse("");
-                }}
-                className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
-                  customCourseOpen
-                    ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
-                    : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
-                )}
-              >
-                Other
-              </motion.button>
-            </div>
-            {customCourseOpen && (
-              <Input
-                value={customCourse}
-                onChange={(event) => setCustomCourse(event.target.value)}
-                placeholder="e.g. A-Level Biology, or ECON 201"
-                maxLength={60}
-                disabled={isLoading}
-                aria-label="Custom course"
-                className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
-              />
-            )}
-          </div>
-
-          <div className="mt-4">
-            <p className="text-xs font-semibold text-brand-ink">
-              Exam board <span className="font-normal text-muted-foreground">(optional)</span>
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {EXAM_BOARDS.map((board) => {
-                const selected = examBoard === board;
-                return (
-                  <motion.button
-                    key={board}
-                    type="button"
-                    aria-pressed={selected}
-                    disabled={isLoading}
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.18, ease: EASE }}
-                    onClick={() => setExamBoard(selected ? "" : board)}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
-                      selected
-                        ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
-                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
-                    )}
-                  >
-                    {board}
-                  </motion.button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-3">
-            <p className="text-xs font-semibold text-brand-ink">
-              Level <span className="font-normal text-muted-foreground">(optional)</span>
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {STUDY_LEVELS.map((option) => {
-                const selected = level === option;
-                return (
-                  <motion.button
-                    key={option}
-                    type="button"
-                    aria-pressed={selected}
-                    disabled={isLoading}
-                    whileHover={{ y: -2 }}
-                    whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.18, ease: EASE }}
-                    onClick={() => setLevel(selected ? "" : option)}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
-                      selected
-                        ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
-                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
-                    )}
-                  >
-                    {option}
-                  </motion.button>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-              The board and level steer how exam questions are written and marked.
-              Leave them blank if you are not studying for a specific paper.
-            </p>
-          </div>
 
           <Tabs
             value={mode}

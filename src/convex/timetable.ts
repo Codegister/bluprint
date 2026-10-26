@@ -48,9 +48,10 @@ type StudyMethod = (typeof STUDY_METHODS)[number];
 const PAPER_MINUTES = 60;
 /**
  * Shape of a generated day. Older plans (no version) were filled with uniform
- * session lengths, so their saved days are rebuilt once when next opened.
+ * session lengths, and version 2 days could leave the tail of a day unused, so
+ * saved days are rebuilt once when next opened.
  */
-const PLANNER_VERSION = 2;
+const PLANNER_VERSION = 3;
 
 /**
  * Revision stops at 8pm. Evenings after that are for the rest of a student's
@@ -567,10 +568,17 @@ function estimatedBlocks(
       Math.floor(budgetMinutes / PAPER_MINUTES),
       MAX_SESSIONS_PER_DAY,
     );
-    return Array.from({ length: count }, () => ({
+    const blocks: StudyBlock[] = Array.from({ length: count }, () => ({
       kind: "paper" as const,
       minutes: PAPER_MINUTES,
     }));
+    // Whatever the whole papers cannot fill goes to a short topic block, the
+    // same way a real day is planned, so the estimate never undercounts.
+    const leftover = budgetMinutes - count * PAPER_MINUTES;
+    if (leftover >= MIN_BLOCK_MINUTES && blocks.length < MAX_SESSIONS_PER_DAY) {
+      blocks.push({ kind: "topic", minutes: leftover });
+    }
+    return blocks;
   }
 
   const blocks: StudyBlock[] = [];
@@ -651,8 +659,9 @@ function planDayItems(
   while (remaining > 0 && items.length < MAX_SESSIONS_PER_DAY) {
     if (wantPaper) {
       if (remaining < PAPER_MINUTES) {
-        // A paper is a whole hour. Anything shorter still goes to a topic.
-        if (method === "papers") break;
+        // A paper is a whole hour. Whatever is left of the day still goes to a
+        // topic block, so even a papers-only day fills its full budget instead
+        // of stopping at the last whole hour.
         wantPaper = false;
         continue;
       }
@@ -676,7 +685,11 @@ function planDayItems(
       continue;
     }
 
-    if (remaining < MIN_TOPIC_MINUTES) break;
+    // The block that closes the day is the leftover time, not a fresh topic,
+    // so it is allowed to be shorter than the 20-minute topic minimum. This is
+    // what makes a 60-minute day with 45-minute sessions 45 + 15 rather than
+    // 45 minutes with a quarter of the day left empty.
+    if (remaining < MIN_TOPIC_MINUTES && remaining < MIN_BLOCK_MINUTES) break;
     const picked = pickCourse(courses, cursor, "topic");
     if (!picked) break;
     const course = picked.course;
