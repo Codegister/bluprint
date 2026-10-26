@@ -86,28 +86,12 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-// The migration connected this project to the dev deployment
-// honorable-lyrebird-974. That deployment holds the migrated courses and the
-// server environment. harmless-dog-538 is a separate production deployment and
-// does not have this data yet, so do not let a stale VITE_CONVEX_URL point the
-// browser at it.
-const TARGET_CONVEX_URL = "https://honorable-lyrebird-974.convex.cloud";
-const configuredConvexUrl = (
-  import.meta.env.VITE_CONVEX_URL as string | undefined
-)?.trim();
-// Only accept the deployment URL (convex.cloud). The auth site URL
-// (convex.site) is not a valid Convex client endpoint and would hang on connect.
-// Trim trailing slashes: Convex appends `/api/...` to this address, so an
-// address ending in `/` becomes `//api/...`, which returns 404 on the sync
-// WebSocket and leaves the app retrying forever.
-const candidateConvexUrl = configuredConvexUrl?.replace(/\/+$/, "");
-const convexUrl =
-  candidateConvexUrl === TARGET_CONVEX_URL
-    ? candidateConvexUrl
-    : TARGET_CONVEX_URL;
-const convex = new ConvexReactClient(convexUrl);
-
-
+// Pinned to the deployment that holds this project's courses and server
+// environment. A stale VITE_CONVEX_URL must not point the browser at another
+// deployment. The address has to be the .cloud host with no trailing slash,
+// because Convex appends "/api/..." to it and "//api/..." fails to sync.
+const CONVEX_URL = "https://honorable-lyrebird-974.convex.cloud";
+const convex = new ConvexReactClient(CONVEX_URL);
 
 function RouteSyncer() {
   const location = useLocation();
@@ -131,7 +115,6 @@ function RouteSyncer() {
 
   return null;
 }
-
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

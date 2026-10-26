@@ -55,14 +55,6 @@ export function dateFromInput(value: string): Date {
   return new Date(`${value}T12:00:00`);
 }
 
-export function formatDateInput(value: string): string {
-  return dateFromInput(value).toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
-
 export function daysUntilInput(value: string): number {
   const target = dateFromInput(value);
   const now = new Date();

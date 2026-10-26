@@ -1119,8 +1119,6 @@ export default function Course() {
           </>
         )}
 
-
-
         <AlertDialog
           open={removal !== null}
           onOpenChange={(open) => {

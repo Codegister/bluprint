@@ -1,9 +1,8 @@
-/* DO NOT CHANGE */
 @import "tailwindcss";
 @import "tw-animate-css";
 @custom-variant dark (&:is(.dark *));
 
-/* DO NOT CHANGE */
+/* Exposes the variables below as Tailwind utilities: font-sans, bg-card, etc. */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -62,7 +61,7 @@
   --color-brand-violet: var(--brand-violet);
 }
 
-/* CHANGE VALUES FOR THEME — light surfaces, ink text, one playful accent. */
+/* Light surfaces, ink text, one accent. Change values here to retheme the app. */
 :root {
   --radius: 1rem;
 

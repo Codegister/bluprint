@@ -11,12 +11,6 @@ import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-
-// The dashboard still reads `api.settings.aiStatus` for the "AI not connected"
-// notice. That query previously required email verification, which crashed the
-// preview for guest and unverified sessions. The server now no longer gates that
-// endpoint on verification, and this defensive read keeps the first paint safe even
-// while the query is still loading.
 import { ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
@@ -214,11 +208,9 @@ export default function Dashboard() {
   const { user } = useAuth();
   const sets = useQuery(api.studySets.listMine);
   const courseRows = useQuery(api.courses.listMine);
+  // Undefined while the query is in flight, so the notice below only renders
+  // once the server has actually said the key is missing.
   const ai = useQuery(api.settings.aiStatus);
-  // The settings query is the only Convex endpoint that previously gated non-
-  // sensitive AI status behind email verification, which is why guest and
-  // unverified sessions crashed on first paint. This dashboard keeps its own
-  // defensive read so an in-flight response is never treated as a hard failure.
   const study = useQuery(api.studySets.studyStats);
   const recoverCourses = useMutation(api.courses.recoverMine);
   const recoveryRequested = useRef(false);
