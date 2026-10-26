@@ -35,11 +35,15 @@ export const SPRING: Transition = {
 };
 
 /**
- * Props for any element that should rise into place once, when scrolled to.
- * Spread onto a motion element so the DOM structure (and therefore the layout)
- * is left exactly as it was:
+ * Props for any element that should rise into place when scrolled to. Spread
+ * onto a motion element so the DOM structure (and therefore the layout) is left
+ * exactly as it was:
  *
  *   <motion.li {...reveal(index * 0.06)} className="...">
+ *
+ * `once: false` on purpose: the entrance is a response to scrolling, not a
+ * one-time page load. Leaving the viewport resets the element to its hidden
+ * state, so scrolling back up (or down again) replays it every time.
  */
 export function reveal(delay = 0, distance = 14): MotionProps {
   return {
@@ -48,7 +52,7 @@ export function reveal(delay = 0, distance = 14): MotionProps {
     // "some" rather than a fraction: a pathway with ten expanded units is far
     // taller than a phone screen, so 20% of it can never be visible at once and
     // the whole section stayed at opacity 0. Any visible sliver now reveals it.
-    viewport: { once: true, amount: "some", margin: "0px 0px -24px 0px" },
+    viewport: { once: false, amount: "some", margin: "0px 0px -24px 0px" },
     // Shorter travel and a slightly quicker curve: the entrance is still
     // noticeable but it settles before the next scroll frame arrives.
     transition: { duration: 0.5, ease: EASE, delay },
@@ -109,9 +113,9 @@ export function Reveal({
 
 /**
  * Staggered entrance. Animates on mount by default; set `inView` for sections
- * below the fold so the sequence actually plays when they are seen. Use with
- * <StaggerItem> children when extra wrappers are safe, otherwise spread
- * `enter()`/`reveal()` on the real elements.
+ * below the fold so the sequence plays when they are seen, and replays whenever
+ * they are scrolled back into view. Use with <StaggerItem> children when extra
+ * wrappers are safe, otherwise spread `enter()`/`reveal()` on the real elements.
  */
 export function Stagger({
   children,
@@ -133,7 +137,7 @@ export function Stagger({
       className={className}
       initial="hidden"
       {...(inView
-        ? { whileInView: "show", viewport: { once: true, amount } }
+        ? { whileInView: "show", viewport: { once: false, amount } }
         : { animate: "show" })}
       variants={staggerOnMount(gap, delay)}
     >
@@ -162,9 +166,10 @@ export function StaggerItem({
 }
 
 /**
- * A number that counts up when it first scrolls into view. Used for dashboard
- * tiles and course stats. Falls back to the final value instantly when reduced
- * motion is requested.
+ * A number that counts up each time it scrolls into view. Used for dashboard
+ * tiles and course stats. It rewinds while off screen so the count-up replays
+ * on the next entry rather than sitting on its final value. Falls back to the
+ * final value instantly when reduced motion is requested.
  */
 export function Counter({
   value,
@@ -183,12 +188,20 @@ export function Counter({
 }) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.4 });
+  const inView = useInView(ref, { once: false, amount: 0.4 });
   const [shown, setShown] = useState(0);
   // The tween's current value, so live changes count from where the number is
   // rather than restarting at zero.
   const current = useRef(0);
   const display = reduce ? value : shown;
+
+  // Off screen: put the number back to zero (silently, nobody can see it) so
+  // the next scroll into view counts up from the start again.
+  useEffect(() => {
+    if (inView || reduce) return;
+    current.current = 0;
+    setShown(0);
+  }, [inView, reduce]);
 
   useEffect(() => {
     if (!inView || reduce) return;
@@ -253,7 +266,7 @@ export function Meter({
         style={{ ...barStyle, width: `${clamped}%` }}
         initial={{ scaleX: 0 }}
         whileInView={{ scaleX: 1 }}
-        viewport={{ once: true, amount: 0.6 }}
+        viewport={{ once: false, amount: 0.6 }}
         transition={{ duration, ease: EASE, delay }}
       />
     </div>

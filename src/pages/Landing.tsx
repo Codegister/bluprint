@@ -400,7 +400,7 @@ export default function Landing() {
               className="absolute inset-x-0 top-0 h-px origin-left bg-[#5B3DF5]"
               initial={{ scaleX: 0 }}
               whileInView={{ scaleX: 1 }}
-              viewport={{ once: true, amount: 0.4 }}
+              viewport={{ once: false, amount: 0.4 }}
               transition={{ duration: 1.5, ease: EASE }}
             />
             <ol className="border-t border-transparent">
@@ -430,7 +430,7 @@ export default function Landing() {
                     className="absolute inset-0 rounded-2xl border border-brand-pink/40"
                     initial={{ opacity: 0, scale: 0.85 }}
                     whileInView={{ opacity: 1, scale: 1.12 }}
-                    viewport={{ once: true, amount: 0.6 }}
+                    viewport={{ once: false, amount: 0.6 }}
                     transition={{ duration: 0.8, ease: EASE, delay: 0.15 + index * 0.1 }}
                   />
                 </span>
