@@ -138,9 +138,15 @@ function RouteSyncer() {
  */
 function RouteFade({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
+  // The timetable builder is one screen whose four steps live in the URL.
+  // Keying on the full path used to remount it on every step, discarding the
+  // subjects chosen so far; those steps keep the same key (and no fade).
+  const screenKey = pathname.startsWith("/timetable/new")
+    ? "/timetable/new"
+    : pathname;
   return (
     <motion.div
-      key={pathname}
+      key={screenKey}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
@@ -235,21 +241,12 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
-              <Route
-                path="/timetable/new"
-                element={
-                  <RequireAuth
-                    title="Sign in to build a revision timetable"
-                    description="Timetables are built from your own courses and exam dates."
-                  >
-                    <TimetableBuilder />
-                  </RequireAuth>
-                }
-              />
               {/* The builder runs as four pages; the step is in the URL so each
-                  one can be linked, reloaded and navigated back. */}
+                  one can be linked, reloaded and navigated back. One splat route
+                  covers all four, so changing step keeps the page (and the
+                  choices made so far) mounted. */}
               <Route
-                path="/timetable/new/:step"
+                path="/timetable/new/*"
                 element={
                   <RequireAuth
                     title="Sign in to build a revision timetable"

@@ -1064,8 +1064,9 @@ export default function Course() {
                       </p>
                       <Button
                         type="button"
+                        variant="outline"
                         onClick={() => selectTab("pathway")}
-                        className="mt-3 h-9 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+                        className="mt-3 h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                       >
                         Go to pathway
                       </Button>

@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/AppShell";
-import { EASE, enter, reveal, SPRING } from "@/components/motion/Motion";
+import { EASE, enter, reveal } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
@@ -13,7 +13,7 @@ import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 const SESSION_MINUTES = [25, 45, 60, 90];
@@ -52,15 +52,82 @@ const LATEST_END = 20 * 60;
 const MAX_COURSES = 12;
 /** The builder runs as four pages; each has its own URL and one decision. */
 const STEPS = [
-  { title: "Subjects", color: "#128A4C", tint: "bg-[#EAFBF4]" },
-  { title: "Length and papers", color: "#6B4DBE", tint: "bg-[#F3F0FF]" },
-  { title: "Daily plan", color: "#2B7FB8", tint: "bg-[#EAF4FD]" },
-  { title: "Exam dates", color: "#B7791F", tint: "bg-[#FFF7EC]" },
+  { title: "Subjects" },
+  { title: "Length and papers" },
+  { title: "Daily plan" },
+  { title: "Exam dates" },
 ] as const;
 
 type CourseSetting = {
   courseId: Id<"courses">;
 };
+
+/**
+ * The unfinished builder is kept for the browser tab. Each step is its own URL,
+ * and a reload used to lose the subjects chosen on step one, so step four asked
+ * to build a timetable with nothing selected.
+ */
+const DRAFT_KEY = "bluprint.timetable-builder-draft";
+
+type StoredDraft = {
+  startDate: string;
+  examDate: string;
+  dailyMinutes: number;
+  dayOffMinutes: number;
+  sessionMinutes: number;
+  startMinutes: number;
+  dayOffStartMinutes: number;
+  daysPerWeek: number;
+  paper: string;
+  studyMethod: StudyMethod;
+  courseIds: string[];
+};
+
+/** Reads only values the form can actually hold; anything else is ignored. */
+function readDraft(): Partial<StoredDraft> {
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<StoredDraft>;
+    if (!parsed || typeof parsed !== "object") return {};
+    const draft: Partial<StoredDraft> = {};
+    for (const key of ["startDate", "examDate"] as const) {
+      const value = parsed[key];
+      if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        draft[key] = value;
+      }
+    }
+    const numbers = [
+      ["dailyMinutes", DAILY_MINUTES],
+      ["dayOffMinutes", DAY_OFF_MINUTES],
+      ["sessionMinutes", SESSION_MINUTES],
+      ["daysPerWeek", DAYS_PER_WEEK],
+      ["startMinutes", START_HOURS.map((hour) => hour * 60)],
+      ["dayOffStartMinutes", START_HOURS.map((hour) => hour * 60)],
+    ] as const;
+    for (const [key, allowed] of numbers) {
+      const value = parsed[key];
+      if (typeof value === "number" && (allowed as readonly number[]).includes(value)) {
+        draft[key] = value;
+      }
+    }
+    if (parsed.studyMethod && STUDY_METHODS.some((m) => m.value === parsed.studyMethod)) {
+      draft.studyMethod = parsed.studyMethod;
+    }
+    if (typeof parsed.paper === "string" && PAPERS.includes(parsed.paper)) {
+      draft.paper = parsed.paper;
+    }
+    if (Array.isArray(parsed.courseIds)) {
+      draft.courseIds = parsed.courseIds.filter(
+        (id): id is string => typeof id === "string",
+      );
+    }
+    return draft;
+  } catch {
+    // Private browsing, or a draft written by an older version.
+    return {};
+  }
+}
 
 function defaults() {
   const start = new Date();
@@ -85,10 +152,11 @@ function sessionWithin(minutes: number): number {
 
 export default function TimetableBuilder() {
   const navigate = useNavigate();
-  const { step: stepParam } = useParams<{ step?: string }>();
-  // Invalid or missing step values fall back to the first page rather than a
-  // blank screen.
-  const parsedStep = Number(stepParam ?? "1");
+  const { pathname } = useLocation();
+  // The step lives in the URL, but every step shares one route so moving
+  // between them does not remount the page and lose the draft.
+  const stepSegment = pathname.split("/").filter(Boolean)[2];
+  const parsedStep = Number(stepSegment ?? "1");
   const step = Number.isInteger(parsedStep)
     ? Math.min(4, Math.max(1, parsedStep))
     : 1;
@@ -97,24 +165,80 @@ export default function TimetableBuilder() {
   const buildPlan = useMutation(api.timetable.build);
 
   const initial = defaults();
-  const [startDate, setStartDate] = useState(initial.startDate);
-  const [examDate, setExamDate] = useState(initial.examDate);
-  const [dailyMinutes, setDailyMinutes] = useState(60);
-  const [dayOffMinutes, setDayOffMinutes] = useState(180);
+  // `useState` with a function keeps the storage read to the first render.
+  const [stored] = useState(readDraft);
+  // A tab left open overnight can hold dates that have already passed. Ignoring
+  // them keeps the first render valid instead of offering a stale plan.
+  const todayKey = dateInputValue(new Date());
+  const draftStart =
+    stored.startDate && stored.startDate >= todayKey
+      ? stored.startDate
+      : initial.startDate;
+  const draftExam =
+    stored.examDate && stored.examDate > draftStart
+      ? stored.examDate
+      : initial.examDate;
+  const [startDate, setStartDate] = useState(draftStart);
+  const [examDate, setExamDate] = useState(draftExam);
+  const [dailyMinutes, setDailyMinutes] = useState(stored.dailyMinutes ?? 60);
+  const [dayOffMinutes, setDayOffMinutes] = useState(stored.dayOffMinutes ?? 180);
   // One uninterrupted study block, shared by every subject.
-  const [sessionMinutes, setSessionMinutes] = useState(45);
-  const [startMinutes, setStartMinutes] = useState(17 * 60);
+  const [sessionMinutes, setSessionMinutes] = useState(stored.sessionMinutes ?? 45);
+  const [startMinutes, setStartMinutes] = useState(stored.startMinutes ?? 17 * 60);
   // A day off has its own start time: half-term mornings are not a school
   // evening after clubs.
-  const [dayOffStartMinutes, setDayOffStartMinutes] = useState(10 * 60);
-  const [daysPerWeek, setDaysPerWeek] = useState(5);
+  const [dayOffStartMinutes, setDayOffStartMinutes] = useState(
+    stored.dayOffStartMinutes ?? 10 * 60,
+  );
+  const [daysPerWeek, setDaysPerWeek] = useState(stored.daysPerWeek ?? 5);
   // One paper answer for the whole timetable instead of a choice per subject.
-  const [paper, setPaper] = useState("Paper 1");
+  const [paper, setPaper] = useState(stored.paper ?? "Paper 1");
   // Topics, past papers, or a mix of both, for every subject in the plan.
-  const [studyMethod, setStudyMethod] = useState<StudyMethod>("topics");
-  const [settings, setSettings] = useState<CourseSetting[]>([]);
+  const [studyMethod, setStudyMethod] = useState<StudyMethod>(
+    stored.studyMethod ?? "topics",
+  );
+  const [settings, setSettings] = useState<CourseSetting[]>(
+    (stored.courseIds ?? []).map((courseId) => ({
+      courseId: courseId as Id<"courses">,
+    })),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Remember every choice so a step change, or a refresh, picks up where the
+  // student left off.
+  useEffect(() => {
+    const draft: StoredDraft = {
+      startDate,
+      examDate,
+      dailyMinutes,
+      dayOffMinutes,
+      sessionMinutes,
+      startMinutes,
+      dayOffStartMinutes,
+      daysPerWeek,
+      paper,
+      studyMethod,
+      courseIds: settings.map((setting) => setting.courseId),
+    };
+    try {
+      window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      // A full or unavailable store is not worth failing the form over.
+    }
+  }, [
+    startDate,
+    examDate,
+    dailyMinutes,
+    dayOffMinutes,
+    sessionMinutes,
+    startMinutes,
+    dayOffStartMinutes,
+    daysPerWeek,
+    paper,
+    studyMethod,
+    settings,
+  ]);
 
   useEffect(() => {
     // Each step is a page, so start at the top of it.
@@ -128,6 +252,22 @@ export default function TimetableBuilder() {
   const datesInvalid = Boolean(startDate && examDate) && examDate <= startDate;
   const longestSessionMinutes = sessionMinutes;
 
+  // A saved draft can name a course that has since been deleted. Drop it once
+  // the list arrives rather than failing at submit time.
+  useEffect(() => {
+    if (!courses) return;
+    const available = new Set(
+      courses
+        .filter((course) => course.status === "ready" && course.topicCount > 0)
+        .map((course) => course._id as string),
+    );
+    setSettings((current) => {
+      const next = current.filter((setting) =>
+        available.has(setting.courseId as string),
+      );
+      return next.length === current.length ? current : next;
+    });
+  }, [courses]);
   const toggle = (courseId: Id<"courses">) => {
     const alreadySelected = settings.some(
       (setting) => setting.courseId === courseId,
@@ -192,21 +332,38 @@ export default function TimetableBuilder() {
     goToStep(step + 1);
   };
 
-  const submit = async () => {
+  /**
+   * Every requirement in one place, with the step that can fix it. The button
+   * stays clickable so a missing answer is explained instead of leaving the
+   * student with a dead control.
+   */
+  const findProblem = (): { step: number; message: string } | null => {
     if (settings.length === 0) {
-      setError("Choose at least one course to revise.");
-      return;
+      return { step: 1, message: "Choose at least one course to revise." };
     }
     if (!startDate || !examDate) {
-      setError("Choose both a start date and an exam date.");
-      return;
+      return {
+        step: 4,
+        message: "Choose both a start date and an exam date.",
+      };
+    }
+    if (datesInvalid) {
+      return {
+        step: 4,
+        message: "Your first exam needs to be after your start date.",
+      };
     }
     if (daysLeft <= 0) {
-      setError("Choose an exam date in the future.");
-      return;
+      return { step: 4, message: "Choose an exam date in the future." };
     }
-    if (examDate <= startDate) {
-      setError("Your first exam needs to be after your start date.");
+    return null;
+  };
+
+  const submit = async () => {
+    const problem = findProblem();
+    if (problem) {
+      setError(problem.message);
+      goToStep(problem.step);
       return;
     }
 
@@ -234,6 +391,12 @@ export default function TimetableBuilder() {
         );
       } else {
         toast.success("Revision timetable built.");
+      }
+      // The plan is saved; a fresh visit should start from a clean draft.
+      try {
+        window.sessionStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // Nothing to clean up if storage is unavailable.
       }
       navigate("/timetable");
     } catch (buildError) {
@@ -284,79 +447,70 @@ export default function TimetableBuilder() {
         </motion.p>
       </header>
 
-      <ol className="mt-5 flex flex-wrap items-stretch gap-2">
-        {STEPS.map((entry, index) => {
-          const value = index + 1;
-          const active = value === step;
-          const done = value < step;
-          return (
-            <li key={entry.title} className="min-w-0 flex-1">
-              <button
-                type="button"
-                onClick={() => goToStep(value)}
-                aria-current={active ? "step" : undefined}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded-2xl border px-3 py-2 text-left transition-colors",
-                  active
-                    ? "bg-white shadow-[0_10px_24px_-22px_rgba(22,24,31,0.5)]"
-                    : "border-border bg-white hover:border-brand-pink/40",
+      {/* A quiet stepper: one accent marks where you are, mint marks what is
+          done. The four steps used to each carry their own colour, which made
+          navigation compete with the form itself. */}
+      <nav aria-label="Timetable steps" className="mt-5">
+        <ol className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          {STEPS.map((entry, index) => {
+            const value = index + 1;
+            const active = value === step;
+            const done = value < step;
+            return (
+              <li key={entry.title} className="flex min-w-0 flex-1 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => goToStep(value)}
+                  aria-current={active ? "step" : undefined}
+                  className={cn(
+                    "flex min-w-0 flex-1 items-center gap-2 rounded-full px-2 py-1.5 text-left transition-colors sm:px-3",
+                    active
+                      ? "bg-white shadow-[0_1px_0_rgba(25,26,30,0.04)] ring-1 ring-border"
+                      : "hover:bg-white/60",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid size-5 shrink-0 place-items-center rounded-full text-[0.6rem] font-bold transition-colors",
+                      done
+                        ? "bg-[#E4F6F2] text-[#0A655C]"
+                        : active
+                          ? "bg-[#191B27] text-white"
+                          : "bg-[#EDE9DF] text-brand-ink/45",
+                    )}
+                  >
+                    {done ? <Check className="size-3" aria-hidden /> : value}
+                  </span>
+                  <span
+                    className={cn(
+                      "truncate text-[0.74rem] font-semibold",
+                      active ? "text-brand-ink" : "text-muted-foreground",
+                    )}
+                  >
+                    {entry.title}
+                  </span>
+                </button>
+                {value < STEPS.length && (
+                  <span
+                    aria-hidden
+                    className="hidden h-px w-3 shrink-0 bg-border sm:block"
+                  />
                 )}
-                style={
-                  active
-                    ? {
-                        backgroundColor: `${entry.color}12`,
-                        borderColor: `${entry.color}44`,
-                      }
-                    : undefined
-                }
-              >
-                <span
-                  className={cn(
-                    "grid size-6 shrink-0 place-items-center rounded-full text-[0.66rem] font-bold text-white",
-                    !active && !done && "bg-[#C9CBD6]",
-                  )}
-                  style={{ backgroundColor: active || done ? entry.color : undefined }}
-                >
-                  {done ? (
-                    <motion.span
-                      initial={{ opacity: 0, scale: 0.4 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={SPRING}
-                      className="grid place-items-center"
-                    >
-                      <Check className="size-3" aria-hidden />
-                    </motion.span>
-                  ) : (
-                    value
-                  )}
-                </span>
-                <span
-                  className={cn(
-                    "truncate text-[0.76rem] font-semibold",
-                    active ? "text-brand-ink" : "text-muted-foreground",
-                  )}
-                >
-                  {entry.title}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-
-      {/* The step track fills as each of the four pages is completed. */}
-      <div
-        className="mt-2 h-1 overflow-hidden rounded-full bg-brand-panel"
-        aria-hidden
-      >
-        <motion.div
-          key={step}
-          initial={{ width: `${((step - 1) / STEPS.length) * 100}%` }}
-          animate={{ width: `${(step / STEPS.length) * 100}%` }}
-          transition={{ duration: 0.5, ease: EASE }}
-          className="h-full rounded-full bg-[#5B3DF5]"
-        />
-      </div>
+              </li>
+            );
+          })}
+        </ol>
+        <div
+          className="mt-2 h-1 overflow-hidden rounded-full bg-brand-panel"
+          aria-hidden
+        >
+          <motion.div
+            animate={{ width: `${(step / STEPS.length) * 100}%` }}
+            transition={{ duration: 0.45, ease: EASE }}
+            className="h-full rounded-full bg-[#5B3DF5]"
+          />
+        </div>
+      </nav>
 
       {ready.length === 0 ? (
         <motion.section
@@ -392,7 +546,7 @@ export default function TimetableBuilder() {
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#0C6B4C]">
+                <p className="mono-label text-muted-foreground">
                   Step 1 of 4
                 </p>
                 <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
@@ -463,7 +617,7 @@ export default function TimetableBuilder() {
             hidden={step !== 2}
             className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
-            <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
+            <p className="mono-label text-muted-foreground">
               Step 2 of 4
             </p>
             <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
@@ -608,7 +762,7 @@ export default function TimetableBuilder() {
             hidden={step !== 3}
             className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
-            <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#1B5C8A]">
+            <p className="mono-label text-muted-foreground">
               Step 3 of 4
             </p>
             <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
@@ -788,7 +942,7 @@ export default function TimetableBuilder() {
             hidden={step !== 4}
             className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
-            <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12]">
+            <p className="mono-label text-muted-foreground">
               Step 4 of 4
             </p>
             <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
@@ -854,63 +1008,61 @@ export default function TimetableBuilder() {
             </motion.p>
           )}
 
-          <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[0.76rem] leading-relaxed text-muted-foreground">
-              {step === 4 ? (
-                <>
-                  {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
-                  {methodLabel} ·{" "}
-                  {studyMethod === "papers"
-                    ? "60 min papers"
-                    : `${sessionMinutes} min sessions`}{" "}
-                  · {dailyMinutes} min on school days · {dayOffMinutes} min on days
-                  off · {daysPerWeek} days a week
-                </>
-              ) : (
-                <>
-                  Step {step} of 4 · {STEPS[step - 1]!.title}
-                  {settings.length > 0 ? ` · ${settings.length} subjects` : ""}
-                </>
-              )}
-            </p>
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              {step > 1 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => goToStep(step - 1)}
-                  className="h-11 rounded-full border-border bg-white px-4 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-                >
-                  <ChevronLeft className="size-4" aria-hidden />
-                  Back
-                </Button>
-              )}
-              {step < 4 ? (
-                <Button
-                  type="button"
-                  onClick={nextStep}
-                  className="h-11 flex-1 rounded-full bg-[#191B27] px-6 text-sm font-semibold text-white hover:bg-[#2A2D3E] sm:flex-none"
-                >
-                  Next
-                  <ChevronRight className="size-4" aria-hidden />
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => void submit()}
-                  disabled={
-                    saving ||
-                    settings.length === 0 ||
-                    !startDate ||
-                    !examDate ||
-                    daysLeft <= 0 ||
-                    datesInvalid
-                  }
-                  className="h-11 flex-1 rounded-full bg-[#191B27] px-6 text-sm font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-50 sm:flex-none"
-                >
-                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}
-                  Build revision timetable
-                </Button>
-              )}
+          {/* One bar, one primary action. It stays in reach on a long step, and
+              it is never disabled for a missing answer: pressing it explains
+              what is needed and moves to that step. */}
+          <div className="sticky bottom-3 z-20 rounded-[1.4rem] border border-border bg-white/95 px-4 py-3 shadow-[0_18px_38px_-30px_rgba(22,24,31,0.55)] backdrop-blur">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="mono-label text-[#5B3DF5]">Step {step} of 4</p>
+                <p className="mt-0.5 truncate text-[0.8rem] text-muted-foreground">
+                  {step === 4 && settings.length === 0
+                    ? "No subjects chosen yet."
+                    : step === 4
+                      ? `${settings.length} subject${settings.length === 1 ? "" : "s"} · ${methodLabel} · ${
+                          studyMethod === "papers"
+                            ? "60 min papers"
+                            : `${sessionMinutes} min sessions`
+                        }`
+                      : `${STEPS[step - 1]!.title}${
+                          settings.length > 0
+                            ? ` · ${settings.length} selected`
+                            : ""
+                        }`}
+                </p>
+              </div>
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                {step > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => goToStep(step - 1)}
+                    className="h-11 rounded-full px-4 text-sm font-semibold text-brand-ink hover:bg-brand-panel"
+                  >
+                    <ChevronLeft className="size-4" aria-hidden />
+                    Back
+                  </Button>
+                )}
+                {step < 4 ? (
+                  <Button
+                    type="button"
+                    onClick={nextStep}
+                    className="h-11 flex-1 rounded-full bg-[#191B27] px-6 text-sm font-semibold text-white hover:bg-[#2A2D3E] sm:flex-none"
+                  >
+                    Next
+                    <ChevronRight className="size-4" aria-hidden />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => void submit()}
+                    disabled={saving}
+                    className="h-11 flex-1 rounded-full bg-[#191B27] px-6 text-sm font-semibold text-white hover:bg-[#2A2D3E] disabled:opacity-60 sm:flex-none"
+                  >
+                    {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+                    Build revision timetable
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </motion.div>

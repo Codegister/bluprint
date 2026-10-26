@@ -184,9 +184,10 @@ export default function PastPaper() {
             </p>
             <Button
               type="button"
+              variant="outline"
               onClick={() => void handleRetry()}
               disabled={retrying}
-              className="mt-4 h-9 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+              className="mt-4 h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
             >
               {retrying ? <Loader2 className="size-3.5 animate-spin" /> : null}
               Rebuild in the current format
@@ -238,9 +239,10 @@ export default function PastPaper() {
             {details.processingStale && (
               <Button
                 type="button"
+                variant="outline"
                 onClick={() => void handleRetry()}
                 disabled={retrying}
-                className="mt-4 h-9 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+                className="mt-4 h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
               >
                 {retrying ? <Loader2 className="size-3.5 animate-spin" /> : null}
                 Take too long? Build again
