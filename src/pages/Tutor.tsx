@@ -90,6 +90,8 @@ export default function TutorPage() {
 
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
+  // Dictation is transcribed on the server, so speech keys stay off the client.
+  const transcribe = useAction(api.ai.transcribeDictation);
   // Same source as the embedded tutor: the actual NVIDIA model id, so the
   // selector never shows a stand-in provider label.
   const aiStatus = useQuery(api.settings.aiStatus);
@@ -303,6 +305,9 @@ export default function TutorPage() {
             maxAttachments={1}
             models={[modelName]}
             modelIcons={{}}
+            onDictate={async (audio, format) =>
+              (await transcribe({ audio, format })).text
+            }
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">

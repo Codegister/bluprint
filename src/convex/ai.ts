@@ -30,6 +30,16 @@ import {
   OPENROUTER_TUTOR_MODEL,
   readOpenRouterKey,
 } from "./lib/openrouterConfig";
+import {
+  DICTATION_FORMATS,
+  MAX_DICTATION_BYTES,
+  NVIDIA_ASR_FUNCTION_ID,
+  NVIDIA_ASR_MODEL,
+  NVIDIA_ASR_URL,
+  OPENROUTER_STT_MODELS,
+  OPENROUTER_STT_URL,
+  dictationMimeType,
+} from "./lib/speechConfig";
 import { searchWeb, webResultsBlock, type WebResult } from "./lib/webSearch";
 import {
   MAX_NOTES_CHARS,
@@ -2714,6 +2724,195 @@ function readQuestion(question: string): string {
   }
   return text;
 }
+
+// ----------------------------------------------------------------------
+// Dictation (speech to text)
+// ----------------------------------------------------------------------
+
+/** Pulls the transcript out of the different shapes the providers return. */
+function readTranscript(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const record = payload as Record<string, unknown>;
+  for (const field of ["text", "transcript", "transcription"]) {
+    const value = record[field];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+
+/** A short, human explanation of a provider's failure, without leaking keys. */
+function dictationHttpError(label: string, status: number): string {
+  if (status === 401 || status === 403) {
+    return `${label} rejected the API key on this deployment`;
+  }
+  if (status === 402) return `${label} has no credits left for transcription`;
+  if (status === 429) return `${label} is rate-limiting transcription right now`;
+  if (status === 400 || status === 404) {
+    return `${label} does not accept this audio or model (HTTP ${status})`;
+  }
+  if (status >= 500) return `${label} is having trouble right now (HTTP ${status})`;
+  return `${label} could not transcribe the recording (HTTP ${status})`;
+}
+
+/** NVIDIA's hosted speech route: multipart upload with the model's own URL. */
+async function transcribeWithNvidia(
+  url: string,
+  apiKey: string,
+  audio: Buffer,
+  format: string,
+): Promise<string> {
+  const bytes = new Uint8Array(audio.byteLength);
+  bytes.set(audio);
+
+  const body = new FormData();
+  body.append(
+    "file",
+    new Blob([bytes], { type: dictationMimeType(format) }),
+    `dictation.${format}`,
+  );
+  body.append("model", NVIDIA_ASR_MODEL);
+  body.append("language", "en");
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    Accept: "application/json",
+  };
+  // Only NVCF deployments expect this, so it is sent only when configured.
+  if (NVIDIA_ASR_FUNCTION_ID) headers["function-id"] = NVIDIA_ASR_FUNCTION_ID;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body,
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(dictationHttpError("NVIDIA speech", response.status));
+  }
+  return readTranscript(await response.json().catch(() => null));
+}
+
+/** OpenRouter's OpenAI-compatible transcription route (JSON + base64 audio). */
+async function transcribeWithOpenRouter(
+  apiKey: string,
+  model: string,
+  audio: Buffer,
+  format: string,
+): Promise<string> {
+  const response = await fetch(OPENROUTER_STT_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "HTTP-Referer": "https://bluprint.study",
+      "X-Title": "Bluprint",
+    },
+    body: JSON.stringify({
+      model,
+      input_audio: { data: audio.toString("base64"), format },
+      language: "en",
+    }),
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(dictationHttpError(model, response.status));
+  }
+  return readTranscript(await response.json().catch(() => null));
+}
+
+/**
+ * Transcribes one dictation clip with the first provider that works.
+ *
+ * The browser never sees the audio again after sending it, and no key leaves
+ * the server. Providers run in the documented order — NVIDIA direct, then
+ * NVIDIA's Parakeet through OpenRouter, then Whisper — and each failure is
+ * reported in the final message so a missing key is obvious to fix.
+ */
+async function transcribeDictationAudio(
+  audio: Buffer,
+  format: string,
+): Promise<string> {
+  const attempts: Array<{ label: string; run: () => Promise<string> }> = [];
+
+  const nvidiaKeys = readNvidiaKeys();
+  if (NVIDIA_ASR_URL && nvidiaKeys.length > 0) {
+    attempts.push({
+      label: "NVIDIA speech",
+      // One key from the pool authenticates the call; OpenRouter covers a
+      // rejected or rate-limited key.
+      run: () => transcribeWithNvidia(NVIDIA_ASR_URL, nvidiaKeys[0], audio, format),
+    });
+  }
+
+  const openRouterKey = readOpenRouterKey();
+  if (openRouterKey) {
+    for (const model of OPENROUTER_STT_MODELS) {
+      attempts.push({
+        label: model,
+        run: () => transcribeWithOpenRouter(openRouterKey, model, audio, format),
+      });
+    }
+  }
+
+  if (attempts.length === 0) {
+    throw new Error(
+      "Dictation needs a transcription model. Set OPENROUTER_API_KEY, or set NVIDIA_ASR_URL alongside NVIDIA_API_KEY, on the deployment.",
+    );
+  }
+
+  const failures: string[] = [];
+  for (const attempt of attempts) {
+    try {
+      const text = (await attempt.run()).trim();
+      if (text) return text;
+      failures.push(`${attempt.label}: nothing was heard`);
+    } catch (error) {
+      failures.push(
+        error instanceof Error && error.message ? error.message : `${attempt.label} failed`,
+      );
+    }
+  }
+
+  throw new Error(
+    `Dictation could not be transcribed. ${failures.join(" · ")}. Check the deployment's speech keys, then try again.`,
+  );
+}
+
+/**
+ * Turns a tutor dictation recording into text.
+ *
+ * The microphone is recorded in the browser and posted here as base64, so the
+ * NVIDIA_API_KEY and OPENROUTER_API_KEY stay on the server. Errors and rate
+ * limits come back as readable messages the composer shows beneath the prompt.
+ */
+export const transcribeDictation = action({
+  args: {
+    audio: v.string(),
+    format: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireUserId(ctx);
+
+    const format = args.format.trim().toLowerCase();
+    if (!DICTATION_FORMATS.has(format)) {
+      throw new Error("That recording format is not supported. Try dictating again.");
+    }
+
+    const audio = Buffer.from(args.audio, "base64");
+    if (audio.byteLength === 0) {
+      throw new Error("That recording was empty. Try dictating again.");
+    }
+    if (audio.byteLength > MAX_DICTATION_BYTES) {
+      throw new Error("That recording is too long to transcribe. Keep dictation under a minute.");
+    }
+
+    const text = await transcribeDictationAudio(audio, format);
+    return { text };
+  },
+});
 
 /**
  * Answers one tutor question using the set's notes and recent saved turns.

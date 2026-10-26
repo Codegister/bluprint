@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRef, useState, useEffect, useCallback } from "react";
+import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
 // ----------------------------------------------------------------------
@@ -417,6 +418,86 @@ function AttachmentGalleryModal({
 // Main Component
 // ----------------------------------------------------------------------
 
+/**
+ * Longest single dictation. The clip is sent to the server as base64, so a cap
+ * keeps the request small; a tutor question is rarely longer than this anyway.
+ */
+const MAX_DICTATION_SECONDS = 60;
+
+/** Human labels for the recording formats a browser recorder can produce. */
+function audioFormatFor(mimeType: string): string {
+  const type = mimeType.toLowerCase();
+  if (type.includes("mp4") || type.includes("m4a") || type.includes("aac")) return "m4a";
+  if (type.includes("ogg")) return "ogg";
+  if (type.includes("wav")) return "wav";
+  if (type.includes("mpeg")) return "mp3";
+  return "webm";
+}
+
+/** First container the browser can actually record in. */
+function pickRecorderMimeType(): string {
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/ogg;codecs=opus",
+  ];
+  for (const candidate of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(candidate)) {
+      return candidate;
+    }
+  }
+  return "";
+}
+
+/**
+ * The browser's own speech engine. Chrome, Edge and Safari can transcribe
+ * speech as it is spoken, for free and without any key, so dictation tries it
+ * first; the server route below covers browsers where it is missing or blocked.
+ */
+type SpeechRecognitionResultLike = {
+  isFinal: boolean;
+  [index: number]: { transcript: string } | undefined;
+};
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: SpeechRecognitionResultLike | undefined;
+  };
+};
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+function getSpeechRecognition(): SpeechRecognitionConstructor | null {
+  if (typeof window === "undefined") return null;
+  const scope = window as typeof window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return scope.SpeechRecognition ?? scope.webkitSpeechRecognition ?? null;
+}
+
+/** Reads a recorded clip as a data URL so the composer can show it inline. */
+function readRecording(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("That recording could not be read."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export interface PromptInputProps {
   onSubmit?: (
     value: string,
@@ -431,6 +512,12 @@ export interface PromptInputProps {
   value?: string;
   onChange?: (value: string) => void;
   maxAttachments?: number;
+  /**
+   * Turns a recorded clip into text. The greeting app passes a Convex action so
+   * the speech keys stay on the server; the base64 payload has no data-URL
+   * prefix and `format` is the audio container (webm, m4a, …).
+   */
+  onDictate?: (audioBase64: string, format: string) => Promise<string>;
 }
 
 export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
@@ -446,6 +533,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       value: controlledValue,
       onChange,
       maxAttachments = 6,
+      onDictate,
     },
     ref,
   ) => {
@@ -463,18 +551,44 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       rect: DOMRect;
     } | null>(null);
 
-    // Audio/Voice recording states
+    // Dictation states. A recording is uploaded to the server for transcription,
+    // which is why there is a separate "transcribing" state after the stop.
     const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const [recordSeconds, setRecordSeconds] = useState(0);
+    const [dictationError, setDictationError] = useState<string | null>(null);
     const [audioData, setAudioData] = useState<number[]>(new Array(5).fill(0));
     const valueRef = useRef(controlledValue !== undefined ? controlledValue : localValue);
 
-    // Refs for Web Audio & Speech Recognition cleanup
+    // Refs for the recorder, the visualiser and their cleanup
     const streamRef = useRef<MediaStream | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const rafRef = useRef<number | null>(null);
-    const recognitionRef = useRef<any>(null);
-    const demoIntervalRef = useRef<number | null>(null);
-    const demoTextIntervalRef = useRef<number | null>(null);
+    const recorderRef = useRef<MediaRecorder | null>(null);
+    const recordedChunksRef = useRef<Blob[]>([]);
+    // Guards the window while the browser is asking for microphone permission.
+    const startingRef = useRef(false);
+    const recordTimerRef = useRef<number | null>(null);
+    // The dictate callback is captured by the recorder's onstop handler, which
+    // can outlive the render that started the recording.
+    const dictateRef = useRef(onDictate);
+
+    // Live dictation (browser speech engine). `baseline` is the prompt before
+    // dictation began, `text` the settled words, `interim` the phrase still
+    // being spoken; `failed` means the engine gave up and the clip is uploaded.
+    const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+    const liveBaselineRef = useRef("");
+    const liveTextRef = useRef("");
+    const liveInterimRef = useRef("");
+    const liveAttemptedRef = useRef(false);
+    const liveFailedRef = useRef(false);
+    const stoppedRef = useRef(false);
+    // Lets the speech engine finish a recording without a circular reference.
+    const stopRef = useRef<() => void>(() => {});
+
+    useEffect(() => {
+      dictateRef.current = onDictate;
+    }, [onDictate]);
 
     const [hoverStyle, setHoverStyle] = useState({
       opacity: 0,
@@ -529,76 +643,269 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       setExpanded(true);
     };
 
-    // --- Voice Recording Logic ---
-    const stopRecording = useCallback(() => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
+    // --- Dictation ---
+
+    /** Frees the microphone, the visualiser and the timer. Recording only. */
+    const releaseMicrophone = useCallback(() => {
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
+      }
+      if (recordTimerRef.current) {
+        window.clearInterval(recordTimerRef.current);
+        recordTimerRef.current = null;
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
       }
       if (audioContextRef.current) {
-        audioContextRef.current.close();
+        void audioContextRef.current.close();
         audioContextRef.current = null;
       }
-      if (demoIntervalRef.current) {
-        window.clearInterval(demoIntervalRef.current);
-        demoIntervalRef.current = null;
+    }, []);
+
+    /** Sends a finished clip to the server and writes the text into the prompt. */
+    const transcribeRecording = useCallback(
+      async (blob: Blob, format: string) => {
+        const dictate = dictateRef.current;
+        if (!dictate) return;
+
+        setIsTranscribing(true);
+        setDictationError(null);
+
+        try {
+          const dataUrl = await readRecording(blob);
+          const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+          const text = (await dictate(base64, format)).trim();
+
+          if (!text) {
+            setDictationError(
+              "Nothing was picked up. Move a little closer to the microphone and try again.",
+            );
+            return;
+          }
+
+          const existing = valueRef.current.trimEnd();
+          handleValueChange(existing ? `${existing} ${text}` : text);
+        } catch (error) {
+          setDictationError(
+            readableError(error, "Dictation could not be transcribed. Try again."),
+          );
+        } finally {
+          setIsTranscribing(false);
+        }
+      },
+      [handleValueChange],
+    );
+
+    const stopRecording = useCallback(() => {
+      stoppedRef.current = true;
+
+      const recognition = recognitionRef.current;
+      if (recognition) {
+        // Detach first: stopping must not loop back through onend, and a late
+        // result must not overwrite the finished prompt.
+        recognition.onend = null;
+        recognition.onresult = null;
+        try {
+          recognition.stop();
+        } catch {
+          // Already finished.
+        }
+        recognitionRef.current = null;
       }
-      if (demoTextIntervalRef.current) {
-        window.clearInterval(demoTextIntervalRef.current);
-        demoTextIntervalRef.current = null;
+
+      // Keep the phrase that was still in flight when the student stopped.
+      liveTextRef.current = `${liveTextRef.current} ${liveInterimRef.current}`.trim();
+      liveInterimRef.current = "";
+
+      const recorder = recorderRef.current;
+      // Stopping the recorder fires its onstop handler, which keeps the spoken
+      // text or uploads the clip; the microphone is released there.
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      } else {
+        releaseMicrophone();
       }
       setIsRecording(false);
       setAudioData(new Array(5).fill(0));
-    }, []);
+    }, [releaseMicrophone]);
+
+    useEffect(() => {
+      stopRef.current = stopRecording;
+    }, [stopRecording]);
 
     const startRecording = useCallback(async () => {
+      if (!dictateRef.current) {
+        setDictationError("Dictation is not available on this screen.");
+        return;
+      }
+      if (isRecording || isTranscribing || startingRef.current) return;
+      startingRef.current = true;
+      stoppedRef.current = false;
+
       setIsSmoothResize(false);
       setExpanded(true);
+      setDictationError(null);
 
-      let stream: MediaStream | null = null;
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
-      } catch (err) {
-        console.warn(
-          "Microphone access denied or unavailable. Falling back to simulated voice mode for demo.",
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        startingRef.current = false;
+        setDictationError(
+          "This browser cannot record audio. Try Chrome, Edge, Firefox or Safari.",
         );
+        return;
       }
 
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+      } catch {
+        startingRef.current = false;
+        setDictationError(
+          "Microphone access was blocked. Allow the microphone in your browser's site settings, then try again.",
+        );
+        return;
+      }
+
+      const mimeType = pickRecorderMimeType();
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, {
+          // Opus at this bitrate keeps a minute of speech small enough to upload.
+          audioBitsPerSecond: 24_000,
+          ...(mimeType ? { mimeType } : {}),
+        });
+      } catch {
+        stream.getTracks().forEach((track) => track.stop());
+        startingRef.current = false;
+        setDictationError("This browser could not start recording. Try a different browser.");
+        return;
+      }
+
+      startingRef.current = false;
+      streamRef.current = stream;
+      recordedChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordedChunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        const clip = new Blob(recordedChunksRef.current, {
+          type: recorder.mimeType || mimeType || "audio/webm",
+        });
+        recordedChunksRef.current = [];
+        recorderRef.current = null;
+        releaseMicrophone();
+
+        // Live dictation already wrote the words into the prompt, so there is
+        // nothing to upload and no waiting around.
+        const spoken = liveTextRef.current.trim();
+        if (spoken) {
+          const base = liveBaselineRef.current;
+          handleValueChange([base, spoken].filter(Boolean).join(" "));
+          setDictationError(null);
+          return;
+        }
+
+        // A tap that lasted a fraction of a second carries no speech.
+        if (clip.size < 2_048) {
+          setDictationError(
+            liveFailedRef.current
+              ? "Live dictation is unavailable in this browser right now, and the clip was too short to transcribe. Try again, or type your question."
+              : liveAttemptedRef.current
+                ? "Nothing was picked up. Speak clearly into the microphone and try again."
+                : "That recording was too short to transcribe. Hold the mic while you speak.",
+          );
+          return;
+        }
+        void transcribeRecording(clip, audioFormatFor(clip.type));
+      };
+
+      recorder.onerror = () => {
+        recorderRef.current = null;
+        releaseMicrophone();
+        setIsRecording(false);
+        setAudioData(new Array(5).fill(0));
+        setDictationError("The recording stopped unexpectedly. Try again.");
+      };
+
+      recorderRef.current = recorder;
+      recorder.start(1000);
       setIsRecording(true);
+      setRecordSeconds(0);
 
-      // Simulation function for tight sandbox environments
-      function simulateText() {
-        const fakeText =
-          "Can you build a high fidelity Framer Motion layout animation for a dark mode dashboard?";
-        const words = fakeText.split(" ");
-        let i = 0;
-        let currentBase = valueRef.current;
-        demoTextIntervalRef.current = window.setInterval(() => {
-          if (i < words.length) {
-            currentBase = (currentBase ? currentBase + " " : "") + words[i];
-            handleValueChange(currentBase);
-            i++;
-          } else {
-            stopRecording();
-          }
-        }, 300);
+      // Live dictation. The clip keeps recording underneath, so if the engine
+      // is unsupported or gives up the audio is still there to transcribe.
+      liveAttemptedRef.current = false;
+      liveFailedRef.current = false;
+      liveTextRef.current = "";
+      liveInterimRef.current = "";
+      liveBaselineRef.current = valueRef.current.trimEnd();
+
+      const Recognition = getSpeechRecognition();
+      if (Recognition) {
+        try {
+          const recognition = new Recognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = navigator.language || "en-GB";
+
+          recognition.onresult = (event) => {
+            let interim = "";
+            for (let index = event.resultIndex; index < event.results.length; index += 1) {
+              const result = event.results[index];
+              const transcript = result?.[0]?.transcript ?? "";
+              if (!transcript) continue;
+              if (result?.isFinal) {
+                liveTextRef.current = `${liveTextRef.current} ${transcript}`.trim();
+              } else {
+                interim += transcript;
+              }
+            }
+            liveInterimRef.current = interim;
+
+            const base = liveBaselineRef.current;
+            const spoken = `${liveTextRef.current} ${interim}`.trim();
+            handleValueChange([base, spoken].filter(Boolean).join(" "));
+          };
+
+          recognition.onerror = (event) => {
+            const code = event.error ?? "";
+            // A pause and a manual stop are normal. Anything else means this
+            // engine is unavailable (no network, blocked, not supported), so
+            // the recorded clip is sent to the server when recording stops.
+            if (code && code !== "no-speech" && code !== "aborted") {
+              liveFailedRef.current = true;
+            }
+          };
+
+          recognition.onend = () => {
+            if (recognitionRef.current !== recognition) return;
+            recognitionRef.current = null;
+            // The engine closes its session after a pause. Finish the recording
+            // so the words heard so far are kept instead of the mic staying on.
+            if (!stoppedRef.current) stopRef.current();
+          };
+
+          recognition.start();
+          recognitionRef.current = recognition;
+          liveAttemptedRef.current = true;
+        } catch {
+          // The browser refused to start it; the clip is uploaded instead.
+          recognitionRef.current = null;
+        }
       }
 
-      if (stream) {
-        streamRef.current = stream;
-
-        // Setup Web Audio API for visualizer
-        const AudioCtx = window.AudioContext || ((window as any).webkitAudioContext as typeof AudioContext);
+      // Visualiser: five bands of the live microphone signal.
+      const AudioCtx =
+        window.AudioContext ??
+        (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (AudioCtx) {
         const audioCtx = new AudioCtx();
         audioContextRef.current = audioCtx;
 
@@ -618,64 +925,33 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
             for (let j = 0; j < step; j++) {
               sum += dataArray[i * step + j];
             }
-            bands[i] = sum / step / 255; // normalize to 0-1
+            bands[i] = step > 0 ? sum / step / 255 : 0; // normalize to 0-1
           }
           setAudioData(bands);
           rafRef.current = requestAnimationFrame(updateVisualizer);
         };
         updateVisualizer();
-
-        // Setup Speech Recognition
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRecognition) {
-          const recognition = new SpeechRecognition();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-
-          let baseline = valueRef.current;
-
-          recognition.onresult = (event: any) => {
-            let interimTranscript = "";
-            let finalTranscript = "";
-
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-              if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript;
-              } else {
-                interimTranscript += event.results[i][0].transcript;
-              }
-            }
-
-            if (finalTranscript) {
-              baseline += (baseline ? " " : "") + finalTranscript;
-            }
-
-            handleValueChange((baseline + (interimTranscript ? " " + interimTranscript : "")).trim());
-          };
-
-          recognition.onerror = (e: any) => {
-            console.error("Speech recognition error", e);
-            stopRecording();
-          };
-
-          recognition.onend = () => {
-            stopRecording();
-          };
-
-          recognitionRef.current = recognition;
-          recognition.start();
-        } else {
-          console.warn("Speech Recognition API not supported in this browser. Using simulated text.");
-          simulateText();
-        }
-      } else {
-        // Fallback simulated visualizer
-        demoIntervalRef.current = window.setInterval(() => {
-          setAudioData(Array.from({ length: 5 }, () => Math.random() * 0.8 + 0.1));
-        }, 100);
-        simulateText();
       }
-    }, [handleValueChange, stopRecording]);
+
+      // Count the clip; the effect below stops it at the cap.
+      recordTimerRef.current = window.setInterval(() => {
+        setRecordSeconds((seconds) => seconds + 1);
+      }, 1000);
+    }, [
+      handleValueChange,
+      isRecording,
+      isTranscribing,
+      releaseMicrophone,
+      stopRecording,
+      transcribeRecording,
+    ]);
+
+    // Stop by itself at the cap so a forgotten recording cannot grow forever.
+    useEffect(() => {
+      if (isRecording && recordSeconds >= MAX_DICTATION_SECONDS) {
+        stopRecording();
+      }
+    }, [isRecording, recordSeconds, stopRecording]);
 
     // Keep textarea auto-scrolled to bottom while recording
     useEffect(() => {
@@ -687,10 +963,29 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     // Ensure cleanup of mic/streams on unmount
     useEffect(() => {
       return () => {
-        stopRecording();
+        const recognition = recognitionRef.current;
+        if (recognition) {
+          recognition.onend = null;
+          recognition.onerror = null;
+          recognition.onresult = null;
+          try {
+            recognition.abort();
+          } catch {
+            // Already finished.
+          }
+          recognitionRef.current = null;
+        }
+
+        const recorder = recorderRef.current;
+        if (recorder && recorder.state !== "inactive") {
+          recorder.onstop = null;
+          recorder.stop();
+        }
+        recorderRef.current = null;
+        releaseMicrophone();
         attachments.forEach((a) => URL.revokeObjectURL(a.url));
       };
-    }, [stopRecording, attachments]);
+    }, [releaseMicrophone, attachments]);
 
     useEffect(() => {
       if ((value.trim() !== "" || hasAttachments) && !expanded) {
@@ -830,9 +1125,10 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     };
 
     // Calculate action button states
-    const showArrow = hasValue && !isRecording;
+    const showArrow = hasValue && !isRecording && !isTranscribing;
     const showStop = isRecording;
-    const showMic = !hasValue && !isRecording;
+    const showMic = !hasValue && !isRecording && !isTranscribing;
+    const showSpinner = isTranscribing;
 
     const onActionButtonClick = (e: React.MouseEvent) => {
       e.preventDefault();
@@ -951,7 +1247,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
               onChange={(e) => handleValueChange(e.target.value)}
               onScroll={updateFades}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey && !isRecording && !isTranscribing) {
                   e.preventDefault();
                   handleSubmit();
                 }
@@ -1153,7 +1449,16 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                 e.stopPropagation();
               }}
               onClick={onActionButtonClick}
-              aria-label={showArrow ? "Send prompt" : showStop ? "Stop recording" : "Use voice input"}
+              disabled={isTranscribing}
+              aria-label={
+                showArrow
+                  ? "Send prompt"
+                  : showStop
+                    ? "Stop recording"
+                    : showSpinner
+                      ? "Transcribing dictation"
+                      : "Use voice input"
+              }
               style={{ borderRadius: 9999 }}
               className="absolute right-2 bottom-2 z-[10] flex h-8 w-8 items-center justify-center bg-primary text-primary-foreground transition-all duration-300 hover:opacity-90 outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-default"
             >
@@ -1188,9 +1493,34 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                 >
                   <StopIcon />
                 </span>
+                <span
+                  className={cn(
+                    "absolute inset-0 flex items-center justify-center transition-opacity duration-200",
+                    showSpinner ? "opacity-100" : "opacity-0 pointer-events-none",
+                  )}
+                >
+                  <span className="size-4 animate-spin rounded-full border-2 border-primary-foreground/35 border-t-primary-foreground" />
+                </span>
               </span>
             </button>
           </div>
+
+          {/* Dictation status lives under the card so it never shifts the text. */}
+          {(isRecording || isTranscribing || dictationError) && (
+            <p
+              role={dictationError ? "alert" : undefined}
+              className={cn(
+                "mt-2 px-1 text-[0.72rem] leading-relaxed",
+                dictationError ? "text-[#C93C49]" : "text-muted-foreground",
+              )}
+            >
+              {dictationError
+                ? dictationError
+                : isTranscribing
+                  ? "Transcribing your recording…"
+                  : `Listening — tap stop when you're done (${recordSeconds}/${MAX_DICTATION_SECONDS}s)`}
+            </p>
+          )}
         </div>
 
         {activeAttachment && (

@@ -377,10 +377,50 @@ endpoints:
 | Summaries, cards, quizzes, exams | `NVIDIA_TEXT_MODEL` | `nvidia/nemotron-3.5-lightning-30b-a3b` |
 | Reading photos / video frames | `NVIDIA_VISION_MODEL` | `meta/llama-3.2-90b-vision-instruct` |
 | Tutor answers with web access | `OPENROUTER_TUTOR_MODEL` | `meta-llama/llama-3.3-70b-instruct` |
+| Tutor dictation through OpenRouter | `OPENROUTER_STT_MODELS` | `nvidia/parakeet-tdt-0.6b-v3`, then `openai/whisper-large-v3-turbo` |
 
 Set overrides on the Convex deployment the same way as `NVIDIA_API_KEY`. If a model is
 retired, the set shows a clear "model not available" message and the environment variable
 is the fix.
+
+### Dictation in the tutor
+
+Dictation works in two layers, and neither needs a new key:
+
+1. **Live browser dictation, used first.** Chrome, Edge and Safari include a speech
+   engine, so words appear in the prompt as you speak. Nothing is uploaded and there is
+   no cost; the audio is handled by the browser vendor rather than by this app.
+2. **Server transcription, as the fallback.** When the browser has no engine, or it stops
+   (no network, blocked, unsupported), the 60-second clip is uploaded and transcribed
+   server-side. No key reaches the page. Providers are tried in order:
+
+| Order | Provider | Needs |
+| --- | --- | --- |
+| 1 | NVIDIA's own speech deployment | `NVIDIA_API_KEY` **and** `NVIDIA_ASR_URL` |
+| 2 | NVIDIA Parakeet, through OpenRouter | `OPENROUTER_API_KEY` with credit |
+| 3 | OpenAI Whisper, through OpenRouter | `OPENROUTER_API_KEY` with credit |
+
+**About credits:** OpenRouter bills transcription per audio second (roughly one penny per
+twelve minutes of speech) and currently lists no free transcription model. An OpenRouter
+account without credit answers HTTP 402, and the prompt says exactly that. Either add a
+little credit, or point `NVIDIA_ASR_URL` at an NVIDIA speech deployment so
+`NVIDIA_API_KEY` is used:
+
+```bash
+npx convex env set NVIDIA_ASR_URL "https://<id>.invocation.api.nvcf.nvidia.com/v1/audio/transcriptions"
+# only if that deployment also asks for the function id
+npx convex env set NVIDIA_ASR_FUNCTION_ID "<uuid>"
+```
+
+NVIDIA's OpenAI-compatible gateway (`integrate.api.nvidia.com`) has no
+`/v1/audio/transcriptions` route — NVIDIA serves speech as per-model deployments, which is
+why the URL is configuration. Copy it from the API tab for
+`nvidia/parakeet-tdt-0.6b-v3` on <https://build.nvidia.com>.
+
+A blocked microphone, a rate limit, an empty recording or a provider error each show a
+readable message under the prompt instead of a fake transcript. Clips are capped at 60
+seconds in the browser and rejected above 8 MB. `NVIDIA_ASR_MODEL` and
+`OPENROUTER_STT_MODELS` (comma separated) override the model choice.
 
 ## How a set is compiled
 

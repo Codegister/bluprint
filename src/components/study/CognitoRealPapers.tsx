@@ -1,8 +1,8 @@
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,8 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { cognitoPaperProxyUrl } from "@/lib/convexSite";
 import { readableError } from "@/lib/errors";
-import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
-import { ExternalLink, FileText, Loader2, RotateCcw } from "lucide-react";
+import { ExternalLink, FileText, Loader2, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -196,39 +195,61 @@ export function CognitoRealPapers({
           if (!open) setViewing(null);
         }}
       >
-        <DialogContent className={cn("max-w-5xl rounded-3xl p-0")}>
-          <DialogHeader className="px-5 pb-2 pt-5">
-            <DialogTitle className="font-display text-[1rem] text-brand-ink">
-              {viewing?.title ?? "Past paper"}
-            </DialogTitle>
-            <DialogDescription className="text-[0.76rem] text-muted-foreground">
-              Read inside Bluprint. The file is the board&apos;s published paper,
-              served through this app.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="px-5 pb-5">
-            {viewing && (
-              <iframe
-                key={viewing.url}
-                src={cognitoPaperProxyUrl(viewing.url)}
-                title={viewing.title}
-                className="h-[70vh] w-full rounded-2xl border border-border bg-white"
-              />
-            )}
-            <p className="mt-2 flex items-center gap-1.5 text-[0.7rem] text-muted-foreground">
-              <ExternalLink className="size-3" aria-hidden />
-              If the viewer stays blank, open this file
-              {" "}
+        {/*
+          The paper opens full screen: a PDF needs the whole viewport to show a
+          page at a readable size and to let every page scroll. A boxed dialog
+          clipped it to the cover page, so the viewer owns the screen until it
+          is closed.
+        */}
+        <DialogContent
+          showCloseButton={false}
+          className="h-[100dvh] max-h-[100dvh] w-screen max-w-none gap-0 rounded-none border-0 bg-[#F4F4F7] p-0 sm:max-w-none"
+          // A header row plus a viewer row that takes every remaining pixel.
+          style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)" }}
+        >
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-white px-4 py-2.5 sm:px-5">
+            <div className="flex min-w-0 items-center gap-2">
+              <FileText className="size-4 shrink-0 text-[#B7791F]" aria-hidden />
+              <DialogTitle className="truncate font-display text-[0.9rem] font-bold leading-tight text-brand-ink">
+                {viewing?.title ?? "Past paper"}
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                The board&apos;s published paper, served through Bluprint.
+              </DialogDescription>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
               <a
                 href={cognitoPaperProxyUrl(viewing?.url ?? "")}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-[#5B3DF5] underline underline-offset-2"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-[0.74rem] font-semibold text-brand-ink transition-colors hover:bg-brand-panel"
               >
-                in a new tab
+                <ExternalLink className="size-3.5" aria-hidden />
+                Open in new tab
               </a>
-              .
-            </p>
+              <DialogClose asChild>
+                <button
+                  type="button"
+                  aria-label="Close the paper"
+                  className="grid size-8 place-items-center rounded-full bg-brand-panel text-brand-ink/70 transition-colors hover:bg-[#E7E7EE] hover:text-brand-ink"
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              </DialogClose>
+            </div>
+          </header>
+
+          <div className="min-h-0 flex-1">
+            {viewing && (
+              <iframe
+                key={viewing.url}
+                // `#view=FitH` asks the PDF viewer to fit pages to the width
+                // instead of opening at a zoom that only fits the cover.
+                src={`${cognitoPaperProxyUrl(viewing.url)}#view=FitH`}
+                title={viewing.title}
+                className="h-full w-full border-0 bg-white"
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>

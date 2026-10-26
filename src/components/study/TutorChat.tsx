@@ -94,6 +94,8 @@ export function TutorChat({
   const messages = scope.kind === "set" ? setMessages : courseMessages;
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
+  // Dictation is transcribed on the server, so speech keys stay off the client.
+  const transcribe = useAction(api.ai.transcribeDictation);
   // The server picks the NVIDIA model, so the selector shows whichever one is
   // actually answering rather than a placeholder provider name.
   const aiStatus = useQuery(api.settings.aiStatus);
@@ -301,6 +303,9 @@ export function TutorChat({
             className="px-4 pb-2"
             maxAttachments={1}
             models={[modelName]}
+            onDictate={async (audio, format) =>
+              (await transcribe({ audio, format })).text
+            }
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
