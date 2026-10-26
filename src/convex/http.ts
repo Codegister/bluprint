@@ -69,6 +69,10 @@ const cognitoPaper = httpAction(async (_ctx, request) => {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": "inline",
+      // The viewer reads the file with `fetch` from the app's own origin, so the
+      // bytes have to be readable cross-origin. The route serves public board
+      // papers and no credentials, so a wildcard origin is safe here.
+      "Access-Control-Allow-Origin": "*",
       // Read-only copy of one paper, so it is safe to reuse for a day.
       "Cache-Control": "private, max-age=86400",
       "X-Content-Type-Options": "nosniff",

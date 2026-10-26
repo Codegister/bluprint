@@ -6,12 +6,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { PdfViewer } from "@/components/study/PdfViewer";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { cognitoPaperProxyUrl } from "@/lib/convexSite";
 import { readableError } from "@/lib/errors";
 import { useAction, useQuery } from "convex/react";
-import { ExternalLink, FileText, Loader2, RotateCcw, X } from "lucide-react";
+import { FileText, Loader2, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -196,15 +197,14 @@ export function CognitoRealPapers({
         }}
       >
         {/*
-          The paper opens full screen: a PDF needs the whole viewport to show a
-          page at a readable size and to let every page scroll. A boxed dialog
-          clipped it to the cover page, so the viewer owns the screen until it
-          is closed.
+          The paper opens full screen: a paper needs the whole viewport to show
+          a page at a readable size, and the pages themselves are drawn by
+          `PdfViewer` rather than by the browser's PDF plugin.
         */}
         <DialogContent
           showCloseButton={false}
           className="h-[100dvh] max-h-[100dvh] w-screen max-w-none gap-0 rounded-none border-0 bg-[#F4F4F7] p-0 sm:max-w-none"
-          // A header row plus a viewer row that takes every remaining pixel.
+          // A header row plus a scrolling viewer that takes every other pixel.
           style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)" }}
         >
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-white px-4 py-2.5 sm:px-5">
@@ -217,37 +217,23 @@ export function CognitoRealPapers({
                 The board&apos;s published paper, served through Bluprint.
               </DialogDescription>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <a
-                href={cognitoPaperProxyUrl(viewing?.url ?? "")}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-[0.74rem] font-semibold text-brand-ink transition-colors hover:bg-brand-panel"
+            <DialogClose asChild>
+              <button
+                type="button"
+                aria-label="Close the paper"
+                className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-panel text-brand-ink/70 transition-colors hover:bg-[#E7E7EE] hover:text-brand-ink"
               >
-                <ExternalLink className="size-3.5" aria-hidden />
-                Open in new tab
-              </a>
-              <DialogClose asChild>
-                <button
-                  type="button"
-                  aria-label="Close the paper"
-                  className="grid size-8 place-items-center rounded-full bg-brand-panel text-brand-ink/70 transition-colors hover:bg-[#E7E7EE] hover:text-brand-ink"
-                >
-                  <X className="size-4" aria-hidden />
-                </button>
-              </DialogClose>
-            </div>
+                <X className="size-4" aria-hidden />
+              </button>
+            </DialogClose>
           </header>
 
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 overflow-y-auto px-3 py-4 sm:px-5">
             {viewing && (
-              <iframe
+              <PdfViewer
                 key={viewing.url}
-                // `#view=FitH` asks the PDF viewer to fit pages to the width
-                // instead of opening at a zoom that only fits the cover.
-                src={`${cognitoPaperProxyUrl(viewing.url)}#view=FitH`}
+                url={cognitoPaperProxyUrl(viewing.url)}
                 title={viewing.title}
-                className="h-full w-full border-0 bg-white"
               />
             )}
           </div>
