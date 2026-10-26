@@ -618,6 +618,40 @@
     }
   }
 
+  /* A chosen subject in the timetable builder: one pale tint per subject,
+     lit from the top left so the tile reads as a coloured surface rather than
+     a flat swatch. The tint itself comes from SUBJECT_COLORS. */
+  .subject-tile {
+    background-image:
+      radial-gradient(
+        125% 95% at 6% -18%,
+        rgba(255, 255, 255, 0.9) 0%,
+        transparent 62%
+      ),
+      linear-gradient(
+        152deg,
+        rgba(255, 255, 255, 0.42) 0%,
+        rgba(255, 255, 255, 0.06) 46%,
+        rgba(25, 26, 30, 0.07) 100%
+      );
+  }
+  /* The dark theme paints the tile on a deep tint, so the same highlight has
+     to be much quieter and the shadow deeper. */
+  .dark .subject-tile {
+    background-image:
+      radial-gradient(
+        125% 95% at 6% -18%,
+        rgba(255, 255, 255, 0.14) 0%,
+        transparent 64%
+      ),
+      linear-gradient(
+        152deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(0, 0, 0, 0.16) 52%,
+        rgba(0, 0, 0, 0.32) 100%
+      );
+  }
+
   /* White surface used by every card. A crisp edge does the work; the shadow
      only lifts the card a few pixels off the metal background. */
   .gizmo-card {
@@ -1207,6 +1241,43 @@
   ) {
   background-color: #33230a;
 }
+
+/* Subject tints from SUBJECT_COLORS (src/lib/timetable.ts). The builder paints
+   the chosen subject on its pale tint; without these the dark theme showed a
+   near-white card title on a near-white card. Each family gets the deep
+   version of its own tint, a deeper hairline and a lifted label. */
+.dark [class~="bg-[#EAECFB]"] { background-color: #161c38; }
+.dark [class~="bg-[#FAF1DF]"] { background-color: #2b2210; }
+.dark [class~="bg-[#FAE9EF]"] { background-color: #2c1420; }
+.dark [class~="bg-[#F0EBFA]"] { background-color: #211a3a; }
+.dark [class~="bg-[#E6F2F9]"] { background-color: #102534; }
+.dark [class~="bg-[#F0F4E3]"] { background-color: #1f2411; }
+.dark [class~="bg-[#FBEDE4]"] { background-color: #2c1a10; }
+.dark [class~="bg-[#F7ECF6]"] { background-color: #271426; }
+.dark [class~="bg-[#EEF1F4]"] { background-color: #1b2129; }
+.dark [class~="bg-[#EAF4EE]"] { background-color: #12251b; }
+.dark [class~="bg-[#F7F2E1]"] { background-color: #262112; }
+
+.dark [class~="border-[#C6CCF3]"] { border-color: #38447a; }
+.dark [class~="border-[#EDC4D2]"] { border-color: #6c3446; }
+.dark [class~="border-[#D6C8F0]"] { border-color: #4a3d75; }
+.dark [class~="border-[#BFDDEF]"] { border-color: #2c5372; }
+.dark [class~="border-[#D3DEB2]"] { border-color: #46542c; }
+.dark [class~="border-[#EECDBA]"] { border-color: #6b452c; }
+.dark [class~="border-[#E4C6E1]"] { border-color: #5e3359; }
+.dark [class~="border-[#CDD6DE]"] { border-color: #3b4756; }
+.dark [class~="border-[#C3DFCF]"] { border-color: #2f5a41; }
+.dark [class~="border-[#E2D5AC]"] { border-color: #5e5330; }
+
+.dark [class~="text-[#98304F]"] { color: #ff9db4; }
+.dark [class~="text-[#513897]"] { color: #c3b2ff; }
+.dark [class~="text-[#206390]"] { color: #8fc2ff; }
+.dark [class~="text-[#4A6016]"] { color: #c2e07a; }
+.dark [class~="text-[#97491E]"] { color: #ffb184; }
+.dark [class~="text-[#6D3768]"] { color: #e5a9de; }
+.dark [class~="text-[#445361]"] { color: #c2cad8; }
+.dark [class~="text-[#2E5D42]"] { color: #7fd6a4; }
+.dark [class~="text-[#6A5315]"] { color: #ffc163; }
 
 /* Accent ink -> lifted accent, one group per family. */
 .dark

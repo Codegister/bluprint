@@ -581,7 +581,7 @@ export default function TimetableBuilder() {
                     className={cn(
                       "flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors",
                       active
-                        ? `${color.tint} ${color.border}`
+                        ? `${color.tint} ${color.border} subject-tile`
                         : "border-border bg-white hover:bg-brand-panel",
                     )}
                   >
