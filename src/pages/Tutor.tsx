@@ -92,10 +92,11 @@ export default function TutorPage() {
   const askCourseTutor = useAction(api.ai.askCourseTutor);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
-  // Same source as the embedded tutor: the actual NVIDIA model id, so the
-  // selector never shows a stand-in provider label.
+  // Same source as the embedded tutor: tiers are offered by label only, and
+  // the NVIDIA model behind each label stays on the server.
   const aiStatus = useQuery(api.settings.aiStatus);
-  const modelName = aiStatus?.textModel ?? "NVIDIA";
+  const tierLabels = aiStatus?.tutorTiers ?? ["Balanced"];
+  const defaultTier = aiStatus?.defaultTutorTier ?? "Balanced";
 
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
@@ -103,6 +104,8 @@ export default function TutorPage() {
   const [error, setError] = useState<string | null>(null);
   const [useWeb, setUseWeb] = useState(false);
   const [effort, setEffort] = useState<"Low" | "Medium" | "Max Effort">("Medium");
+  // Last tier used, so a suggested question keeps the same answer style.
+  const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const streaming = messages?.find((message) => message.streaming);
@@ -128,19 +131,28 @@ export default function TutorPage() {
     const question = value.trim();
     if (!question || sending) return;
 
+    // The picker reports a tier label; the server maps it to a NVIDIA model.
+    const chosenTier = meta.model || tier;
+    setTier(chosenTier);
     setError(null);
     setSending(true);
     setPending(question);
 
     try {
       if (validSetId && setId) {
-        await askTutor({ setId: setId as Id<"studySets">, question, useWeb });
+        await askTutor({
+          setId: setId as Id<"studySets">,
+          question,
+          useWeb,
+          tier: chosenTier,
+        });
       } else if (validCourseId && courseId) {
         await askCourseTutor({
           courseId: courseId as Id<"courses">,
           unitTitle: unitTitle ?? undefined,
           question,
           useWeb,
+          tier: chosenTier,
         });
       }
     } catch (sendError) {
@@ -222,7 +234,7 @@ export default function TutorPage() {
                     type="button"
                     onClick={() =>
                       void send(suggestion, {
-                        model: modelName,
+                        model: tier,
                         effort,
                         attachments: [],
                       })
@@ -303,7 +315,7 @@ export default function TutorPage() {
             placeholder="Ask anything about this material…"
             className="px-4 pb-2"
             maxAttachments={1}
-            models={[modelName]}
+            models={tierLabels}
             modelIcons={{}}
             onDictate={async (audio, format) =>
               (await transcribe({ audio, format })).text

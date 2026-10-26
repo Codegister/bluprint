@@ -1,9 +1,9 @@
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import {
+  DEFAULT_TUTOR_TIER_LABEL,
   NVIDIA_KEY_NAME,
-  NVIDIA_TEXT_MODEL,
-  NVIDIA_VISION_MODEL,
+  TUTOR_TIER_LABELS,
   readNvidiaKeys,
 } from "./lib/nvidiaConfig";
 
@@ -30,8 +30,10 @@ export const aiStatus = query({
       // Do not expose how many keys are loaded. That leaks operational detail
       // that is useful only to an attacker trying keys against the endpoint.
       keyName: NVIDIA_KEY_NAME,
-      textModel: NVIDIA_TEXT_MODEL,
-      visionModel: NVIDIA_VISION_MODEL,
+      // Tutor tiers are shown by label only: Fast, Balanced, Powerful, Max,
+      // Ultra. The NVIDIA model behind each one stays on the server.
+      tutorTiers: TUTOR_TIER_LABELS,
+      defaultTutorTier: DEFAULT_TUTOR_TIER_LABEL,
     };
   },
 });

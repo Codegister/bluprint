@@ -47,6 +47,8 @@ import {
   NVIDIA_TEXT_MODEL,
   NVIDIA_VISION_MODEL,
   readNvidiaKeys,
+  readTutorTier,
+  type TutorTier,
 } from "./lib/nvidiaConfig";
 import { buildPaperCover } from "./lib/paperFormat";
 import {
@@ -2534,10 +2536,14 @@ async function readChatStream(
  * Streams one tutor answer from NVIDIA. Each attempt takes the next key; a 429
  * cools that key and moves on. The answer is retried only while nothing has
  * been written, because a half-streamed answer cannot be resumed.
+ *
+ * `tier` carries the model, token budget and temperature the student picked,
+ * so the picker changes the answer without the browser ever seeing a model id.
  */
 async function streamNvidiaAnswer(
   apiKeys: string[],
   messages: ChatMessage[],
+  tier: TutorTier,
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
   const maxAttempts = Math.max(2, Math.min(apiKeys.length + 1, 4));
@@ -2556,11 +2562,11 @@ async function streamNvidiaAnswer(
           Accept: "text/event-stream",
         },
         body: JSON.stringify({
-          model: NVIDIA_TEXT_MODEL,
+          model: tier.model,
           messages,
-          temperature: 0.3,
+          temperature: tier.temperature,
           top_p: 1,
-          max_tokens: 1500,
+          max_tokens: tier.maxTokens,
           stream: true,
           ...(thinkingDisabled
             ? { chat_template_kwargs: { enable_thinking: false } }
@@ -2680,12 +2686,14 @@ async function streamTutorAnswer(
   context: TutorContext,
   question: string,
   useWeb: boolean,
+  tier: TutorTier,
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
   if (!useWeb) {
     return await streamNvidiaAnswer(
       apiKeys,
       tutorPrompt(context, question),
+      tier,
       onSnapshot,
     );
   }
@@ -2697,6 +2705,7 @@ async function streamTutorAnswer(
     const grounded = await streamNvidiaAnswer(
       apiKeys,
       tutorPrompt(context, question, results),
+      tier,
       onSnapshot,
     );
     return { text: grounded.text, sources: sourcesFrom(results) };
@@ -2708,6 +2717,7 @@ async function streamTutorAnswer(
     return await streamNvidiaAnswer(
       apiKeys,
       tutorPrompt(context, question),
+      tier,
       onSnapshot,
     );
   }
@@ -2927,10 +2937,16 @@ export const askTutor = action({
     setId: v.id("studySets"),
     question: v.string(),
     useWeb: v.optional(v.boolean()),
+    // A tier label such as "Ultra"; the matching NVIDIA model stays server-side.
+    tier: v.optional(v.string()),
   },
-  handler: async (ctx, { setId, question, useWeb }): Promise<{ reply: string }> => {
+  handler: async (
+    ctx,
+    { setId, question, useWeb, tier },
+  ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
+    const chosenTier = readTutorTier(tier);
 
     const context = await ctx.runQuery(internal.tutor.getTutorContext, {
       setId,
@@ -2960,6 +2976,7 @@ export const askTutor = action({
         text,
         // Off unless the browser explicitly asks for it.
         useWeb === true,
+        chosenTier,
         async (content, sources) => {
           await ctx.runMutation(internal.tutor.appendTutorAnswer, {
             messageId,
@@ -2996,13 +3013,16 @@ export const askCourseTutor = action({
     unitTitle: v.optional(v.string()),
     question: v.string(),
     useWeb: v.optional(v.boolean()),
+    // Same tier labels as `askTutor`; the model mapping is shared.
+    tier: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { courseId, unitTitle, question, useWeb },
+    { courseId, unitTitle, question, useWeb, tier },
   ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
+    const chosenTier = readTutorTier(tier);
 
     const context = await ctx.runQuery(internal.tutor.getCourseTutorContext, {
       courseId,
@@ -3024,6 +3044,7 @@ export const askCourseTutor = action({
         text,
         // Off unless the browser explicitly asks for it.
         useWeb === true,
+        chosenTier,
         async (content, sources) => {
           await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
             messageId,

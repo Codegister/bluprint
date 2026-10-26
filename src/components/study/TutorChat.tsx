@@ -96,10 +96,11 @@ export function TutorChat({
   const askCourseTutor = useAction(api.ai.askCourseTutor);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
-  // The server picks the NVIDIA model, so the selector shows whichever one is
-  // actually answering rather than a placeholder provider name.
+  // Tiers are named by feel only (Fast, Balanced, Powerful, Max, Ultra). The
+  // NVIDIA model behind each label is chosen on the server and never sent here.
   const aiStatus = useQuery(api.settings.aiStatus);
-  const modelName = aiStatus?.textModel ?? "NVIDIA";
+  const tierLabels = aiStatus?.tutorTiers ?? ["Balanced"];
+  const defaultTier = aiStatus?.defaultTutorTier ?? "Balanced";
 
   const groundedIn =
     scope.kind === "set"
@@ -116,6 +117,8 @@ export function TutorChat({
   // from the saved notes and specification first.
   const [useWeb, setUseWeb] = useState(false);
   const [effort, setEffort] = useState<"Low" | "Medium" | "Max Effort">("Medium");
+  // The last tier the student used, so a suggested question uses the same one.
+  const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // The reply being written right now, if any.
@@ -132,19 +135,24 @@ export function TutorChat({
     const question = value.trim();
     if (!question || sending) return;
 
+    // The composer's model picker reports a tier label; an unknown one falls
+    // back to the default on the server.
+    const chosenTier = meta.model || tier;
+    setTier(chosenTier);
     setError(null);
     setSending(true);
     setPending(question);
 
     try {
       if (scope.kind === "set") {
-        await askTutor({ setId: scope.setId, question, useWeb });
+        await askTutor({ setId: scope.setId, question, useWeb, tier: chosenTier });
       } else {
         await askCourseTutor({
           courseId: scope.courseId,
           unitTitle: scope.unitTitle,
           question,
           useWeb,
+          tier: chosenTier,
         });
       }
     } catch (sendError) {
@@ -217,7 +225,7 @@ export function TutorChat({
                     type="button"
                     onClick={() =>
                       void send(suggestion, {
-                        model: modelName,
+                        model: tier,
                         effort,
                         attachments: [],
                       })
@@ -302,7 +310,7 @@ export function TutorChat({
             }
             className="px-4 pb-2"
             maxAttachments={1}
-            models={[modelName]}
+            models={tierLabels}
             onDictate={async (audio, format) =>
               (await transcribe({ audio, format })).text
             }

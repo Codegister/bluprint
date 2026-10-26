@@ -142,6 +142,10 @@ earned. Four practice papers per course is the cap; remove one to build another.
    used are listed under the answer and saved with the thread. With web off it answers from
    your material alone. Suggested first questions get you started; exam practice is one
    question at a time.
+   The **power picker** under the prompt chooses how hard the tutor works: **Fast**,
+   **Balanced** (default), **Powerful**, **Max**, or **Ultra**. Tiers are named by feel
+   rather than by model — each one maps to a different NVIDIA model on the server, so the
+   browser never sees a model id.
 8. **Edit and rebuild** — **Set settings** next to a set's title changes its name, course,
    board, or level, and its three build sliders (1–100 flashcards, quiz questions and
    exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and exam
@@ -376,6 +380,11 @@ endpoints:
 | --- | --- | --- |
 | Summaries, cards, quizzes, exams | `NVIDIA_TEXT_MODEL` | `nvidia/nemotron-3.5-lightning-30b-a3b` |
 | Reading photos / video frames | `NVIDIA_VISION_MODEL` | `meta/llama-3.2-90b-vision-instruct` |
+| Tutor tier: Fast | `NVIDIA_TUTOR_FAST_MODEL` | `meta/llama-3.1-8b-instruct` |
+| Tutor tier: Balanced (default) | `NVIDIA_TUTOR_BALANCED_MODEL` | `NVIDIA_TEXT_MODEL`'s model |
+| Tutor tier: Powerful | `NVIDIA_TUTOR_POWERFUL_MODEL` | `meta/llama-3.3-70b-instruct` |
+| Tutor tier: Max | `NVIDIA_TUTOR_MAX_MODEL` | `nvidia/llama-3.3-nemotron-super-49b-v1.5` |
+| Tutor tier: Ultra | `NVIDIA_TUTOR_ULTRA_MODEL` | `nvidia/llama-3.1-nemotron-ultra-253b-v1` |
 | Tutor answers with web access | `OPENROUTER_TUTOR_MODEL` | `meta-llama/llama-3.3-70b-instruct` |
 | Tutor dictation through OpenRouter | `OPENROUTER_STT_MODELS` | `nvidia/parakeet-tdt-0.6b-v3`, then `openai/whisper-large-v3-turbo` |
 
