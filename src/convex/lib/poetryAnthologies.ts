@@ -437,6 +437,52 @@ function isPoemTopic(topicTitle: string, poemTitle: string): boolean {
 }
 
 /**
+ * True when a unit is a copy of the anthology rather than an ordinary unit.
+ * Scrapes and starter maps title it differently ("Poetry anthology: Love and
+ * Relationships", "Love and Relationships", "Poetry"), so the title, the
+ * cluster name and the proportion of poem topics are all considered.
+ */
+function isAnthologyUnit(
+  unit: PathwayUnitLike,
+  clusters: AnthologyCluster[],
+): boolean {
+  const key = normaliseTitle(unit.title);
+  if (!key) return false;
+
+  // A generic poetry unit is the anthology in every GCSE English Literature
+  // pathway. Keeping it would sit a second copy beside the saved cluster.
+  if (/\b(anthology|poetry|poems?)\b/.test(key)) return true;
+
+  const keyWords = titleWords(unit.title);
+  const matchesClusterName = clusters.some((cluster) => {
+    const titles = [cluster.title, cluster.key.replace(/-/g, " ")];
+    return titles.some((title) => {
+      const clusterKey = normaliseTitle(title);
+      if (clusterKey === key) return true;
+      if (key.length >= 5 && clusterKey.includes(key)) return true;
+      const clusterWords = titleWords(title);
+      if (keyWords.size === 0 || clusterWords.size === 0) return false;
+      let hits = 0;
+      for (const word of keyWords) if (clusterWords.has(word)) hits += 1;
+      // 0.6 tolerates a board or year suffix such as "Love and Relationships
+      // (AQA)" without matching an unrelated unit that merely says "love".
+      return hits / keyWords.size >= 0.6;
+    });
+  });
+  if (matchesClusterName) return true;
+
+  // A unit with no "poetry" in its name may still be the anthology: the
+  // scrape sometimes lists the poems as its topics.
+  if (unit.topics.length === 0) return false;
+  const poemTopics = unit.topics.filter((topic) =>
+    clusters.some((cluster) =>
+      cluster.poems.some((poem) => isPoemTopic(topic.title, poem.title)),
+    ),
+  ).length;
+  return poemTopics >= Math.max(2, Math.ceil(unit.topics.length * 0.4));
+}
+
+/**
  * Completes the poetry clusters in an English Literature pathway.
  *
  * A scraped English Literature page lists only the poems it has notes for, and
@@ -444,6 +490,10 @@ function isPoemTopic(topicTitle: string, poemTitle: string): boolean {
  * beside the saved cluster and duplicate it, so every anthologised unit and
  * every poem topic is removed before the complete saved clusters are added
  * back once. The result holds each poem exactly once, in anthology order.
+ *
+ * Rebuilding reuses the id of a poem topic that was already there. Existing
+ * study sets point at those ids, so a repaired course keeps its links instead
+ * of orphaning every set made from a poem.
  */
 export function completeAnthology(
   pathway: PathwayLike,
@@ -466,25 +516,41 @@ export function completeAnthology(
   const clusters = referenced.length > 0 ? referenced : candidates;
   if (clusters.length === 0) return pathway;
 
-  const clusterTitleKeys = new Set(
-    clusters.map((cluster) => normaliseTitle(cluster.title)),
-  );
+  // Poem ids already on the pathway are kept for the rebuilt cluster.
+  const previousTopics = pathway.units.flatMap((unit) => unit.topics);
+  const claimed = new Set<string>();
+  const reusedPoemId = (poemTitle: string): string | undefined => {
+    const found = previousTopics.find(
+      (topic) => !claimed.has(topic.id) && isPoemTopic(topic.title, poemTitle),
+    );
+    if (!found) return undefined;
+    claimed.add(found.id);
+    return found.id;
+  };
 
   const kept: PathwayUnitLike[] = [];
   const seenUnitTitles = new Set<string>();
   for (const unit of pathway.units) {
     const unitKey = normaliseTitle(unit.title);
 
-    // A copy of the anthology itself (scraped or generic) is replaced, never
-    // kept alongside the saved cluster.
-    if (clusterTitleKeys.has(unitKey) || /anthology/.test(unitKey)) continue;
+    // Every copy of the anthology is replaced, never kept alongside the saved
+    // cluster.
+    if (isAnthologyUnit(unit, clusters)) continue;
 
-    const topics = unit.topics.filter(
-      (topic) =>
-        !clusters.some((cluster) =>
+    const seenTopics = new Set<string>();
+    const topics = unit.topics.filter((topic) => {
+      const topicKey = normaliseTitle(topic.title);
+      if (
+        clusters.some((cluster) =>
           cluster.poems.some((poem) => isPoemTopic(topic.title, poem.title)),
-        ),
-    );
+        )
+      ) {
+        return false;
+      }
+      if (seenTopics.has(topicKey)) return false;
+      seenTopics.add(topicKey);
+      return true;
+    });
     if (topics.length === 0) continue;
     if (seenUnitTitles.has(unitKey)) continue;
     seenUnitTitles.add(unitKey);
@@ -495,7 +561,9 @@ export function completeAnthology(
     title: cluster.title,
     summary: `${cluster.poems.length} poems, as published in the AQA anthology. One poem is printed in the exam and you compare it with another from the same cluster.`,
     topics: cluster.poems.map((poem, poemIndex) => ({
-      id: `a${clusterIndex + 1}t${poemIndex + 1}`,
+      // Reuse the id of the poem that was already here, so sets and tick-offs
+      // survive a repair.
+      id: reusedPoemId(poem.title) ?? `a${clusterIndex + 1}t${poemIndex + 1}`,
       title: poem.title,
       summary: `${poem.poet}: ${poem.about}`,
       keyPoints: [`Poet: ${poem.poet}.`, ...poem.notes],
@@ -503,7 +571,54 @@ export function completeAnthology(
     })),
   }));
 
+  // A cluster the student already has in the saved shape is still rebuilt, but
+  // identical duplicates cannot survive because only one copy is written here.
   return { ...pathway, units: [...kept, ...anthologyUnits] };
+}
+
+/**
+ * True when a saved pathway shows the anthology more than once: a repeated
+ * unit title, two units that both read as the anthology, or a poem topic that
+ * appears in more than one place. The repair path checks this first so it can
+ * never re-add a cluster the student deliberately removed.
+ */
+export function hasDuplicateAnthology(
+  pathway: PathwayLike,
+  clusters: AnthologyCluster[] = ANTHOLOGIES,
+): boolean {
+  // A course can legitimately study both clusters, so two anthology units are
+  // only a duplicate when one of them is an extra copy that does not carry the
+  // saved cluster's own title, or when the same anthology title appears twice.
+  const savedClusterTitles = new Set(
+    clusters.map((cluster) => normaliseTitle(cluster.title)),
+  );
+  const anthologyUnits = pathway.units.filter((unit) =>
+    isAnthologyUnit(unit, clusters),
+  );
+  const savedClusterUnits = anthologyUnits.filter((unit) =>
+    savedClusterTitles.has(normaliseTitle(unit.title)),
+  );
+  if (anthologyUnits.length > savedClusterUnits.length) return true;
+
+  const anthologyTitleCounts = new Map<string, number>();
+  for (const unit of anthologyUnits) {
+    const key = normaliseTitle(unit.title);
+    anthologyTitleCounts.set(key, (anthologyTitleCounts.get(key) ?? 0) + 1);
+  }
+  if ([...anthologyTitleCounts.values()].some((count) => count > 1)) return true;
+
+  const poemCounts = new Map<string, number>();
+  for (const unit of pathway.units) {
+    for (const topic of unit.topics) {
+      const poem = clusters
+        .flatMap((cluster) => cluster.poems)
+        .find((candidate) => isPoemTopic(topic.title, candidate.title));
+      if (!poem) continue;
+      const key = normaliseTitle(poem.title);
+      poemCounts.set(key, (poemCounts.get(key) ?? 0) + 1);
+    }
+  }
+  return [...poemCounts.values()].some((count) => count > 1);
 }
 
 /** Matches a stored poetry theme to the saved cluster, if one is named. */

@@ -10,6 +10,12 @@ import {
 } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner, requireVerifiedUser } from "./lib/authorization";
+import {
+  clusterForTheme,
+  completeAnthology,
+  hasDuplicateAnthology,
+  type PathwayLike,
+} from "./lib/poetryAnthologies";
 
 /**
  * Course pathways: the second way into Bluprint.
@@ -883,6 +889,53 @@ export const recoverMine = mutation({
       recovered += 1;
     }
     return { recovered };
+  },
+});
+
+/**
+ * Repairs an English Literature pathway that grew duplicate anthology units.
+ *
+ * Older builds could keep a scraped "Love and Relationships" unit beside the
+ * saved "Poetry anthology: Love and Relationships" cluster, so the course page
+ * listed the poems twice. `completeAnthology` already prevents that on a fresh
+ * build; this applies the same pass to a course that is already saved and only
+ * writes when the units actually change. Existing poem ids are reused, so
+ * linked study sets and ticked topics survive the repair.
+ */
+export const repairPathways = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+      .collect();
+
+    let repaired = 0;
+    for (const course of courses) {
+      if (course.status !== "ready" || !course.pathway) continue;
+      if (course.subject.trim().toLowerCase() !== "english literature") continue;
+      if (!/gcse/i.test(course.level)) continue;
+
+      const pathway = course.pathway as PathwayLike;
+      // Only a genuinely duplicated anthology is rewritten. Without this guard
+      // the repair would re-add a cluster the student had removed on purpose.
+      if (!hasDuplicateAnthology(pathway, clusterForTheme(course.poetryTheme))) {
+        continue;
+      }
+
+      const next = completeAnthology(pathway, course);
+      if (JSON.stringify(next.units) === JSON.stringify(course.pathway.units)) {
+        continue;
+      }
+
+      await ctx.db.patch(course._id, {
+        pathway: { ...course.pathway, units: next.units },
+        updatedAt: Date.now(),
+      });
+      repaired += 1;
+    }
+    return { repaired };
   },
 });
 

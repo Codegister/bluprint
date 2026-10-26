@@ -5,7 +5,9 @@ import { enter } from "@/components/motion/Motion";
 import { ExamPractice } from "@/components/study/ExamPractice";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { QuizRunner } from "@/components/study/QuizRunner";
+import { ReadinessPanel } from "@/components/study/ReadinessPanel";
 import { SetSettingsDialog } from "@/components/study/SetSettingsDialog";
+import { WeakSpots } from "@/components/study/WeakSpots";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -29,13 +31,14 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 /** One screen per study mode. The overview is the set's summary. */
-type SetSection = "summary" | "cards" | "quiz" | "exam";
+type SetSection = "summary" | "cards" | "quiz" | "exam" | "weak";
 
 const SECTION_LABEL: Record<SetSection, string> = {
   summary: "Summary",
   cards: "Flashcards",
   quiz: "Quiz",
   exam: "Exam practice",
+  weak: "Weak spots",
 };
 
 function MissingCard() {
@@ -471,7 +474,10 @@ export default function StudySet() {
   const [searchParams] = useSearchParams();
   const legacyTab = searchParams.get("tab");
   const activeSection: SetSection =
-    section === "cards" || section === "quiz" || section === "exam"
+    section === "cards" ||
+    section === "quiz" ||
+    section === "exam" ||
+    section === "weak"
       ? section
       : legacyTab === "cards" || legacyTab === "quiz" || legacyTab === "exam"
         ? legacyTab
@@ -601,12 +607,14 @@ export default function StudySet() {
           <div className="mt-6">
             {activeSection === "cards" && (
               <FlashcardReview
+                key={set._id}
                 cards={details.cards}
                 onTakeQuiz={() => navigate(`/sets/${set._id}/quiz`)}
               />
             )}
             {activeSection === "quiz" && (
               <QuizRunner
+                key={set._id}
                 quiz={details.quiz}
                 setId={set._id}
                 qualification={qualification}
@@ -619,6 +627,9 @@ export default function StudySet() {
                 setId={set._id}
                 qualification={qualification}
               />
+            )}
+            {activeSection === "weak" && (
+              <WeakSpots key={set._id} setId={set._id} />
             )}
           </div>
         ) : (
@@ -633,8 +644,15 @@ export default function StudySet() {
                 </span>
               )}
               <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
-                {percent(set.knownCount, set.cardCount)}% of cards known
+                {details.readiness.score}% exam-ready
               </span>
+              {details.pace && (
+                <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
+                  {details.pace.daysLeft} day
+                  {details.pace.daysLeft === 1 ? "" : "s"} to exam ·{" "}
+                  {details.pace.perDay}/day
+                </span>
+              )}
               {set.lastStudiedAt && (
                 <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
                   Studied {relativeDate(set.lastStudiedAt)}
@@ -663,6 +681,18 @@ export default function StudySet() {
 
             <div className="mt-5">
               <StudyActions setId={set._id} set={set} />
+            </div>
+
+            <div className="mt-5">
+              <ReadinessPanel
+                setId={set._id}
+                readiness={details.readiness}
+                projected={details.projected}
+                pace={details.pace}
+                weakCardCount={details.weakCardCount}
+                weakQuizCount={details.weakQuizCount}
+                dueCount={details.dueCount}
+              />
             </div>
 
             <div className="mt-6">

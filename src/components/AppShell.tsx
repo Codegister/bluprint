@@ -23,6 +23,7 @@ import {
   Layers3,
   Menu,
   Sparkles,
+  Target,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -66,6 +67,14 @@ const navItems = [
     tile: "bg-[#2B7FB8] text-white",
     soft: "bg-[#E7F2FC] text-[#2B7FB8]",
   },
+  {
+    to: "/today",
+    label: "Today",
+    icon: Target,
+    active: "bg-[#FDEFF4] text-[#A83458]",
+    tile: "bg-[#D9577E] text-white",
+    soft: "bg-[#FFE7F0] text-[#C43F69]",
+  },
 ] as const;
 
 function DeckRow({
@@ -102,26 +111,30 @@ function DeckRow({
   );
 }
 
-/** Today's review goal, shown as a small progress card above the set list. */
+/** Today's question goal, shown as a small progress card above the set list. */
 function GoalCard() {
   const study = useQuery(api.studySets.studyStats);
   const today = study?.todayCount ?? 0;
-  const goal = study?.goal ?? 1;
+  const goal = study?.goal ?? 20;
   const streak = study?.streak ?? 0;
   const progress = Math.min(100, Math.round((today / Math.max(goal, 1)) * 100));
 
-  return (      <div className="mx-3 mb-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_14px_28px_-26px_rgba(60,40,120,0.6)]">
+  return (
+    <Link
+      to="/today"
+      className="mx-3 mb-4 block rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_14px_28px_-26px_rgba(60,40,120,0.6)] transition-colors hover:bg-white"
+    >
       <div className="flex items-baseline justify-between gap-2">
         <p className="mono-label text-[#5B3DF5]">Today</p>
         <p className="text-[0.7rem] font-semibold tabular-nums text-brand-ink/55">
-          {study ? `${today}/${goal} cards` : "—"}
+          {study ? `${today}/${goal} questions` : "—"}
         </p>
       </div>
       <Meter
         value={progress}
         className="mt-2 h-1.5 bg-[#ECE6FF]"
         barClassName="bg-[#5B3DF5]"
-        label="Cards reviewed today"
+        label="Questions answered today"
       />
       <p className="mt-2 flex items-center gap-1.5 text-[0.72rem] leading-snug text-brand-ink/60">
         {streak > 0 ? (
@@ -130,13 +143,13 @@ function GoalCard() {
             <span className="font-semibold text-brand-ink/80">
               {streak} day{streak === 1 ? "" : "s"}
             </span>
-            on the bounce
+            {study?.tier ? `· ${study.tier} tier` : "on the bounce"}
           </>
         ) : (
-          (study ? "Review a card to start a streak" : "Every card counts")
+          (study ? "Reach 10 questions to start a streak" : "Every question counts")
         )}
       </p>
-    </div>
+    </Link>
   );
 }
 

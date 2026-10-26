@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import {
   internalMutation,
@@ -12,6 +12,14 @@ import {
   requireVerifiedUser,
   requireOwner,
 } from "./lib/authorization";
+import { schedule, DAY_MS, type Rating } from "./lib/fsrs";
+import {
+  buildPacePlan,
+  examReadiness,
+  examTimestamp,
+  goalFromExam,
+} from "./lib/studyMetrics";
+import { gradeShortAnswer } from "./lib/recall";
 
 const sourceType = v.union(
   v.literal("text"),
@@ -31,6 +39,12 @@ const quizInput = v.object({
   options: v.array(v.string()),
   correctIndex: v.number(),
   explanation: v.string(),
+  // New quiz questions mix multiple choice, cloze and typed answers.
+  type: v.optional(
+    v.union(v.literal("mcq"), v.literal("cloze"), v.literal("typed")),
+  ),
+  answer: v.optional(v.string()),
+  acceptedAnswers: v.optional(v.array(v.string())),
 });
 const examInput = v.object({
   question: v.string(),
@@ -56,21 +70,22 @@ function targetCount(
 }
 
 // ---------------------------------------------------------------------------
-// Review scheduling
+// Review scheduling and daily study counts
 // ---------------------------------------------------------------------------
 
 /**
- * Simplified SM-2, the schedule family Anki, RemNote and Gizmo use: a failed
- * card returns in ten minutes, a recalled card is pushed out by its ease factor
- * (starting at 1 day). Two ratings only, because that is what the UI offers.
+ * The streak counts questions answered, not minutes spent. A day only keeps
+ * the chain once it reaches the starter tier; the higher tiers are the badge
+ * for that day. This means a five-minute sprint still moves the number, while
+ * one stray card cannot fake a day.
  */
-const DAY_MS = 86_400_000;
-const AGAIN_DELAY_MS = 10 * 60 * 1000;
-const STARTING_EASE = 2.5;
-const MAX_INTERVAL_DAYS = 180;
+export const STREAK_TIERS = [
+  { key: "starter", label: "Starter", questions: 10 },
+  { key: "builder", label: "Builder", questions: 25 },
+  { key: "deep", label: "Deep", questions: 50 },
+] as const;
 
-/** Cards per day that count towards the streak, matching RemNote's default. */
-export const DAILY_CARD_GOAL = 10;
+const STREAK_BASE = STREAK_TIERS[0].questions;
 
 /** Calendar day key in UTC, so a streak never depends on the viewer's clock. */
 function dayKey(timestamp: number): string {
@@ -81,24 +96,111 @@ function isDue(card: { dueAt?: number }, now: number): boolean {
   return card.dueAt === undefined || card.dueAt <= now;
 }
 
+/** Older day rows only counted cards, before quiz questions were included. */
+function questionsOn(day: { cardsReviewed: number; questionsAnswered?: number }): number {
+  return day.questionsAnswered ?? day.cardsReviewed;
+}
+
 /**
- * Streak rule: today counts once anything has been reviewed; otherwise a streak
- * stays alive if yesterday was studied. Days are UTC keys.
+ * Streak rule: today counts once the starter tier is reached; otherwise the
+ * chain stays alive if yesterday reached it. Higher tiers describe today only.
  */
 function streakFrom(
   reviewed: Map<string, number>,
   now: number,
-): { todayCount: number; streak: number } {
+): {
+  todayCount: number;
+  streak: number;
+  tier: string | null;
+  tierQuestions: number;
+  nextTier: { label: string; questions: number } | null;
+} {
   const todayCount = reviewed.get(dayKey(now)) ?? 0;
-  let cursor = todayCount > 0 ? now : now - DAY_MS;
+  let cursor = todayCount >= STREAK_BASE ? now : now - DAY_MS;
   let streak = 0;
-  while ((reviewed.get(dayKey(cursor)) ?? 0) > 0) {
+  while ((reviewed.get(dayKey(cursor)) ?? 0) >= STREAK_BASE) {
     streak += 1;
     cursor -= DAY_MS;
     // Guard against a clock skew producing an endless loop.
     if (streak > 4000) break;
   }
-  return { todayCount, streak };
+
+  const reached = [...STREAK_TIERS]
+    .reverse()
+    .find((tier) => todayCount >= tier.questions);
+  const next = STREAK_TIERS.find((tier) => todayCount < tier.questions);
+
+  return {
+    todayCount,
+    streak,
+    tier: reached?.label ?? null,
+    tierQuestions: reached?.questions ?? 0,
+    nextTier: next ? { label: next.label, questions: next.questions } : null,
+  };
+}
+
+/** One counters row per person per day, shared by cards and quiz answers. */
+async function bumpStudyDay(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  counts: { cards?: number; questions?: number },
+): Promise<void> {
+  const now = Date.now();
+  const day = dayKey(now);
+  const cards = counts.cards ?? 0;
+  const questions = counts.questions ?? 0;
+  const today = await ctx.db
+    .query("studyDays")
+    .withIndex("by_user_day", (q) => q.eq("userId", userId).eq("day", day))
+    .first();
+
+  if (today) {
+    await ctx.db.patch(today._id, {
+      cardsReviewed: today.cardsReviewed + cards,
+      questionsAnswered: questionsOn(today) + questions,
+      updatedAt: now,
+    });
+    return;
+  }
+  await ctx.db.insert("studyDays", {
+    userId,
+    day,
+    cardsReviewed: cards,
+    questionsAnswered: questions,
+    updatedAt: now,
+  });
+}
+
+/** A card the next review should prioritise: lapsed or never consolidated. */
+function isWeakCard(card: {
+  lapses?: number;
+  status: string;
+  reps?: number;
+  stability?: number;
+}): boolean {
+  // A lapse only matters while the memory is still fragile. Once a card is
+  // stable again it has earned its way out of the weak-spot session.
+  if ((card.lapses ?? 0) > 0 && (card.stability ?? 0) < 21) return true;
+  if (card.status === "again") return true;
+  return (card.reps ?? 0) > 0 && (card.stability ?? 0) < 4;
+}
+
+/** Study priority: due first, then the shakiest memory. */
+function byStudyPriority(
+  a: { dueAt?: number; lapses?: number; stability?: number; order: number },
+  b: { dueAt?: number; lapses?: number; stability?: number; order: number },
+  now: number,
+): number {
+  const dueA = isDue(a, now) ? 0 : 1;
+  const dueB = isDue(b, now) ? 0 : 1;
+  if (dueA !== dueB) return dueA - dueB;
+  const lapse = (b.lapses ?? 0) - (a.lapses ?? 0);
+  if (lapse !== 0) return lapse;
+  const stability = (a.stability ?? 0) - (b.stability ?? 0);
+  if (stability !== 0) return stability;
+  const due = (a.dueAt ?? 0) - (b.dueAt ?? 0);
+  if (due !== 0) return due;
+  return a.order - b.order;
 }
 
 async function deleteStudySetContent(ctx: MutationCtx, setId: Id<"studySets">) {
@@ -135,14 +237,46 @@ export const listMine = query({
     const now = Date.now();
 
     // Leave the (potentially long) notes on the server for the list view. Due
-    // counts are computed here so the dashboard can offer "study what's due"
-    // without downloading every card.
+    // counts, exam readiness and the pace plan are computed here so the
+    // dashboard can show them without downloading every card.
     return await Promise.all(
       sets.map(async (set) => {
-        const cards = await ctx.db
-          .query("flashcards")
-          .withIndex("by_set", (q) => q.eq("setId", set._id))
-          .collect();
+        const [cards, quizRows, exams] = await Promise.all([
+          ctx.db
+            .query("flashcards")
+            .withIndex("by_set", (q) => q.eq("setId", set._id))
+            .collect(),
+          ctx.db
+            .query("quizQuestions")
+            .withIndex("by_set", (q) => q.eq("setId", set._id))
+            .collect(),
+          ctx.db
+            .query("examQuestions")
+            .withIndex("by_set", (q) => q.eq("setId", set._id))
+            .collect(),
+        ]);
+
+        const quiz = set.lastQuizTotal
+          ? { score: set.lastQuizScore ?? 0, total: set.lastQuizTotal }
+          : null;
+        const graded = exams.filter((exam) => exam.gradedAt !== undefined);
+        const exam =
+          graded.length > 0
+            ? {
+                earned: graded.reduce(
+                  (sum, question) => sum + (question.awardedMarks ?? 0),
+                  0,
+                ),
+                total: graded.reduce((sum, question) => sum + question.marks, 0),
+              }
+            : null;
+
+        const readiness = examReadiness({ cards, quiz, exam, at: now });
+        const examAt = set.examDate ? examTimestamp(set.examDate) : null;
+        const projected = examAt
+          ? examReadiness({ cards, quiz, exam, at: examAt })
+          : readiness;
+
         return {
           _id: set._id,
           title: set.title,
@@ -162,24 +296,98 @@ export const listMine = query({
           lastStudiedAt: set.lastStudiedAt,
           lastQuizScore: set.lastQuizScore,
           lastQuizTotal: set.lastQuizTotal,
+          examDate: set.examDate,
           dueCount: cards.filter((card) => isDue(card, now)).length,
+          // Cards and missed quiz questions both earn a place in weak spots.
+          weakCount:
+            cards.filter(isWeakCard).length +
+            quizRows.filter((question) => (question.missCount ?? 0) > 0).length,
+          readiness: readiness.score,
+          readinessBand: readiness.band,
+          pace: buildPacePlan({
+            examDate: set.examDate,
+            cards,
+            quizCount: set.quizCount,
+            at: now,
+            projected: projected.score,
+          }),
         };
       }),
     );
   },
 });
 
-/** Daily review progress used by the dashboard goal card and streak. */
+/**
+ * Today's numbers: the tiered question streak, the exam-derived daily goal and
+ * how much is still to cover. The goal is derived from the nearest exam across
+ * every ready set, so it tightens as a real paper approaches.
+ */
 export const studyStats = query({
   args: {},
   handler: async (ctx) => {
     const userId = await requireUserId(ctx);
-    const days = await ctx.db
-      .query("studyDays")
-      .withIndex("by_user_day", (q) => q.eq("userId", userId))
-      .collect();
-    const reviewed = new Map(days.map((day) => [day.day, day.cardsReviewed]));
-    return { ...streakFrom(reviewed, Date.now()), goal: DAILY_CARD_GOAL };
+    const [sets, days] = await Promise.all([
+      ctx.db
+        .query("studySets")
+        .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+        .collect(),
+      ctx.db
+        .query("studyDays")
+        .withIndex("by_user_day", (q) => q.eq("userId", userId))
+        .collect(),
+    ]);
+
+    const now = Date.now();
+    const reviewed = new Map(days.map((day) => [day.day, questionsOn(day)]));
+    const streak = streakFrom(reviewed, now);
+
+    let remaining = 0;
+    let nearestExam: { daysLeft: number; title: string } | null = null;
+
+    for (const set of sets) {
+      if (set.status !== "ready") continue;
+      const cards = await ctx.db
+        .query("flashcards")
+        .withIndex("by_set", (q) => q.eq("setId", set._id))
+        .collect();
+
+      remaining += cards.filter(
+        (card) =>
+          (card.reps ?? 0) === 0 ||
+          (card.stability ?? 0) < 21 ||
+          isDue(card, now),
+      ).length;
+      // A set with no quiz taken yet still has questions to answer.
+      if (!set.lastQuizTotal) remaining += set.quizCount;
+
+      if (set.examDate) {
+        const examAt = examTimestamp(set.examDate);
+        if (examAt !== null) {
+          const daysLeft = Math.ceil((examAt - now) / DAY_MS);
+          if (
+            daysLeft >= 0 &&
+            (nearestExam === null || daysLeft < nearestExam.daysLeft)
+          ) {
+            nearestExam = { daysLeft, title: set.title };
+          }
+        }
+      }
+    }
+
+    const goal = goalFromExam(remaining, nearestExam?.daysLeft ?? null);
+
+    return {
+      ...streak,
+      goal: goal.goal,
+      goalReason: goal.reason,
+      examInDays: nearestExam?.daysLeft ?? null,
+      examTitle: nearestExam?.title ?? null,
+      remaining,
+      tiers: STREAK_TIERS.map((tier) => ({
+        ...tier,
+        reached: streak.todayCount >= tier.questions,
+      })),
+    };
   },
 });
 
@@ -213,17 +421,136 @@ export const getDetails = query({
       if (url) sourceImages.push({ id: imageId, url });
     }
 
+    const now = Date.now();
+    const quizPart = set.lastQuizTotal
+      ? { score: set.lastQuizScore ?? 0, total: set.lastQuizTotal }
+      : null;
+    const graded = exams.filter((exam) => exam.gradedAt !== undefined);
+    const examPart =
+      graded.length > 0
+        ? {
+            earned: graded.reduce(
+              (sum, question) => sum + (question.awardedMarks ?? 0),
+              0,
+            ),
+            total: graded.reduce((sum, question) => sum + question.marks, 0),
+          }
+        : null;
+
+    const readiness = examReadiness({ cards, quiz: quizPart, exam: examPart, at: now });
+    const examAt = set.examDate ? examTimestamp(set.examDate) : null;
+    const projected = examAt
+      ? examReadiness({ cards, quiz: quizPart, exam: examPart, at: examAt })
+      : readiness;
+
     return {
       set,
       cards: byOrder(cards),
       quiz: byOrder(quiz),
       exams: byOrder(exams),
       sourceImages,
+      readiness,
+      projected,
+      pace: buildPacePlan({
+        examDate: set.examDate,
+        cards,
+        quizCount: set.quizCount,
+        at: now,
+        projected: projected.score,
+      }),
+      dueCount: cards.filter((card) => isDue(card, now)).length,
+      weakCardCount: cards.filter(isWeakCard).length,
+      weakQuizCount: quiz.filter((question) => (question.missCount ?? 0) > 0).length,
       // Computed server-side so the page doesn't call Date.now() during render.
       processingStale:
         set.status === "processing" &&
         set.processingStartedAt !== undefined &&
-        Date.now() - set.processingStartedAt > 10 * 60 * 1000,
+        now - set.processingStartedAt > 10 * 60 * 1000,
+    };
+  },
+});
+
+/**
+ * The cards for a quick sprint, across every ready set. Due cards come first,
+ * then the shakiest memories, so a five-card sprint is the most useful five
+ * cards rather than the first five in the library.
+ */
+export const sprintQueue = query({
+  args: { length: v.number() },
+  handler: async (ctx, { length }) => {
+    const userId = await requireUserId(ctx);
+    const limit = Math.max(1, Math.min(50, Math.round(length)));
+    const sets = await ctx.db
+      .query("studySets")
+      .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+      .collect();
+
+    const now = Date.now();
+    const collected: Array<{ card: Doc<"flashcards">; setTitle: string }> = [];
+
+    for (const set of sets) {
+      if (set.status !== "ready") continue;
+      const rows = await ctx.db
+        .query("flashcards")
+        .withIndex("by_set", (q) => q.eq("setId", set._id))
+        .collect();
+      for (const card of rows) collected.push({ card, setTitle: set.title });
+    }
+
+    collected.sort((a, b) => byStudyPriority(a.card, b.card, now));
+    return collected
+      .slice(0, limit)
+      .map(({ card, setTitle }) => ({ ...card, setTitle }));
+  },
+});
+
+/**
+ * The weak-spot session: the cards that keep slipping plus the quiz questions
+ * that have been missed. Ordered worst first, so a short session starts with
+ * the material most likely to cost marks.
+ */
+export const weakSpots = query({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const userId = await requireUserId(ctx);
+    const set = await ctx.db.get(setId);
+    if (!set || set.userId !== userId) return null;
+
+    const [cards, quiz] = await Promise.all([
+      ctx.db
+        .query("flashcards")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+      ctx.db
+        .query("quizQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+    ]);
+
+    const weakCards = cards
+      .filter(isWeakCard)
+      .sort(
+        (a, b) =>
+          (b.lapses ?? 0) - (a.lapses ?? 0) ||
+          (a.stability ?? 0) - (b.stability ?? 0),
+      )
+      .slice(0, 30);
+
+    const missedQuiz = quiz
+      .filter((question) => (question.missCount ?? 0) > 0)
+      .sort(
+        (a, b) =>
+          (b.missCount ?? 0) - (a.missCount ?? 0) ||
+          (b.lastMissedAt ?? 0) - (a.lastMissedAt ?? 0),
+      )
+      .slice(0, 12);
+
+    return {
+      setTitle: set.title,
+      cards: weakCards,
+      quiz: missedQuiz,
+      weakCardCount: cards.filter(isWeakCard).length,
+      weakQuizCount: quiz.filter((question) => (question.missCount ?? 0) > 0).length,
     };
   },
 });
@@ -377,6 +704,35 @@ export const updateDetails = mutation({
   },
 });
 
+/** Exam date validation: an empty value clears the pace plan. */
+function safeExamDate(value?: string): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return undefined;
+  return Number.isFinite(Date.parse(`${trimmed}T00:00:00Z`))
+    ? trimmed
+    : undefined;
+}
+
+/**
+ * Sets or clears the exam this set is for. Kept apart from `updateDetails` so
+ * a rename from an older client cannot wipe the date the goal depends on.
+ */
+export const setExamDate = mutation({
+  args: {
+    setId: v.id("studySets"),
+    examDate: v.optional(v.string()),
+  },
+  handler: async (ctx, { setId, examDate }) => {
+    const userId = await requireUserId(ctx);
+    await requireOwner(await ctx.db.get(setId), userId);
+    await ctx.db.patch(setId, {
+      examDate: safeExamDate(examDate),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const remove = mutation({
   args: { setId: v.id("studySets") },
   handler: async (ctx, { setId }) => {
@@ -404,100 +760,133 @@ export const remove = mutation({
 });
 
 /**
- * Applies one self-rated review: schedules the next showing, keeps the set's
- * mastery count in sync and bumps the daily counter. Kept separate from the
+ * Applies one FSRS review: schedules the next showing, keeps the set's mastery
+ * count in sync and bumps the daily question counter. Kept separate from the
  * mutation so the schedule can be exercised directly.
  */
 async function applyReview(
   ctx: MutationCtx,
   userId: Id<"users">,
   cardId: Id<"flashcards">,
-  outcome: "known" | "again",
+  rating: Rating,
 ) {
-    const card = await ctx.db.get(cardId);
-    if (!card || card.userId !== userId) throw new Error("Flashcard not found.");
-    const set = await ctx.db.get(card.setId);
-    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+  const card = await ctx.db.get(cardId);
+  if (!card || card.userId !== userId) throw new Error("Flashcard not found.");
+  const set = await ctx.db.get(card.setId);
+  if (!set || set.userId !== userId) throw new Error("Study set not found.");
 
-    const now = Date.now();
-    const ease = card.ease ?? STARTING_EASE;
+  const now = Date.now();
+  const next = schedule(
+    {
+      state: card.fsrsState,
+      stability: card.stability,
+      difficulty: card.difficulty,
+      lastReviewedAt: card.lastReviewedAt,
+      lapses: card.lapses,
+      reps: card.reps,
+    },
+    rating,
+    now,
+  );
 
-    // Fail: back in ten minutes, ease trimmed. Recall: interval grows by the
-    // ease factor, starting at one day, and ease slowly rises.
-    const intervalDays =
-      outcome === "again"
-        ? 0
-        : card.intervalDays && card.intervalDays > 0
-          ? Math.min(MAX_INTERVAL_DAYS, Math.max(1, Math.round(card.intervalDays * ease)))
-          : 1;
-    const dueAt =
-      outcome === "again" ? now + AGAIN_DELAY_MS : now + intervalDays * DAY_MS;
+  await ctx.db.patch(cardId, {
+    // Hard is still a successful recall in FSRS; only Again is a lapse.
+    status: rating >= 2 ? "known" : "again",
+    reviewCount: card.reviewCount + 1,
+    lastReviewedAt: now,
+    dueAt: next.dueAt,
+    intervalDays: next.intervalDays,
+    fsrsState: next.state,
+    stability: next.stability,
+    difficulty: next.difficulty,
+    lapses: next.lapses,
+    reps: next.reps,
+    lastRating: rating,
+  });
 
-    await ctx.db.patch(cardId, {
-      status: outcome,
-      reviewCount: card.reviewCount + 1,
-      lastReviewedAt: now,
-      dueAt,
-      intervalDays,
-      ease:
-        outcome === "again"
-          ? Math.max(1.3, Math.round((ease - 0.2) * 100) / 100)
-          : Math.min(3, Math.round((ease + 0.1) * 100) / 100),
-    });
+  let knownCount = set.knownCount;
+  if (rating >= 2 && card.status !== "known") knownCount += 1;
+  if (rating === 1 && card.status === "known") knownCount -= 1;
 
-    let knownCount = set.knownCount;
-    if (outcome === "known" && card.status !== "known") knownCount += 1;
-    if (outcome === "again" && card.status === "known") knownCount -= 1;
+  await ctx.db.patch(set._id, {
+    knownCount: Math.max(0, Math.min(set.cardCount, knownCount)),
+    lastStudiedAt: now,
+    updatedAt: now,
+  });
 
-    await ctx.db.patch(set._id, {
-      knownCount: Math.max(0, Math.min(set.cardCount, knownCount)),
-      lastStudiedAt: now,
-      updatedAt: now,
-    });
+  await bumpStudyDay(ctx, userId, { cards: 1, questions: 1 });
 
-    // One counters row per day powers the daily goal and streak.
-    const day = dayKey(now);
-    const today = await ctx.db
-      .query("studyDays")
-      .withIndex("by_user_day", (q) => q.eq("userId", userId).eq("day", day))
-      .first();
-    if (today) {
-      await ctx.db.patch(today._id, {
-        cardsReviewed: today.cardsReviewed + 1,
-        updatedAt: now,
-      });
-    } else {
-      await ctx.db.insert("studyDays", {
-        userId,
-        day,
-        cardsReviewed: 1,
-        updatedAt: now,
-      });
-    }
+  return {
+    dueAt: next.dueAt,
+    intervalDays: next.intervalDays,
+    stability: next.stability,
+    state: next.state,
+  };
 }
 
-/** Saves a self-rated flashcard review and keeps the set's mastery count in sync. */
+/** Saves one FSRS rating (1 Again – 4 Easy) for a card. */
 export const reviewCard = mutation({
   args: {
     cardId: v.id("flashcards"),
-    outcome: v.union(v.literal("known"), v.literal("again")),
+    rating: v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4)),
   },
-  handler: async (ctx, { cardId, outcome }) => {
+  handler: async (ctx, { cardId, rating }) => {
     const userId = await requireUserId(ctx);
-    const card = await requireOwner(
-      await ctx.db.get(cardId),
+    await requireOwner(await ctx.db.get(cardId), userId);
+    return await applyReview(ctx, userId, cardId, rating as Rating);
+  },
+});
+
+/** Grades one answer against the saved question. Shared by both mutations. */
+function gradeQuizQuestion(
+  question: Doc<"quizQuestions">,
+  response: { selectedIndex?: number; text?: string },
+): { correct: boolean; expected: string } {
+  const type = question.type ?? "mcq";
+  if (type === "mcq") {
+    return {
+      correct: response.selectedIndex === question.correctIndex,
+      expected: question.options[question.correctIndex] ?? "",
+    };
+  }
+
+  const expected = question.answer ?? "";
+  const grade = gradeShortAnswer(expected, question.acceptedAnswers, response.text ?? "");
+  return { correct: grade.correct, expected };
+}
+
+/**
+ * Checks a single typed, dictated or multiple-choice answer before the student
+ * moves on. The expected answer comes back so the explanation can show it.
+ */
+export const checkQuizAnswer = mutation({
+  args: {
+    questionId: v.id("quizQuestions"),
+    selectedIndex: v.optional(v.number()),
+    text: v.optional(v.string()),
+  },
+  handler: async (ctx, { questionId, selectedIndex, text }) => {
+    const userId = await requireUserId(ctx);
+    const question = await requireOwner(
+      await ctx.db.get(questionId),
       userId,
     );
-    return await applyReview(ctx, userId, cardId, outcome);
+    return gradeQuizQuestion(question, { selectedIndex, text });
   },
 });
 
 export const submitQuiz = mutation({
   args: {
     setId: v.id("studySets"),
-    answers: v.array(v.number()),
+    responses: v.array(
+      v.object({
+        questionId: v.id("quizQuestions"),
+        selectedIndex: v.optional(v.number()),
+        text: v.optional(v.string()),
+      }),
+    ),
   },
-  handler: async (ctx, { setId, answers }) => {
+  handler: async (ctx, { setId, responses }) => {
     const userId = await requireUserId(ctx);
     const set = await requireOwner(
       await ctx.db.get(setId),
@@ -512,22 +901,47 @@ export const submitQuiz = mutation({
     );
     if (questions.length === 0) throw new Error("This set has no quiz yet.");
 
-    // Reject oversized or malformed answer arrays early. This is a client trust
-    // boundary: the server should not assume the browser sent one answer per
-    // question in the right order.
-    if (!Array.isArray(answers) || answers.length !== questions.length) {
+    // This is a client trust boundary: the server expects exactly one response
+    // per saved question and grades every one itself.
+    if (responses.length !== questions.length) {
       throw new Error("That quiz submission did not look right. Open the quiz again and retry.");
     }
-    if (answers.some((value) => !Number.isInteger(value) || value < 0 || value > 3)) {
+    const byId = new Map(responses.map((response) => [response.questionId, response]));
+    if (byId.size !== questions.length) {
       throw new Error("That quiz submission did not look right. Open the quiz again and retry.");
     }
-
-    let score = 0;
-    questions.forEach((question, index) => {
-      if (answers[index] === question.correctIndex) score += 1;
-    });
 
     const now = Date.now();
+    const results: Array<{
+      questionId: Id<"quizQuestions">;
+      correct: boolean;
+      expected: string;
+    }> = [];
+    let score = 0;
+
+    for (const question of questions) {
+      const response = byId.get(question._id);
+      if (!response) {
+        throw new Error("That quiz submission did not look right. Open the quiz again and retry.");
+      }
+
+      const grade = gradeQuizQuestion(question, response);
+      if (grade.correct) score += 1;
+      results.push({ questionId: question._id, ...grade });
+
+      // Per-question accuracy powers the weak-spot session. A correct answer
+      // slowly works a question out of the list: one miss needs one correct
+      // attempt to clear, rather than staying flagged forever.
+      await ctx.db.patch(question._id, {
+        correctCount:
+          (question.correctCount ?? 0) + (grade.correct ? 1 : 0),
+        missCount: grade.correct
+          ? Math.max(0, (question.missCount ?? 0) - 1)
+          : (question.missCount ?? 0) + 1,
+        lastMissedAt: grade.correct ? question.lastMissedAt : now,
+      });
+    }
+
     await ctx.db.insert("quizAttempts", {
       setId,
       userId,
@@ -541,8 +955,9 @@ export const submitQuiz = mutation({
       lastStudiedAt: now,
       updatedAt: now,
     });
+    await bumpStudyDay(ctx, userId, { questions: questions.length });
 
-    return { score, total: questions.length };
+    return { score, total: questions.length, results };
   },
 });
 
@@ -636,10 +1051,13 @@ export const completeGeneration = internalMutation({
         order: index,
         status: "new",
         reviewCount: 0,
-        // New cards are due immediately.
+        // New cards are due immediately and have no memory state yet. FSRS
+        // reads the first rating to set their starting stability.
         dueAt: now,
         intervalDays: 0,
-        ease: STARTING_EASE,
+        fsrsState: "new",
+        lapses: 0,
+        reps: 0,
       });
     }
     for (const [index, question] of quiz.entries()) {
@@ -650,7 +1068,12 @@ export const completeGeneration = internalMutation({
         options: question.options,
         correctIndex: question.correctIndex,
         explanation: question.explanation,
+        type: question.type,
+        answer: question.answer,
+        acceptedAnswers: question.acceptedAnswers,
         order: index,
+        missCount: 0,
+        correctCount: 0,
       });
     }
     for (const [index, question] of exams.entries()) {
@@ -731,5 +1154,8 @@ export const saveExamResult = internalMutation({
       gradedAt: now,
     });
     await ctx.db.patch(set._id, { lastStudiedAt: now, updatedAt: now });
+    // A marked written question is still a question answered: it moves the
+    // tiered streak and the daily goal like a card or a quiz question.
+    await bumpStudyDay(ctx, exam.userId, { questions: 1 });
   },
 });

@@ -99,6 +99,10 @@ const schema = defineSchema(
       lastStudiedAt: v.optional(v.number()),
       lastQuizScore: v.optional(v.number()),
       lastQuizTotal: v.optional(v.number()),
+      // The exam this set is for, stored as a UTC calendar key (YYYY-MM-DD).
+      // The daily goal, exam-readiness projection and pace plan are all derived
+      // from it; a set without a date simply has no pace plan.
+      examDate: v.optional(v.string()),
     })
       .index("by_user_updated", ["userId", "updatedAt"])
       .index("by_course", ["courseId", "updatedAt"]),
@@ -472,10 +476,27 @@ const schema = defineSchema(
       status: v.union(v.literal("new"), v.literal("known"), v.literal("again")),
       reviewCount: v.number(),
       lastReviewedAt: v.optional(v.number()),
-      // Lightweight SM-2 scheduling. Missing values mean "due now", which is
-      // how cards created before scheduling existed are treated.
+      // FSRS scheduling. `state` is new / learning / review / relearning;
+      // stability is the days until recall falls to 90%, difficulty is 1–10.
+      // Missing values mean "due now" and schedule as a first sighting.
       dueAt: v.optional(v.number()),
       intervalDays: v.optional(v.number()),
+      fsrsState: v.optional(
+        v.union(
+          v.literal("new"),
+          v.literal("learning"),
+          v.literal("review"),
+          v.literal("relearning"),
+        ),
+      ),
+      stability: v.optional(v.number()),
+      difficulty: v.optional(v.number()),
+      lapses: v.optional(v.number()),
+      reps: v.optional(v.number()),
+      // The last rating (1 Again – 4 Easy), kept so weak spots can be read
+      // without replaying every review.
+      lastRating: v.optional(v.number()),
+      // Legacy SM-2 ease retained for old rows; the scheduler ignores it.
       ease: v.optional(v.number()),
     }).index("by_set", ["setId"]),
 
@@ -483,10 +504,24 @@ const schema = defineSchema(
       setId: v.id("studySets"),
       userId: v.id("users"),
       question: v.string(),
+      // Multiple-choice questions keep four options and one correct index.
+      // Cloze and typed questions leave `options` empty and store the expected
+      // answer instead; the generator also supplies accepted alternatives so
+      // dictation and paraphrases can still be marked right.
       options: v.array(v.string()),
       correctIndex: v.number(),
+      type: v.optional(
+        v.union(v.literal("mcq"), v.literal("cloze"), v.literal("typed")),
+      ),
+      answer: v.optional(v.string()),
+      acceptedAnswers: v.optional(v.array(v.string())),
       explanation: v.string(),
       order: v.number(),
+      // Per-question accuracy, so the weak-spot session can point at the
+      // questions that actually keep going wrong.
+      missCount: v.optional(v.number()),
+      correctCount: v.optional(v.number()),
+      lastMissedAt: v.optional(v.number()),
     }).index("by_set", ["setId"]),
 
     // Exam-style questions are answered in full sentences and marked by the
@@ -552,6 +587,9 @@ const schema = defineSchema(
       userId: v.id("users"),
       day: v.string(),
       cardsReviewed: v.number(),
+      // Cards answered plus quiz questions answered. The tiered streak counts
+      // questions, not minutes, so a short sprint still moves the number.
+      questionsAnswered: v.optional(v.number()),
       updatedAt: v.number(),
     }).index("by_user_day", ["userId", "day"]),
 

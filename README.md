@@ -127,8 +127,12 @@ earned. Four practice papers per course is the cap; remove one to build another.
    upload. Long sets are generated in batches so a single JSON response cannot truncate
    the middle of the deck, and a batch that comes back malformed is retried rather than
    ending the run.
-3. **Study** — flip and self-rate flashcards, take the quiz, and answer exam questions
-   that are marked against the guide with feedback and a model answer.
+3. **Study** — recall cards by **speaking the answer** (the browser's own dictation
+   engine turns speech into text; typing works too), which is compared with the model
+   answer before you rate it. A **Self-mark** switch skips the comparison for when
+   speaking is not possible. The quiz mixes multiple choice, cloze (fill the gap) and
+   short typed answers, all marked on key words with explanations. Exam questions are
+   marked against the guide with feedback and a model answer.
 4. **Tag the exam context afterwards** — a set opens with its settings button, where it can
    be renamed and tagged with a course, an exam board (AQA, Pearson Edexcel, OCR, WJEC /
    Eduqas, Cambridge International, IB, SQA, College Board AP), and a level (GCSE, A-Level,
@@ -136,10 +140,34 @@ earned. Four practice papers per course is the cap; remove one to build another.
    exam questions, and how written answers are marked. Course, board, and level are
    filterable and searchable on the dashboard. Tagging is not part of the upload because a
    student pasting notes usually wants the set, not a form.
-5. **Review on a schedule** — flashcards use a simplified SM-2 schedule: a card you miss
-   returns in ten minutes, a card you recall returns tomorrow and then at widening
-   intervals (×2.5 ease, capped at 180 days). Each deck shows how many cards are due.
-6. **Keep a habit** — the dashboard shows how many cards you have reviewed today against your daily goal.
+5. **Review on a full FSRS schedule** — every card carries an FSRS memory state
+   (stability and difficulty). Each review is rated **Again / Hard / Good / Easy**; a
+   missed card returns in ten minutes, a recalled one is scheduled from its predicted
+   recall at the moment you answered. The review queue is ordered by due date, so today's
+   work is what the scheduler asks for rather than a fixed deck order. Each set shows how
+   many cards are due.
+6. **Keep a habit** — the streak is **tiered by question count**: a day keeps the streak
+   once it reaches the **Starter** tier (10 questions), with **Builder** (25) and **Deep**
+   (50) as higher badges for that day. Card reviews and quiz answers both count. The daily
+   goal is **derived from your nearest exam date**: Bluprint divides the material still to
+   cover by the days left (clamped to 10–80 questions), so it tightens as a real paper
+   approaches. Without an exam date it falls back to 20.
+7. **Today, but second** — **My sets** is still the home screen. A compact Today strip on
+   it shows the goal and streak, with one-tap **quick sprints** of 5, 10, 15 or 25 cards.
+   The full **Today** screen (sidebar) holds the cross-set due queue and the sets with weak
+   spots. A sprint takes the most useful cards first: everything overdue, then the shakiest
+   memories.
+8. **Mastery is exam readiness** — the percentage on each set is no longer "cards known".
+   It weighs **card recall** (from FSRS) at 60%, **last quiz accuracy** at 25% and **written
+   exam marks** at 15%, dropping any part the set does not have. It also projects readiness
+   forward to exam day, so a high score with a distant exam date reads honestly.
+9. **Pace the exam** — add an exam date in **Set settings** and the set gets a per-day pace
+   plan: days left, cards per day, quiz questions per week, an on-track / tight / behind
+   status, and projected readiness on the day. The daily goal uses the nearest exam across
+   all ready sets.
+10. **Weak spots** — a dedicated session per set collects cards that were rated Again, have
+   lapsed, or never reached a stable memory, plus the quiz questions you keep missing. It
+   starts with the worst material rather than replaying the whole deck.
 7. **Ask the tutor** — the tutor can be pointed at a study set, a whole course, or one
    unit of a course. A set thread reads that set's notes; a course or unit thread reads the
    scraped pathway for that scope. It knows the course, board, and level, and keeps each
@@ -158,15 +186,15 @@ earned. Four practice papers per course is the cap; remove one to build another.
    temperature, so it deliberates deeply over a full derivation or a marked essay plan.
    Tiers are named by feel rather than by model — each one maps to a different NVIDIA
    model on the server, so the browser never sees a model id.
-8. **Edit and rebuild** — **Set settings** next to a set's title changes its name, course,
-   board, or level, and its three build sliders (1–100 flashcards, quiz questions and
-   exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and exam
-   questions with those counts and the new board conventions; your notes and uploads are
-   kept.
-9. **Persist** — study sets, extracted notes, uploads, card progress, due dates, quiz
+11. **Edit and rebuild** — **Set settings** next to a set's title changes its name, course,
+   board, level, or exam date, and its three build sliders (1–100 flashcards, quiz questions
+   and exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and
+   exam questions with those counts and the new board conventions; your notes and uploads
+   are kept. The exam date saves without a rebuild.
+12. **Persist** — study sets, extracted notes, uploads, FSRS card state, daily counts, quiz
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
-10. **Plan your revision** — **Build revision timetable** asks which subjects to revise,
+13. **Plan your revision** — **Build revision timetable** asks which subjects to revise,
     which **study method** the plan uses (topics, past papers only, or a mix of both), the
     **longest** a topic session can be, one paper choice for the whole plan, how long a
     school day and a day off should be, how many days a week you can work, and when your
@@ -176,14 +204,15 @@ earned. Four practice papers per course is the cap; remove one to build another.
     The schedule is saved to your account and appears in the sidebar as a colour-coded weekly
     timetable; clicking a topic session opens (or builds) its study set, and clicking a past
     paper session opens the saved paper.
-11. **Practise a paper** — every ready course keeps up to four saved practice papers,
+14. **Practise a paper** — every ready course keeps up to four saved practice papers,
     written from its specification in that subject's real question format (RS 3/4/5/12,
     English essays, maths calculations, and so on) and marked question by question against
     their own mark schemes. Progress and marks per paper are kept alongside the course.
 
 After signing in, the main screen is **My sets**, and nothing else. It keeps one primary
-action, **New study set**, a search box, and the saved-set list with status, due counts,
-card mastery and last quiz score. **My courses** is a separate screen with topic progress,
+action, **New study set**, a search box, and the saved-set list with status, due counts, exam readiness and
+pace or last quiz score. The Today strip sits below the hero and above the list, so the
+library stays the focus. **My courses** is a separate screen with topic progress,
 material counts and **Add courses**; the saved **Revision timetable** and the **AI tutor**
 each have their own sidebar destination. The tutor's first screen asks which course or set
 to discuss, so it never sits in the middle of the set library.
@@ -216,10 +245,18 @@ Sets built from a course topic link back to that course.
 - **Days are UTC.** The daily goal and streak use UTC calendar days so two friends in
   different time zones see consistent numbers. A 4 a.m. local cut-off, as Anki uses, is not
   implemented.
-- **Ten cards a day is the goal.** It is a display target, not a hard limit: any number of
-  reviews counts and nothing is blocked.
-- **A card you mark "again" comes back in ten minutes**, not the next day, so a study
-  session can repair a gap immediately.
+- **Ten questions a day starts the streak; the goal itself follows the exam date.** The
+  goal is a display target, not a hard limit: any number of questions counts and nothing is
+  blocked. A day only keeps the streak at the Starter tier, so one stray card cannot fake a
+  day; Builder and Deep are badges, not extra streak multipliers.
+- **A card you mark "Again" comes back in ten minutes**, not the next day, so a study
+  session can repair a gap immediately. FSRS then carries the lapse into the next
+  interval; there is no separate "learning steps" screen.
+- **Dictation uses the browser's speech engine.** Chrome, Edge and Safari expose one, so
+  recall needs no extra key or upload; Firefox does not, and the typed box plus Self-mark
+  cover that case. Audio is never sent to NVIDIA for card recall.
+- **Exam readiness is a heuristic, not a predicted grade.** The 60/25/15 split and the
+  projected-at-exam figure exist to steer revision; the bands are labels, not guarantees.
 - **Board conventions are prompt guidance, not official mark schemes.** Real past papers
   and mark schemes are copyrighted, so questions are original and the AI imitates each
   board's published wording and marking style rather than reproducing a paper. Cambridge
@@ -451,8 +488,9 @@ seconds in the browser and rejected above 8 MB. `NVIDIA_ASR_MODEL` and
 - Creating a set saves it immediately with status **queued**.
 - Opening the set triggers one server action. An atomic claim prevents duplicate runs.
 - The action reads stored images (one vision request per image), writes the extracted
-  notes to the set, then asks NVIDIA in sequence for the summary, flashcards, quiz, and
-  exam questions. Progress messages are written to the set so the page updates live.
+  notes to the set, then asks NVIDIA in sequence for the summary, flashcards, quiz (a mix
+  of multiple choice, cloze and typed answers), and exam questions. Progress messages are
+  written to the set so the page updates live.
 - If anything fails, the set gets an **error** status, a readable message, and a retry
   button. Extracted notes and uploads are kept.
 - Rate limits (HTTP 429) rotate to the next key in the pool. If the whole pool is
@@ -461,6 +499,27 @@ exhausted, the set is paused with a clear message so you can retry after the coo
 
 Convex actions can run for several minutes, so generation continues if the page is closed.
 Reopening the set shows the saved result.
+
+## How scheduling, streak and readiness work
+
+- **FSRS on the server.** `convex/lib/fsrs.ts` holds the scheduler as a pure function.
+  Every card stores `stability` (days until recall falls to 90%), `difficulty` (1–10), its
+  learning state, reps and lapses. A review supplies one of four ratings; the scheduler
+  computes the recall probability at that moment, then the next stability and interval.
+  There is no client-side scheduling and no model call: a review is one database write.
+- **Typed recall with dictation.** The card is shown, the student speaks (or types) the
+  answer, then the answer is compared with the model answer using the same word-overlap
+  rules as a typed quiz question (`convex/lib/recall.ts`). The student still chooses the
+  FSRS rating once the answer is visible, because only they know how effortful the recall
+  felt. With **Self-mark** on, the comparison is skipped and the answer is simply revealed.
+- **Daily counts.** `studyDays` holds one row per person per UTC day with cards reviewed
+  and questions answered. Cards and quiz questions both increment `questionsAnswered`, so a
+  quiz-only session still moves the tiered streak.
+- **Readiness and pace.** `convex/lib/studyMetrics.ts` computes readiness at any timestamp
+  from the cards' FSRS state plus quiz and written marks. Passing the exam timestamp gives
+  the projected-at-exam number. `buildPacePlan` turns the exam date into cards/day and
+  quizzes/week, and `goalFromExam` turns the remaining material and days left into the daily
+  goal. All of it is server-side, so two devices see the same plan.
 
 Tutor questions are a single NVIDIA request each: the set's notes, its course/board/level,
 and the last ten turns are sent, and the question and answer are saved only after a usable
@@ -495,6 +554,12 @@ same rate-limit messages as the rest of the app.
   sections is reopened rather than rebuilt. The existing compile pipeline takes over, so a
   pathway set has the same summary, cards, quiz, exam marking, scheduling, and tutor as an
   uploaded set.
+- English Literature poetry clusters are completed from the saved AQA anthology lists, so
+  every poem appears once in anthology order even when the scraped page only lists the ones
+  with notes. Scraped poetry units and starter "Poetry anthology" units are replaced, not
+  kept alongside. A saved pathway that shows the anthology twice is repaired in place the
+  next time it is opened; poem topic ids are reused, so linked study sets and tick-offs
+  survive.
 - Marking topics complete is manual. A topic's linked study set, card counts, and course
   scores are derived from the set, not duplicated.
 
@@ -629,6 +694,7 @@ src/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
     Dashboard.tsx        saved study sets, search, and the new-set action
+    Today.tsx            due queue, quick sprint picker, streak and daily goal
     Courses.tsx          course library with pathway progress
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
     Course.tsx           course pathway, past papers, topic papers, and study sets,
@@ -644,7 +710,8 @@ src/
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
-    study/               flashcard review, quiz runner, exam practice, practice papers,
+    study/               flashcard review (dictation + FSRS), quiz runner, exam practice,
+                         practice papers, readiness/pacing panel, weak spots, today strip,
                          tutor chat, set settings
   convex/
     schema.ts            users, courses, studySets, cards, quiz, exam, practice papers,
@@ -657,6 +724,10 @@ src/
     ai.ts                "use node" NVIDIA calls, key rotation, OCR, JSON validation, marking,
                          tutoring, study-set generation, and the course-outline pathway actions
     settings.ts          environment key-pool status for the UI
+    lib/fsrs.ts          pure FSRS scheduler (stability, difficulty, four ratings)
+    lib/studyMetrics.ts  exam readiness, projected readiness, pace plan, daily goal
+    lib/recall.ts        shared word-overlap marking for typed and cloze answers
+    lib/poetryAnthologies.ts  saved AQA clusters and duplicate-free anthologised units
     lib/nvidiaConfig.ts  NVIDIA URL, model IDs, key parsing, notes limit
     lib/cognito.ts       reads a course's published topic outline
     lib/paperBlueprint.ts each subject's question types, marks and marking style

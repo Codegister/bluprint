@@ -79,11 +79,18 @@ type Summary = {
 };
 
 type GeneratedCard = { front: string; back: string };
+type QuizKind = "mcq" | "cloze" | "typed";
 type GeneratedQuiz = {
   question: string;
   options: string[];
   correctIndex: number;
   explanation: string;
+  /** MCQ by default, so quizzes built before this existed still parse. */
+  type?: QuizKind;
+  /** Expected answer for cloze and typed questions. */
+  answer?: string;
+  /** Dictation and paraphrases the marker should also accept. */
+  acceptedAnswers?: string[];
 };
 type GeneratedExam = {
   question: string;
@@ -550,32 +557,68 @@ function parseCards(raw: string, limit = 12): GeneratedCard[] {
     .slice(0, limit);
 }
 
+function quizKind(value: unknown): QuizKind {
+  const text = typeof value === "string" ? value.trim().toLowerCase() : "";
+  // Models label the two written kinds in a few ways. Anything unrecognised
+  // stays multiple choice, which is the only kind that can be marked without
+  // an expected answer.
+  if (/cloze|fill|gap|blank/.test(text)) return "cloze";
+  if (/typed|short|text|written/.test(text)) return "typed";
+  return "mcq";
+}
+
 function parseQuiz(raw: string, limit = 6): GeneratedQuiz[] {
   const items = collectionItems(
     raw,
     "questions",
-    (row) => typeof row.question === "string" && Array.isArray(row.options),
+    (row) => typeof row.question === "string",
   );
   const questions: GeneratedQuiz[] = [];
   for (const item of items) {
     const row = item as Partial<GeneratedQuiz>;
-    const question = asText(row.question, 600);
-    const options = Array.isArray(row.options)
-      ? row.options.map((option) => asText(option, 300))
-      : [];
-    const correctIndex = Number(row.correctIndex);
+    const question = asText(row.question, 700);
     const explanation = asText(row.explanation, 900);
-    if (
-      question &&
-      options.length === 4 &&
-      options.every(Boolean) &&
-      Number.isInteger(correctIndex) &&
-      correctIndex >= 0 &&
-      correctIndex < 4 &&
-      explanation
-    ) {
-      questions.push({ question, options, correctIndex, explanation });
+    const type = quizKind(row.type);
+    if (!question || !explanation) continue;
+
+    if (type === "mcq") {
+      const options = Array.isArray(row.options)
+        ? row.options.map((option) => asText(option, 300))
+        : [];
+      const correctIndex = Number(row.correctIndex);
+      if (
+        options.length === 4 &&
+        options.every(Boolean) &&
+        Number.isInteger(correctIndex) &&
+        correctIndex >= 0 &&
+        correctIndex < 4
+      ) {
+        questions.push({ question, options, correctIndex, explanation, type });
+      }
+      continue;
     }
+
+    // A cloze question is only a cloze if it actually has a blank to fill.
+    const answer = asText(row.answer, 300);
+    if (!answer) continue;
+    if (type === "cloze" && !/_{3,}/.test(question)) continue;
+
+    const acceptedAnswers = Array.isArray(row.acceptedAnswers)
+      ? row.acceptedAnswers
+          .map((option) => asText(option, 200))
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+
+    questions.push({
+      question,
+      options: [],
+      correctIndex: 0,
+      explanation,
+      type,
+      answer,
+      acceptedAnswers,
+    });
   }
   return questions.slice(0, limit);
 }
@@ -888,11 +931,21 @@ async function generateQuiz(
           role: "user",
           content:
             `${materialBlock(notes)}\n\n` +
-            `Create ${want} multiple-choice quiz questions of increasing difficulty. Cover different parts of the material and include at least two questions that ask the student to apply a concept to a new example rather than recall a definition. Each question needs exactly 4 plausible options, one correct index (0-3), and a 1-2 sentence explanation of why the answer is right and the distractors are wrong. ` +
+            `Create ${want} quiz questions of increasing difficulty. Mix three kinds: roughly half multiple choice, a quarter cloze, and a quarter short typed answer. Each kind tests recall in a different way, so the quiz does not become four options to guess between. ` +
+            "Cover different parts of the material and include at least two questions that ask the student to apply a concept to a new example rather than recall a definition. " +
+            "A multiple-choice question needs exactly 4 plausible options and one correct index (0-3). " +
+            "A cloze question is one sentence from the material with the key term replaced by ____ (four underscores) and no options. " +
+            "A typed question asks for a word or short phrase and must be answerable in a few words, with no options. " +
+            "Every question needs a 1-2 sentence explanation of why the answer is right. " +
+            "For cloze and typed questions list every wording that should be marked correct in acceptedAnswers, including abbreviations and common synonyms. " +
             (previous
               ? `Do not repeat these existing questions:\n${previous}\n`
               : "") +
-            'Return JSON exactly like: {"questions":[{"question":"...","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."}]}',
+            'Return JSON exactly like: {"questions":[' +
+            '{"question":"...","type":"mcq","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."},' +
+            '{"question":"The process by which water moves across a membrane is ____.","type":"cloze","answer":"osmosis","acceptedAnswers":["osmosis"],"explanation":"..."},' +
+            '{"question":"Name the cell organelle where aerobic respiration happens.","type":"typed","answer":"mitochondria","acceptedAnswers":["mitochondrion","the mitochondria"],"explanation":"..."}' +
+            "]}",
         },
       ],
       // A batch of eight with explanations needs far more room than the old

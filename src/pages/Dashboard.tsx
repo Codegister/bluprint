@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { CreateSetDialog } from "@/components/CreateSetDialog";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
+import { TodayStrip } from "@/components/study/TodayStrip";
 import { SkeletonRows } from "@/components/Skeletons";
 import { EASE, Meter, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { qualificationLabel } from "@/lib/examBoards";
-import { displayName, percent, relativeDate } from "@/lib/format";
+import { displayName, relativeDate } from "@/lib/format";
 import { subjectMeta } from "@/lib/subjects";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -40,7 +41,7 @@ function StatusText({ set }: { set: SetSummary }) {
 
 /** One saved set, shown as a single scannable row. */
 function SetRow({ set }: { set: SetSummary }) {
-  const mastery = percent(set.knownCount, set.cardCount);
+  const readiness = set.readiness;
   const processing = set.status === "processing" || set.status === "queued";
   const context = qualificationLabel(set);
   const accent = subjectMeta(set.course ?? "").color;
@@ -78,13 +79,13 @@ function SetRow({ set }: { set: SetSummary }) {
         ) : (
           <div className="mt-2 flex items-center gap-2.5">
             <Meter
-              value={mastery}
+              value={readiness}
               className="h-1.5 w-full max-w-[180px]"
               barStyle={{ backgroundColor: accent }}
-              label={`${set.title} mastery`}
+              label={`${set.title} exam readiness`}
             />
             <span className="shrink-0 text-[0.7rem] text-muted-foreground">
-              {mastery}% known
+              {readiness}% exam-ready
             </span>
           </div>
         )}
@@ -94,14 +95,18 @@ function SetRow({ set }: { set: SetSummary }) {
         {set.status === "ready" ? (
           <>
             <p className="font-medium text-brand-ink">
-              {set.lastQuizTotal
-                ? `${set.lastQuizScore}/${set.lastQuizTotal} last quiz`
-                : "No quiz yet"}
+              {set.pace
+                ? `${set.pace.daysLeft}d to exam`
+                : set.lastQuizTotal
+                  ? `${set.lastQuizScore}/${set.lastQuizTotal} last quiz`
+                  : "No quiz yet"}
             </p>
             <p className="mt-0.5">
-              {set.lastStudiedAt
-                ? `Studied ${relativeDate(set.lastStudiedAt)}`
-                : "Not started"}
+              {set.pace
+                ? `${set.pace.perDay} cards/day`
+                : set.lastStudiedAt
+                  ? `Studied ${relativeDate(set.lastStudiedAt)}`
+                  : "Not started"}
             </p>
           </>
         ) : (
@@ -135,10 +140,16 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const list = sets ?? [];
-    const cards = list.reduce((sum, set) => sum + set.cardCount, 0);
-    const known = list.reduce((sum, set) => sum + set.knownCount, 0);
+    const ready = list.filter((set) => set.status === "ready");
     const due = list.reduce((sum, set) => sum + (set.dueCount ?? 0), 0);
-    return { mastery: percent(known, cards), due };
+    return {
+      // Exam readiness (recall + quiz + written marks), not the old "known"
+      // count, is the mastery number on Home.
+      readiness: ready.length
+        ? Math.round(ready.reduce((sum, set) => sum + set.readiness, 0) / ready.length)
+        : 0,
+      due,
+    };
   }, [sets]);
 
   // Study-set courses are free text, so the filter is built from what the
@@ -201,9 +212,9 @@ export default function Dashboard() {
                 {sets ? (
                   <>
                     {sets.length} {sets.length === 1 ? "set" : "sets"} ·{" "}
-                    {stats.mastery}% cards known
+                    {stats.readiness}% exam-ready
                     {study
-                      ? ` · ${study.todayCount}/${study.goal} reviewed today`
+                      ? ` · ${study.todayCount}/${study.goal} questions today`
                       : ""}
                   </>
                 ) : (
@@ -231,6 +242,9 @@ export default function Dashboard() {
           study sets. Saved material still works.
         </p>
       )}
+
+      {/* Secondary by design: the saved sets stay the main screen. */}
+      <TodayStrip />
 
       <section className="mt-8">
         <motion.div className="flex flex-wrap items-center gap-2.5" {...enter(0.1)}>

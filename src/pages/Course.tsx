@@ -239,6 +239,7 @@ export default function Course() {
   const setTopicDone = useMutation(api.courses.setTopicDone);
   const removeCourse = useMutation(api.courses.remove);
   const recoverCourses = useMutation(api.courses.recoverMine);
+  const repairPathways = useMutation(api.courses.repairPathways);
   const rebuild = useAction(api.ai.rebuildCoursePathway);
   const syncCognitoLinks = useAction(api.ai.syncCognitoLinks);
 
@@ -268,6 +269,24 @@ export default function Course() {
       recoveryRequested.current = false;
     });
   }, [details, recoverCourses]);
+
+  // Older English Literature builds could show two copies of the anthology.
+  // The saved pathway is repaired once per visit; the mutation only writes if
+  // the units actually change, and it reuses poem ids so linked sets survive.
+  const repairRequested = useRef<string | null>(null);
+  useEffect(() => {
+    if (!details || details.course.status !== "ready") return;
+    if (details.course.subject.trim().toLowerCase() !== "english literature") {
+      return;
+    }
+    // Each course is checked once per visit; the ref holds the id, not a
+    // boolean, so opening a second literature course still repairs it.
+    if (repairRequested.current === details.course._id) return;
+    repairRequested.current = details.course._id;
+    void repairPathways().catch(() => {
+      repairRequested.current = null;
+    });
+  }, [details, repairPathways]);
 
   const [retrying, setRetrying] = useState(false);
   const [busyTopic, setBusyTopic] = useState<string | null>(null);

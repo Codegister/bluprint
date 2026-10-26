@@ -47,6 +47,7 @@ export function SetSettingsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const updateDetails = useMutation(api.studySets.updateDetails);
+  const saveExamDate = useMutation(api.studySets.setExamDate);
   const removeSet = useMutation(api.studySets.remove);
   const processSet = useAction(api.ai.processStudySet);
   const navigate = useNavigate();
@@ -58,6 +59,7 @@ export function SetSettingsDialog({
   const [cardCount, setCardCount] = useState(set.targetCardCount ?? 20);
   const [quizCount, setQuizCount] = useState(set.targetQuizCount ?? 10);
   const [examCount, setExamCount] = useState(set.targetExamCount ?? 4);
+  const [examDate, setExamDate] = useState(set.examDate ?? "");
   const [saving, setSaving] = useState<"save" | "rebuild" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -73,6 +75,7 @@ export function SetSettingsDialog({
     setCardCount(set.targetCardCount ?? 20);
     setQuizCount(set.targetQuizCount ?? 10);
     setExamCount(set.targetExamCount ?? 4);
+    setExamDate(set.examDate ?? "");
     setError(null);
   }, [
     open,
@@ -83,6 +86,7 @@ export function SetSettingsDialog({
     set.targetCardCount,
     set.targetQuizCount,
     set.targetExamCount,
+    set.examDate,
   ]);
 
   const save = async (rebuild: boolean) => {
@@ -102,6 +106,13 @@ export function SetSettingsDialog({
         targetCardCount: cardCount,
         targetQuizCount: quizCount,
         targetExamCount: examCount,
+      });
+
+      // The exam date drives the goal and the pace plan, so it is saved even
+      // when the material itself is not being rebuilt.
+      await saveExamDate({
+        setId: set._id,
+        examDate: examDate.trim() || undefined,
       });
 
       if (rebuild) {
@@ -260,6 +271,27 @@ export function SetSettingsDialog({
                 );
               })}
             </div>
+          </div>
+
+          <div className="mt-4">
+            <label
+              htmlFor="set-settings-exam-date"
+              className="text-xs font-semibold text-brand-ink"
+            >
+              Exam date <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <Input
+              id="set-settings-exam-date"
+              type="date"
+              value={examDate}
+              onChange={(event) => setExamDate(event.target.value)}
+              disabled={saving !== null}
+              className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+            />
+            <p className="mt-1 text-[0.7rem] leading-relaxed text-muted-foreground">
+              Sets this set's pace plan, projected readiness and your daily
+              question goal.
+            </p>
           </div>
 
           <div className="mt-5 rounded-2xl border border-border bg-[#FCFCFD] p-3.5">

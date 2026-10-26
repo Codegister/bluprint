@@ -21,6 +21,7 @@ import "./index.css";
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const Today = lazy(() => import("./pages/Today.tsx"));
 const CourseSetup = lazy(() => import("./pages/CourseSetup.tsx"));
 const CoursesPage = lazy(() => import("./pages/Courses.tsx"));
 const CoursePage = lazy(() => import("./pages/Course.tsx"));
@@ -212,6 +213,17 @@ createRoot(document.getElementById("root")!).render(
                     description="Your sets, progress and quiz scores live in your account."
                   >
                     <Dashboard />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/today"
+                element={
+                  <RequireAuth
+                    title="Sign in for today's queue"
+                    description="Your due cards, weak spots and daily goal follow your own account."
+                  >
+                    <Today />
                   </RequireAuth>
                 }
               />
