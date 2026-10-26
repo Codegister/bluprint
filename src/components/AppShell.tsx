@@ -284,9 +284,6 @@ function Sidebar({
       </div>
 
       <div className="relative border-t border-white/70 px-4 py-4">
-        {/* Labelled here rather than in the header: the sidebar has the room to
-            say what the button does. */}
-        <ThemeToggle withLabel className="mb-3 w-full" />
         <div className="flex items-center gap-2.5">
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#191B27] text-[0.85rem] font-bold text-white">
             {initialFor(user?.name, user?.email)}
@@ -299,6 +296,7 @@ function Sidebar({
               {user?.email ?? "Private account"}
             </p>
           </div>
+          <ThemeToggle className="-mr-1.5" />
         </div>
         <button
           type="button"
