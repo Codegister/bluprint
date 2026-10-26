@@ -30,51 +30,52 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 /**
- * The sidebar is machined from the same metal as the rest of the app. Each
- * row uses one step of the nine-shade chrome ramp, so destinations stay
- * distinguishable without reintroducing a rainbow of accent colours. `tile` is
- * the icon chip when the row is active; `soft` is the same chip when it is not.
+ * The sidebar is a page of the same notebook as the rest of the app. Each
+ * destination gets one of the pastel highlighters when it is active, while
+ * the icon tile stays ink so the rail keeps a single strong vertical rhythm.
+ * `tile` is the icon chip; `soft` is the quiet version used when the row is
+ * not active.
  */
 const navItems = [
   {
     to: "/dashboard",
     label: "My sets",
     icon: Layers3,
-    active: "bg-chrome-2 text-chrome-8",
-    tile: "bg-brand-ink text-brand-cream",
-    soft: "bg-chrome-3 text-chrome-7",
+    active: "bg-gizmo-lime text-[#1C1A14]",
+    tile: "bg-[#1C1A14] text-gizmo-lime",
+    soft: "bg-gizmo-lime/45 text-[#1C1A14] dark:bg-gizmo-lime/20 dark:text-brand-ink",
   },
   {
     to: "/courses",
     label: "My courses",
     icon: GraduationCap,
-    active: "bg-chrome-3 text-chrome-8",
-    tile: "bg-brand-ink text-brand-cream",
-    soft: "bg-chrome-2 text-chrome-7",
+    active: "bg-gizmo-lilac/65 text-[#1C1A14]",
+    tile: "bg-[#1C1A14] text-gizmo-lilac",
+    soft: "bg-gizmo-lilac/40 text-[#1C1A14] dark:bg-gizmo-lilac/20 dark:text-brand-ink",
   },
   {
     to: "/tutor",
     label: "AI tutor",
     icon: Sparkles,
-    active: "bg-chrome-2 text-chrome-8",
-    tile: "bg-brand-ink text-brand-cream",
-    soft: "bg-chrome-4 text-chrome-8",
+    active: "bg-gizmo-sky/65 text-[#1C1A14]",
+    tile: "bg-[#1C1A14] text-gizmo-sky",
+    soft: "bg-gizmo-sky/40 text-[#1C1A14] dark:bg-gizmo-sky/20 dark:text-brand-ink",
   },
   {
     to: "/timetable",
     label: "Revision timetable",
     icon: CalendarDays,
-    active: "bg-chrome-3 text-chrome-8",
-    tile: "bg-brand-ink text-brand-cream",
-    soft: "bg-chrome-3 text-chrome-7",
+    active: "bg-gizmo-peach/70 text-[#1C1A14]",
+    tile: "bg-[#1C1A14] text-gizmo-peach",
+    soft: "bg-gizmo-peach/40 text-[#1C1A14] dark:bg-gizmo-peach/20 dark:text-brand-ink",
   },
   {
     to: "/today",
     label: "Today",
     icon: Target,
-    active: "bg-chrome-2 text-chrome-8",
-    tile: "bg-brand-ink text-brand-cream",
-    soft: "bg-chrome-4 text-chrome-8",
+    active: "bg-gizmo-mint/75 text-[#1C1A14]",
+    tile: "bg-[#1C1A14] text-gizmo-mint",
+    soft: "bg-gizmo-mint/40 text-[#1C1A14] dark:bg-gizmo-mint/20 dark:text-brand-ink",
   },
 ] as const;
 
@@ -98,13 +99,13 @@ function DeckRow({
       className={cn(
         "flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[0.92rem] transition-colors",
         active
-          ? "bg-white font-semibold text-brand-ink shadow-[0_6px_16px_-14px_rgba(30,36,43,0.7)]"
+          ? "bg-gizmo-lime/45 font-semibold text-brand-ink dark:bg-gizmo-lime/20"
           : "text-brand-ink/75 hover:bg-white/70",
       )}
     >
       <span className="truncate">{title}</span>
       {due > 0 && (
-        <span className="shrink-0 rounded-full bg-chrome-2 px-2 py-0.5 text-[0.65rem] font-semibold text-chrome-7">
+        <span className="shrink-0 rounded-full bg-brand-ink px-2 py-0.5 text-[0.65rem] font-semibold text-brand-cream">
           {due} due
         </span>
       )}
@@ -123,7 +124,7 @@ function GoalCard() {
   return (
     <Link
       to="/today"
-      className="mx-3 mb-4 block rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_14px_28px_-26px_rgba(28,34,41,0.6)] transition-colors hover:bg-white"
+      className="mx-3 mb-4 block rounded-2xl border border-border bg-white/80 p-3 shadow-[0_2px_0_rgba(28,26,20,0.05)] transition-colors hover:bg-white"
     >
       <div className="flex items-baseline justify-between gap-2">
         <p className="mono-label text-chrome-7">Today</p>
@@ -133,14 +134,14 @@ function GoalCard() {
       </div>
       <Meter
         value={progress}
-        className="mt-2 h-1.5 bg-brand-panel"
-        barClassName="bg-chrome-6"
+        className="mt-2 h-1.5 bg-brand-ink/10"
+        barClassName="bg-brand-pink-deep"
         label="Questions answered today"
       />
       <p className="mt-2 flex items-center gap-1.5 text-[0.72rem] leading-snug text-brand-ink/60">
         {streak > 0 ? (
           <>
-            <Flame className="size-3.5 text-chrome-6" aria-hidden />
+            <Flame className="size-3.5 text-brand-pink-deep" aria-hidden />
             <span className="font-semibold text-brand-ink/80">
               {streak} day{streak === 1 ? "" : "s"}
             </span>
@@ -250,7 +251,7 @@ function Sidebar({
           to="/dashboard?new=1"
           onClick={onNavigate}
           aria-label="New study set"
-          className="grid size-6 place-items-center rounded-full bg-white/80 text-[0.9rem] font-semibold text-chrome-7 shadow-[0_4px_12px_-10px_rgba(30,36,43,0.75)] transition-colors hover:bg-white"
+          className="grid size-6 place-items-center rounded-full border border-brand-ink/40 bg-gizmo-lime text-[0.9rem] font-bold text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.18)] transition-transform hover:-rotate-6"
         >
           +
         </Link>
@@ -285,7 +286,7 @@ function Sidebar({
 
       <div className="relative border-t border-white/70 px-4 py-4">
         <div className="flex items-center gap-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#191B27] text-[0.85rem] font-bold text-white">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-brand-ink/50 bg-gizmo-lime text-[0.85rem] font-bold text-brand-ink">
             {initialFor(user?.name, user?.email)}
           </span>
           <div className="min-w-0 flex-1">
@@ -319,7 +320,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      {/* The metal wash behind every signed-in screen. */}
+      {/* The paper wash behind every signed-in screen. */}
       <ChromeBackdrop intensity={0.55} />
       <motion.div
         aria-hidden

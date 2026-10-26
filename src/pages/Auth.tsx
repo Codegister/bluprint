@@ -98,7 +98,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[1.02fr_0.98fr]">
-      {/* The page metal. The aside carries a heavier plate of its own. */}
+      {/* The paper wash. The aside carries a heavier plate of its own. */}
       <ChromeBackdrop intensity={0.8} />
       {/* Context panel */}
       <aside className="chrome-rail relative hidden flex-col justify-between overflow-hidden border-r border-border p-10 lg:flex xl:p-14">
@@ -126,7 +126,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             className="chrome-title mt-6 max-w-md text-[2.5rem] font-extrabold leading-[1.04] tracking-[-0.04em] xl:text-[2.9rem]"
             {...enter(0.2)}
           >
-            Your sets, scores and progress, kept together.
+            Your sets, scores and progress,{" "}
+            <span className="highlighter">kept together.</span>
           </motion.h1>
           <motion.p
             className="mt-4 max-w-sm text-[0.95rem] leading-relaxed text-brand-ink/65"

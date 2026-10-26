@@ -184,13 +184,13 @@ export default function Dashboard() {
       >
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <span className="sticker bg-white/85 text-chrome-7">
+            <span className="sticker -rotate-1 bg-gizmo-lime text-brand-ink">
               <Layers3 className="size-3" aria-hidden />
               Your library
             </span>
             <h1 className="chrome-title mt-3 font-display text-[1.75rem] font-extrabold leading-[1.05] tracking-[-0.035em] sm:text-[2.2rem]">
               Welcome back,{" "}
-              <span className="text-chrome-7">
+              <span className="highlighter">
                 {displayName(user?.name, user?.email)}
               </span>
             </h1>

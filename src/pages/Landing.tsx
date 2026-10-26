@@ -52,7 +52,7 @@ function HeroPreview() {
           <span className="text-[0.78rem] font-medium text-muted-foreground">
             Cell biology, page 42
           </span>
-          <span className="rounded-full bg-[#191a1e] px-4 py-2 text-[0.82rem] font-semibold text-white">
+          <span className="rounded-full border border-brand-ink/40 bg-gizmo-lime px-4 py-2 text-[0.82rem] font-semibold text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.16)]">
             Generate
           </span>
         </div>
@@ -124,7 +124,7 @@ function HeroChip({
         transition={{ duration: 0.7, ease: EASE, delay }}
       >
         <Floating distance={6} duration={6.5 + delay} delay={delay} rotate={-1.5}>
-          <div className="rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 shadow-[0_18px_34px_-26px_rgba(28,34,41,0.6)]">
+          <div className="rounded-2xl border border-border bg-card px-3.5 py-2.5 shadow-[0_2px_0_rgba(28,26,20,0.06),0_18px_34px_-26px_rgba(60,50,20,0.5)]">
             {children}
           </div>
         </Floating>
@@ -152,7 +152,7 @@ function HeroArt() {
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <motion.svg
             viewBox="0 0 200 200"
-            className="size-[390px] text-chrome-4/70 sm:size-[430px]"
+            className="size-[390px] text-brand-ink/20 sm:size-[430px]"
             animate={{ rotate: 360 }}
             transition={{ duration: 90, repeat: Infinity, ease: "linear" }}
           >
@@ -165,13 +165,19 @@ function HeroArt() {
               strokeWidth="0.7"
               strokeDasharray="2 8"
             />
-            <circle cx="100" cy="6" r="2.6" fill="#434A53" />
-            <circle cx="194" cy="100" r="1.8" fill="#6B747E" />
+            <circle cx="100" cy="6" r="2.6" fill="#1C1A14" />
+            <circle cx="194" cy="100" r="1.8" fill="#8FAE18" />
           </motion.svg>
         </div>
       </div>
 
       <motion.div style={{ y: lift }} className="relative">
+        {/* A lilac sheet peeking out behind the real preview: the stacked-card
+            look the Gizmo reels use, made from a single offset div. */}
+        <div
+          aria-hidden
+          className="absolute inset-x-5 -top-3 bottom-3 -z-10 rotate-[-2.5deg] rounded-[2rem] border border-brand-ink/10 bg-gizmo-lilac/45"
+        />
         <motion.div
           initial={{ opacity: 0, y: 26, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -183,7 +189,7 @@ function HeroArt() {
 
       <HeroChip className="-left-8 top-28 hidden lg:block" delay={0.55}>
         <div className="flex items-center gap-2">
-          <span className="pulse-ring size-2 rounded-full bg-[#22A06B] text-[#22A06B]" />
+          <span className="pulse-ring size-2 rounded-full bg-brand-pink-deep text-brand-pink-deep" />
           <p className="text-[0.72rem] font-semibold text-brand-ink">10 cards ready</p>
         </div>
         <p className="mt-0.5 text-[0.66rem] text-muted-foreground">From one page of notes</p>
@@ -192,12 +198,12 @@ function HeroArt() {
       <HeroChip className="-right-6 bottom-24 hidden sm:block" delay={0.75}>
         <div className="flex w-[148px] items-center justify-between gap-3">
           <p className="text-[0.68rem] font-semibold text-brand-ink">Exam marked</p>
-          <p className="text-[0.68rem] font-bold text-[#8A5A12]">7/10</p>
+          <p className="text-[0.68rem] font-bold text-brand-ink">7/10</p>
         </div>
         <Meter
           value={70}
           className="mt-1.5 h-1 w-[148px] bg-[#EFEAE0]"
-          barClassName="bg-chrome-6"
+          barClassName="bg-brand-pink-deep"
           delay={1.1}
           label="Sample exam score"
         />
@@ -239,7 +245,7 @@ function OutputCard({
   children: ReactNode;
 }) {
   return (
-    <div className="lift hover-sheen flex h-full flex-col rounded-3xl border border-border bg-white p-5 sm:p-6">
+    <div className="lift hover-sheen flex h-full flex-col rounded-3xl border border-border bg-card p-5 sm:p-6">
       <p className={cn("mono-label", labelClass)}>{label}</p>
       <h3 className="mt-2 font-display text-[1.15rem] font-semibold text-brand-ink">
         {title}
@@ -259,8 +265,8 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen text-brand-ink">
-      {/* One fixed chrome wash behind the whole page, so hero, gaps and
-          transparent sections all share the same metal. */}
+      {/* One fixed paper wash behind the whole page, so hero, gaps and
+          transparent sections all share the same cream desk. */}
       <ChromeBackdrop intensity={0.85} />
       <header className="chrome-bar sticky top-0 z-50 border-b">
         <motion.div
@@ -313,25 +319,25 @@ export default function Landing() {
             as a lit panel rather than a colour wash. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/80 via-transparent to-chrome-4/30 dark:from-chrome-3/40 dark:to-chrome-6/20"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-gizmo-lime/25 via-transparent to-gizmo-lilac/25"
         />
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
             <motion.div className="flex flex-wrap gap-2" {...enter(0.04)}>
-              <span className="sticker bg-white/85 text-chrome-7 transition-transform hover:-rotate-2">
+              <span className="sticker -rotate-1 bg-gizmo-lime text-brand-ink transition-transform hover:-rotate-2">
                 <Camera className="size-3" aria-hidden /> Photos and video
               </span>
-              <span className="sticker bg-white/85 text-chrome-8 transition-transform hover:rotate-2">
+              <span className="sticker rotate-1 bg-gizmo-lilac/60 text-brand-ink transition-transform hover:rotate-2">
                 <Sparkles className="size-3" aria-hidden /> Pasted notes
               </span>
             </motion.div>
 
             <motion.h1
-              className="chrome-title mt-5 max-w-[34rem] font-display text-[2.9rem] font-extrabold leading-[0.98] tracking-[-0.045em] sm:text-[3.7rem] lg:text-[4.1rem]"
+              className="mt-5 max-w-[34rem] font-display text-[2.9rem] font-extrabold leading-[0.98] tracking-[-0.045em] text-brand-ink sm:text-[3.7rem] lg:text-[4.1rem]"
               {...enter(0.12, 24)}
             >
               A page of notes becomes a{" "}
-              <span className="text-chrome-7">revision session.</span>
+              <span className="highlighter">revision session.</span>
             </motion.h1>
 
             <motion.p
@@ -357,7 +363,7 @@ export default function Landing() {
                 asChild
                 size="lg"
                 variant="outline"
-                className="h-12 bg-white px-6 text-[0.95rem]"
+                className="h-12 bg-card px-6 text-[0.95rem]"
               >
                 <a href="#pipeline">See how it works</a>
               </Button>
@@ -424,11 +430,11 @@ export default function Landing() {
                 className="grid gap-2 border-b border-border py-6 sm:grid-cols-[72px_minmax(0,0.9fr)_minmax(0,1.3fr)] sm:gap-6 sm:py-7"
                 {...reveal(index * 0.1)}
               >
-                <span className="relative inline-flex h-10 w-10 items-center justify-center justify-self-start rounded-2xl border border-border bg-white font-display text-[1.1rem] font-semibold leading-none tabular-nums text-brand-pink">
+                <span className="relative inline-flex h-10 w-10 items-center justify-center justify-self-start rounded-2xl border border-brand-ink/25 bg-gizmo-lime font-display text-[1.1rem] font-semibold leading-none tabular-nums text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.1)]">
                   {String(index + 1).padStart(2, "0")}
                   <motion.span
                     aria-hidden
-                    className="absolute inset-0 rounded-2xl border border-brand-pink/40"
+                    className="absolute inset-0 rounded-2xl border border-brand-ink/20"
                     initial={{ opacity: 0, scale: 0.85 }}
                     whileInView={{ opacity: 1, scale: 1.12 }}
                     viewport={{ once: false, amount: 0.6 }}
@@ -473,7 +479,7 @@ export default function Landing() {
             <StaggerItem className="h-full" scale>
             <OutputCard
               label="Summary"
-              labelClass="text-chrome-7"
+              labelClass="text-brand-pink-deep"
               title="The argument, in a few lines"
               copy="An overview, the points worth remembering and the angles an examiner is likely to take."
             >
@@ -505,7 +511,7 @@ export default function Landing() {
             <StaggerItem className="h-full" scale>
             <OutputCard
               label="Flashcards"
-              labelClass="text-chrome-8"
+              labelClass="text-brand-violet"
               title="Ten cards, one idea each"
               copy="Reveal the answer, then mark the card known or bring it back into the next session."
             >
@@ -527,7 +533,7 @@ export default function Landing() {
             <StaggerItem className="h-full" scale>
             <OutputCard
               label="Quiz"
-              labelClass="text-chrome-7"
+              labelClass="text-brand-sky"
               title="Five questions with reasons"
               copy="Multiple choice, with a short explanation for every option so a wrong answer still teaches you something."
             >
@@ -543,7 +549,7 @@ export default function Landing() {
                         className={cn(
                           "flex items-center justify-between rounded-xl px-3 py-1.5 text-[0.82rem]",
                           index === 0
-                            ? "bg-chrome-3 font-semibold text-chrome-8"
+                            ? "bg-gizmo-lime/60 font-semibold text-brand-ink"
                             : "bg-white text-muted-foreground",
                         )}
                       >
@@ -560,7 +566,7 @@ export default function Landing() {
             <StaggerItem className="h-full" scale>
             <OutputCard
               label="Exam practice"
-              labelClass="text-chrome-7"
+              labelClass="text-brand-orange"
               title="Written answers, marked"
               copy="Answer in full sentences. Bluprint marks against the guide and shows which points are still missing."
             >
@@ -574,7 +580,7 @@ export default function Landing() {
                 <Meter
                   value={70}
                   className="mt-2 h-1.5 bg-white"
-                  barClassName="bg-chrome-6"
+                  barClassName="bg-brand-pink-deep"
                   label="Sample exam score"
                 />
                 <p className="mt-2.5 text-[0.82rem] leading-relaxed text-muted-foreground">
@@ -636,9 +642,9 @@ export default function Landing() {
             </div>
             <div className="rise-stagger space-y-1.5">
               {[
-                { title: "Cell biology", color: "#20252B", meta: "10 cards, 5 quiz" },
-                { title: "Organic chemistry", color: "#6B747E", meta: "10 cards, 5 quiz" },
-                { title: "Macroeconomics", color: "#8F98A2", meta: "10 cards, 5 quiz" },
+                { title: "Cell biology", color: "#1C1A14", meta: "10 cards, 5 quiz" },
+                { title: "Organic chemistry", color: "#8FAE18", meta: "10 cards, 5 quiz" },
+                { title: "Macroeconomics", color: "#7D5BD6", meta: "10 cards, 5 quiz" },
               ].map((deck) => (
                 <div
                   key={deck.title}
@@ -738,7 +744,7 @@ export default function Landing() {
         <Reveal className="chrome-hero relative overflow-hidden rounded-[2rem] px-6 py-9 sm:px-10 sm:py-11">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/40 via-white/5 to-chrome-4/30 dark:from-black/45 dark:via-black/10 dark:to-chrome-5/25"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-gizmo-lime/30 via-transparent to-gizmo-lilac/25"
           />
           <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
@@ -760,7 +766,7 @@ export default function Landing() {
                   asChild
                   size="lg"
                   variant="outline"
-                  className="h-12 bg-white px-6 text-[0.95rem] text-chrome-8"
+                  className="h-12 bg-card px-6 text-[0.95rem] text-brand-ink"
                 >
                   <Link to="/auth?returnTo=/dashboard">I already have an account</Link>
                 </Button>
@@ -770,7 +776,7 @@ export default function Landing() {
               <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                 <motion.div
                   aria-hidden
-                  className="size-[240px] rounded-full border border-dashed border-chrome-4/80"
+                  className="size-[240px] rounded-full border border-dashed border-brand-ink/25"
                   animate={{ rotate: 360 }}
                   transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
                   style={{ borderStyle: "dashed" }}
@@ -782,7 +788,7 @@ export default function Landing() {
         </Reveal>
       </section>
 
-      <footer className="border-t border-border bg-white">
+      <footer className="border-t border-border bg-card">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-8 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
           <Brand />
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[0.85rem] font-medium text-muted-foreground">

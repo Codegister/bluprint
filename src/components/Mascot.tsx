@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Bluprint's study buddy, "Blu": a calm, rounded character drawn in SVG so it
- * stays crisp at any size and needs no image assets. Built from a handful of
- * clean shapes (blob, big friendly eyes, tiny arms) rather than a detailed
- * creature, which reads better at 90px in a chat as well as 200px on a card.
+ * Bluprint's study buddy, "Blu": a lime highlighter blob with a thick ink
+ * outline, drawn in SVG so it stays crisp at any size and needs no image
+ * assets. The outline and flat fills are what make it read as a sticker in the
+ * Gizmo-style stationery world at 90px in a chat as well as 200px on a card.
  * Purely decorative.
  */
 export function Mascot({
@@ -29,22 +29,22 @@ export function Mascot({
     >
       <defs>
         <linearGradient id="blu-body" x1="56" y1="36" x2="186" y2="206">
-          <stop offset="0" stopColor="#F7F8FA" />
-          <stop offset="0.45" stopColor="#C2C9D1" />
-          <stop offset="1" stopColor="#7B848E" />
+          <stop offset="0" stopColor="#F2FFB2" />
+          <stop offset="0.45" stopColor="#D9F45B" />
+          <stop offset="1" stopColor="#B4D636" />
         </linearGradient>
         <linearGradient id="blu-foot" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#4F575F" />
-          <stop offset="1" stopColor="#2A3037" />
+          <stop offset="0" stopColor="#3A362B" />
+          <stop offset="1" stopColor="#1C1A14" />
         </linearGradient>
         <linearGradient id="blu-bookmark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#E7EBEF" />
-          <stop offset="1" stopColor="#8F98A2" />
+          <stop offset="0" stopColor="#E3DBFF" />
+          <stop offset="1" stopColor="#A98CFF" />
         </linearGradient>
       </defs>
 
       {/* soft ground shadow */}
-      <ellipse cx="120" cy="214" rx="52" ry="9" fill="#16181F" opacity="0.08" />
+      <ellipse cx="120" cy="214" rx="52" ry="9" fill="#1C1A14" opacity="0.1" />
 
       {/* bookmark tuft: a quiet nod to a page marker */}
       <path
@@ -57,47 +57,50 @@ export function Mascot({
       <ellipse cx="98" cy="208" rx="17" ry="10" fill="url(#blu-foot)" />
       <ellipse cx="142" cy="208" rx="17" ry="10" fill="url(#blu-foot)" />
 
-      {/* body: a tall rounded blob, wider at the base */}
+      {/* body: a tall rounded blob, wider at the base, with the ink outline
+          that makes it read as a sticker rather than a soft 3D character */}
       <path
         d="M120 32c40 0 68 26 68 66v50c0 38-30 62-68 62s-68-24-68-62V98c0-40 28-66 68-66Z"
         fill="url(#blu-body)"
+        stroke="#1C1A14"
+        strokeWidth="3.5"
       />
 
       {/* soft sheen across the top-left of the body */}
       <path
         d="M120 32c-40 0-68 26-68 66 0-4 6-46 50-52 12-2 18-8 18-14Z"
         fill="#FFFFFF"
-        opacity="0.18"
+        opacity="0.35"
       />
 
       {/* arms */}
       <path
         d="M54 138c-9 7-12 17-8 27"
-        stroke="#6B747E"
+        stroke="#9BB82C"
         strokeWidth="13"
         strokeLinecap="round"
       />
       <path
         d="M186 138c9 7 12 17 8 27"
-        stroke="#6B747E"
+        stroke="#9BB82C"
         strokeWidth="13"
         strokeLinecap="round"
       />
 
       {/* eyes: big, bright and readable at small sizes */}
-      <ellipse cx="98" cy="106" rx="19" ry="21" fill="#FFFFFF" />
-      <ellipse cx="142" cy="106" rx="19" ry="21" fill="#FFFFFF" />
-      <circle cx="101" cy="110" r="9.5" fill="#20252B" />
-      <circle cx="145" cy="110" r="9.5" fill="#20252B" />
+      <ellipse cx="98" cy="106" rx="19" ry="21" fill="#FFFDF8" stroke="#1C1A14" strokeWidth="2.5" />
+      <ellipse cx="142" cy="106" rx="19" ry="21" fill="#FFFDF8" stroke="#1C1A14" strokeWidth="2.5" />
+      <circle cx="101" cy="110" r="9.5" fill="#1C1A14" />
+      <circle cx="145" cy="110" r="9.5" fill="#1C1A14" />
       <circle cx="105" cy="104" r="3.4" fill="#FFFFFF" />
       <circle cx="149" cy="104" r="3.4" fill="#FFFFFF" />
 
       {/* cheeks and smile */}
-      <ellipse cx="70" cy="138" rx="11" ry="6.5" fill="#AEB7C0" opacity="0.55" />
-      <ellipse cx="170" cy="138" rx="11" ry="6.5" fill="#AEB7C0" opacity="0.55" />
+      <ellipse cx="70" cy="138" rx="11" ry="6.5" fill="#FFB0A0" opacity="0.8" />
+      <ellipse cx="170" cy="138" rx="11" ry="6.5" fill="#FFB0A0" opacity="0.8" />
       <path
         d="M105 144c9 10 21 10 30 0"
-        stroke="#20252B"
+        stroke="#1C1A14"
         strokeWidth="5"
         strokeLinecap="round"
       />
@@ -105,9 +108,12 @@ export function Mascot({
       {/* sparkle: the little "got it" moment */}
       <path
         d="M196 84l4 10 10 4-10 4-4 10-4-10-10-4 10-4 4-10Z"
-        fill="#F4F6F8"
+        fill="#C9B8FF"
+        stroke="#1C1A14"
+        strokeWidth="2"
+        strokeLinejoin="round"
       />
-      <circle cx="188" cy="120" r="3.5" fill="#C6CDD4" opacity="0.9" />
+      <circle cx="188" cy="120" r="3.5" fill="#1C1A14" opacity="0.35" />
     </svg>
   );
 }
@@ -115,7 +121,7 @@ export function Mascot({
 /** Flat deck glyph: three stacked cards in one accent colour. */
 export function DeckGlyph({
   className,
-  color = "#6B747E",
+  color = "#1C1A14",
 }: {
   className?: string;
   color?: string;
