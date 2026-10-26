@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import {
   Accordion,
@@ -266,7 +267,7 @@ export default function Landing() {
         <div className="mx-auto flex h-[72px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Brand />
 
-          <nav className="hidden items-center gap-7 text-[0.9rem] font-medium text-muted-foreground md:flex">
+          <nav className="hidden items-center gap-5 text-[0.9rem] font-medium text-muted-foreground md:flex lg:gap-7">
             <a href="#pipeline" className="transition-colors hover:text-brand-ink">
               How it works
             </a>
@@ -282,6 +283,7 @@ export default function Landing() {
           </nav>
 
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {!isAuthenticated && (
               <Link
                 to="/auth?returnTo=/dashboard"
@@ -293,7 +295,9 @@ export default function Landing() {
             <Button asChild className="group h-10 px-5 text-[0.88rem]">
               <Link to={startHref}>
                 {isAuthenticated ? "Dashboard" : "Get started"}
-                <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
+                {/* Dropped on the narrowest phones so the header (and the theme
+                    button beside it) never wraps. */}
+                <ArrowRight className="hidden size-4 transition-transform duration-300 group-hover:translate-x-1 sm:block" />
               </Link>
             </Button>
           </div>

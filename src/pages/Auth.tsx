@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { Mascot } from "@/components/Mascot";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { EASE, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,8 +99,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[1.02fr_0.98fr]">
       {/* Context panel */}
       <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[#EFEBFF] p-10 lg:flex xl:p-14">
-        <motion.div className="relative" {...enter(0.05)}>
+        <motion.div className="relative flex items-center justify-between gap-3" {...enter(0.05)}>
           <Brand />
+          <ThemeToggle />
         </motion.div>
 
         <div className="relative flex flex-col items-start">
@@ -148,14 +150,17 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       {/* Form panel */}
       <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-10 sm:px-8">
         <div className="w-full max-w-[440px]">
-          <div className="mb-5 flex items-center justify-between lg:hidden">
+          <div className="mb-5 flex items-center justify-between gap-2 lg:hidden">
             <Brand />
-            <Link
-              to="/"
-              className="rounded-full px-3 py-1.5 text-[0.82rem] font-semibold text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
-            >
-              ← Home
-            </Link>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Link
+                to="/"
+                className="rounded-full px-3 py-1.5 text-[0.82rem] font-semibold text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+              >
+                ← Home
+              </Link>
+            </div>
           </div>
 
           <motion.div

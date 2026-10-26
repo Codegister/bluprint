@@ -591,7 +591,7 @@ export default function StudySet() {
                     <TabsTrigger
                       key={item.value}
                       value={item.value}
-                      className="h-10 gap-2 rounded-full border border-border bg-white px-4 text-[0.85rem] font-semibold text-brand-ink/70 shadow-none transition-colors data-[state=active]:border-[#191B27] data-[state=active]:bg-[#191B27] data-[state=active]:text-white data-[state=active]:shadow-none"
+                      className="h-10 gap-2 rounded-full border border-border bg-white px-4 text-[0.85rem] font-semibold text-brand-ink/70 shadow-none transition-colors data-[state=active]:border-brand-ink data-[state=active]:bg-brand-ink data-[state=active]:text-brand-cream data-[state=active]:shadow-none"
                     >
                       {item.label}
                       {count !== null && (

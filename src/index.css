@@ -121,6 +121,74 @@
   color-scheme: light;
 }
 
+/* ---------------------------------------------------------------------------
+   High-contrast dark theme.
+
+   The header button adds/removes `.dark` on <html> (see ThemeProvider). Every
+   token below is the dark counterpart of the light one above, so components
+   that paint with semantic colours (bg-card, text-brand-ink, border-border,
+   text-muted-foreground...) switch without knowing about the theme.
+
+   Contrast is deliberate: body copy on the page sits around 16:1, muted copy
+   around 9:1, borders stay visible at ~2.5:1, and accent text is lifted rather
+   than dimmed. That is what makes it "high contrast" rather than merely dark.
+   --------------------------------------------------------------------------- */
+.dark {
+  color-scheme: dark;
+
+  --brand-ink: #f4f6fb;
+  --brand-cream: #07080b;
+  --brand-panel: #1b2029;
+  --brand-panel-2: #12151c;
+  --brand-void: #07080b;
+
+  /* Accents are brightened so they survive on a near-black page. */
+  --brand-pink: #c3b2ff;
+  --brand-pink-deep: #d8ccff;
+  --brand-mint: #6fe3ac;
+  --brand-lime: #ffc45c;
+  --brand-sky: #8fc2ff;
+  --brand-peach: #ff9da8;
+  --brand-teal: #63e3d0;
+  --brand-pink2: #ff9acb;
+  --brand-orange: #ffa95c;
+  --brand-violet: #c9baff;
+  --brand-butter: #3a2a08;
+  --brand-blush: #3a1526;
+
+  --background: #07080b;
+  --foreground: #f4f6fb;
+  --card: #12151c;
+  --card-foreground: #f4f6fb;
+  --popover: #161a22;
+  --popover-foreground: #f4f6fb;
+  --primary: #f1f4f9;
+  --primary-foreground: #07080b;
+  --secondary: #1b2029;
+  --secondary-foreground: #f4f6fb;
+  --muted: #1b2029;
+  --muted-foreground: #b7c0d0;
+  --accent: #241c4a;
+  --accent-foreground: #d8ccff;
+  --destructive: #ff6b7a;
+  --border: #3b4354;
+  --input: #4a5364;
+  --ring: #c3b2ff;
+  --chart-1: #a78bfa;
+  --chart-2: #6fe3ac;
+  --chart-3: #ffc45c;
+  --chart-4: #8fc2ff;
+  --chart-5: #ff9da8;
+  --sidebar: #0b0d12;
+  --sidebar-foreground: #f4f6fb;
+  --sidebar-primary: #f1f4f9;
+  --sidebar-primary-foreground: #07080b;
+  --sidebar-accent: #1b2029;
+  --sidebar-accent-foreground: #f4f6fb;
+  --sidebar-border: #2b3140;
+  --sidebar-ring: #c3b2ff;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -149,6 +217,11 @@
   ::selection {
     background: #ded5ff;
     color: #191a1e;
+  }
+  /* Violet selection is unreadable on a dark page; lift it instead. */
+  .dark ::selection {
+    background: #4a3aa8;
+    color: #f7f8fc;
   }
   code,
   kbd,
@@ -483,6 +556,396 @@
 .week-columns {
   display: grid;
   grid-template-columns: repeat(var(--week-days, 5), minmax(0, 1fr));
+}
+
+/* ---------------------------------------------------------------------------
+   Dark-mode compatibility layer for literal colours.
+
+   Several screens still spell colours out by hand (bg-[#FFF6E5], text-[#128A4C])
+   instead of using a token. Rewriting ~25 screens would be a large, risky change
+   for one theme, so the dark theme remaps the literals this codebase actually
+   uses onto the dark palette below. Each group is a colour family: a light tint
+   becomes a deep tint, its ink becomes a lifted accent.
+
+   New components should paint with semantic tokens (bg-card, text-brand-ink,
+   text-muted-foreground, border-border, bg-brand-panel) or the `dark:` variant,
+   and then they need nothing from this block.
+   --------------------------------------------------------------------------- */
+
+/* Neutral light surfaces -> card / raised surface. */
+.dark
+  :is(
+    [class~="bg-white"],
+    [class~="bg-white/60"],
+    [class~="bg-white/70"],
+    [class~="bg-white/75"],
+    [class~="bg-white/80"],
+    [class~="bg-white/85"],
+    [class~="bg-white/90"],
+    [class~="bg-white/95"],
+    [class~="bg-[#FCFCFD]"],
+    [class~="bg-[#FCFCFA]"],
+    [class~="bg-[#FBFAF6]"],
+    [class~="bg-[#FAFAF7]"],
+    [class~="bg-[#FCFAF4]"],
+    [class~="bg-[#F7F5EF]"],
+    [class~="bg-[#F4F4F7]"]
+  ) {
+  background-color: var(--card);
+}
+
+.dark
+  :is(
+    [class~="bg-[#EFEAE0]"],
+    [class~="bg-[#EDE9DF]"],
+    [class~="bg-[#E7E7EF]"],
+    [class~="bg-[#E7E7EE]"],
+    [class~="bg-[#E3DED2]"]
+  ) {
+  background-color: #1e2430;
+}
+
+/* Ink fills (primary buttons, avatar chips, logo tile) invert: the light theme
+   paints ink on paper, the dark theme paints paper on ink. Setting `color` here
+   beats the utility's own `text-white`, so labels inside stay readable. */
+.dark
+  :is(
+    [class~="bg-[#191B27]"],
+    [class~="bg-[#191a1e]"],
+    [class~="bg-[#2A2D3E]"],
+    [class~="bg-[#32333b]"]
+  ) {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* A disabled ink button keeps a 25-30% ink fill in the light theme, which is
+   invisible on a dark page. Give it a muted raised fill and label instead. */
+.dark :is([class~="bg-[#191B27]"], [class~="bg-[#2A2D3E]"]):disabled {
+  background-color: #2b3140;
+  color: #98a1b3;
+}
+
+/* White hairlines and muted white labels used on tinted panels. */
+.dark
+  :is(
+    [class~="border-white/70"],
+    [class~="border-white/80"],
+    [class~="border-white/90"]
+  ) {
+  border-color: var(--border);
+}
+
+.dark :is([class~="text-white/60"], [class~="text-white/70"]) {
+  color: #c2cad8;
+}
+
+/* The wordmark tile keeps its violet fill: the glyph is drawn with a white
+   path, which would vanish on the light tile the ink rule above produces. */
+.dark .brand-tile {
+  background-color: #5b3df5;
+  color: #ffffff;
+}
+
+/* Accent tints: pale family -> deep family. */
+.dark
+  :is(
+    [class~="bg-[#FAF8FF]"],
+    [class~="bg-[#FBF7FF]"],
+    [class~="bg-[#FBFAFF]"],
+    [class~="bg-[#F6F2FF]"],
+    [class~="bg-[#F5F1FF]"],
+    [class~="bg-[#F4F2FF]"],
+    [class~="bg-[#F3F0FF]"],
+    [class~="bg-[#F3ECFF]"],
+    [class~="bg-[#F1F0FB]"],
+    [class~="bg-[#F1ECFF]"],
+    [class~="bg-[#EFEDFF]"],
+    [class~="bg-[#EFEBFF]"],
+    [class~="bg-[#EDE8FF]"],
+    [class~="bg-[#ECE6FF]"],
+    [class~="bg-[#E4DBFF]"],
+    [class~="bg-[#E2DBFF]"]
+  ) {
+  background-color: #221c40;
+}
+
+.dark
+  :is(
+    [class~="bg-[#E9FBF3]"],
+    [class~="bg-[#EAFBF0]"],
+    [class~="bg-[#EAF8F0]"],
+    [class~="bg-[#E6F9F1]"],
+    [class~="bg-[#E6F7EF]"],
+    [class~="bg-[#E3F8F0]"],
+    [class~="bg-[#DDF7EB]"],
+    [class~="bg-[#DCF5E8]"],
+    [class~="bg-[#D7F0E3]"],
+    [class~="bg-[#CFF3E2]"],
+    [class~="bg-[#F3FBF7]"],
+    [class~="bg-[#F7FCFA]"],
+    [class~="bg-[#e7f7ef]"]
+  ) {
+  background-color: #0f2a1f;
+}
+
+.dark
+  :is([class~="bg-[#E6F9F6]"], [class~="bg-[#E4F6F2]"]) {
+  background-color: #082a2a;
+}
+
+.dark
+  :is(
+    [class~="bg-[#E8F3FD]"],
+    [class~="bg-[#E7F2FC]"],
+    [class~="bg-[#EEF3FF]"],
+    [class~="bg-[#E3ECFF]"]
+  ) {
+  background-color: #0f2136;
+}
+
+.dark
+  :is(
+    [class~="bg-[#FFEEF0]"],
+    [class~="bg-[#FFF1F3]"],
+    [class~="bg-[#FFF7F9]"],
+    [class~="bg-[#FDEFF4]"],
+    [class~="bg-[#FDE8ED]"],
+    [class~="bg-[#FBDDE0]"],
+    [class~="bg-[#FFE3E6]"],
+    [class~="bg-[#FFE7F0]"]
+  ) {
+  background-color: #3a1119;
+}
+
+.dark
+  :is(
+    [class~="bg-[#FFF6E5]"],
+    [class~="bg-[#FFF0DC]"],
+    [class~="bg-[#FFF3E3]"],
+    [class~="bg-[#FFF1DE]"],
+    [class~="bg-[#FFFBF2]"],
+    [class~="bg-[#FFFBEC]"],
+    [class~="bg-[#FFF9EC]"],
+    [class~="bg-[#FFF3E8]"]
+  ) {
+  background-color: #33230a;
+}
+
+/* Accent ink -> lifted accent, one group per family. */
+.dark
+  :is(
+    [class~="text-[#5B3DF5]"],
+    [class~="text-[#6B4BFF]"],
+    [class~="text-[#6B4EE6]"],
+    [class~="text-[#7C5CFF]"],
+    [class~="text-[#5130D8]"],
+    [class~="text-[#4B2BD6]"],
+    [class~="text-[#3f24b8]"],
+    [class~="text-[#8A4BC6]"],
+    [class~="text-[#B9A6FF]"]
+  ) {
+  color: #c3b2ff;
+}
+
+.dark
+  :is(
+    [class~="text-[#128A4C]"],
+    [class~="text-[#128A5B]"],
+    [class~="text-[#0F7A50]"],
+    [class~="text-[#0e7a50]"],
+    [class~="text-[#0C6B4C]"],
+    [class~="text-[#22A06B]"]
+  ) {
+  color: #6fe3a6;
+}
+
+.dark
+  :is(
+    [class~="text-[#0e7a66]"],
+    [class~="text-[#0E8C7F]"],
+    [class~="text-[#0A655C]"],
+    [class~="text-[#14866D]"]
+  ) {
+  color: #63e3d0;
+}
+
+.dark
+  :is(
+    [class~="text-[#C93C49]"],
+    [class~="text-[#C23B49]"],
+    [class~="text-[#D24350]"],
+    [class~="text-[#A83458]"],
+    [class~="text-[#B23A55]"],
+    [class~="text-[#C43F69]"],
+    [class~="text-[#D2542A]"]
+  ) {
+  color: #ff9da8;
+}
+
+.dark
+  :is(
+    [class~="text-[#96650A]"],
+    [class~="text-[#96560C]"],
+    [class~="text-[#8A5D00]"],
+    [class~="text-[#8A5A12]"],
+    [class~="text-[#8a5a12]"],
+    [class~="text-[#7A5306]"],
+    [class~="text-[#7A5410]"],
+    [class~="text-[#B4720E]"],
+    [class~="text-[#B7791F]"],
+    [class~="text-[#C2660F]"],
+    [class~="text-[#D08A00]"],
+    [class~="text-[#F0871F]"]
+  ) {
+  color: #ffc163;
+}
+
+.dark
+  :is(
+    [class~="text-[#4C5FD5]"],
+    [class~="text-[#3153C9]"],
+    [class~="text-[#3846A8]"],
+    [class~="text-[#2B7FB8]"],
+    [class~="text-[#1B5C8A]"],
+    [class~="text-[#1d5f9e]"]
+  ) {
+  color: #8fc2ff;
+}
+
+/* Light hairlines -> dark hairlines, thick enough to actually show. */
+.dark
+  :is(
+    [class~="border-[#E9E2F5]"],
+    [class~="border-[#E7DCF8]"],
+    [class~="border-[#D8CCFF]"],
+    [class~="border-[#CFC7E8]"],
+    [class~="border-[#CFC4FF]"],
+    [class~="border-[#B9B0E8]"]
+  ) {
+  border-color: #453b6b;
+}
+
+.dark
+  :is([class~="border-[#E4DFD3]"], [class~="border-[#E7E7EF]"]) {
+  border-color: var(--border);
+}
+
+.dark [class~="border-[#191B27]"] {
+  border-color: #6b7285;
+}
+
+.dark
+  :is(
+    [class~="border-[#BDEBD3]"],
+    [class~="border-[#CBE7D8]"],
+    [class~="border-[#A6D9B9]"],
+    [class~="border-[#12B8A6]"]
+  ) {
+  border-color: #2f7a68;
+}
+
+.dark [class~="border-[#F6D2D6]"] {
+  border-color: #6e2a34;
+}
+
+.dark :is([class~="border-[#F0DCB8]"], [class~="border-[#EBD9B4]"]) {
+  border-color: #6b4e1c;
+}
+
+.dark :is([class~="border-[#C8D8FF]"], [class~="border-[#AAC1FF]"]) {
+  border-color: #2c4b78;
+}
+
+/* Focus rings keep their hue but gain brightness. */
+.dark [class~="ring-[#7C5CFF]"] {
+  --tw-ring-color: #c3b2ff;
+}
+
+/* Hover states that would otherwise flash a light or near-black fill. */
+.dark [class~="hover:bg-white"]:hover {
+  background-color: #1c2230;
+}
+
+.dark [class~="hover:bg-[#2A2D3E]"]:hover,
+.dark [class~="hover:bg-[#32333b]"]:hover {
+  background-color: #dbe3f0;
+}
+
+.dark [class~="hover:bg-[#e3ded2]"]:hover {
+  background-color: #252b36;
+}
+
+.dark [class~="hover:bg-[#a32a38]"]:hover {
+  background-color: #ff8b97;
+}
+
+/* Destructive buttons carry dark ink in both themes, because the fill is now a
+   bright red rather than a deep one. */
+.dark [data-variant="destructive"] {
+  color: #24070b;
+}
+
+/* Component chrome that is drawn rather than tokenised. */
+.dark .gizmo-card {
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.7),
+    0 22px 40px -38px rgba(0, 0, 0, 0.95);
+}
+
+.dark .lift:hover {
+  box-shadow: 0 20px 36px -28px rgba(0, 0, 0, 0.9);
+}
+
+.dark .gizmo-row {
+  color: color-mix(in srgb, var(--brand-ink) 82%, transparent);
+}
+
+.dark .gizmo-scroll {
+  scrollbar-color: #46506a transparent;
+}
+
+.dark .gizmo-scroll::-webkit-scrollbar-thumb {
+  background: #46506a;
+}
+
+.dark .paper-panel {
+  background-color: #0d1016;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.08) 1px,
+    transparent 1px
+  );
+}
+
+.dark .blueprint-grid,
+.dark .dot-grid,
+.dark .paper-grid,
+.dark .blueprint-grid-fine,
+.dark .paper-dots {
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.09) 1px,
+    transparent 1px
+  );
+}
+
+.dark .hover-sheen::after {
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    rgba(195, 178, 255, 0.16) 50%,
+    transparent 62%
+  );
+}
+
+.dark .sticker {
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+.dark .soft-shadow,
+.dark .ring-shadow {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 @media (prefers-reduced-motion: reduce) {

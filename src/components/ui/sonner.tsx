@@ -6,13 +6,16 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
+import { useTheme } from "@/components/ThemeProvider"
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  // Toasts follow the app theme (not the OS setting), so a dark session never
+  // gets a white card dropped on top of it.
+  const { theme } = useTheme()
+
   return (
     <Sonner
-      // Bluprint ships a single light theme, so toasts should never follow the
-      // OS setting and flip to dark.
-      theme="light"
+      theme={theme}
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

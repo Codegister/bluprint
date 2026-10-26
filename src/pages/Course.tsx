@@ -55,7 +55,7 @@ type CourseTab = "pathway" | "tutor" | "papers" | "topic-papers" | "sets";
 const COURSE_TABS: CourseTab[] = ["pathway", "tutor", "papers", "topic-papers", "sets"];
 
 const TAB_TRIGGER_CLASS =
-  "h-10 gap-2 rounded-full border border-border bg-white px-4 text-[0.85rem] font-semibold text-brand-ink/70 shadow-none transition-colors data-[state=active]:border-[#191B27] data-[state=active]:bg-[#191B27] data-[state=active]:text-white data-[state=active]:shadow-none";
+  "h-10 gap-2 rounded-full border border-border bg-white px-4 text-[0.85rem] font-semibold text-brand-ink/70 shadow-none transition-colors data-[state=active]:border-brand-ink data-[state=active]:bg-brand-ink data-[state=active]:text-brand-cream data-[state=active]:shadow-none";
 
 /** Octagon, so each node reads as a cut gem rather than a plain circle. */
 const NODE_SHAPE =

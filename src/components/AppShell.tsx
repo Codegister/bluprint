@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Meter, SPRING } from "@/components/motion/Motion";
 import {
   Sheet,
@@ -275,6 +276,9 @@ function Sidebar({
       </div>
 
       <div className="relative border-t border-white/70 px-4 py-4">
+        {/* Labelled here rather than in the header: the sidebar has the room to
+            say what the button does. */}
+        <ThemeToggle withLabel className="mb-3 w-full" />
         <div className="flex items-center gap-2.5">
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#191B27] text-[0.85rem] font-bold text-white">
             {initialFor(user?.name, user?.email)}
@@ -320,14 +324,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border/70 bg-white/80 px-4 py-3 backdrop-blur lg:hidden">
         <Brand to="/dashboard" />
-        <button
-          type="button"
-          aria-label="Open menu"
-          onClick={() => setMobileOpen(true)}
-          className="grid size-9 place-items-center rounded-full bg-white text-brand-ink/70 ring-1 ring-border transition-colors hover:text-brand-ink"
-        >
-          <Menu className="size-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            type="button"
+            aria-label="Open menu"
+            onClick={() => setMobileOpen(true)}
+            className="grid size-9 place-items-center rounded-full bg-white text-brand-ink/70 ring-1 ring-border transition-colors hover:text-brand-ink"
+          >
+            <Menu className="size-5" />
+          </button>
+        </div>
       </header>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

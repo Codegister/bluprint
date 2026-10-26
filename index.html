@@ -7,6 +7,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#f7f6f2" />
+  <meta name="color-scheme" content="light dark" />
   <meta
     name="description"
     content="Bluprint turns your notes into summaries, flashcards, quizzes and AI-marked exam questions."
@@ -18,6 +19,26 @@
     rel="stylesheet"
   />
   <title>Bluprint: notes in, revision out</title>
+  <!--
+    Applies the saved theme before the first paint. Without this, a reload in
+    dark mode would flash a warm-paper white page until React mounted.
+    Keep the storage key in sync with src/components/ThemeProvider.tsx.
+  -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("bluprint.theme");
+        var dark =
+          saved === "dark" ||
+          (saved !== "light" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      } catch (error) {
+        /* Storage unavailable: the light theme still renders fine. */
+      }
+    })();
+  </script>
   <script type="module" src="/src/vly-runtime.ts"></script>
 </head>
 

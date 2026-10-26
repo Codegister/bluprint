@@ -23,7 +23,9 @@ export function Brand({
       onClick={onNavigate}
       className={cn("group inline-flex items-center gap-2.5", className)}
     >
-      <span className="grid size-9 place-items-center rounded-[0.7rem] bg-[#191B27] text-white transition-transform duration-300 ease-out group-hover:-rotate-6 group-hover:scale-105">
+      {/* `brand-tile` keeps the violet mark readable in the dark theme, where
+          ink tiles are inverted to a light fill. */}
+      <span className="brand-tile grid size-9 place-items-center rounded-[0.7rem] bg-[#191B27] text-white transition-transform duration-300 ease-out group-hover:-rotate-6 group-hover:scale-105">
         <svg
           viewBox="0 0 24 24"
           className="size-[18px]"

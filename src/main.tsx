@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
@@ -164,7 +165,10 @@ createRoot(document.getElementById("root")!).render(
         <VlyToolbar />
       </ToolbarErrorBoundary>
       <MotionConfig reducedMotion="user">
-        <ConvexAuthProvider client={convex}>
+        {/* Theme lives above the router so every screen, dialog and toast
+            shares one light / high-contrast-dark state. */}
+        <ThemeProvider>
+          <ConvexAuthProvider client={convex}>
           <BrowserRouter>
             <RouteSyncer />
             <RouteFade>
@@ -273,7 +277,8 @@ createRoot(document.getElementById("root")!).render(
             </RouteFade>
             <Toaster />
           </BrowserRouter>
-        </ConvexAuthProvider>
+          </ConvexAuthProvider>
+        </ThemeProvider>
       </MotionConfig>
     </RootErrorBoundary>
   </StrictMode>,

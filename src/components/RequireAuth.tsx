@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { Mascot } from "@/components/Mascot";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -51,13 +52,16 @@ export function RequireAuth({
       <div className="min-h-screen bg-background">
         <header className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
           <Brand />
-          <button
-            type="button"
-            onClick={() => navigate("/")}
-            className="rounded-full px-3 py-1.5 text-[0.85rem] font-semibold text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
-          >
-            ← Home
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="rounded-full px-3 py-1.5 text-[0.85rem] font-semibold text-muted-foreground hover:bg-brand-panel hover:text-brand-ink"
+            >
+              ← Home
+            </button>
+          </div>
         </header>
 
         <main className="flex items-center justify-center px-4 pb-20 pt-10">
