@@ -52,13 +52,15 @@ export type SubjectMeta = {
   tint: string;
 };
 
-const SCIENCE = { color: "#128A4C", tint: "bg-[#E6F9F6]" };
-const MATHS = { color: "#2563EB", tint: "bg-[#E9F0FF]" };
-const HUMANITIES = { color: "#B45309", tint: "bg-[#FFF3E8]" };
-const LANGUAGES = { color: "#D1367E", tint: "bg-[#FFF0F6]" };
-const CREATIVE = { color: "#7C3AED", tint: "bg-[#F3ECFF]" };
-const APPLIED = { color: "#0E7490", tint: "bg-[#E6F7FA]" };
-const CORE = { color: "#5B3DF5", tint: "bg-[#EFEDFF]" };
+/* Subject groups are told apart by chrome shade, not by hue. The inline
+   `color` is a CSS variable so it follows the light and dark ramps. */
+const SCIENCE = { color: "var(--chrome-7)", tint: "bg-chrome-3" };
+const MATHS = { color: "var(--chrome-6)", tint: "bg-chrome-2" };
+const HUMANITIES = { color: "var(--chrome-8)", tint: "bg-chrome-4" };
+const LANGUAGES = { color: "var(--chrome-7)", tint: "bg-chrome-2" };
+const CREATIVE = { color: "var(--chrome-6)", tint: "bg-chrome-3" };
+const APPLIED = { color: "var(--chrome-5)", tint: "bg-chrome-2" };
+const CORE = { color: "var(--chrome-8)", tint: "bg-chrome-4" };
 
 const catalogue: Array<Omit<SubjectMeta, "group"> & { group: string }> = [
   // Sciences

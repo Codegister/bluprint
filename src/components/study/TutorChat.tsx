@@ -51,7 +51,7 @@ function SourceList({ sources }: { sources: Source[] }) {
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="min-w-0 truncate text-[#4C5FD5] underline decoration-[#C6CCF3] underline-offset-2 hover:text-[#3846A8]"
+            className="min-w-0 truncate text-chrome-6 underline decoration-chrome-4 underline-offset-2 hover:text-chrome-8"
             title={source.title}
           >
             {source.title || hostOf(source.url)}
@@ -252,7 +252,7 @@ export function TutorChat({
                         attachments: [],
                       })
                     }
-                    className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-[#D8CCFF] hover:bg-[#FAF8FF]"
+                    className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-chrome-4 hover:bg-brand-panel"
                   >
                     {suggestion}
                   </button>

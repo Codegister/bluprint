@@ -407,7 +407,7 @@ function StudyActions({ setId, set }: { setId: string; set: Doc<"studySets"> }) 
       count: set.cardCount,
       note: `${mastery}% known · spaced review`,
       icon: Layers3,
-      tint: "bg-[#EDE8FF] text-[#6B4BFF]",
+      tint: "bg-brand-panel text-chrome-7",
     },
     {
       to: `/sets/${setId}/quiz`,
@@ -435,7 +435,7 @@ function StudyActions({ setId, set }: { setId: string; set: Doc<"studySets"> }) 
         <Link
           key={item.label}
           to={item.to}
-          className="group flex items-center gap-3 rounded-2xl border border-border bg-white p-4 transition-colors hover:border-[#D8CCFF] hover:bg-[#FBF9FF]"
+          className="group flex items-center gap-3 rounded-2xl border border-border bg-white p-4 transition-colors hover:border-chrome-4 hover:bg-[#FBF9FF]"
         >
           <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.tint}`}>
             <item.icon className="size-[18px]" aria-hidden />
@@ -551,7 +551,7 @@ export default function StudySet() {
                 onClick={openTutor}
                 className="h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
               >
-                <Sparkles className="size-3.5 text-[#C43F69]" aria-hidden />
+                <Sparkles className="size-3.5 text-chrome-7" aria-hidden />
                 Ask the tutor
               </Button>
               <Button
@@ -568,7 +568,7 @@ export default function StudySet() {
 
         <div className="chrome-plate mt-2 min-w-0 rounded-[1.6rem] px-4 py-4">
           {isMode && (
-            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-[#6B4EE6]">
+            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-chrome-7">
               {SECTION_LABEL[activeSection]}
             </p>
           )}
@@ -639,7 +639,7 @@ export default function StudySet() {
               {...enter(0.12)}
             >
               {qualification && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3ECFF] px-3 py-1.5 text-[0.75rem] font-semibold text-[#5B3DF5]">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-3 py-1.5 text-[0.75rem] font-semibold text-chrome-7">
                   {qualification}
                 </span>
               )}

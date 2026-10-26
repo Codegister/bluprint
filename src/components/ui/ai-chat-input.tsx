@@ -73,7 +73,7 @@ const MODEL_GLYPHS: Record<string, { Glyph: LucideIcon; tint: string }> = {
   // Ultra is the speed tier, so it gets the lightning bolt.
   zap: { Glyph: Zap, tint: "text-[#D08A00]" },
   rabbit: { Glyph: Rabbit, tint: "text-[#14866D]" },
-  scale: { Glyph: Scale, tint: "text-[#4C5FD5]" },
+  scale: { Glyph: Scale, tint: "text-chrome-6" },
   flame: { Glyph: Flame, tint: "text-[#D2542A]" },
   crown: { Glyph: Crown, tint: "text-[#8A4BC6]" },
 };

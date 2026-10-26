@@ -59,7 +59,7 @@ export function CognitoTopicNotes({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[0.64rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
+          <p className="text-[0.64rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
             Topic notes
           </p>
           <p className="mt-0.5 text-[0.78rem] font-semibold text-brand-ink">

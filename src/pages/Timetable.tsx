@@ -153,7 +153,7 @@ function DayChip({
         "group flex min-w-[86px] flex-1 flex-col items-start gap-1 rounded-2xl border px-3 py-2.5 text-left transition-colors",
         selected
           ? "border-[#191B27] bg-[#191B27] text-white"
-          : "border-border bg-white text-brand-ink hover:border-[#B9B0E8] hover:bg-[#FBFAFF]",
+          : "border-border bg-white text-brand-ink hover:border-chrome-4 hover:bg-brand-panel",
       )}
     >
       <span className="flex w-full items-center justify-between gap-1">
@@ -169,7 +169,7 @@ function DayChip({
           <span
             className={cn(
               "size-1.5 rounded-full",
-              selected ? "bg-white" : "bg-[#5B3DF5]",
+              selected ? "bg-white" : "bg-chrome-6",
             )}
             aria-label="Today"
           />
@@ -277,7 +277,7 @@ function SessionRow({
               "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[0.68rem] font-semibold transition-colors disabled:opacity-60",
               done
                 ? "border-[#CBE7D8] bg-[#EAF8F0] text-[#128A4C]"
-                : "border-border bg-white text-brand-ink/70 hover:border-[#B9B0E8] hover:text-brand-ink",
+                : "border-border bg-white text-brand-ink/70 hover:border-chrome-4 hover:text-brand-ink",
             )}
           >
             {busy ? (
@@ -761,7 +761,7 @@ export default function Timetable() {
     <AppShell>
       <header className="chrome-plate flex flex-wrap items-end justify-between gap-4 rounded-[1.6rem] px-5 py-5">
         <div>
-          <p className="mono-label text-[#5B3DF5]">{dayLabel}</p>
+          <p className="mono-label text-chrome-7">{dayLabel}</p>
           <motion.h1
             className="mt-1 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
             {...enter(0.02)}
@@ -864,7 +864,7 @@ export default function Timetable() {
                   <Meter
                     value={progress}
                     className="h-1.5 bg-brand-panel"
-                    barClassName="bg-[#5B3DF5]"
+                    barClassName="bg-chrome-6"
                     label="Sessions completed"
                   />
                 </div>

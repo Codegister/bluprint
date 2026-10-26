@@ -406,7 +406,7 @@ export function CreateSetDialog({
                 maxLength={20_000}
                 rows={8}
                 disabled={isLoading}
-                className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+                className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
               />
               <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
                 <span>A few sentences is enough to start</span>
@@ -451,7 +451,7 @@ export function CreateSetDialog({
                 <label key={control.label} className="block">
                   <span className="flex items-center justify-between gap-2 text-[0.76rem] font-semibold text-brand-ink">
                     {control.label}
-                    <span className="rounded-full bg-[#F3ECFF] px-2 py-0.5 text-[0.7rem] tabular-nums text-[#5B3DF5]">
+                    <span className="rounded-full bg-brand-panel px-2 py-0.5 text-[0.7rem] tabular-nums text-chrome-7">
                       {control.value}
                     </span>
                   </span>
@@ -464,7 +464,7 @@ export function CreateSetDialog({
                     disabled={isLoading}
                     onChange={(event) => control.onChange(Number(event.target.value))}
                     aria-label={control.aria}
-                    className="mt-2 w-full cursor-pointer accent-[#7C5CFF]"
+                    className="mt-2 w-full cursor-pointer accent-chrome-6"
                   />
                   <span className="flex justify-between text-[0.62rem] font-medium text-muted-foreground">
                     <span>1</span>

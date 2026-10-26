@@ -133,7 +133,7 @@ export function CoursePastPapers({
             paper every time you open it, and it can be scheduled in your timetable.
           </p>
           {formatSummary && (
-            <p className="mt-2 inline-flex rounded-full bg-[#F1F0FB] px-3 py-1 text-[0.7rem] font-semibold text-[#5B3DF5]">
+            <p className="mt-2 inline-flex rounded-full bg-brand-panel px-3 py-1 text-[0.7rem] font-semibold text-chrome-7">
               {formatSummary}
             </p>
           )}
@@ -246,7 +246,7 @@ export function CoursePastPapers({
                       {paper.title}
                     </h3>
                     {paper.paper && !paper.title.startsWith(paper.paper) && (
-                      <span className="rounded-full bg-[#F1F0FB] px-2 py-0.5 text-[0.62rem] font-semibold text-[#5B3DF5]">
+                      <span className="rounded-full bg-brand-panel px-2 py-0.5 text-[0.62rem] font-semibold text-chrome-7">
                         {paper.paper}
                       </span>
                     )}

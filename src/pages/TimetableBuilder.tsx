@@ -507,7 +507,7 @@ export default function TimetableBuilder() {
           <motion.div
             animate={{ width: `${(step / STEPS.length) * 100}%` }}
             transition={{ duration: 0.45, ease: EASE }}
-            className="h-full rounded-full bg-[#5B3DF5]"
+            className="h-full rounded-full bg-chrome-6"
           />
         </div>
       </nav>
@@ -556,7 +556,7 @@ export default function TimetableBuilder() {
                   Select a course for each subject you want on the timetable.
                 </p>
               </div>
-              <span className="rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.72rem] font-bold text-[#5B3DF5]">
+              <span className="rounded-full bg-brand-panel px-2.5 py-1 text-[0.72rem] font-bold text-chrome-7">
                 {settings.length} selected
               </span>
             </div>
@@ -602,7 +602,7 @@ export default function TimetableBuilder() {
                     <span
                       className={cn(
                         "shrink-0 text-[0.7rem] font-semibold",
-                        active ? color.text : "text-[#5B3DF5]",
+                        active ? color.text : "text-chrome-7",
                       )}
                     >
                       {active ? "Selected" : "Add"}
@@ -646,7 +646,7 @@ export default function TimetableBuilder() {
                       className={cn(
                         "rounded-2xl border px-3.5 py-3 text-left transition-colors",
                         active
-                          ? "border-[#6B4EE6] bg-[#F6F2FF]"
+                          ? "border-chrome-6 bg-brand-panel"
                           : "border-border bg-white hover:bg-brand-panel",
                       )}
                     >
@@ -656,7 +656,7 @@ export default function TimetableBuilder() {
                         </span>
                         {active && (
                           <Check
-                            className="size-3.5 shrink-0 text-[#6B4EE6]"
+                            className="size-3.5 shrink-0 text-chrome-7"
                             aria-hidden
                           />
                         )}
@@ -736,7 +736,7 @@ export default function TimetableBuilder() {
                     className={cn(
                       "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
                       paper === option
-                        ? "border-[#6B4EE6] bg-[#F3ECFF] text-[#5130D8]"
+                        ? "border-chrome-6 bg-brand-panel text-chrome-8"
                         : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
                     )}
                   >
@@ -752,7 +752,7 @@ export default function TimetableBuilder() {
             </div>
 
             {studyMethod === "papers" && (
-              <p className="mt-4 rounded-2xl bg-[#F3F0FF] px-4 py-3 text-[0.78rem] leading-relaxed text-[#5130D8]">
+              <p className="mt-4 rounded-2xl bg-brand-panel px-4 py-3 text-[0.78rem] leading-relaxed text-chrome-8">
                 A past paper takes an hour, so every session is one full paper. The
                 session length and paper label only apply to topic sessions and can
                 be chosen on the mix route.
@@ -795,7 +795,7 @@ export default function TimetableBuilder() {
                     className={cn(
                       "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
                       dailyMinutes === minutes
-                        ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
+                        ? "border-chrome-6 bg-brand-panel text-chrome-7"
                         : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
                       tooShort && "cursor-not-allowed opacity-40 hover:bg-white",
                     )}
@@ -834,7 +834,7 @@ export default function TimetableBuilder() {
                       className={cn(
                         "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
                         dayOffMinutes === minutes
-                          ? "border-[#6B4DBE] bg-[#F3F0FF] text-[#5130D8]"
+                          ? "border-chrome-6 bg-brand-panel text-chrome-8"
                           : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
                         disabled &&
                           "cursor-not-allowed opacity-40 hover:bg-white",
@@ -868,7 +868,7 @@ export default function TimetableBuilder() {
                       className={cn(
                         "rounded-full border px-4 py-2 text-[0.8rem] font-semibold transition-colors",
                         daysPerWeek === days
-                          ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
+                          ? "border-chrome-6 bg-chrome-3 text-chrome-8"
                           : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
                       )}
                     >
@@ -893,7 +893,7 @@ export default function TimetableBuilder() {
                     onChange={(event) =>
                       setStartMinutes(Number(event.target.value))
                     }
-                    className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9A6FF]"
+                    className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-chrome-4"
                   >
                     {START_HOURS.map((hour) => (
                       <option
@@ -1018,7 +1018,7 @@ export default function TimetableBuilder() {
           <div className="chrome-bar sticky bottom-3 z-20 rounded-[1.4rem] border px-4 py-3 shadow-[0_18px_38px_-30px_rgba(22,24,31,0.55)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="mono-label text-[#5B3DF5]">Step {step} of 4</p>
+                <p className="mono-label text-chrome-7">Step {step} of 4</p>
                 <p className="mt-0.5 truncate text-[0.8rem] text-muted-foreground">
                   {step === 4 && settings.length === 0
                     ? "No subjects chosen yet."

@@ -49,7 +49,7 @@ function SetRow({ set }: { set: SetSummary }) {
   return (
     <Link
       to={`/sets/${set._id}`}
-      className="group flex items-center gap-3.5 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-[#FBF7FF] sm:gap-4 sm:px-5"
+      className="group flex items-center gap-3.5 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel sm:gap-4 sm:px-5"
     >
       <DeckGlyph className="size-9 shrink-0" color={accent} />
       <div className="min-w-0 flex-1">
@@ -184,13 +184,13 @@ export default function Dashboard() {
       >
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <span className="sticker bg-white/85 text-[#5B3DF5]">
+            <span className="sticker bg-white/85 text-chrome-7">
               <Layers3 className="size-3" aria-hidden />
               Your library
             </span>
             <h1 className="chrome-title mt-3 font-display text-[1.75rem] font-extrabold leading-[1.05] tracking-[-0.035em] sm:text-[2.2rem]">
               Welcome back,{" "}
-              <span className="text-[#5B3DF5]">
+              <span className="text-chrome-7">
                 {displayName(user?.name, user?.email)}
               </span>
             </h1>
@@ -264,7 +264,7 @@ export default function Dashboard() {
                 value={courseFilter}
                 onChange={(event) => setCourseFilter(event.target.value)}
                 aria-label="Filter study sets by course"
-                className="h-9 rounded-full border border-border bg-white px-3 text-[0.78rem] font-medium text-brand-ink outline-none focus:border-[#B9A6FF]"
+                className="h-9 rounded-full border border-border bg-white px-3 text-[0.78rem] font-medium text-brand-ink outline-none focus:border-chrome-4"
               >
                 <option value="all">All courses</option>
                 {courseFilters.map(([name, count]) => (

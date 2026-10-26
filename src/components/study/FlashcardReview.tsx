@@ -281,7 +281,7 @@ export function FlashcardReview({
     <div className="mx-auto w-full max-w-2xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.7rem] font-semibold text-[#5B3DF5]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-2.5 py-1 text-[0.7rem] font-semibold text-chrome-7">
             {dictation.supported ? <Mic className="size-3" /> : <Keyboard className="size-3" />}
             Typed recall
           </span>
@@ -303,7 +303,7 @@ export function FlashcardReview({
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.7rem] font-semibold transition-colors",
               selfMark
-                ? "border-[#B9A6FF] bg-[#F3ECFF] text-[#5B3DF5]"
+                ? "border-chrome-4 bg-brand-panel text-chrome-7"
                 : "border-border bg-white text-brand-ink/60 hover:bg-brand-panel",
             )}
           >
@@ -311,7 +311,7 @@ export function FlashcardReview({
               aria-hidden
               className={cn(
                 "size-2 rounded-full",
-                selfMark ? "bg-[#5B3DF5]" : "bg-brand-ink/25",
+                selfMark ? "bg-chrome-8" : "bg-brand-ink/25",
               )}
             />
             Self-mark
@@ -371,7 +371,7 @@ export function FlashcardReview({
                 }
                 rows={3}
                 aria-label="Your answer"
-                className="min-h-[104px] resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+                className="min-h-[104px] resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
               />
               {dictation.listening && (
                 <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-[#FFEEF0] px-2 py-0.5 text-[0.65rem] font-semibold text-[#C93C49]">
@@ -397,7 +397,7 @@ export function FlashcardReview({
                   {dictation.listening ? (
                     <MicOff className="size-3.5" />
                   ) : (
-                    <Mic className="size-3.5 text-[#5B3DF5]" />
+                    <Mic className="size-3.5 text-chrome-7" />
                   )}
                   {dictation.listening ? "Stop dictation" : "Speak your answer"}
                 </Button>
@@ -491,7 +491,7 @@ export function FlashcardReview({
                       className={cn(
                         "rounded-2xl border px-2 py-2.5 text-[0.8rem] font-semibold transition-colors disabled:opacity-60",
                         entry.className,
-                        suggested && "ring-2 ring-[#5B3DF5]/45 ring-offset-1",
+                        suggested && "ring-2 ring-chrome-6/45 ring-offset-1",
                       )}
                     >
                       {entry.label}
@@ -505,7 +505,7 @@ export function FlashcardReview({
             </div>
 
             <p className="mt-3 flex items-center justify-center gap-1.5 text-[0.7rem] font-medium text-muted-foreground">
-              <Sparkles className="size-3 text-[#5B3DF5]" aria-hidden />
+              <Sparkles className="size-3 text-chrome-7" aria-hidden />
               Your rating sets the next review with FSRS.
             </p>
           </motion.div>

@@ -10,11 +10,12 @@ const buttonVariants = cva(
     variants: {
       variant: {
         // Hover states swap to a different solid colour; nothing fades.
-        default: "bg-primary text-primary-foreground hover:bg-[#32333b]",
+        default:
+          "chrome-button bg-primary text-primary-foreground hover:bg-[#32333b]",
         destructive: "bg-destructive text-white hover:bg-[#a32a38]",
         outline:
           "border border-border bg-card text-foreground hover:bg-brand-panel",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-[#e3ded2]",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-chrome-3",
         ghost: "text-brand-ink hover:bg-brand-panel",
         link: "text-primary underline-offset-4 hover:underline",
       },

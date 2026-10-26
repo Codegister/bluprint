@@ -248,9 +248,9 @@ function SubjectRow({
       className={cn(
         "flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
         active
-          ? "border-[#7C5CFF]/50 bg-white shadow-[0_8px_20px_-18px_rgba(22,24,31,0.6)]"
+          ? "border-chrome-6/50 bg-white shadow-[0_8px_20px_-18px_rgba(22,24,31,0.6)]"
           : flashed
-            ? "border-[#7C5CFF] bg-[#FAF8FF] ring-2 ring-[#7C5CFF]/20"
+            ? "border-chrome-6 bg-brand-panel ring-2 ring-chrome-6/20"
             : selected
               ? "border-border bg-white"
               : "border-transparent hover:border-border hover:bg-white",
@@ -268,7 +268,7 @@ function SubjectRow({
             {isDefault && (
               <>
                 <Star
-                  className="size-2.5 shrink-0 text-[#7C5CFF]"
+                  className="size-2.5 shrink-0 text-chrome-6"
                   fill="currentColor"
                   aria-hidden
                 />
@@ -690,7 +690,7 @@ export default function CourseSetup() {
           transition={{ duration: 0.3, ease: EASE }}
           className="mt-6 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-7"
         >
-          <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
+          <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-chrome-6">
             Step 1 of 2
           </p>
           <motion.h2
@@ -713,7 +713,7 @@ export default function CourseSetup() {
                 {...enter(0.08 + index * 0.05, 12)}
                 whileHover={{ y: -2, transition: SPRING }}
                 whileTap={{ scale: 0.99, transition: SPRING }}
-                className="group flex items-center justify-between gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-[#7C5CFF]/60 hover:bg-[#FAF8FF]"
+                className="group flex items-center justify-between gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-chrome-6/60 hover:bg-brand-panel"
               >
                 <span>
                   <span className="block text-[0.94rem] font-semibold text-brand-ink">
@@ -724,7 +724,7 @@ export default function CourseSetup() {
                   </span>
                 </span>
                 <ChevronRight
-                  className="size-4 text-brand-ink/30 transition-colors group-hover:text-[#5B3DF5]"
+                  className="size-4 text-brand-ink/30 transition-colors group-hover:text-chrome-7"
                   aria-hidden
                 />
               </motion.button>
@@ -747,7 +747,7 @@ export default function CourseSetup() {
           exit={{ opacity: 0, x: -16 }}
           transition={{ duration: 0.3, ease: EASE }}
         >
-          <p className="mt-5 text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
+          <p className="mt-5 text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-chrome-6">
             Step 2 of 2
           </p>
           <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -866,7 +866,7 @@ export default function CourseSetup() {
                               "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.82rem] font-medium transition-colors",
                               chosen
                                 ? "border-[#191B27] bg-[#191B27] text-white"
-                                : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                : "border-border bg-white text-brand-ink/80 hover:border-chrome-6/50 hover:bg-brand-panel",
                             )}
                           >
                             <span className="truncate">{option}</span>
@@ -918,7 +918,7 @@ export default function CourseSetup() {
                               "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
                               chosen
                                 ? "border-[#191B27] bg-[#191B27] text-white"
-                                : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                : "border-border bg-white text-brand-ink/80 hover:border-chrome-6/50 hover:bg-brand-panel",
                             )}
                           >
                             <span className="truncate">{tierLabel(option)}</span>
@@ -955,7 +955,7 @@ export default function CourseSetup() {
                                   "flex flex-col gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-colors",
                                   chosen
                                     ? "border-[#191B27] bg-[#191B27] text-white"
-                                    : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                    : "border-border bg-white text-brand-ink/80 hover:border-chrome-6/50 hover:bg-brand-panel",
                                 )}
                               >
                                 <span className="flex items-center gap-2 text-[0.84rem] font-semibold">
@@ -1006,7 +1006,7 @@ export default function CourseSetup() {
                                   "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
                                   chosen
                                     ? "border-[#191B27] bg-[#191B27] text-white"
-                                    : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                    : "border-border bg-white text-brand-ink/80 hover:border-chrome-6/50 hover:bg-brand-panel",
                                 )}
                               >
                                 <span className="truncate">{religion}</span>
@@ -1046,7 +1046,7 @@ export default function CourseSetup() {
                                   "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
                                   chosen
                                     ? "border-[#191B27] bg-[#191B27] text-white"
-                                    : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                    : "border-border bg-white text-brand-ink/80 hover:border-chrome-6/50 hover:bg-brand-panel",
                                 )}
                               >
                                 <span className="truncate">{religion}</span>
@@ -1083,7 +1083,7 @@ export default function CourseSetup() {
                                   "flex flex-col gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-colors",
                                   chosen
                                     ? "border-[#191B27] bg-[#191B27] text-white"
-                                    : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                    : "border-border bg-white text-brand-ink/80 hover:border-chrome-6/50 hover:bg-brand-panel",
                                 )}
                               >
                                 <span className="text-[0.84rem] font-semibold">
@@ -1142,7 +1142,7 @@ export default function CourseSetup() {
                                   "flex flex-col gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-colors",
                                   chosen
                                     ? "border-[#191B27] bg-[#191B27] text-white"
-                                    : "border-border bg-white text-brand-ink/80 hover:border-[#7C5CFF]/50 hover:bg-[#FAF8FF]",
+                                    : "border-border bg-white text-brand-ink/80 hover:border-chrome-6/50 hover:bg-brand-panel",
                                 )}
                               >
                                 <span className="text-[0.84rem] font-semibold">
@@ -1203,10 +1203,10 @@ export default function CourseSetup() {
                       <button
                         type="button"
                         onClick={addCustom}
-                        className="mt-2 flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-left transition-colors hover:border-[#7C5CFF] hover:bg-white"
+                        className="mt-2 flex w-full items-center gap-2.5 rounded-xl border border-dashed border-border px-3 py-2.5 text-left transition-colors hover:border-chrome-6 hover:bg-white"
                       >
                         <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#EFEDFF]">
-                          <Plus className="size-4 text-[#5B3DF5]" aria-hidden />
+                          <Plus className="size-4 text-chrome-7" aria-hidden />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[0.84rem] font-semibold text-brand-ink">

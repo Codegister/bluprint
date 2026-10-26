@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bluprint">
   <rect width="64" height="64" rx="12" fill="#0B1219" />
-  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="11.25" stroke="#22D3EE" stroke-opacity="0.35" stroke-width="1.5" fill="none" />
-  <g stroke="#22D3EE" stroke-width="1.6" stroke-linejoin="round">
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="11.25" stroke="#B0B8C0" stroke-opacity="0.55" stroke-width="1.5" fill="none" />
+  <g stroke="#CCD2D8" stroke-width="1.6" stroke-linejoin="round">
     <path d="M32 8 54 21v22L32 56 10 43V21L32 8Z" />
     <path d="M32 8v23m0 0 22-10M32 31 10 21m22 10v25" stroke-width="1.2" opacity="0.65" />
     <path d="M21 15 43 28v12L21 27V15Z" stroke-width="1.1" opacity="0.35" />
   </g>
-  <circle cx="32" cy="31" r="2.4" fill="#22D3EE" />
-  <circle cx="54" cy="21" r="1.8" fill="#FACC15" />
+  <circle cx="32" cy="31" r="2.4" fill="#FFFFFF" />
+  <circle cx="54" cy="21" r="1.8" fill="#8F98A2" />
 </svg>

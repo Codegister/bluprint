@@ -192,7 +192,7 @@ export function SetSettingsDialog({
               onChange={(event) => setTitle(event.target.value)}
               maxLength={80}
               disabled={saving !== null}
-              className="mt-2 h-11 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+              className="mt-2 h-11 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
             />
           </div>
 
@@ -207,7 +207,7 @@ export function SetSettingsDialog({
               placeholder="e.g. Biology"
               maxLength={60}
               disabled={saving !== null}
-              className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+              className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
             />
           </div>
 
@@ -231,7 +231,7 @@ export function SetSettingsDialog({
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
                       selected
-                        ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
+                        ? "border-chrome-6 bg-brand-panel text-chrome-7"
                         : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
                     )}
                   >
@@ -262,7 +262,7 @@ export function SetSettingsDialog({
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
                       selected
-                        ? "border-[#12B8A6] bg-[#E6F9F6] text-[#0E8C7F]"
+                        ? "border-chrome-6 bg-chrome-3 text-chrome-8"
                         : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
                     )}
                   >
@@ -286,7 +286,7 @@ export function SetSettingsDialog({
               value={examDate}
               onChange={(event) => setExamDate(event.target.value)}
               disabled={saving !== null}
-              className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+              className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
             />
             <p className="mt-1 text-[0.7rem] leading-relaxed text-muted-foreground">
               Sets this set's pace plan, projected readiness and your daily
@@ -313,7 +313,7 @@ export function SetSettingsDialog({
                 <label key={control.label} className="block">
                   <span className="flex items-center justify-between gap-1.5 text-[0.7rem] font-semibold text-brand-ink">
                     {control.label}
-                    <span className="rounded-full bg-white px-1.5 py-0.5 text-[0.66rem] tabular-nums text-[#5B3DF5]">
+                    <span className="rounded-full bg-white px-1.5 py-0.5 text-[0.66rem] tabular-nums text-chrome-7">
                       {control.value}
                     </span>
                   </span>
@@ -326,7 +326,7 @@ export function SetSettingsDialog({
                     disabled={saving !== null}
                     onChange={(event) => control.onChange(Number(event.target.value))}
                     aria-label={control.label}
-                    className="mt-1.5 w-full cursor-pointer accent-[#7C5CFF]"
+                    className="mt-1.5 w-full cursor-pointer accent-chrome-6"
                   />
                 </label>
               ))}

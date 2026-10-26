@@ -139,7 +139,7 @@ export function ExplainDialog({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "inline-flex h-8 items-center gap-1.5 rounded-full border border-[#C8D8FF] bg-[#EEF3FF] px-3 text-[0.74rem] font-semibold text-[#3153C9] transition-colors hover:border-[#AAC1FF] hover:bg-[#E3ECFF]",
+          "inline-flex h-8 items-center gap-1.5 rounded-full border border-chrome-4 bg-brand-panel px-3 text-[0.74rem] font-semibold text-chrome-7 transition-colors hover:border-chrome-5 hover:bg-chrome-3",
           className,
         )}
       >
@@ -150,7 +150,7 @@ export function ExplainDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="flex max-h-[86vh] w-[calc(100%-1.5rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-[1.6rem] p-0">
           <DialogHeader className="flex-row items-center gap-2.5 space-y-0 border-b border-border px-4 py-3.5 sm:px-5">
-            <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#EEF3FF] text-[#3153C9]">
+            <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-brand-panel text-chrome-7">
               <Sparkles className="size-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1 text-left">

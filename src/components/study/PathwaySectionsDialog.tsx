@@ -67,7 +67,7 @@ export function PathwaySectionsDialog({
         </div>
 
         <div className="px-6 pb-6">
-          <p className="mt-5 text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
+          <p className="mt-5 text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-chrome-7">
             Sections in this set
           </p>
 
@@ -100,7 +100,7 @@ export function PathwaySectionsDialog({
                 key={option.id}
                 className="flex items-start gap-2.5 rounded-2xl bg-[#FCFCFD] px-3 py-2.5"
               >
-                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-[#F3ECFF] text-[0.66rem] font-semibold tabular-nums text-[#5B3DF5]">
+                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-brand-panel text-[0.66rem] font-semibold tabular-nums text-chrome-7">
                   {index + 1}
                 </span>
                 <span className="min-w-0">

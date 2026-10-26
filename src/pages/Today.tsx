@@ -70,7 +70,7 @@ export default function Today() {
       >
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <span className="sticker bg-white/85 text-[#5B3DF5]">
+            <span className="sticker bg-white/85 text-chrome-7">
               <Target className="size-3" aria-hidden />
               Today
             </span>
@@ -118,7 +118,7 @@ export default function Today() {
         <motion.div className="gizmo-card p-5" {...enter(0.08)}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="mono-label text-[#5B3DF5]">Daily goal</p>
+              <p className="mono-label text-chrome-7">Daily goal</p>
               <p className="mt-1 font-display text-[1.6rem] font-bold tabular-nums text-brand-ink">
                 {today}
                 <span className="text-[0.95rem] font-semibold text-muted-foreground">
@@ -133,8 +133,8 @@ export default function Today() {
           </div>
           <Meter
             value={progress}
-            className="mt-3 h-2 bg-[#ECE6FF]"
-            barClassName="bg-[#5B3DF5]"
+            className="mt-3 h-2 bg-brand-panel"
+            barClassName="bg-chrome-8"
             label="Questions answered today"
           />
           <p className="mt-2 text-[0.76rem] leading-relaxed text-muted-foreground">
@@ -157,14 +157,14 @@ export default function Today() {
           </div>
 
           <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
-            <Flame className="size-4 text-[#F0871F]" aria-hidden />
+            <Flame className="size-4 text-chrome-6" aria-hidden />
             <p className="text-[0.8rem] font-medium text-brand-ink/75">
               {study?.streak
                 ? `${study.streak} day streak`
                 : "No streak yet — hit the Starter tier to begin"}
             </p>
             {study?.tier && (
-              <span className="ml-auto rounded-full bg-[#F3ECFF] px-2 py-0.5 text-[0.66rem] font-semibold text-[#5B3DF5]">
+              <span className="ml-auto rounded-full bg-brand-panel px-2 py-0.5 text-[0.66rem] font-semibold text-chrome-7">
                 {study.tier} tier
               </span>
             )}
@@ -172,7 +172,7 @@ export default function Today() {
         </motion.div>
 
         <motion.div className="gizmo-card p-5" {...enter(0.12)}>
-          <p className="mono-label text-[#C43F69]">Quick sprint</p>
+          <p className="mono-label text-chrome-7">Quick sprint</p>
           <h2 className="mt-1 font-display text-[1.15rem] font-bold text-brand-ink">
             Pick your length
           </h2>
@@ -189,7 +189,7 @@ export default function Today() {
                 onClick={() => startSprint(length)}
                 className={`rounded-2xl border px-2 py-2.5 text-[0.85rem] font-bold tabular-nums transition-colors ${
                   sprintLength === length
-                    ? "border-[#B9A6FF] bg-[#F3ECFF] text-[#5B3DF5]"
+                    ? "border-chrome-4 bg-brand-panel text-chrome-7"
                     : "border-border bg-white text-brand-ink/75 hover:bg-brand-panel"
                 }`}
               >
@@ -202,7 +202,7 @@ export default function Today() {
           </div>
 
           <div className="mt-3 flex items-center gap-2">
-            <Timer className="size-3.5 text-[#5B3DF5]" aria-hidden />
+            <Timer className="size-3.5 text-chrome-7" aria-hidden />
             <p className="text-[0.72rem] text-muted-foreground">
               {sprintLength
                 ? `A ${sprintLength}-card sprint is ready below.`
@@ -271,9 +271,9 @@ export default function Today() {
                 <li key={set._id}>
                   <Link
                     to={`/sets/${set._id}/cards`}
-                    className="flex items-center gap-3 border-b border-border/70 px-5 py-3 last:border-b-0 hover:bg-[#FBF7FF]"
+                    className="flex items-center gap-3 border-b border-border/70 px-5 py-3 last:border-b-0 hover:bg-brand-panel"
                   >
-                    <Layers3 className="size-4 shrink-0 text-[#5B3DF5]" aria-hidden />
+                    <Layers3 className="size-4 shrink-0 text-chrome-7" aria-hidden />
                     <span className="min-w-0 flex-1 truncate text-[0.85rem] font-medium text-brand-ink">
                       {set.title}
                     </span>

@@ -26,8 +26,8 @@ export type Theme = "light" | "dark";
 const STORAGE_KEY = "bluprint.theme";
 
 const THEME_COLOR: Record<Theme, string> = {
-  light: "#f7f3fd",
-  dark: "#07051a",
+  light: "#f3f5f7",
+  dark: "#0a0d10",
 };
 
 type ThemeContextValue = {

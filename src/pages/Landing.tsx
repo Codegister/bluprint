@@ -67,7 +67,7 @@ function HeroPreview() {
           <span className="text-[0.72rem] font-semibold text-muted-foreground">
             Card 3 of 10
           </span>
-          <span className="text-[0.72rem] font-semibold text-[#3f24b8]">Biology</span>
+          <span className="text-[0.72rem] font-semibold text-chrome-7">Biology</span>
         </div>
         <p className="mt-3 font-display text-[1.05rem] font-semibold leading-snug text-brand-ink">
           Why does the mitochondrion have folded inner membranes?
@@ -93,7 +93,7 @@ function HeroPreview() {
           <span className="text-muted-foreground">
             {revealed ? "Self-assessed" : "Active recall"}
           </span>
-          <span className="text-[#3f24b8]">
+          <span className="text-chrome-7">
             {revealed ? "Hide answer" : "Reveal answer"}
           </span>
         </div>
@@ -124,7 +124,7 @@ function HeroChip({
         transition={{ duration: 0.7, ease: EASE, delay }}
       >
         <Floating distance={6} duration={6.5 + delay} delay={delay} rotate={-1.5}>
-          <div className="rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 shadow-[0_18px_34px_-26px_rgba(60,40,120,0.6)]">
+          <div className="rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 shadow-[0_18px_34px_-26px_rgba(28,34,41,0.6)]">
             {children}
           </div>
         </Floating>
@@ -152,7 +152,7 @@ function HeroArt() {
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <motion.svg
             viewBox="0 0 200 200"
-            className="size-[390px] text-[#B9A6FF]/60 sm:size-[430px]"
+            className="size-[390px] text-chrome-4/70 sm:size-[430px]"
             animate={{ rotate: 360 }}
             transition={{ duration: 90, repeat: Infinity, ease: "linear" }}
           >
@@ -165,8 +165,8 @@ function HeroArt() {
               strokeWidth="0.7"
               strokeDasharray="2 8"
             />
-            <circle cx="100" cy="6" r="2.6" fill="#5B3DF5" />
-            <circle cx="194" cy="100" r="1.8" fill="#6B4BFF" />
+            <circle cx="100" cy="6" r="2.6" fill="#434A53" />
+            <circle cx="194" cy="100" r="1.8" fill="#6B747E" />
           </motion.svg>
         </div>
       </div>
@@ -197,7 +197,7 @@ function HeroArt() {
         <Meter
           value={70}
           className="mt-1.5 h-1 w-[148px] bg-[#EFEAE0]"
-          barClassName="bg-[#E8A317]"
+          barClassName="bg-chrome-6"
           delay={1.1}
           label="Sample exam score"
         />
@@ -309,19 +309,19 @@ export default function Landing() {
       </header>
 
       <section className="relative overflow-hidden border-b border-border">
-        {/* A quiet violet-to-periwinkle band across the hero, layered on the
-            page chrome so it reads as a lit panel rather than a colour wash. */}
+        {/* A steel band across the hero, layered on the page chrome so it reads
+            as a lit panel rather than a colour wash. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#8b5cff]/14 via-transparent to-[#8ea2ff]/20 dark:from-[#7c5cff]/22 dark:to-[#4f63d8]/20"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/80 via-transparent to-chrome-4/30 dark:from-chrome-3/40 dark:to-chrome-6/20"
         />
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
             <motion.div className="flex flex-wrap gap-2" {...enter(0.04)}>
-              <span className="sticker bg-white/85 text-[#5B3DF5] transition-transform hover:-rotate-2">
+              <span className="sticker bg-white/85 text-chrome-7 transition-transform hover:-rotate-2">
                 <Camera className="size-3" aria-hidden /> Photos and video
               </span>
-              <span className="sticker bg-white/85 text-[#A83458] transition-transform hover:rotate-2">
+              <span className="sticker bg-white/85 text-chrome-8 transition-transform hover:rotate-2">
                 <Sparkles className="size-3" aria-hidden /> Pasted notes
               </span>
             </motion.div>
@@ -331,7 +331,7 @@ export default function Landing() {
               {...enter(0.12, 24)}
             >
               A page of notes becomes a{" "}
-              <span className="text-[#5B3DF5]">revision session.</span>
+              <span className="text-chrome-7">revision session.</span>
             </motion.h1>
 
             <motion.p
@@ -398,7 +398,7 @@ export default function Landing() {
             {/* The rule above the steps draws itself as the section arrives. */}
             <motion.div
               aria-hidden
-              className="absolute inset-x-0 top-0 h-px origin-left bg-[#5B3DF5]"
+              className="absolute inset-x-0 top-0 h-px origin-left bg-chrome-5"
               initial={{ scaleX: 0 }}
               whileInView={{ scaleX: 1 }}
               viewport={{ once: false, amount: 0.4 }}
@@ -424,7 +424,7 @@ export default function Landing() {
                 className="grid gap-2 border-b border-border py-6 sm:grid-cols-[72px_minmax(0,0.9fr)_minmax(0,1.3fr)] sm:gap-6 sm:py-7"
                 {...reveal(index * 0.1)}
               >
-                <span className="relative inline-flex h-10 w-10 items-center justify-center justify-self-start rounded-2xl border border-[#E7DCF8] bg-white font-display text-[1.1rem] font-semibold leading-none tabular-nums text-brand-pink">
+                <span className="relative inline-flex h-10 w-10 items-center justify-center justify-self-start rounded-2xl border border-border bg-white font-display text-[1.1rem] font-semibold leading-none tabular-nums text-brand-pink">
                   {String(index + 1).padStart(2, "0")}
                   <motion.span
                     aria-hidden
@@ -473,7 +473,7 @@ export default function Landing() {
             <StaggerItem className="h-full" scale>
             <OutputCard
               label="Summary"
-              labelClass="text-[#3f24b8]"
+              labelClass="text-chrome-7"
               title="The argument, in a few lines"
               copy="An overview, the points worth remembering and the angles an examiner is likely to take."
             >
@@ -505,19 +505,19 @@ export default function Landing() {
             <StaggerItem className="h-full" scale>
             <OutputCard
               label="Flashcards"
-              labelClass="text-[#0e7a66]"
+              labelClass="text-chrome-8"
               title="Ten cards, one idea each"
               copy="Reveal the answer, then mark the card known or bring it back into the next session."
             >
               <div className="rounded-2xl bg-brand-panel/70 p-4">
                 <div className="flex items-center justify-between text-[0.72rem] font-semibold text-muted-foreground">
                   <span>Card 4 of 10</span>
-                  <span className="text-[#0e7a66]">Known</span>
+                  <span className="text-chrome-7">Known</span>
                 </div>
                 <p className="mt-3 text-[0.92rem] font-semibold leading-relaxed text-brand-ink/85">
                   Where does the Krebs cycle take place?
                 </p>
-                <p className="mt-2 border-t border-border pt-2 text-[0.84rem] leading-relaxed text-[#0e7a66]">
+                <p className="mt-2 border-t border-border pt-2 text-[0.84rem] leading-relaxed text-chrome-7">
                   In the mitochondrial matrix.
                 </p>
               </div>
@@ -527,7 +527,7 @@ export default function Landing() {
             <StaggerItem className="h-full" scale>
             <OutputCard
               label="Quiz"
-              labelClass="text-[#1d5f9e]"
+              labelClass="text-chrome-7"
               title="Five questions with reasons"
               copy="Multiple choice, with a short explanation for every option so a wrong answer still teaches you something."
             >
@@ -543,7 +543,7 @@ export default function Landing() {
                         className={cn(
                           "flex items-center justify-between rounded-xl px-3 py-1.5 text-[0.82rem]",
                           index === 0
-                            ? "bg-[#e7f7ef] font-semibold text-[#0e7a50]"
+                            ? "bg-chrome-3 font-semibold text-chrome-8"
                             : "bg-white text-muted-foreground",
                         )}
                       >
@@ -560,7 +560,7 @@ export default function Landing() {
             <StaggerItem className="h-full" scale>
             <OutputCard
               label="Exam practice"
-              labelClass="text-[#8a5a12]"
+              labelClass="text-chrome-7"
               title="Written answers, marked"
               copy="Answer in full sentences. Bluprint marks against the guide and shows which points are still missing."
             >
@@ -569,12 +569,12 @@ export default function Landing() {
                   <span className="text-[0.72rem] font-semibold text-muted-foreground">
                     Question 2, 10 marks
                   </span>
-                  <span className="text-[0.8rem] font-semibold text-[#8a5a12]">7 / 10</span>
+                  <span className="text-[0.8rem] font-semibold text-chrome-8">7 / 10</span>
                 </div>
                 <Meter
                   value={70}
                   className="mt-2 h-1.5 bg-white"
-                  barClassName="bg-[#8a5a12]"
+                  barClassName="bg-chrome-6"
                   label="Sample exam score"
                 />
                 <p className="mt-2.5 text-[0.82rem] leading-relaxed text-muted-foreground">
@@ -636,9 +636,9 @@ export default function Landing() {
             </div>
             <div className="rise-stagger space-y-1.5">
               {[
-                { title: "Cell biology", color: "#6B4BFF", meta: "10 cards, 5 quiz" },
-                { title: "Organic chemistry", color: "#0E7A66", meta: "10 cards, 5 quiz" },
-                { title: "Macroeconomics", color: "#B8456A", meta: "10 cards, 5 quiz" },
+                { title: "Cell biology", color: "#20252B", meta: "10 cards, 5 quiz" },
+                { title: "Organic chemistry", color: "#6B747E", meta: "10 cards, 5 quiz" },
+                { title: "Macroeconomics", color: "#8F98A2", meta: "10 cards, 5 quiz" },
               ].map((deck) => (
                 <div
                   key={deck.title}
@@ -651,7 +651,7 @@ export default function Landing() {
                     </p>
                     <p className="text-[0.75rem] text-muted-foreground">{deck.meta}</p>
                   </div>
-                  <span className="text-[0.72rem] font-semibold text-[#3f24b8]">Ready</span>
+                  <span className="text-[0.72rem] font-semibold text-chrome-7">Ready</span>
                 </div>
               ))}
             </div>
@@ -738,7 +738,7 @@ export default function Landing() {
         <Reveal className="chrome-hero relative overflow-hidden rounded-[2rem] px-6 py-9 sm:px-10 sm:py-11">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/30 via-white/5 to-[#b8a8ff]/25 dark:from-black/45 dark:via-black/10 dark:to-[#3b4bb0]/30"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/40 via-white/5 to-chrome-4/30 dark:from-black/45 dark:via-black/10 dark:to-chrome-5/25"
           />
           <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
@@ -760,7 +760,7 @@ export default function Landing() {
                   asChild
                   size="lg"
                   variant="outline"
-                  className="h-12 bg-white px-6 text-[0.95rem] text-[#3f24b8]"
+                  className="h-12 bg-white px-6 text-[0.95rem] text-chrome-8"
                 >
                   <Link to="/auth?returnTo=/dashboard">I already have an account</Link>
                 </Button>
@@ -770,7 +770,7 @@ export default function Landing() {
               <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                 <motion.div
                   aria-hidden
-                  className="size-[240px] rounded-full border border-dashed border-[#B9A6FF]/70"
+                  className="size-[240px] rounded-full border border-dashed border-chrome-4/80"
                   animate={{ rotate: 360 }}
                   transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
                   style={{ borderStyle: "dashed" }}

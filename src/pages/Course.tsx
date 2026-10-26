@@ -35,17 +35,18 @@ import { Link, useParams, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 /**
- * Faceted pathway nodes. Colours are raw hex rather than Tailwind classes
- * because the progress ring is painted with a conic gradient, and each unit
- * keeps one colour down the path.
+ * Faceted pathway nodes, painted from the chrome ramp rather than a set of
+ * subject hues. Values are CSS variables because the progress ring is a conic
+ * gradient and each unit keeps one shade down the path; the variables flip
+ * with the dark theme automatically.
  */
 const PATH_COLORS = [
-  { hex: "#128A4C", soft: "#E6F9F6", ring: "#B6E4DB" },
-  { hex: "#4C5FD5", soft: "#EEF0FD", ring: "#C6CCF3" },
-  { hex: "#B7791F", soft: "#FBF3E2", ring: "#EBD6AB" },
-  { hex: "#C2466A", soft: "#FBECF1", ring: "#EDC4D2" },
-  { hex: "#6B4DBE", soft: "#F2EDFC", ring: "#D6C8F0" },
-  { hex: "#2B7FB8", soft: "#EAF5FB", ring: "#BFDDEF" },
+  { hex: "var(--chrome-8)", soft: "var(--chrome-2)", ring: "var(--chrome-4)" },
+  { hex: "var(--chrome-7)", soft: "var(--chrome-3)", ring: "var(--chrome-4)" },
+  { hex: "var(--chrome-8)", soft: "var(--chrome-2)", ring: "var(--chrome-5)" },
+  { hex: "var(--chrome-7)", soft: "var(--chrome-3)", ring: "var(--chrome-4)" },
+  { hex: "var(--chrome-8)", soft: "var(--chrome-2)", ring: "var(--chrome-5)" },
+  { hex: "var(--chrome-7)", soft: "var(--chrome-3)", ring: "var(--chrome-5)" },
 ];
 
 /** Each course destination is its own screen, so no screen carries the others. */
@@ -150,7 +151,7 @@ function BuildingBar() {
   return (
     <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
       <motion.div
-        className="h-full w-1/3 rounded-full bg-[#7C5CFF]"
+        className="h-full w-1/3 rounded-full bg-chrome-5"
         animate={{ x: ["-110%", "310%"] }}
         transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
       />
@@ -168,7 +169,7 @@ function BuildingPanel({
   return (
     <section className="mt-6 overflow-hidden rounded-[2rem] border border-border bg-white p-6 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-8">
       <div>
-        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-chrome-6">
           Building pathway
         </p>
         <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
@@ -199,7 +200,7 @@ function BuildingPanel({
 function RecoveringPanel({ course }: { course: Doc<"courses"> }) {
   return (
     <section className="mt-6 rounded-[2rem] border border-border bg-white p-6 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-8">
-      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
+      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-chrome-6">
         Preparing pathway
       </p>
       <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
@@ -516,7 +517,7 @@ export default function Course() {
               <Button
                 type="button"
                 onClick={() => openTutor()}
-                className="h-9 rounded-full bg-[#EDE8FF] px-4 text-[0.8rem] font-semibold text-[#5130D8] hover:bg-[#E2DBFF]"
+                className="h-9 rounded-full bg-brand-panel px-4 text-[0.8rem] font-semibold text-chrome-8 hover:bg-chrome-3"
               >
                 <Sparkles className="size-3.5" aria-hidden />
                 Ask the tutor
@@ -671,7 +672,7 @@ export default function Course() {
                 {nextTopic && (
               <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-border bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div className="min-w-0">
-                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
+                  <p className="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-chrome-7">
                     Next up · {nextTopic.unit.title}
                   </p>
                   <h2 className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink">
@@ -699,7 +700,7 @@ export default function Course() {
             <motion.section className="mt-6" {...enter(0.05, 10)}>
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
+                  <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
                     Revision pathway
                   </p>
                   <h2 className="mt-1 font-display text-[1.25rem] font-bold text-brand-ink">
@@ -765,7 +766,7 @@ export default function Course() {
 
                           <div
                             className="min-w-0 flex-1 rounded-3xl border bg-white p-3.5 shadow-[0_16px_34px_-30px_rgba(22,24,31,0.55)] sm:p-4"
-                            style={{ borderColor: `${color.hex}22` }}
+                            style={{ borderColor: "var(--chrome-line)" }}
                           >
                             <div className="flex items-start gap-2">
                               <button
@@ -914,7 +915,7 @@ export default function Course() {
                                         </ul>
                                       )}
                                       {topic.examSkill && (
-                                        <p className="mt-2 text-[0.72rem] leading-relaxed text-[#6B4EE6]">
+                                        <p className="mt-2 text-[0.72rem] leading-relaxed text-chrome-7">
                                           <span className="font-semibold">Exam skill: </span>
                                           {topic.examSkill}
                                         </p>
@@ -948,7 +949,7 @@ export default function Course() {
                                         className={cn(
                                           "h-8 rounded-full border-border bg-white px-3 text-[0.76rem] font-semibold text-brand-ink hover:bg-brand-panel",
                                           !set &&
-                                            "border-[#D8CCFF] bg-[#FAF8FF] text-[#5B3DF5]",
+                                            "border-chrome-4 bg-brand-panel text-chrome-7",
                                         )}
                                       >
                                         {busyTopic === topic.id ? (
@@ -970,8 +971,8 @@ export default function Course() {
                                           className={cn(
                                             "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.74rem] font-semibold transition-colors",
                                             notesTopic === topic.id
-                                              ? "bg-[#F3F0FF] text-[#5130D8]"
-                                              : "text-[#6B4EE6] hover:bg-[#F3F0FF]",
+                                              ? "bg-brand-panel text-chrome-8"
+                                              : "text-chrome-7 hover:bg-brand-panel",
                                           )}
                                         >
                                           <BookOpen className="size-3.5" aria-hidden />
@@ -1042,7 +1043,7 @@ export default function Course() {
                   <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
+                        <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
                           Topic papers
                         </p>
                         <h2 className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink">
@@ -1054,7 +1055,7 @@ export default function Course() {
                           topic's guide, so you can see exactly where the marks go.
                         </p>
                       </div>
-                      <span className="rounded-full bg-[#F1F0FB] px-3 py-1.5 text-[0.7rem] font-semibold text-[#5B3DF5]">
+                      <span className="rounded-full bg-brand-panel px-3 py-1.5 text-[0.7rem] font-semibold text-chrome-7">
                         {topicPapers.length} topic
                         {topicPapers.length === 1 ? "" : "s"}
                       </span>
@@ -1101,7 +1102,7 @@ export default function Course() {
                 <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
+                      <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
                         Study sets
                       </p>
                       <h2 className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink">
@@ -1113,7 +1114,7 @@ export default function Course() {
                         live in your main library.
                       </p>
                     </div>
-                    <span className="rounded-full bg-[#F1F0FB] px-3 py-1.5 text-[0.7rem] font-semibold text-[#5B3DF5]">
+                    <span className="rounded-full bg-brand-panel px-3 py-1.5 text-[0.7rem] font-semibold text-chrome-7">
                       {sets.length} set{sets.length === 1 ? "" : "s"}
                     </span>
                   </div>

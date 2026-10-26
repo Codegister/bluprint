@@ -71,7 +71,7 @@ export function BlueprintGlyph({
       className={cn("shrink-0", className)}
       aria-hidden="true"
     >
-      <g stroke="#22d3ee" strokeWidth="0.8" opacity="0.22">
+      <g stroke="var(--chrome-5)" strokeWidth="0.8" opacity="0.22">
         {Array.from({ length: 9 }).map((_, index) => (
           <path key={`v-${index}`} d={`M${30 + index * 23} 18v204`} />
         ))}
@@ -80,7 +80,7 @@ export function BlueprintGlyph({
         ))}
       </g>
 
-      <g stroke="#22d3ee" strokeWidth="1.1" opacity="0.3">
+      <g stroke="var(--chrome-5)" strokeWidth="1.1" opacity="0.3">
         <circle cx="120" cy="120" r="72" strokeDasharray="3 7" />
         <circle cx="120" cy="120" r="92" strokeDasharray="1 10" />
       </g>
@@ -91,7 +91,7 @@ export function BlueprintGlyph({
         <path d="M89 72 150 107v40l-61-35V72Z" opacity="0.2" />
       </g>
 
-      <g fill="#22d3ee">
+      <g fill="var(--chrome-5)">
         <circle cx="120" cy="55" r="2.6" />
         <circle cx="181" cy="90" r="2.6" />
         <circle cx="181" cy="160" r="2.6" />
@@ -101,7 +101,7 @@ export function BlueprintGlyph({
       </g>
       <circle cx="120" cy="125" r="3.4" fill="#facc15" />
 
-      <g stroke="#22d3ee" strokeWidth="1" opacity="0.55">
+      <g stroke="var(--chrome-5)" strokeWidth="1" opacity="0.55">
         <path d="M32 44h24M44 32v24M184 196h24M196 184v24" />
       </g>
 

@@ -40,10 +40,22 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Bluprint palette: a warm paper workspace with one lilac accent. */
+  /* Bluprint palette: a polished chrome workspace in nine neutral steps. */
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* The nine chrome shades, exposed as utilities (bg-chrome-5, text-chrome-8).
+     0 is the specular highlight and 8 is the deepest gunmetal. */
+  --color-chrome-0: var(--chrome-0);
+  --color-chrome-1: var(--chrome-1);
+  --color-chrome-2: var(--chrome-2);
+  --color-chrome-3: var(--chrome-3);
+  --color-chrome-4: var(--chrome-4);
+  --color-chrome-5: var(--chrome-5);
+  --color-chrome-6: var(--chrome-6);
+  --color-chrome-7: var(--chrome-7);
+  --color-chrome-8: var(--chrome-8);
   --color-brand-ink: var(--brand-ink);
   --color-brand-cream: var(--brand-cream);
   --color-brand-panel: var(--brand-panel);
@@ -63,156 +75,158 @@
   --color-brand-blush: var(--brand-blush);
 }
 
-/* Light surfaces, ink text, one accent. Change values here to retheme the app. */
+/* Light surfaces, ink text, chrome metal. Change values here to retheme. */
 :root {
   --radius: 1rem;
 
-  --brand-ink: #191a1e;
-  --brand-cream: #f7f3fd;
-  --brand-panel: #efe8fb;
+  /* -------------------------------------------------------------------------
+     The chrome ramp: exactly nine neutral shades, from specular white to
+     gunmetal. Every accent below is one of these nine, so the app reads as one
+     machined metal surface rather than a set of coloured tags.
+     ------------------------------------------------------------------------- */
+  --chrome-0: #ffffff; /* specular highlight */
+  --chrome-1: #f3f5f7; /* polished paper */
+  --chrome-2: #e3e7eb; /* satin */
+  --chrome-3: #ccd2d8; /* bright steel */
+  --chrome-4: #b0b8c0; /* brushed steel */
+  --chrome-5: #8f98a2; /* graphite steel */
+  --chrome-6: #6b747e; /* dark graphite */
+  --chrome-7: #434a53; /* gunmetal */
+  --chrome-8: #20252b; /* black chrome */
+
+  --brand-ink: #14181c;
+  --brand-cream: #f6f7f9;
+  --brand-panel: #eceff2;
   --brand-panel-2: #ffffff;
-  --brand-void: #fdfbff;
+  --brand-void: #fbfcfd;
 
-  --brand-pink: #6b4bff;
-  --brand-pink-deep: #5636e0;
-  --brand-mint: #22a06b;
-  --brand-lime: #e8a317;
-  --brand-sky: #3b82f6;
-  --brand-peach: #ef5f6b;
-  --brand-teal: #12b8a6;
-  --brand-pink2: #f472b6;
-  --brand-orange: #fb923c;
-  --brand-violet: #a78bfa;
-  --brand-butter: #ffe6a3;
-  --brand-blush: #ffd7e6;
+  /* Accent aliases point at the ramp. "pink" is the app's one accent slot, so
+     it is now graphite rather than violet; the rest are neighbouring shades. */
+  --brand-pink: #5f6872;
+  --brand-pink-deep: #3d444c;
+  --brand-mint: #4d7a63;
+  --brand-lime: #8a6b2f;
+  --brand-sky: #6b747e;
+  --brand-peach: #8a4f53;
+  --brand-teal: #55706f;
+  --brand-pink2: #8f98a2;
+  --brand-orange: #8a5f38;
+  --brand-violet: #aab3bc;
+  --brand-butter: #e6e1d5;
+  --brand-blush: #e9dfdf;
 
-  --background: #f7f3fd;
-  --foreground: #191a1e;
+  --background: #f6f7f9;
+  --foreground: #14181c;
   --card: #ffffff;
-  --card-foreground: #191a1e;
+  --card-foreground: #14181c;
   --popover: #ffffff;
-  --popover-foreground: #191a1e;
-  --primary: #191a1e;
-  --primary-foreground: #ffffff;
-  --secondary: #efe8fb;
-  --secondary-foreground: #191a1e;
-  --muted: #efe8fb;
-  --muted-foreground: #5d6070;
-  --accent: #e6dbff;
-  --accent-foreground: #3f24b8;
-  --destructive: #c33444;
-  --border: #ddd3f2;
-  --input: #d3c8ec;
-  --ring: #6b4bff;
-  --chart-1: #7c5cff;
-  --chart-2: #22a06b;
-  --chart-3: #e8a317;
-  --chart-4: #3b82f6;
-  --chart-5: #ef5f6b;
-  --sidebar: #faf6ff;
-  --sidebar-foreground: #191a1e;
-  --sidebar-primary: #191a1e;
+  --popover-foreground: #14181c;
+  --primary: #20252b;
+  --primary-foreground: #f7f8fa;
+  --secondary: #e3e7eb;
+  --secondary-foreground: #20252b;
+  --muted: #eceff2;
+  --muted-foreground: #5a626c;
+  --accent: #b0b8c0;
+  --accent-foreground: #14181c;
+  --destructive: #a33a44;
+  --border: #d7dce1;
+  --input: #c5ccd3;
+  --ring: #6b747e;
+  --chart-1: #20252b;
+  --chart-2: #434a53;
+  --chart-3: #6b747e;
+  --chart-4: #8f98a2;
+  --chart-5: #b0b8c0;
+  --sidebar: #fbfcfd;
+  --sidebar-foreground: #14181c;
+  --sidebar-primary: #20252b;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #efe8fb;
-  --sidebar-accent-foreground: #191a1e;
-  --sidebar-border: #e4dbf6;
-  --sidebar-ring: #6b4bff;
+  --sidebar-accent: #eceff2;
+  --sidebar-accent-foreground: #14181c;
+  --sidebar-border: #dfe4e8;
+  --sidebar-ring: #6b747e;
 
   /* -------------------------------------------------------------------------
-     Iridescent chrome system.
+     Chrome metal system.
 
-     The app is skinned like satin chrome lit by one lamp: violet and
-     periwinkle light rolling across a pale surface, with a single faint warm
-     glow in the far corner so the cool tones do not read as flat grey. Two
-     hues, not a rainbow - restraint is what keeps it looking expensive.
-     These tokens are the only place the gradients are defined, so every
-     surface, card, heading and button below is painted from them.
+     One lamp, one sheet of polished steel. The gradients use only the nine
+     shades above: a white specular edge, a steel core and a gunmetal shadow.
+     No blue, no violet, no rainbow - the metal itself supplies the contrast.
      ------------------------------------------------------------------------- */
-  --chrome-hi: #ffffff;
-  --chrome-1: #f0eaff;
-  --chrome-2: #e4daff;
-  --chrome-3: #d2c5ff;
-  --chrome-4: #b9a8f5;
-  --chrome-steel: #8b8fb8;
-  --chrome-line: rgba(58, 36, 130, 0.18);
-  --chrome-sheen: rgba(255, 255, 255, 0.95);
-  --chrome-shadow: rgba(64, 38, 140, 0.3);
+  --chrome-hi: var(--chrome-0);
+  --chrome-steel: var(--chrome-5);
+  --chrome-line: rgba(24, 31, 39, 0.16);
+  --chrome-sheen: rgba(255, 255, 255, 0.96);
+  --chrome-shadow: rgba(17, 22, 28, 0.26);
 
-  /* Page wash: violet light from the top left, periwinkle from the top right
-     and a paler lilac low on the right, over a near-white lilac base. One
-     restrained peach glow at the bottom left stops it feeling clinical. */
+  /* Page wash: white light from the top left, steel in the lower right. */
   --chrome-page:
-    radial-gradient(110% 78% at 4% -14%, rgba(139, 112, 255, 0.34) 0%, transparent 58%),
-    radial-gradient(90% 66% at 100% -8%, rgba(126, 150, 255, 0.26) 0%, transparent 60%),
-    radial-gradient(95% 72% at 94% 88%, rgba(176, 156, 255, 0.22) 0%, transparent 62%),
-    radial-gradient(80% 60% at 0% 104%, rgba(255, 199, 160, 0.14) 0%, transparent 60%),
-    linear-gradient(158deg, #f1ebfc 0%, #f7f3fd 44%, #fbf9ff 100%);
+    radial-gradient(110% 76% at 6% -16%, rgba(255, 255, 255, 0.95) 0%, transparent 58%),
+    radial-gradient(90% 66% at 100% -10%, rgba(176, 184, 192, 0.34) 0%, transparent 62%),
+    radial-gradient(95% 74% at 96% 92%, rgba(107, 116, 126, 0.22) 0%, transparent 64%),
+    linear-gradient(158deg, #fafbfc 0%, #f2f4f6 46%, #e7ebee 100%);
 
-  /* Big polished panel, used by hero headers and the landing CTA. Three
-     lilac and periwinkle corner glows over a pale violet sweep. */
+  /* Polished panel: a white highlight, then steel falling into shadow. */
   --chrome-panel:
-    radial-gradient(120% 130% at 0% 0%, #d3c4ff 0%, transparent 58%),
-    radial-gradient(110% 120% at 100% 0%, #cbd6ff 0%, transparent 58%),
-    radial-gradient(120% 120% at 100% 100%, #e2d8ff 0%, transparent 60%),
+    radial-gradient(120% 130% at 0% 0%, #ffffff 0%, transparent 56%),
+    radial-gradient(105% 120% at 100% 0%, #dfe4e8 0%, transparent 58%),
+    radial-gradient(120% 120% at 100% 100%, #b9c0c7 0%, transparent 62%),
     linear-gradient(
       146deg,
-      #f7f2ff 0%,
-      #e5dbff 34%,
-      #ece4ff 66%,
-      #faf8ff 100%
+      #ffffff 0%,
+      #eef1f3 32%,
+      #d5dbe0 64%,
+      #f7f8fa 100%
     );
 
-  /* Translucent card wash. Tinted, but light enough that body copy stays
-     crisp; transparent enough that hover background colours still show
-     through, so existing interactions keep their feedback. */
+  /* Translucent card wash. Neutral enough to keep body copy crisp, and still
+     transparent enough that hover tints show through. */
   --chrome-surface:
     linear-gradient(
       152deg,
-      rgba(255, 255, 255, 0.97) 0%,
-      rgba(245, 240, 255, 0.92) 34%,
-      rgba(240, 238, 255, 0.86) 62%,
-      rgba(255, 255, 255, 0.96) 100%
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(247, 249, 250, 0.94) 34%,
+      rgba(240, 243, 245, 0.9) 62%,
+      rgba(255, 255, 255, 0.97) 100%
     );
 
-  /* The moving reflection band: lilac, pearl white and periwinkle, like a
-     brushed metal sheet catching one lamp. Kept low-contrast so it reads as
-     a sheen rather than a stripe of colour. */
+  /* The reflection band: a brushed steel sheet catching one lamp. */
   --chrome-metal:
     linear-gradient(
       106deg,
-      #b6a0ff 0%,
-      #efe9ff 14%,
-      #d6c8ff 28%,
-      #fdfbff 46%,
-      #cdd6ff 62%,
-      #eee6ff 78%,
-      #b6a0ff 100%
+      #6e7781 0%,
+      #f7f8fa 12%,
+      #aab3bc 27%,
+      #ffffff 43%,
+      #8f98a2 59%,
+      #e2e6ea 76%,
+      #5f6872 100%
     );
 
-  /* Ink fills get a violet chrome overlay rather than flat black. */
+  /* Ink fills carry a soft specular gradient rather than flat black. */
   --chrome-ink:
     linear-gradient(
       158deg,
-      rgba(147, 124, 255, 0.34) 0%,
-      rgba(66, 48, 150, 0.18) 38%,
-      rgba(4, 3, 10, 0.22) 68%,
-      rgba(120, 110, 210, 0.16) 100%
+      rgba(255, 255, 255, 0.26) 0%,
+      rgba(255, 255, 255, 0.08) 34%,
+      rgba(0, 0, 0, 0.2) 64%,
+      rgba(255, 255, 255, 0.12) 100%
     );
 
-  /* Gradient type for page titles: deep indigo lifting to violet and back
-     down, so the heading has depth without changing hue. */
+  /* Gradient type: engraved chrome, dark at the top, lit in the middle. */
   --chrome-type:
     linear-gradient(
-      175deg,
-      #241c5e 0%,
-      #4a2fd0 32%,
-      #6b4be0 58%,
-      #3a2f86 82%,
-      #1a1738 100%
+      176deg,
+      #12161a 0%,
+      #333a42 30%,
+      #5b646d 54%,
+      #2f363d 78%,
+      #14181c 100%
     );
 
   /* Brushed hairlines layered over panels. */
-  --chrome-brush: rgba(255, 255, 255, 0.7);
+  --chrome-brush: rgba(255, 255, 255, 0.72);
 
   color-scheme: light;
 }
@@ -233,130 +247,138 @@
 .dark {
   color-scheme: dark;
 
-  --brand-ink: #f8fafc;
-  --brand-cream: #07051a;
-  --brand-panel: #201a3a;
-  --brand-panel-2: #141024;
-  --brand-void: #07051a;
+  /* The same nine steps, remapped for a dark page: 1–6 become the dark
+     surface steps, 7–8 become the lit ink steps and 0 stays the specular
+     highlight. Every utility that flipped correctly in the light theme keeps
+     its meaning here. */
+  --chrome-0: #f4f6f8;
+  --chrome-1: #15191e;
+  --chrome-2: #1d2228;
+  --chrome-3: #272d34;
+  --chrome-4: #363d45;
+  --chrome-5: #4f575f;
+  --chrome-6: #7b848e;
+  --chrome-7: #b6bec6;
+  --chrome-8: #e7ebef;
 
-  /* Accents are brightened so they survive on a near-black page. */
-  --brand-pink: #c3b2ff;
-  --brand-pink-deep: #d8ccff;
-  --brand-mint: #6fe3ac;
-  --brand-lime: #ffc45c;
-  --brand-sky: #8fc2ff;
-  --brand-peach: #ff9da8;
-  --brand-teal: #63e3d0;
-  --brand-pink2: #ff9acb;
-  --brand-orange: #ffa95c;
-  --brand-violet: #c9baff;
-  --brand-butter: #3a2a08;
-  --brand-blush: #3a1526;
+  --brand-ink: #f3f5f7;
+  --brand-cream: #0a0d10;
+  --brand-panel: #1d2228;
+  --brand-panel-2: #15191e;
+  --brand-void: #0a0d10;
 
-  --background: #07051a;
-  --foreground: #f8fafc;
-  --card: #141024;
-  --card-foreground: #f8fafc;
-  --popover: #1a1430;
-  --popover-foreground: #f8fafc;
-  --primary: #f4f7ff;
-  --primary-foreground: #07051a;
-  --secondary: #1e1836;
-  --secondary-foreground: #f8fafc;
-  --muted: #1e1836;
-  --muted-foreground: #cbd5e4;
-  --accent: #2c2160;
-  --accent-foreground: #e2d9ff;
-  --destructive: #ff6b7a;
-  --border: #4a3f70;
-  --input: #5b4f85;
-  --ring: #d8ccff;
-  --chart-1: #a78bfa;
-  --chart-2: #6fe3ac;
-  --chart-3: #ffc45c;
-  --chart-4: #8fc2ff;
-  --chart-5: #ff9da8;
-  --sidebar: #08051a;
-  --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #f4f7ff;
-  --sidebar-primary-foreground: #07051a;
-  --sidebar-accent: #1e1836;
-  --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: #3b3360;
-  --sidebar-ring: #d8ccff;
+  /* Accents sit one step above the surface so they stay visible. */
+  --brand-pink: #b6bec6;
+  --brand-pink-deep: #e7ebef;
+  --brand-mint: #8fc3a5;
+  --brand-lime: #d6b978;
+  --brand-sky: #aab3bc;
+  --brand-peach: #d99ca0;
+  --brand-teal: #9dbfbd;
+  --brand-pink2: #c6cdd4;
+  --brand-orange: #d5a67d;
+  --brand-violet: #c6cdd4;
+  --brand-butter: #3a352a;
+  --brand-blush: #3a2f31;
 
-  /* Deep-colour counterparts of the light chrome tokens above. The palette is
-     the same two hues pushed to full saturation on near-black metal. */
-  --chrome-hi: #4b3a86;
-  --chrome-1: #160f2e;
-  --chrome-2: #0e0921;
-  --chrome-3: #070514;
-  --chrome-4: #03020a;
-  --chrome-steel: #a397e6;
-  --chrome-line: rgba(196, 180, 255, 0.2);
-  --chrome-sheen: rgba(214, 200, 255, 0.26);
-  --chrome-shadow: rgba(0, 0, 0, 0.75);
+  --background: #0a0d10;
+  --foreground: #f3f5f7;
+  --card: #15191e;
+  --card-foreground: #f3f5f7;
+  --popover: #1b2026;
+  --popover-foreground: #f3f5f7;
+  --primary: #e7ebef;
+  --primary-foreground: #101418;
+  --secondary: #1d2228;
+  --secondary-foreground: #f3f5f7;
+  --muted: #1d2228;
+  --muted-foreground: #b3bcc4;
+  --accent: #363d45;
+  --accent-foreground: #f3f5f7;
+  --destructive: #ff8b95;
+  --border: #343b43;
+  --input: #434b54;
+  --ring: #b6bec6;
+  --chart-1: #e7ebef;
+  --chart-2: #b6bec6;
+  --chart-3: #7b848e;
+  --chart-4: #4f575f;
+  --chart-5: #363d45;
+  --sidebar: #0c1013;
+  --sidebar-foreground: #f3f5f7;
+  --sidebar-primary: #e7ebef;
+  --sidebar-primary-foreground: #101418;
+  --sidebar-accent: #1d2228;
+  --sidebar-accent-foreground: #f3f5f7;
+  --sidebar-border: #2c333a;
+  --sidebar-ring: #b6bec6;
 
-  /* Violet from the top left, indigo from the top right, a quieter violet low
-     on the right, over a near-black indigo base. */
+  --chrome-hi: #f4f6f8;
+  --chrome-steel: #7b848e;
+  --chrome-line: rgba(231, 235, 239, 0.16);
+  --chrome-sheen: rgba(255, 255, 255, 0.2);
+  --chrome-shadow: rgba(0, 0, 0, 0.85);
+
+  /* Black chrome: one cold highlight in the top left, everything else falling
+     away into graphite. */
   --chrome-page:
-    radial-gradient(110% 82% at 6% -12%, rgba(88, 58, 214, 0.52) 0%, transparent 58%),
-    radial-gradient(90% 70% at 100% -6%, rgba(56, 74, 190, 0.4) 0%, transparent 60%),
-    radial-gradient(85% 70% at 92% 78%, rgba(74, 54, 160, 0.32) 0%, transparent 62%),
-    linear-gradient(158deg, #150f33 0%, #0b0820 52%, #04030c 100%);
+    radial-gradient(110% 80% at 6% -14%, rgba(197, 205, 213, 0.16) 0%, transparent 58%),
+    radial-gradient(90% 70% at 100% -6%, rgba(120, 130, 140, 0.14) 0%, transparent 60%),
+    radial-gradient(85% 70% at 92% 80%, rgba(70, 78, 86, 0.22) 0%, transparent 62%),
+    linear-gradient(158deg, #14181d 0%, #0c1013 52%, #07090b 100%);
 
   --chrome-panel:
-    radial-gradient(130% 130% at 0% 0%, #43309f 0%, transparent 58%),
-    radial-gradient(120% 120% at 100% 0%, #2b3a86 0%, transparent 58%),
-    radial-gradient(120% 120% at 100% 100%, #241a58 0%, transparent 60%),
+    radial-gradient(130% 130% at 0% 0%, #3d444c 0%, transparent 58%),
+    radial-gradient(120% 120% at 100% 0%, #2a3037 0%, transparent 58%),
+    radial-gradient(120% 120% at 100% 100%, #1b2026 0%, transparent 60%),
     linear-gradient(
       148deg,
-      #2a1a63 0%,
-      #231a4d 38%,
-      #140f30 72%,
-      #080612 100%
+      #2a3037 0%,
+      #22272d 38%,
+      #14181d 72%,
+      #0a0d10 100%
     );
 
   --chrome-surface:
     linear-gradient(
       152deg,
-      rgba(96, 78, 168, 0.5) 0%,
-      rgba(32, 25, 62, 0.75) 40%,
-      rgba(8, 7, 18, 0.9) 100%
+      rgba(60, 68, 77, 0.5) 0%,
+      rgba(29, 34, 40, 0.76) 40%,
+      rgba(12, 16, 19, 0.92) 100%
     );
 
   --chrome-metal:
     linear-gradient(
       106deg,
-      #241a5c 0%,
-      #6b52e0 16%,
-      #161034 34%,
-      #a58cff 50%,
-      #0d0a24 66%,
-      #2f2570 82%,
-      #241a5c 100%
+      #15191e 0%,
+      #7b848e 14%,
+      #262c33 32%,
+      #d7dde3 48%,
+      #1b2026 64%,
+      #59616a 82%,
+      #15191e 100%
     );
 
   --chrome-ink:
     linear-gradient(
       158deg,
-      rgba(255, 255, 255, 0.55) 0%,
-      rgba(255, 255, 255, 0.15) 34%,
-      rgba(120, 90, 220, 0.12) 66%,
-      rgba(255, 255, 255, 0.35) 100%
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.07) 34%,
+      rgba(0, 0, 0, 0.28) 66%,
+      rgba(255, 255, 255, 0.1) 100%
     );
 
   --chrome-type:
     linear-gradient(
       174deg,
       #ffffff 0%,
-      #ddd2ff 30%,
-      #c3cbff 60%,
-      #f2eeff 84%,
+      #d5dbe0 30%,
+      #98a1aa 58%,
+      #eef1f3 84%,
       #ffffff 100%
     );
 
-  --chrome-brush: rgba(255, 255, 255, 0.14);
+  --chrome-brush: rgba(255, 255, 255, 0.12);
 }
 
 @layer base {
@@ -395,13 +417,13 @@
     cursor: pointer;
   }
   ::selection {
-    background: #ded5ff;
-    color: #191a1e;
+    background: var(--chrome-3);
+    color: var(--chrome-8);
   }
-  /* Violet selection is unreadable on a dark page; lift it instead. */
+  /* On black chrome, lift the selection rather than darkening it. */
   .dark ::selection {
-    background: #4a3aa8;
-    color: #f7f8fc;
+    background: var(--chrome-5);
+    color: var(--chrome-0);
   }
   code,
   kbd,
@@ -441,13 +463,31 @@
     opacity: calc(var(--chrome-intensity, 1) * 0.92);
   }
 
+  /* The WebGPU chrome ribbon. It is translucent and sits over the CSS metal,
+     so the backdrop stays full-bleed even if the shader covers only part of
+     the canvas. If WebGPU is unavailable this layer is empty and the CSS
+     ribbon underneath is the whole backdrop. */
+  .chrome-shader {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    opacity: calc(var(--chrome-intensity, 1) * 0.62);
+    mix-blend-mode: normal;
+    pointer-events: none;
+  }
+  .dark .chrome-shader {
+    opacity: calc(var(--chrome-intensity, 1) * 0.72);
+  }
+
   /* The lit ribbon. Oversized and rotated, then drifted by a transform, which
      gives a slow chrome sheen without animating colours. */
   .chrome-backdrop-metal {
     position: absolute;
     inset: -22%;
     background-image: var(--chrome-metal);
-    opacity: calc(var(--chrome-intensity, 1) * 0.34);
+    opacity: calc(var(--chrome-intensity, 1) * 0.4);
     transform: translate3d(-2%, -1%, 0) rotate(-7deg) scale(1.04);
     animation: chrome-drift 26s ease-in-out infinite alternate;
     will-change: transform;
@@ -568,20 +608,20 @@
   /* Reading progress along the top of the app: polished metal rather than a
      flat accent line. */
   .chrome-progress {
-    background-color: #6b4bff;
+    background-color: var(--chrome-7);
     background-image: linear-gradient(
       90deg,
-      #5b3df5 0%,
-      #7c5cff 46%,
-      #b3a1ff 100%
+      var(--chrome-8) 0%,
+      var(--chrome-6) 46%,
+      var(--chrome-3) 100%
     );
   }
   .dark .chrome-progress {
     background-image: linear-gradient(
       90deg,
-      #7c5cff 0%,
-      #a68cff 46%,
-      #d0c4ff 100%
+      var(--chrome-6) 0%,
+      var(--chrome-3) 46%,
+      var(--chrome-0) 100%
     );
   }
 
@@ -590,18 +630,18 @@
     background-color: var(--chrome-1);
     background-image: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.9) 0%,
-      rgba(246, 241, 255, 0.86) 48%,
-      rgba(241, 237, 255, 0.88) 100%
+      rgba(255, 255, 255, 0.94) 0%,
+      rgba(247, 249, 250, 0.9) 48%,
+      rgba(235, 238, 241, 0.92) 100%
     );
     border-color: var(--chrome-line);
   }
   .dark .chrome-bar {
     background-image: linear-gradient(
       180deg,
-      rgba(48, 38, 96, 0.94) 0%,
-      rgba(22, 17, 46, 0.95) 55%,
-      rgba(9, 7, 20, 0.96) 100%
+      rgba(39, 45, 52, 0.96) 0%,
+      rgba(21, 25, 30, 0.96) 55%,
+      rgba(10, 13, 16, 0.97) 100%
     );
   }
 
@@ -610,23 +650,23 @@
     background-color: var(--chrome-1);
     background-image: linear-gradient(
       165deg,
-      rgba(255, 255, 255, 0.95) 0%,
-      rgba(243, 238, 255, 0.94) 48%,
-      rgba(238, 235, 255, 0.92) 100%
+      rgba(255, 255, 255, 0.96) 0%,
+      rgba(245, 247, 249, 0.95) 48%,
+      rgba(232, 236, 239, 0.94) 100%
     );
     box-shadow: inset -1px 0 0 var(--chrome-line);
   }
   .dark .chrome-rail {
     background-image: linear-gradient(
       165deg,
-      rgba(46, 34, 94, 0.94) 0%,
-      rgba(22, 16, 46, 0.95) 46%,
-      rgba(8, 6, 18, 0.97) 100%
+      rgba(38, 44, 51, 0.95) 0%,
+      rgba(20, 24, 29, 0.96) 46%,
+      rgba(9, 12, 15, 0.98) 100%
     );
   }
 
   /* Metallic type for page titles. Nested accent spans keep their own colour,
-     so a violet highlight inside a chrome heading still reads. */
+     so a darker highlight inside a chrome heading still reads. */
   .chrome-title {
     background-image: var(--chrome-type);
     -webkit-background-clip: text;
@@ -688,8 +728,8 @@
     background-image: var(--chrome-surface);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.8),
-      0 1px 0 rgba(25, 26, 30, 0.04),
-      0 22px 40px -38px rgba(60, 40, 120, 0.35);
+      0 1px 0 rgba(20, 24, 28, 0.05),
+      0 22px 40px -38px rgba(30, 36, 43, 0.38);
   }
   .dark .gizmo-card {
     box-shadow:
@@ -716,6 +756,52 @@
     [class~="bg-[#2A2D3E]"]
   ) {
     background-image: var(--chrome-ink);
+  }
+
+  /* The primary control is milled from the same metal: a lit top edge, a
+     graphite body and a dark lower bevel. The dark theme inverts the metal
+     rather than dimming it, so the label keeps its contrast. */
+  .chrome-button {
+    background-color: #20252b;
+    background-image: linear-gradient(
+      156deg,
+      #3b424a 0%,
+      #20252b 52%,
+      #14181c 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.45),
+      0 10px 20px -16px rgba(10, 14, 20, 0.9);
+  }
+  .chrome-button:hover {
+    background-image: linear-gradient(
+      156deg,
+      #4a525b 0%,
+      #2b3138 52%,
+      #1a1f24 100%
+    );
+  }
+  .dark .chrome-button {
+    background-color: #e7ebef;
+    background-image: linear-gradient(
+      156deg,
+      #ffffff 0%,
+      #dfe4e8 52%,
+      #b6bec6 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+      0 10px 20px -16px rgba(0, 0, 0, 0.95);
+  }
+  .dark .chrome-button:hover {
+    background-image: linear-gradient(
+      156deg,
+      #ffffff 0%,
+      #edf0f3 52%,
+      #c9d0d7 100%
+    );
   }
 
   /* A slow shine across a chrome plate on hover. Transform only. */
@@ -758,7 +844,7 @@
   }
   .lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 20px 36px -28px rgba(60, 40, 120, 0.45);
+    box-shadow: 0 20px 36px -28px rgba(28, 34, 41, 0.48);
   }
 
   /* Stagger children as they appear, without adding wrapper elements. Useful
@@ -794,7 +880,7 @@
     animation-delay: 0.34s;
   }
 
-  /* A soft lilac light that crosses a card on hover. The card needs
+  /* A soft specular highlight that crosses a card on hover. The card needs
      `relative overflow-hidden`, which every card here already has. */
   .hover-sheen {
     position: relative;
@@ -908,14 +994,14 @@
 
   .gizmo-scroll {
     scrollbar-width: thin;
-    scrollbar-color: #d4cfc3 transparent;
+    scrollbar-color: var(--chrome-4) transparent;
   }
   .gizmo-scroll::-webkit-scrollbar {
     width: 8px;
   }
   .gizmo-scroll::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: #d4cfc3;
+    background: var(--chrome-4);
   }
   .gizmo-scroll::-webkit-scrollbar-track {
     background: transparent;
@@ -1179,11 +1265,13 @@
   color: #c2cad8;
 }
 
-/* The wordmark tile keeps its violet fill: the glyph is drawn with a white
+/* The wordmark tile keeps a dark chrome fill: the glyph is drawn with a white
    path, which would vanish on the light tile the ink rule above produces. */
 .dark .brand-tile {
-  background-color: #5b3df5;
+  background-color: #20252b;
+  background-image: var(--chrome-ink);
   color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 /* Accent tints: pale family -> deep family. */
@@ -1206,7 +1294,7 @@
     [class~="bg-[#E4DBFF]"],
     [class~="bg-[#E2DBFF]"]
   ) {
-  background-color: #221c40;
+  background-color: #1d2228;
 }
 
 .dark
@@ -1321,7 +1409,7 @@
     [class~="text-[#8A4BC6]"],
     [class~="text-[#B9A6FF]"]
   ) {
-  color: #c3b2ff;
+  color: #c6cdd4;
 }
 
 .dark
@@ -1605,6 +1693,9 @@
   .chrome-backdrop-metal {
     animation: none;
     transform: rotate(-6deg) scale(1.05);
+  }
+  .chrome-shader {
+    display: none;
   }
   .chrome-shine::after {
     display: none;

@@ -30,50 +30,51 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 /**
- * Each destination keeps its own colour, so the sidebar reads as a map rather
- * than a list. `tile` is the icon chip when the row is active; `soft` is the
- * same chip when it is not.
+ * The sidebar is machined from the same metal as the rest of the app. Each
+ * row uses one step of the nine-shade chrome ramp, so destinations stay
+ * distinguishable without reintroducing a rainbow of accent colours. `tile` is
+ * the icon chip when the row is active; `soft` is the same chip when it is not.
  */
 const navItems = [
   {
     to: "/dashboard",
     label: "My sets",
     icon: Layers3,
-    active: "bg-[#FFF3E3] text-[#96560C]",
-    tile: "bg-[#F0A03C] text-white",
-    soft: "bg-[#FFF1DE] text-[#B4720E]",
+    active: "bg-chrome-2 text-chrome-8",
+    tile: "bg-brand-ink text-brand-cream",
+    soft: "bg-chrome-3 text-chrome-7",
   },
   {
     to: "/courses",
     label: "My courses",
     icon: GraduationCap,
-    active: "bg-[#E6F9F1] text-[#0C6B4C]",
-    tile: "bg-[#128A4C] text-white",
-    soft: "bg-[#E6F7EF] text-[#128A4C]",
+    active: "bg-chrome-3 text-chrome-8",
+    tile: "bg-brand-ink text-brand-cream",
+    soft: "bg-chrome-2 text-chrome-7",
   },
   {
     to: "/tutor",
     label: "AI tutor",
     icon: Sparkles,
-    active: "bg-[#FDEFF4] text-[#A83458]",
-    tile: "bg-[#D9577E] text-white",
-    soft: "bg-[#FFE7F0] text-[#C43F69]",
+    active: "bg-chrome-2 text-chrome-8",
+    tile: "bg-brand-ink text-brand-cream",
+    soft: "bg-chrome-4 text-chrome-8",
   },
   {
     to: "/timetable",
     label: "Revision timetable",
     icon: CalendarDays,
-    active: "bg-[#E8F3FD] text-[#1B5C8A]",
-    tile: "bg-[#2B7FB8] text-white",
-    soft: "bg-[#E7F2FC] text-[#2B7FB8]",
+    active: "bg-chrome-3 text-chrome-8",
+    tile: "bg-brand-ink text-brand-cream",
+    soft: "bg-chrome-3 text-chrome-7",
   },
   {
     to: "/today",
     label: "Today",
     icon: Target,
-    active: "bg-[#FDEFF4] text-[#A83458]",
-    tile: "bg-[#D9577E] text-white",
-    soft: "bg-[#FFE7F0] text-[#C43F69]",
+    active: "bg-chrome-2 text-chrome-8",
+    tile: "bg-brand-ink text-brand-cream",
+    soft: "bg-chrome-4 text-chrome-8",
   },
 ] as const;
 
@@ -97,13 +98,13 @@ function DeckRow({
       className={cn(
         "flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[0.92rem] transition-colors",
         active
-          ? "bg-white font-semibold text-brand-ink shadow-[0_6px_16px_-14px_rgba(60,40,120,0.7)]"
+          ? "bg-white font-semibold text-brand-ink shadow-[0_6px_16px_-14px_rgba(30,36,43,0.7)]"
           : "text-brand-ink/75 hover:bg-white/70",
       )}
     >
       <span className="truncate">{title}</span>
       {due > 0 && (
-        <span className="shrink-0 rounded-full bg-[#FFF0DC] px-2 py-0.5 text-[0.65rem] font-semibold text-[#B4720E]">
+        <span className="shrink-0 rounded-full bg-chrome-2 px-2 py-0.5 text-[0.65rem] font-semibold text-chrome-7">
           {due} due
         </span>
       )}
@@ -122,24 +123,24 @@ function GoalCard() {
   return (
     <Link
       to="/today"
-      className="mx-3 mb-4 block rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_14px_28px_-26px_rgba(60,40,120,0.6)] transition-colors hover:bg-white"
+      className="mx-3 mb-4 block rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_14px_28px_-26px_rgba(28,34,41,0.6)] transition-colors hover:bg-white"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <p className="mono-label text-[#5B3DF5]">Today</p>
+        <p className="mono-label text-chrome-7">Today</p>
         <p className="text-[0.7rem] font-semibold tabular-nums text-brand-ink/55">
           {study ? `${today}/${goal} questions` : "—"}
         </p>
       </div>
       <Meter
         value={progress}
-        className="mt-2 h-1.5 bg-[#ECE6FF]"
-        barClassName="bg-[#5B3DF5]"
+        className="mt-2 h-1.5 bg-brand-panel"
+        barClassName="bg-chrome-6"
         label="Questions answered today"
       />
       <p className="mt-2 flex items-center gap-1.5 text-[0.72rem] leading-snug text-brand-ink/60">
         {streak > 0 ? (
           <>
-            <Flame className="size-3.5 text-[#F0871F]" aria-hidden />
+            <Flame className="size-3.5 text-chrome-6" aria-hidden />
             <span className="font-semibold text-brand-ink/80">
               {streak} day{streak === 1 ? "" : "s"}
             </span>
@@ -249,7 +250,7 @@ function Sidebar({
           to="/dashboard?new=1"
           onClick={onNavigate}
           aria-label="New study set"
-          className="grid size-6 place-items-center rounded-full bg-white/80 text-[0.9rem] font-semibold text-[#5B3DF5] shadow-[0_4px_12px_-10px_rgba(60,40,120,0.8)] transition-colors hover:bg-white"
+          className="grid size-6 place-items-center rounded-full bg-white/80 text-[0.9rem] font-semibold text-chrome-7 shadow-[0_4px_12px_-10px_rgba(30,36,43,0.75)] transition-colors hover:bg-white"
         >
           +
         </Link>
@@ -319,7 +320,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
       {/* The metal wash behind every signed-in screen. */}
-      <ChromeBackdrop />
+      <ChromeBackdrop intensity={0.55} />
       <motion.div
         aria-hidden
         className="chrome-progress fixed inset-x-0 top-0 z-40 h-[2px] origin-left"

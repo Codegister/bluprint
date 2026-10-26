@@ -1,19 +1,22 @@
+import { ChromeShader } from "@/components/ChromeShader";
 import { cn } from "@/lib/utils";
 import type { CSSProperties } from "react";
 
 /**
  * The app's chrome-metal backdrop.
  *
- * Four layers, all pure CSS:
- *   1. base  - a neutral silver wash with one cool and one warm edge.
- *   2. metal - an oversized metallic ribbon that drifts on a long loop.
- *   3. sweep - a single specular highlight crossing the surface.
- *   4. brush - static hairlines, the machined texture.
+ * Five layers:
+ *   1. base   - a neutral silver wash with a lit top-left edge.
+ *   2. metal  - the CSS ribbon: the complete backdrop when WebGPU is not there.
+ *   3. shader - the WebGPU liquid-chrome ribbon layered over the CSS metal.
+ *   4. sweep  - a single specular highlight crossing the surface.
+ *   5. brush  - static hairlines, the machined texture.
  *
- * Only `transform` is animated, so the reflection is painted by the compositor
- * rather than the main thread. Nothing here is interactive or read by a screen
- * reader. `variant="page"` pins the backdrop behind the whole screen; the panel
- * variant fills whatever positioned, rounded container it is dropped into.
+ * The CSS layers animate only `transform`, so they are painted by the
+ * compositor rather than the main thread. Nothing here is interactive or read
+ * by a screen reader. `variant="page"` pins the backdrop behind the whole
+ * screen; the panel variant fills whatever positioned, rounded container it is
+ * dropped into.
  *
  * The tokens live in `index.css` and switch automatically with the dark theme.
  */
@@ -39,6 +42,7 @@ export function ChromeBackdrop({
     >
       <span className="chrome-backdrop-base" />
       <span className="chrome-backdrop-metal" />
+      <ChromeShader />
       <span className="chrome-backdrop-sweep" />
       <span className="chrome-backdrop-brush" />
     </div>

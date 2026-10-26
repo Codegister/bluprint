@@ -116,7 +116,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           >
             <motion.div
               aria-hidden
-              className="absolute left-1/2 top-1/2 size-[236px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-[#A78BFA]/60"
+              className="absolute left-1/2 top-1/2 size-[236px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-chrome-4/70"
               animate={{ rotate: 360 }}
               transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
             />
@@ -220,7 +220,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <Button
                     type="submit"
                     disabled={isLoading}
-                    className="mt-4 h-12 w-full rounded-full bg-[#191B27] text-[0.95rem] font-semibold text-white hover:bg-[#2A2D3E]"
+                    className="chrome-button mt-4 h-12 w-full rounded-full bg-[#191B27] text-[0.95rem] font-semibold text-white hover:bg-[#2A2D3E]"
                   >
                     {isLoading ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -320,7 +320,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <Button
                     type="submit"
                     disabled={isLoading || otp.length !== 6}
-                    className="mt-5 h-12 w-full rounded-full bg-[#191B27] text-[0.95rem] font-semibold text-white hover:bg-[#2A2D3E]"
+                    className="chrome-button mt-5 h-12 w-full rounded-full bg-[#191B27] text-[0.95rem] font-semibold text-white hover:bg-[#2A2D3E]"
                   >
                     {isLoading ? (
                       <>

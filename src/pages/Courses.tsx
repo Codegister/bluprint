@@ -26,7 +26,7 @@ function CourseRow({ course }: { course: CourseSummary }) {
   return (
     <Link
       to={`/courses/${course._id}`}
-      className="group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-[#F7FCFA] sm:grid-cols-[minmax(0,1fr)_170px_160px_16px] sm:items-center sm:px-5"
+      className="group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel sm:grid-cols-[minmax(0,1fr)_170px_160px_16px] sm:items-center sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3">
         <span
@@ -41,7 +41,7 @@ function CourseRow({ course }: { course: CourseSummary }) {
               {course.subject}
             </h3>
             {course.isNew && (
-              <span className="rounded-full bg-[#3B82F6] px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-[0.04em] text-white">
+              <span className="rounded-full bg-chrome-7 px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-[0.04em] text-white">
                 New
               </span>
             )}

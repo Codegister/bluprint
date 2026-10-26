@@ -200,7 +200,7 @@ export function PastPaperPractice({
                 <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-4">
                   <span
                     aria-hidden
-                    className="mt-0.5 grid h-8 w-14 place-items-center rounded-lg bg-[#F4F2FF] font-display text-[0.82rem] font-bold text-[#5B3DF5]"
+                    className="mt-0.5 grid h-8 w-14 place-items-center rounded-lg bg-[#F4F2FF] font-display text-[0.82rem] font-bold text-chrome-7"
                   >
                     {question.label?.trim() || position}
                   </span>
@@ -212,7 +212,7 @@ export function PastPaperPractice({
                     {(question.commandWord || question.specReference) && (
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         {question.commandWord && (
-                          <span className="rounded-full bg-[#F1F0FB] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-[#5B3DF5]">
+                          <span className="rounded-full bg-brand-panel px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-chrome-7">
                             {question.commandWord}
                           </span>
                         )}
@@ -248,7 +248,7 @@ export function PastPaperPractice({
                   maxLength={12000}
                   disabled={isGrading}
                   className={cn(
-                    "mt-4 resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15",
+                    "mt-4 resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15",
                     isEssay
                       ? "min-h-[320px]"
                       : isExtended
@@ -402,7 +402,7 @@ function PaperCoverPage({ cover }: { cover: PaperCover }) {
   return (
     <section className="overflow-hidden rounded-[1.6rem] border border-border bg-white">
       <div className="border-b border-border bg-white px-5 py-6 text-center sm:px-8 sm:py-8">
-        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#5B3DF5]">
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-chrome-7">
           {cover.qualification}
         </p>
         <h2 className="mt-2 font-display text-[1.5rem] font-bold uppercase tracking-[0.02em] text-brand-ink sm:text-[1.8rem]">
@@ -433,7 +433,7 @@ function PaperCoverPage({ cover }: { cover: PaperCover }) {
                   key={item}
                   className="flex items-start gap-2 text-[0.84rem] leading-relaxed text-brand-ink/75"
                 >
-                  <span className="mt-[0.42rem] size-1.5 shrink-0 rounded-full bg-[#B9A6FF]" />
+                  <span className="mt-[0.42rem] size-1.5 shrink-0 rounded-full bg-chrome-4" />
                   {item}
                 </li>
               ))}

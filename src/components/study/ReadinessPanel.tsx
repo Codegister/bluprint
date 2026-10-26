@@ -115,12 +115,12 @@ export function ReadinessPanel({
       <section className="rounded-[2rem] border border-border bg-card p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="mono-label text-[#5B3DF5]">Mastery</p>
+            <p className="mono-label text-chrome-7">Mastery</p>
             <h2 className="mt-1 font-display text-[1.05rem] font-bold text-brand-ink">
               Exam readiness
             </h2>
           </div>
-          <span className="grid size-9 place-items-center rounded-xl bg-[#F3ECFF] text-[#5B3DF5]">
+          <span className="grid size-9 place-items-center rounded-xl bg-brand-panel text-chrome-7">
             <ShieldCheck className="size-4" aria-hidden />
           </span>
         </div>
@@ -145,8 +145,8 @@ export function ReadinessPanel({
         </p>
 
         <div className="mt-4 space-y-2.5">
-          <PartMeter label="Card recall" value={readiness.parts.recall} tint="bg-[#7C5CFF]" />
-          <PartMeter label="Quiz accuracy" value={readiness.parts.quiz} tint="bg-[#12B8A6]" />
+          <PartMeter label="Card recall" value={readiness.parts.recall} tint="bg-chrome-6" />
+          <PartMeter label="Quiz accuracy" value={readiness.parts.quiz} tint="bg-chrome-4" />
           <PartMeter label="Written marks" value={readiness.parts.exam} tint="bg-[#F0A03C]" />
         </div>
 
@@ -160,7 +160,7 @@ export function ReadinessPanel({
       <section className="rounded-[2rem] border border-border bg-card p-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="mono-label text-[#C43F69]">Pace</p>
+            <p className="mono-label text-chrome-7">Pace</p>
             <h2 className="mt-1 font-display text-[1.05rem] font-bold text-brand-ink">
               {pace ? `Plan to ${shortDate(pace.examDate)}` : "Exam pace plan"}
             </h2>
@@ -214,7 +214,7 @@ export function ReadinessPanel({
             </div>
 
             <p className="mt-3 flex items-start gap-1.5 text-[0.74rem] leading-relaxed text-muted-foreground">
-              <Gauge className="mt-0.5 size-3.5 shrink-0 text-[#C43F69]" aria-hidden />
+              <Gauge className="mt-0.5 size-3.5 shrink-0 text-chrome-7" aria-hidden />
               {pace.remaining === 0
                 ? "Every card is consolidated. Keep it warm with short reviews."
                 : `${pace.remaining} cards are not yet settled. About ${pace.perDay} a day clears them before the paper.`}

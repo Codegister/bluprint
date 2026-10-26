@@ -43,7 +43,7 @@ function SourceList({ sources }: { sources: Array<{ title: string; url: string }
             href={source.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="min-w-0 truncate text-[#4C5FD5] underline decoration-[#C6CCF3] underline-offset-2 hover:text-[#3846A8]"
+            className="min-w-0 truncate text-chrome-6 underline decoration-chrome-4 underline-offset-2 hover:text-chrome-8"
             title={source.title}
           >
             {source.title || new URL(source.url).hostname.replace(/^www\./, "")}
@@ -209,7 +209,7 @@ export default function TutorPage() {
             className="chrome-plate rounded-[1.6rem] px-5 py-6 text-center"
             {...enter(0.04, 12)}
           >
-            <span className="sticker mx-auto bg-white/85 text-[#C43F69]">
+            <span className="sticker mx-auto bg-white/85 text-chrome-7">
               <Sparkles className="size-3" aria-hidden />
               AI tutor
             </span>
@@ -304,7 +304,7 @@ export default function TutorPage() {
                   <Link
                     key={set._id}
                     to={`/tutor?set=${set._id}`}
-                    className="group flex items-center gap-3 border-b border-border/70 px-4 py-4 last:border-b-0 transition-colors hover:bg-[#FBF7FF] sm:px-5"
+                    className="group flex items-center gap-3 border-b border-border/70 px-4 py-4 last:border-b-0 transition-colors hover:bg-brand-panel sm:px-5"
                   >
                     <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#FFF1DE] text-[#B4720E]">
                       <Layers3 className="size-4" aria-hidden />
@@ -329,7 +329,7 @@ export default function TutorPage() {
                 Showing your six most recent sets.{" "}
                 <Link
                   to="/dashboard"
-                  className="font-semibold text-[#5B3DF5] underline-offset-2 hover:underline"
+                  className="font-semibold text-chrome-7 underline-offset-2 hover:underline"
                 >
                   See all sets
                 </Link>
@@ -424,7 +424,7 @@ export default function TutorPage() {
                         attachments: [],
                       })
                     }
-                    className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-[#D8CCFF] hover:bg-[#FAF8FF]"
+                    className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-chrome-4 hover:bg-brand-panel"
                   >
                     {suggestion}
                   </button>

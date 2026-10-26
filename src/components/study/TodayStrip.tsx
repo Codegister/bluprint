@@ -20,20 +20,20 @@ export function TodayStrip() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="min-w-0 sm:w-56">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="mono-label text-[#5B3DF5]">Today</p>
+            <p className="mono-label text-chrome-7">Today</p>
             <p className="text-[0.7rem] font-semibold tabular-nums text-brand-ink/55">
               {study ? `${today}/${goal} questions` : "—"}
             </p>
           </div>
           <Meter
             value={progress}
-            className="mt-1.5 h-1.5 bg-[#ECE6FF]"
-            barClassName="bg-[#5B3DF5]"
+            className="mt-1.5 h-1.5 bg-brand-panel"
+            barClassName="bg-chrome-8"
             label="Questions answered today"
           />
           <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[0.7rem] leading-snug text-brand-ink/60">
             <span className="inline-flex items-center gap-1 font-semibold text-brand-ink/80">
-              <Flame className="size-3 text-[#F0871F]" aria-hidden />
+              <Flame className="size-3 text-chrome-6" aria-hidden />
               {study?.streak ?? 0} day{study?.streak === 1 ? "" : "s"}
             </span>
             {study?.goalReason ? `· ${study.goalReason}` : ""}
@@ -50,7 +50,7 @@ export function TodayStrip() {
             <Link
               key={length}
               to={`/today?sprint=${length}`}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-2.5 py-1 text-[0.72rem] font-bold tabular-nums text-brand-ink/75 transition-colors hover:border-[#CFC4FF] hover:bg-[#F3ECFF] hover:text-[#5B3DF5]"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-2.5 py-1 text-[0.72rem] font-bold tabular-nums text-brand-ink/75 transition-colors hover:border-chrome-4 hover:bg-brand-panel hover:text-chrome-7"
             >
               <Play className="size-2.5" aria-hidden />
               {length}
@@ -60,7 +60,7 @@ export function TodayStrip() {
 
         <Link
           to="/today"
-          className="inline-flex shrink-0 items-center gap-1 text-[0.76rem] font-semibold text-[#5B3DF5] hover:underline"
+          className="inline-flex shrink-0 items-center gap-1 text-[0.76rem] font-semibold text-chrome-7 hover:underline"
         >
           Today's queue
           <ArrowRight className="size-3.5" aria-hidden />

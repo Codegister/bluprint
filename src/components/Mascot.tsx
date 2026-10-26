@@ -29,17 +29,17 @@ export function Mascot({
     >
       <defs>
         <linearGradient id="blu-body" x1="56" y1="36" x2="186" y2="206">
-          <stop offset="0" stopColor="#A78BFA" />
-          <stop offset="0.5" stopColor="#7C5CFF" />
-          <stop offset="1" stopColor="#5B3DF5" />
+          <stop offset="0" stopColor="#F7F8FA" />
+          <stop offset="0.45" stopColor="#C2C9D1" />
+          <stop offset="1" stopColor="#7B848E" />
         </linearGradient>
         <linearGradient id="blu-foot" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#5B3DF5" />
-          <stop offset="1" stopColor="#4526C9" />
+          <stop offset="0" stopColor="#4F575F" />
+          <stop offset="1" stopColor="#2A3037" />
         </linearGradient>
         <linearGradient id="blu-bookmark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#FFD37A" />
-          <stop offset="1" stopColor="#F5A524" />
+          <stop offset="0" stopColor="#E7EBEF" />
+          <stop offset="1" stopColor="#8F98A2" />
         </linearGradient>
       </defs>
 
@@ -73,13 +73,13 @@ export function Mascot({
       {/* arms */}
       <path
         d="M54 138c-9 7-12 17-8 27"
-        stroke="#6B4BFF"
+        stroke="#6B747E"
         strokeWidth="13"
         strokeLinecap="round"
       />
       <path
         d="M186 138c9 7 12 17 8 27"
-        stroke="#6B4BFF"
+        stroke="#6B747E"
         strokeWidth="13"
         strokeLinecap="round"
       />
@@ -87,17 +87,17 @@ export function Mascot({
       {/* eyes: big, bright and readable at small sizes */}
       <ellipse cx="98" cy="106" rx="19" ry="21" fill="#FFFFFF" />
       <ellipse cx="142" cy="106" rx="19" ry="21" fill="#FFFFFF" />
-      <circle cx="101" cy="110" r="9.5" fill="#1B1440" />
-      <circle cx="145" cy="110" r="9.5" fill="#1B1440" />
+      <circle cx="101" cy="110" r="9.5" fill="#20252B" />
+      <circle cx="145" cy="110" r="9.5" fill="#20252B" />
       <circle cx="105" cy="104" r="3.4" fill="#FFFFFF" />
       <circle cx="149" cy="104" r="3.4" fill="#FFFFFF" />
 
       {/* cheeks and smile */}
-      <ellipse cx="70" cy="138" rx="11" ry="6.5" fill="#FFA9C4" opacity="0.6" />
-      <ellipse cx="170" cy="138" rx="11" ry="6.5" fill="#FFA9C4" opacity="0.6" />
+      <ellipse cx="70" cy="138" rx="11" ry="6.5" fill="#AEB7C0" opacity="0.55" />
+      <ellipse cx="170" cy="138" rx="11" ry="6.5" fill="#AEB7C0" opacity="0.55" />
       <path
         d="M105 144c9 10 21 10 30 0"
-        stroke="#1B1440"
+        stroke="#20252B"
         strokeWidth="5"
         strokeLinecap="round"
       />
@@ -105,9 +105,9 @@ export function Mascot({
       {/* sparkle: the little "got it" moment */}
       <path
         d="M196 84l4 10 10 4-10 4-4 10-4-10-10-4 10-4 4-10Z"
-        fill="#FFE6A3"
+        fill="#F4F6F8"
       />
-      <circle cx="188" cy="120" r="3.5" fill="#FFE6A3" opacity="0.8" />
+      <circle cx="188" cy="120" r="3.5" fill="#C6CDD4" opacity="0.9" />
     </svg>
   );
 }
@@ -115,7 +115,7 @@ export function Mascot({
 /** Flat deck glyph: three stacked cards in one accent colour. */
 export function DeckGlyph({
   className,
-  color = "#7C5CFF",
+  color = "#6B747E",
 }: {
   className?: string;
   color?: string;

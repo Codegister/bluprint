@@ -25,18 +25,41 @@ their own dashboard containing only their courses and study sets.
   course. The pathway builder follows the published qualification → subject → exam board →
   tier route, so the map matches the board's own specification headings exactly. No AI is
   used for the pathway.
-- **`shaders` (WebGPU)** — the animated mesh-gradient backdrops behind the landing page,
-  sign-in panel and dashboard hero. Browsers without WebGPU, and visitors who ask for
-  reduced motion, get the same palette as a static CSS gradient.
+- **`shaders` (WebGPU)** — the animated liquid-chrome backdrop behind the landing page,
+  sign-in panel and every signed-in screen. `LiquidMetal` from `shaders/react` draws the
+  moving reflection over a CSS metal ribbon. Browsers without WebGPU, and visitors who ask
+  for reduced motion, get the static nine-shade CSS metal instead.
 - **Bun** — package manager and scripts
 
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
 actions.
 
-The visual direction is a light, friendly study workspace: a white sidebar with the deck
-list, soft rounded cards on a pale grey canvas, a violet accent with pastel icon tints, and
-Poppins headings. The little violet axolotl is drawn in SVG, so the app needs no image
+The visual direction is machined chrome. Nine neutral shades, from specular white
+(`--chrome-0`) to black chrome (`--chrome-8`), are the only palette: the primary is black
+chrome, the secondary is satin steel, and the accent is graphite steel. Surfaces are
+polished plates with a lit top edge, the sidebar and cards are brushed metal, and headings
+use Bricolage Grotesque. A WebGPU liquid-metal ribbon (see `src/components/ChromeShader.tsx`)
+moves slowly behind the app, with a CSS metal fallback for browsers without WebGPU. The
+little axolotl is drawn in SVG using the same chrome ramp, so the app needs no image
 assets.
+
+The nine shades live in `src/index.css` as `--chrome-0` to `--chrome-8` and are exposed
+to Tailwind as `bg-chrome-*`, `text-chrome-*`, and `border-chrome-*`:
+
+| Token | Light | Role |
+| --- | --- | --- |
+| `--chrome-0` | `#ffffff` | specular highlight |
+| `--chrome-1` | `#f3f5f7` | polished paper |
+| `--chrome-2` | `#e3e7eb` | secondary surfaces (satin) |
+| `--chrome-3` | `#ccd2d8` | bright steel / borders |
+| `--chrome-4` | `#b0b8c0` | accent (brushed steel) |
+| `--chrome-5` | `#8f98a2` | graphite steel |
+| `--chrome-6` | `#6b747e` | dark graphite |
+| `--chrome-7` | `#434a53` | gunmetal / secondary text |
+| `--chrome-8` | `#20252b` | primary (black chrome) |
+
+Semantic red, green, and amber are kept only for errors, correct answers, and warnings;
+every decorative accent uses the ramp above.
 
 ## Two ways to start
 
@@ -710,6 +733,8 @@ src/
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
+    ChromeBackdrop.tsx   layered chrome wash and brush behind every page
+    ChromeShader.tsx     WebGPU liquid-metal layer with a CSS fallback
     study/               flashcard review (dictation + FSRS), quiz runner, exam practice,
                          practice papers, readiness/pacing panel, weak spots, today strip,
                          tutor chat, set settings

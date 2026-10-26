@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 
 /**
- * Bluprint wordmark. The mark is a rounded violet tile with a white
+ * Bluprint wordmark. The mark is a rounded black-chrome tile with an engraved
  * page-and-spark glyph; the wordmark is heavy, tight and lowercase.
  */
 export function Brand({
@@ -23,8 +23,8 @@ export function Brand({
       onClick={onNavigate}
       className={cn("group inline-flex items-center gap-2.5", className)}
     >
-      {/* `brand-tile` keeps the violet mark readable in the dark theme, where
-          ink tiles are inverted to a light fill. */}
+      {/* `brand-tile` keeps the dark chrome mark readable in the dark theme,
+          where ink tiles are inverted to a light fill. */}
       <span className="brand-tile grid size-9 place-items-center rounded-[0.7rem] bg-[#191B27] text-white transition-transform duration-300 ease-out group-hover:-rotate-6 group-hover:scale-105">
         <svg
           viewBox="0 0 24 24"
@@ -38,9 +38,9 @@ export function Brand({
           />
           <path
             d="M6.5 12.1h7a3.9 3.9 0 1 1 0 7.9h-7v-7.9Z"
-            fill="#A78BFA"
+            fill="#B0B8C0"
           />
-          <circle cx="18.5" cy="5.5" r="1.9" fill="#8B5CF6" />
+          <circle cx="18.5" cy="5.5" r="1.9" fill="#8F98A2" />
         </svg>
       </span>
       {!markOnly && (

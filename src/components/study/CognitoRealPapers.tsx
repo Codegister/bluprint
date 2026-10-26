@@ -79,7 +79,7 @@ export function CognitoRealPapers({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
             Real past papers
           </p>
           <h2 className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink">
@@ -91,7 +91,7 @@ export function CognitoRealPapers({
             own mark scheme.
           </p>
         </div>
-        <span className="rounded-full bg-[#F1F0FB] px-3 py-1.5 text-[0.7rem] font-semibold text-[#5B3DF5]">
+        <span className="rounded-full bg-brand-panel px-3 py-1.5 text-[0.7rem] font-semibold text-chrome-7">
           {papers.length > 0
             ? `${papers.length} paper${papers.length === 1 ? "" : "s"}`
             : "Cognito"}

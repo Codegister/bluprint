@@ -71,7 +71,7 @@ function ClozePrompt({ text }: { text: string }) {
         /^_{3,}$/.test(part) ? (
           <span
             key={`blank-${index}`}
-            className="mx-1 inline-block min-w-20 border-b-2 border-[#B9A6FF] align-baseline"
+            className="mx-1 inline-block min-w-20 border-b-2 border-chrome-4 align-baseline"
           >
             &nbsp;
           </span>
@@ -257,7 +257,7 @@ export function QuizRunner({
         <p className="text-sm font-semibold text-brand-ink">
           Question {index + 1} of {quiz.length}
         </p>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3ECFF] px-2.5 py-1 text-[0.68rem] font-semibold text-[#5B3DF5]">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-2.5 py-1 text-[0.68rem] font-semibold text-chrome-7">
           {kind === "mcq" ? "Multiple choice" : kind === "cloze" ? "Fill the gap" : (
             <>
               <Keyboard className="size-3" aria-hidden /> Typed answer
@@ -303,8 +303,8 @@ export function QuizRunner({
                   className={cn(
                     "flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left text-sm font-medium transition-colors",
                     !checked &&
-                      "border-border bg-white text-brand-ink/85 hover:border-[#CFC4FF] hover:bg-[#FAF8FF]",
-                    !checked && isSelected && "border-[#B9A6FF] bg-[#F5F1FF] text-brand-ink",
+                      "border-border bg-white text-brand-ink/85 hover:border-chrome-4 hover:bg-brand-panel",
+                    !checked && isSelected && "border-chrome-4 bg-brand-panel text-brand-ink",
                     isCorrect && "border-[#BDEBD3] bg-[#E9FBF3] text-[#0F7A50]",
                     isWrongChoice && "border-[#F6D2D6] bg-[#FFEEF0] text-[#C93C49]",
                     checked &&
@@ -321,7 +321,7 @@ export function QuizRunner({
                         : isWrongChoice
                           ? "bg-[#FBDDE0] text-[#C93C49]"
                           : isSelected
-                            ? "bg-[#E4DBFF] text-[#5B3DF5]"
+                            ? "bg-chrome-3 text-chrome-7"
                             : "bg-brand-panel text-muted-foreground",
                     )}
                   >
@@ -351,7 +351,7 @@ export function QuizRunner({
                   ? "Type the missing word or phrase"
                   : "Type your answer in a few words"
               }
-              className="resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+              className="resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-4 focus-visible:ring-chrome-6/15"
             />
             <p className="mt-1.5 text-[0.7rem] font-medium text-muted-foreground">
               Marked on key words, so small spelling and wording differences
