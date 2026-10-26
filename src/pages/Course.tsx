@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { CognitoRealPapers } from "@/components/study/CognitoRealPapers";
 import { CognitoTopicNotes } from "@/components/study/CognitoTopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
+import { TutorChat } from "@/components/study/TutorChat";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,6 +14,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
@@ -23,7 +30,7 @@ import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { BookOpen, ChevronDown, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router";
+import { Link, useParams, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 /**
@@ -39,6 +46,14 @@ const PATH_COLORS = [
   { hex: "#6B4DBE", soft: "#F2EDFC", ring: "#D6C8F0" },
   { hex: "#2B7FB8", soft: "#EAF5FB", ring: "#BFDDEF" },
 ];
+
+/** The course page is split by what the student is doing, not by data type. */
+type CourseTab = "pathway" | "tutor" | "papers" | "topic-papers" | "sets";
+
+const COURSE_TABS: CourseTab[] = ["pathway", "tutor", "papers", "topic-papers", "sets"];
+
+const TAB_TRIGGER_CLASS =
+  "h-10 gap-2 rounded-full border border-border bg-white px-4 text-[0.85rem] font-semibold text-brand-ink/70 shadow-none transition-colors data-[state=active]:border-[#191B27] data-[state=active]:bg-[#191B27] data-[state=active]:text-white data-[state=active]:shadow-none";
 
 /** Octagon, so each node reads as a cut gem rather than a plain circle. */
 const NODE_SHAPE =
@@ -195,6 +210,16 @@ export default function Course() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
   const validId = Boolean(courseId && /^[a-z0-9]{20,40}$/i.test(courseId));
+  // The open tab lives in the URL, so a link from the dashboard or a topic
+  // paper opens the right section and a reload keeps it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const tab: CourseTab = COURSE_TABS.includes(requestedTab as CourseTab)
+    ? (requestedTab as CourseTab)
+    : "pathway";
+  const selectTab = (value: string) => {
+    setSearchParams(value === "pathway" ? {} : { tab: value }, { replace: true });
+  };
   const details = useQuery(
     api.courses.getDetails,
     validId ? { courseId: courseId as Id<"courses"> } : "skip",
@@ -376,6 +401,19 @@ export default function Course() {
     const known = sets.reduce((sum, set) => sum + set.knownCount, 0);
     const done = new Set(course.completedTopics);
 
+    // Topic titles, so a study set can be labelled with the topic it came from.
+    const topicTitleById = new Map<string, string>();
+    for (const unit of pathway?.units ?? []) {
+      for (const topic of unit.topics) {
+        topicTitleById.set(topic.id, topic.title);
+      }
+    }
+    // A topic paper is a topic's own exam-style questions, saved with its study
+    // set. The tab only exists when the course has at least one.
+    const topicPapers = sets.filter((set) => set.examCount > 0);
+    const activeTab: CourseTab =
+      tab === "topic-papers" && topicPapers.length === 0 ? "pathway" : tab;
+
     return (
       <>
         <div className="flex flex-wrap items-center gap-3">
@@ -398,7 +436,7 @@ export default function Course() {
             {pathway && (
               <Button
                 type="button"
-                onClick={() => openTutor()}
+                onClick={() => selectTab("tutor")}
                 className="h-9 rounded-full bg-[#EDE8FF] px-4 text-[0.8rem] font-semibold text-[#5130D8] hover:bg-[#E2DBFF]"
               >
                 <Sparkles className="size-3.5" aria-hidden />
@@ -477,12 +515,40 @@ export default function Course() {
               </div>
             </section>
 
-            <section className="mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
-                    How this course is assessed
-                  </h2>
+            <Tabs value={activeTab} onValueChange={selectTab} className="mt-5 gap-4">
+              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0">
+                <TabsTrigger value="pathway" className={TAB_TRIGGER_CLASS}>
+                  Pathway
+                </TabsTrigger>
+                <TabsTrigger value="tutor" className={TAB_TRIGGER_CLASS}>
+                  AI tutor
+                </TabsTrigger>
+                <TabsTrigger value="papers" className={TAB_TRIGGER_CLASS}>
+                  Past papers
+                </TabsTrigger>
+                {topicPapers.length > 0 && (
+                  <TabsTrigger value="topic-papers" className={TAB_TRIGGER_CLASS}>
+                    Topic papers
+                    <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
+                      {topicPapers.length}
+                    </span>
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="sets" className={TAB_TRIGGER_CLASS}>
+                  Study sets
+                  <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
+                    {sets.length}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="pathway" className="mt-1">
+                <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
+                        How this course is assessed
+                      </h2>
                   <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
                     {pathway.examFormat}
                   </p>
@@ -498,21 +564,9 @@ export default function Course() {
                 AI-built from the published specification. Always check your exam
                 board's current specification before relying on a topic list.
               </p>
-            </section>
+                </section>
 
-            <CoursePastPapers
-              courseId={course._id}
-              formatId={buildPaperBlueprint(course).id}
-              formatSummary={buildPaperBlueprint(course).summary}
-              papers={pathway.papers}
-            />
-
-            <CognitoRealPapers
-              courseId={course._id}
-              enabled={Boolean(pathway.sourceUrl)}
-            />
-
-            {nextTopic && (
+                {nextTopic && (
               <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-[#D8CCFF] bg-[#FAF8FF] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div className="min-w-0">
                   <p className="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
@@ -863,10 +917,205 @@ export default function Course() {
               )}
             </section>
 
-            <p className="mt-4 text-[0.72rem] text-muted-foreground">
-              Progress updated {relativeDate(course.updatedAt)} · last studied{" "}
-              {course.lastStudiedAt ? relativeDate(course.lastStudiedAt) : "not yet"}
-            </p>
+                <p className="mt-4 text-[0.72rem] text-muted-foreground">
+                  Progress updated {relativeDate(course.updatedAt)} · last studied{" "}
+                  {course.lastStudiedAt ? relativeDate(course.lastStudiedAt) : "not yet"}
+                </p>
+              </TabsContent>
+
+              <TabsContent value="tutor" className="mt-1">
+                <TutorChat
+                  scope={{ kind: "course", courseId: course._id }}
+                  title={course.subject}
+                  qualification={courseSubtitle(course)}
+                />
+              </TabsContent>
+
+              <TabsContent value="papers" className="mt-1">
+                <CoursePastPapers
+                  courseId={course._id}
+                  formatId={buildPaperBlueprint(course).id}
+                  formatSummary={buildPaperBlueprint(course).summary}
+                  papers={pathway.papers}
+                />
+
+                <CognitoRealPapers
+                  courseId={course._id}
+                  enabled={Boolean(pathway.sourceUrl)}
+                />
+              </TabsContent>
+
+              {topicPapers.length > 0 && (
+                <TabsContent value="topic-papers" className="mt-1">
+                  <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
+                          Topic papers
+                        </p>
+                        <h2 className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink">
+                          Exam practice, one topic at a time
+                        </h2>
+                        <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
+                          These are the exam-style questions saved with each topic's
+                          study set. Write your answer and it is marked against the
+                          topic's guide, so you can see exactly where the marks go.
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-[#F1F0FB] px-3 py-1.5 text-[0.7rem] font-semibold text-[#5B3DF5]">
+                        {topicPapers.length} topic
+                        {topicPapers.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+
+                    <ul className="mt-4 grid gap-2.5">
+                      {topicPapers.map((set) => (
+                        <li
+                          key={set._id}
+                          className="flex flex-col gap-3 rounded-2xl border border-border bg-[#FCFCFD] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <h3 className="truncate text-[0.9rem] font-semibold text-brand-ink">
+                              {topicTitleById.get(set.topicId ?? "") ?? set.title}
+                            </h3>
+                            <p className="mt-0.5 text-[0.74rem] text-muted-foreground">
+                              {set.examCount} exam-style question
+                              {set.examCount === 1 ? "" : "s"} · marked against
+                              the guide
+                              {set.status === "ready" ? "" : " · set still building"}
+                            </p>
+                          </div>
+                          <Button
+                            asChild
+                            variant="outline"
+                            className="h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.76rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                          >
+                            <Link to={`/sets/${set._id}?tab=exam`}>
+                              Open topic paper
+                            </Link>
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
+                      Questions are written for this specification and saved with
+                      the set, so a paper reads the same every time.
+                    </p>
+                  </section>
+                </TabsContent>
+              )}
+
+              <TabsContent value="sets" className="mt-1">
+                <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
+                        Study sets
+                      </p>
+                      <h2 className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink">
+                        Everything built from this course
+                      </h2>
+                      <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
+                        One set per topic, holding the summary, flashcards, quiz and
+                        exam questions for that topic. Sets you uploaded yourself
+                        live in your main library.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[#F1F0FB] px-3 py-1.5 text-[0.7rem] font-semibold text-[#5B3DF5]">
+                      {sets.length} set{sets.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+
+                  {sets.length === 0 ? (
+                    <div className="mt-4 rounded-2xl border border-dashed border-border bg-brand-panel px-4 py-6 text-center">
+                      <p className="font-display text-[0.98rem] font-bold text-brand-ink">
+                        No study sets yet
+                      </p>
+                      <p className="mx-auto mt-1 max-w-md text-[0.8rem] leading-relaxed text-muted-foreground">
+                        Open a topic in the pathway and choose "Study this topic"
+                        to build the first set for this course.
+                      </p>
+                      <Button
+                        type="button"
+                        onClick={() => selectTab("pathway")}
+                        className="mt-3 h-9 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+                      >
+                        Go to pathway
+                      </Button>
+                    </div>
+                  ) : (
+                    <ul className="mt-4 grid gap-2.5">
+                      {sets.map((set) => {
+                        const mastery = percent(set.knownCount, set.cardCount);
+                        return (
+                          <li
+                            key={set._id}
+                            className="flex flex-col gap-3 rounded-2xl border border-border bg-[#FCFCFD] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="truncate text-[0.9rem] font-semibold text-brand-ink">
+                                  {set.title}
+                                </h3>
+                                <span
+                                  className={cn(
+                                    "rounded-full px-2 py-0.5 text-[0.62rem] font-semibold",
+                                    set.status === "ready"
+                                      ? "bg-[#EAFBF0] text-[#128A4C]"
+                                      : set.status === "error"
+                                        ? "bg-[#FFEEF0] text-[#C23B49]"
+                                        : "bg-[#FFF6E5] text-[#96650A]",
+                                  )}
+                                >
+                                  {set.status === "ready"
+                                    ? "Ready"
+                                    : set.status === "error"
+                                      ? "Build interrupted"
+                                      : "Building"}
+                                </span>
+                                {set.topicId && topicTitleById.has(set.topicId) && (
+                                  <span className="rounded-full bg-brand-panel px-2 py-0.5 text-[0.62rem] font-semibold text-brand-ink/60">
+                                    {topicTitleById.get(set.topicId)}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 text-[0.74rem] text-muted-foreground">
+                                {set.cardCount} cards · {set.quizCount} quiz ·{" "}
+                                {set.examCount} exam · updated{" "}
+                                {relativeDate(set.updatedAt)}
+                              </p>
+                              {set.status === "ready" && set.cardCount > 0 && (
+                                <div className="mt-2 flex items-center gap-2">
+                                  <div className="h-1.5 w-full max-w-[190px] overflow-hidden rounded-full bg-brand-panel">
+                                    <div
+                                      className="h-full rounded-full bg-[#128A4C] transition-[width] duration-500"
+                                      style={{ width: `${mastery}%` }}
+                                    />
+                                  </div>
+                                  <span className="shrink-0 text-[0.66rem] font-semibold text-muted-foreground">
+                                    {mastery}% known
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <Button
+                              asChild
+                              variant="outline"
+                              className="h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.76rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                            >
+                              <Link to={`/sets/${set._id}`}>
+                                {set.status === "ready" ? "Open set" : "View set"}
+                              </Link>
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+              </TabsContent>
+            </Tabs>
           </>
         )}
 

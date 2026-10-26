@@ -25,6 +25,12 @@ const navItems = [
     dot: "bg-[#7C5CFF]",
   },
   {
+    to: "/dashboard#tutor",
+    label: "AI tutor",
+    active: "bg-[#FDEFF4] text-[#A83458]",
+    dot: "bg-[#D9577E]",
+  },
+  {
     to: "/dashboard#courses",
     label: "My courses",
     active: "bg-[#EAFBF4] text-[#0C6B4C]",
@@ -117,11 +123,13 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           const active =
             item.to === "/dashboard"
               ? location.pathname === "/dashboard" && !location.hash
-              : item.to === "/dashboard#courses"
-                ? location.pathname.startsWith("/courses")
-                : item.to === "/dashboard#sets"
-                  ? location.pathname.startsWith("/sets/")
-                  : location.pathname.startsWith("/timetable");
+              : item.to === "/dashboard#tutor"
+                ? location.pathname === "/dashboard" && location.hash === "#tutor"
+                : item.to === "/dashboard#courses"
+                  ? location.pathname.startsWith("/courses")
+                  : item.to === "/dashboard#sets"
+                    ? location.pathname.startsWith("/sets/")
+                    : location.pathname.startsWith("/timetable");
           return (
             <Link
               key={item.label}

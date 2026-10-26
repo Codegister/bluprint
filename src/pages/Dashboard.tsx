@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { CreateSetDialog } from "@/components/CreateSetDialog";
+import { TutorChat } from "@/components/study/TutorChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
@@ -18,7 +19,7 @@ import type { FunctionReturnType } from "convex/server";
 // while the query is still loading.
 import { ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 
 type SetSummary = FunctionReturnType<typeof api.studySets.listMine>[number];
 type CourseSummary = FunctionReturnType<typeof api.courses.listMine>[number];
@@ -222,13 +223,24 @@ export default function Dashboard() {
   const recoverCourses = useMutation(api.courses.recoverMine);
   const recoveryRequested = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Sidebar links point at dashboard sections. Scrolling here means the
+  // anchor works even when the click only changes the hash.
+  const location = useLocation();
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState<string>("all");
+  const [tutorCourseId, setTutorCourseId] = useState<string | null>(null);
   const dialogOpen = searchParams.get("new") === "1";
 
   const setDialogOpen = (open: boolean) => {
     setSearchParams(open ? { new: "1" } : {}, { replace: true });
   };
+
+  useEffect(() => {
+    if (!location.hash) return;
+    document
+      .getElementById(location.hash.slice(1))
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [location.hash]);
 
   // Recover courses left failed by an older build. This runs once per page
   // load and means the student never has to press a retry button.
@@ -271,6 +283,15 @@ export default function Dashboard() {
     }
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [sets]);
+
+  // The dashboard tutor answers from one of your finished courses. Only a
+  // course with a saved pathway has material to ground an answer in.
+  const readyCourses = useMemo(
+    () => (courseRows ?? []).filter((course) => course.status === "ready"),
+    [courseRows],
+  );
+  const tutorCourse =
+    readyCourses.find((course) => course._id === tutorCourseId) ?? readyCourses[0];
 
   // Religious Studies is supported as Edexcel GCSE Religious Studies A and B.
   const rsDescription =
@@ -360,6 +381,81 @@ export default function Dashboard() {
           study sets. Pathways are scraped and saved material still works.
         </p>
       )}
+
+      <section id="tutor" className="mt-8 scroll-mt-6">
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
+            AI tutor
+          </h2>
+          <span className="rounded-full bg-[#F1F0FB] px-2 py-0.5 text-[0.64rem] font-bold text-[#5B3DF5]">
+            Ask anything
+          </span>
+          <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
+        </div>
+        <p className="mt-1 max-w-2xl text-[0.82rem] leading-relaxed text-muted-foreground">
+          Explain an idea, quiz yourself, or ask where marks are usually lost.
+          Answers come from the course you pick, and web search stays off unless
+          you turn it on.
+        </p>
+
+        {courseRows === undefined ? (
+          <div className="mt-3 flex min-h-[120px] items-center justify-center rounded-3xl border border-border bg-white">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : !tutorCourse ? (
+          <div className="mt-3 rounded-3xl border border-dashed border-border bg-white px-5 py-6">
+            <p className="text-[0.82rem] leading-relaxed text-muted-foreground">
+              The tutor works from a course pathway. Set up your subjects first,
+              then ask away.
+            </p>
+            <Button
+              asChild
+              className="mt-3 h-9 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+            >
+              <Link to="/courses/new">Set up courses</Link>
+            </Button>
+          </div>
+        ) : (
+          <>
+            {readyCourses.length > 1 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {readyCourses.map((course) => (
+                  <button
+                    key={course._id}
+                    type="button"
+                    aria-pressed={course._id === tutorCourse._id}
+                    onClick={() => setTutorCourseId(course._id)}
+                    className={cn(
+                      "h-8 rounded-full border px-3 text-[0.74rem] font-semibold transition-colors",
+                      course._id === tutorCourse._id
+                        ? "border-[#191B27] bg-[#191B27] text-white"
+                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                    )}
+                  >
+                    {course.subject}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mt-3">
+              <TutorChat
+                key={tutorCourse._id}
+                scope={{ kind: "course", courseId: tutorCourse._id }}
+                title={tutorCourse.subject}
+                qualification={courseSubtitle(tutorCourse)}
+              />
+            </div>
+            <p className="mt-2 text-[0.72rem] text-muted-foreground">
+              <Link
+                to={`/tutor?course=${tutorCourse._id}`}
+                className="font-semibold text-[#5B3DF5] underline-offset-2 hover:underline"
+              >
+                Open the tutor in full screen
+              </Link>
+            </p>
+          </>
+        )}
+      </section>
 
       <section id="courses" className="mt-8 scroll-mt-6">
         <div className="flex items-center gap-3">

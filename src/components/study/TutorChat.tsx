@@ -94,6 +94,10 @@ export function TutorChat({
   const messages = scope.kind === "set" ? setMessages : courseMessages;
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
+  // The server picks the NVIDIA model, so the selector shows whichever one is
+  // actually answering rather than a placeholder provider name.
+  const aiStatus = useQuery(api.settings.aiStatus);
+  const modelName = aiStatus?.textModel ?? "NVIDIA";
 
   const groundedIn =
     scope.kind === "set"
@@ -106,9 +110,10 @@ export function TutorChat({
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useWeb, setUseWeb] = useState(true);
+  // Web search stays off unless the student asks for it: the tutor answers
+  // from the saved notes and specification first.
+  const [useWeb, setUseWeb] = useState(false);
   const [effort, setEffort] = useState<"Low" | "Medium" | "Max Effort">("Medium");
-  const [model, setModel] = useState<string>("GPT 5.5");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // The reply being written right now, if any.
@@ -208,7 +213,13 @@ export function TutorChat({
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => void send(suggestion, { model: model, effort: effort, attachments: [] })}
+                    onClick={() =>
+                      void send(suggestion, {
+                        model: modelName,
+                        effort,
+                        attachments: [],
+                      })
+                    }
                     className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-[#D8CCFF] hover:bg-[#FAF8FF]"
                   >
                     {suggestion}
@@ -289,6 +300,7 @@ export function TutorChat({
             }
             className="px-4 pb-2"
             maxAttachments={1}
+            models={[modelName]}
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">

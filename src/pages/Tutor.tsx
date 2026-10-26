@@ -90,14 +90,17 @@ export default function TutorPage() {
 
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
+  // Same source as the embedded tutor: the actual NVIDIA model id, so the
+  // selector never shows a stand-in provider label.
+  const aiStatus = useQuery(api.settings.aiStatus);
+  const modelName = aiStatus?.textModel ?? "NVIDIA";
 
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useWeb, setUseWeb] = useState(true);
+  const [useWeb, setUseWeb] = useState(false);
   const [effort, setEffort] = useState<"Low" | "Medium" | "Max Effort">("Medium");
-  const [model, setModel] = useState<string>("NVIDIA");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const streaming = messages?.find((message) => message.streaming);
@@ -215,7 +218,13 @@ export default function TutorPage() {
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => void send(suggestion, { model: model, effort: effort, attachments: [] })}
+                    onClick={() =>
+                      void send(suggestion, {
+                        model: modelName,
+                        effort,
+                        attachments: [],
+                      })
+                    }
                     className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-[#D8CCFF] hover:bg-[#FAF8FF]"
                   >
                     {suggestion}
@@ -292,10 +301,8 @@ export default function TutorPage() {
             placeholder="Ask anything about this material…"
             className="px-4 pb-2"
             maxAttachments={1}
-            models={["NVIDIA"]}
-            modelIcons={{
-              NVIDIA: "https://placehold.co/40x40/1d1d2d/7c5cff?text=NVIDIA",
-            }}
+            models={[modelName]}
+            modelIcons={{}}
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">

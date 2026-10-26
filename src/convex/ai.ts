@@ -2759,7 +2759,8 @@ export const askTutor = action({
         apiKeys,
         tutorContext,
         text,
-        useWeb !== false,
+        // Off unless the browser explicitly asks for it.
+        useWeb === true,
         async (content, sources) => {
           await ctx.runMutation(internal.tutor.appendTutorAnswer, {
             messageId,
@@ -2822,7 +2823,8 @@ export const askCourseTutor = action({
         apiKeys,
         context,
         text,
-        useWeb !== false,
+        // Off unless the browser explicitly asks for it.
+        useWeb === true,
         async (content, sources) => {
           await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
             messageId,

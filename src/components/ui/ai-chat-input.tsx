@@ -27,7 +27,7 @@ interface Attachment {
 // ----------------------------------------------------------------------
 // Sub-components
 // ----------------------------------------------------------------------
-function MorphingText({ text }: { text: string }) {
+function MorphingText({ text, className }: { text: string; className?: string }) {
   const [width, setWidth] = useState<number | "auto">("auto");
   const spanRef = useRef<HTMLSpanElement>(null);
 
@@ -39,7 +39,10 @@ function MorphingText({ text }: { text: string }) {
 
   return (
     <span
-      className="relative inline-flex items-center justify-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
+      className={cn(
+        "relative inline-flex items-center justify-center overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]",
+        className,
+      )}
       style={{ width }}
     >
       <span ref={spanRef} className="invisible whitespace-nowrap px-1">
@@ -738,6 +741,13 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       setTimeout(updateFades, 0);
     }, [textareaHeight]);
 
+    // The tutor only learns which NVIDIA model the server uses after the
+    // status query resolves, so keep the selected label in step with the list
+    // instead of freezing the first value it was mounted with.
+    useEffect(() => {
+      setSelectedModel((current) => (models.includes(current) ? current : models[0]));
+    }, [models]);
+
     useEffect(() => {
       if (!isModelSelectOpen) return;
       const handleOutsideClick = (e: MouseEvent) => {
@@ -1031,7 +1041,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                     modelIcons={modelIcons}
                   />
                   <span className="text-xs font-semibold select-none transition-colors">
-                    <MorphingText text={selectedModel} />
+                    <MorphingText text={selectedModel} className="max-w-[260px]" />
                   </span>
                 </button>                  <div
                   style={{ transformOrigin: "bottom left" }}
@@ -1045,7 +1055,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                     }));
                   }}
                   className={cn(
-                    "absolute bottom-full left-0 mb-2.5 z-50 w-44 rounded-2xl border border-border bg-card/95 p-1 shadow-xl backdrop-blur-md flex flex-col gap-0.5 transition-all duration-400 cursor-default",
+                    "absolute bottom-full left-0 mb-2.5 z-50 w-auto min-w-44 max-w-[320px] rounded-2xl border border-border bg-card/95 p-1 shadow-xl backdrop-blur-md flex flex-col gap-0.5 transition-all duration-400 cursor-default",
                     isModelSelectOpen
                       ? "opacity-100 scale-100 translate-y-0 pointer-events-auto ease-[cubic-bezier(0.34,1.56,0.64,1)]"
                       : "opacity-0 scale-95 translate-y-3 pointer-events-none ease-[cubic-bezier(0.175,0.885,0.32,1.275)]",
@@ -1078,13 +1088,16 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                         }}
                         className="group relative flex h-8 w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-xs font-medium text-foreground/80 outline-none active:scale-[0.98] cursor-default"
                       >
-                        <span className="flex items-center gap-2">
+                        <span
+                          className="flex min-w-0 items-center gap-2 truncate"
+                          title={model}
+                        >
                           <ModelIcon
                             model={model}
-                            className="size-3.5 opacity-85 group-hover:opacity-100 transition-opacity"
+                            className="size-3.5 shrink-0 opacity-85 group-hover:opacity-100 transition-opacity"
                             modelIcons={modelIcons}
                           />
-                          {model}
+                          <span className="truncate">{model}</span>
                         </span>
                       </button>
                     ))}

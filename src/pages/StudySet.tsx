@@ -19,7 +19,7 @@ import { percent, relativeDate, sourceLabel } from "@/lib/format";
 import { useAction, useQuery } from "convex/react";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
 
@@ -408,7 +408,17 @@ export default function StudySet() {
     validId ? { setId: setId as Id<"studySets"> } : "skip",
   );
   const processSet = useAction(api.ai.processStudySet);
-  const [tab, setTab] = useState<Tab>("summary");
+  // `?tab=exam` lets a course's topic paper open straight on its questions.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const [tab, setTab] = useState<Tab>(
+    requestedTab === "cards" ||
+      requestedTab === "quiz" ||
+      requestedTab === "exam" ||
+      requestedTab === "tutor"
+      ? requestedTab
+      : "summary",
+  );
   const [retrying, setRetrying] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const triggered = useRef<string | null>(null);
