@@ -211,9 +211,11 @@ function BuildingPanel({
             aria-valuenow={shownPercent}
             aria-label="Study set build progress"
           >
+            {/* scaleX rather than width: the build can tick every 300ms without
+                forcing a layout pass each time. */}
             <div
-              className="progress-live h-full rounded-full transition-[width] duration-300 ease-linear"
-              style={{ width: `${displayPercent}%` }}
+              className="progress-live h-full w-full origin-left rounded-full transition-transform duration-300 ease-linear"
+              style={{ transform: `scaleX(${Math.max(0, Math.min(1, displayPercent / 100))})` }}
             />
           </div>
 
@@ -485,7 +487,7 @@ export default function StudySet() {
             Set settings
           </Button>
         </div>
-        <div className="mt-1 min-w-0">
+        <div className="chrome-plate mt-2 min-w-0 rounded-[1.6rem] px-4 py-4">
           <motion.h1
             className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
             {...enter(0.04)}

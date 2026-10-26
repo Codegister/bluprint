@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Meter, SPRING } from "@/components/motion/Motion";
 import {
@@ -118,8 +119,7 @@ function GoalCard() {
   const streak = study?.streak ?? 0;
   const progress = Math.min(100, Math.round((today / Math.max(goal, 1)) * 100));
 
-  return (
-    <div className="mx-3 mb-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_14px_28px_-26px_rgba(60,40,120,0.6)] backdrop-blur">
+  return (      <div className="mx-3 mb-4 rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_14px_28px_-26px_rgba(60,40,120,0.6)]">
       <div className="flex items-baseline justify-between gap-2">
         <p className="mono-label text-[#5B3DF5]">Today</p>
         <p className="text-[0.7rem] font-semibold tabular-nums text-brand-ink/55">
@@ -182,7 +182,7 @@ function Sidebar({
   };
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-[#FBFAF6]">
+    <div className="chrome-rail relative flex h-full flex-col overflow-hidden">
 
       <div className="relative px-5 pb-5 pt-6">
         <Brand onNavigate={onNavigate} />
@@ -319,16 +319,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
+      {/* The metal wash behind every signed-in screen. */}
+      <ChromeBackdrop />
       <motion.div
         aria-hidden
-        className="fixed inset-x-0 top-0 z-40 h-[2px] origin-left bg-[#5B3DF5]"
+        className="chrome-progress fixed inset-x-0 top-0 z-40 h-[2px] origin-left"
         style={{ scaleX: scrollYProgress }}
       />
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[292px] border-r border-[#E9E2F5] lg:block">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[292px] border-r border-border lg:block">
         <Sidebar idPrefix="desktop" />
       </aside>
 
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border/70 bg-white/80 px-4 py-3 backdrop-blur lg:hidden">
+      <header className="chrome-bar sticky top-0 z-30 flex items-center justify-between border-b px-4 py-3 lg:hidden">
         <Brand to="/dashboard" />
         <div className="flex items-center gap-2">
           <ThemeToggle />

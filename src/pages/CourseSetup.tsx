@@ -661,10 +661,10 @@ export default function CourseSetup() {
         Back to home
       </Link>
 
-      <div className="mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+      <div className="chrome-plate mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2 rounded-[1.6rem] px-5 py-5">
         <div>
           <motion.h1
-            className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+            className="chrome-title font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] sm:text-[2rem]"
             {...enter(0.04)}
           >
             Your courses

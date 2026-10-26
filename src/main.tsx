@@ -41,7 +41,7 @@ function RouteLoading() {
       role="status"
       aria-busy="true"
       aria-live="polite"
-      className="min-h-screen bg-background px-4 py-7 sm:px-6 lg:px-10 lg:py-10"
+      className="min-h-screen px-4 py-7 sm:px-6 lg:px-10 lg:py-10"
     >
       <span className="sr-only">Loading page</span>
       <div className="mx-auto w-full max-w-[1080px] space-y-5">

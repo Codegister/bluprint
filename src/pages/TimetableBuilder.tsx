@@ -429,9 +429,9 @@ export default function TimetableBuilder() {
         Back to timetable
       </Link>
 
-      <header className="mt-4">
+      <header className="chrome-plate mt-4 rounded-[1.6rem] px-5 py-5">
         <motion.h1
-          className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+          className="chrome-title font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] sm:text-[2rem]"
           {...enter(0.02)}
         >
           Build a plan you can actually follow
@@ -1015,7 +1015,7 @@ export default function TimetableBuilder() {
           {/* One bar, one primary action. It stays in reach on a long step, and
               it is never disabled for a missing answer: pressing it explains
               what is needed and moves to that step. */}
-          <div className="sticky bottom-3 z-20 rounded-[1.4rem] border border-border bg-white/95 px-4 py-3 shadow-[0_18px_38px_-30px_rgba(22,24,31,0.55)] backdrop-blur">
+          <div className="chrome-bar sticky bottom-3 z-20 rounded-[1.4rem] border px-4 py-3 shadow-[0_18px_38px_-30px_rgba(22,24,31,0.55)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="mono-label text-[#5B3DF5]">Step {step} of 4</p>

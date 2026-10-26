@@ -703,9 +703,9 @@ export default function Timetable() {
   if (plan === null || view === null) {
     return (
       <AppShell>
-        <header>
+        <header className="chrome-plate rounded-[1.6rem] px-5 py-5">
           <motion.h1
-            className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+            className="chrome-title font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] sm:text-[2rem]"
             {...enter(0.02)}
           >
             Your revision timetable
@@ -759,7 +759,7 @@ export default function Timetable() {
 
   return (
     <AppShell>
-      <header className="flex flex-wrap items-end justify-between gap-4">
+      <header className="chrome-plate flex flex-wrap items-end justify-between gap-4 rounded-[1.6rem] px-5 py-5">
         <div>
           <p className="mono-label text-[#5B3DF5]">{dayLabel}</p>
           <motion.h1

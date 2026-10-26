@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { Mascot } from "@/components/Mascot";
 import { SkeletonText } from "@/components/Skeletons";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -67,7 +68,8 @@ export function RequireAuth({
     }
 
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen">
+        <ChromeBackdrop intensity={0.9} />
         <header className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
           <Brand />
           <div className="flex items-center gap-2">
@@ -96,7 +98,7 @@ export function RequireAuth({
               <Mascot size={150} />
             </motion.div>
 
-            <h1 className="mt-3 text-[1.6rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
+            <h1 className="chrome-title mt-3 text-[1.6rem] font-extrabold leading-tight tracking-[-0.03em]">
               {title}
             </h1>
             <p className="mt-2 text-[0.92rem] leading-relaxed text-muted-foreground">

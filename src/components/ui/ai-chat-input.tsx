@@ -408,7 +408,9 @@ function AttachmentGalleryModal({
 
   return (
     <div className="fixed inset-0 z-[100]" onClick={handleClose} role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-background/70 backdrop-blur-md transition-opacity duration-400" style={{ opacity: isOpen ? 1 : 0 }} />
+      {/* A flat scrim instead of a full-screen blur: the blur repainted the
+          whole panel on every message scroll. */}
+      <div className="absolute inset-0 bg-background/80 transition-opacity duration-300" style={{ opacity: isOpen ? 1 : 0 }} />
       <div
         style={{
           position: "fixed",

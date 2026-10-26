@@ -44,7 +44,7 @@ export function Brand({
         </svg>
       </span>
       {!markOnly && (
-        <span className="font-display text-[1.5rem] font-extrabold leading-none tracking-[-0.045em] text-brand-ink">
+        <span className="chrome-title font-display text-[1.5rem] font-extrabold leading-none tracking-[-0.045em]">
           bluprint
         </span>
       )}

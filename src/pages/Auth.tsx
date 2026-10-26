@@ -1,5 +1,5 @@
 import { Brand } from "@/components/Brand";
-import { ShaderBackdrop } from "@/components/shader/ShaderBackdrop";
+import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { Mascot } from "@/components/Mascot";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EASE, enter } from "@/components/motion/Motion";
@@ -97,14 +97,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   };
 
   return (
-    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[1.02fr_0.98fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[1.02fr_0.98fr]">
+      {/* The page metal. The aside carries a heavier plate of its own. */}
+      <ChromeBackdrop intensity={0.8} />
       {/* Context panel */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[#EFEBFF] p-10 lg:flex xl:p-14">
-        <ShaderBackdrop intensity={0.9} />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/35 via-transparent to-white/45 dark:from-black/45 dark:to-black/55"
-        />
+      <aside className="chrome-rail relative hidden flex-col justify-between overflow-hidden border-r border-border p-10 lg:flex xl:p-14">
         <motion.div className="relative flex items-center justify-between gap-3" {...enter(0.05)}>
           <Brand />
           <ThemeToggle />
@@ -126,7 +123,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             <Mascot size={196} />
           </motion.div>
           <motion.h1
-            className="mt-6 max-w-md text-[2.5rem] font-extrabold leading-[1.04] tracking-[-0.04em] text-brand-ink xl:text-[2.9rem]"
+            className="chrome-title mt-6 max-w-md text-[2.5rem] font-extrabold leading-[1.04] tracking-[-0.04em] xl:text-[2.9rem]"
             {...enter(0.2)}
           >
             Your sets, scores and progress, kept together.
@@ -154,7 +151,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       </aside>
 
       {/* Form panel */}
-      <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-10 sm:px-8">
+      <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-[440px]">
           <div className="mb-5 flex items-center justify-between gap-2 lg:hidden">
             <Brand />

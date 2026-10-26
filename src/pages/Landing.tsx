@@ -1,5 +1,5 @@
 import { Brand } from "@/components/Brand";
-import { ShaderBackdrop } from "@/components/shader/ShaderBackdrop";
+import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import {
@@ -124,7 +124,7 @@ function HeroChip({
         transition={{ duration: 0.7, ease: EASE, delay }}
       >
         <Floating distance={6} duration={6.5 + delay} delay={delay} rotate={-1.5}>
-          <div className="rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 shadow-[0_18px_34px_-26px_rgba(60,40,120,0.6)] backdrop-blur">
+          <div className="rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 shadow-[0_18px_34px_-26px_rgba(60,40,120,0.6)]">
             {children}
           </div>
         </Floating>
@@ -258,11 +258,14 @@ export default function Landing() {
   const { scrollYProgress } = useScroll();
 
   return (
-    <div className="min-h-screen bg-background text-brand-ink">
-      <header className="sticky top-0 z-50 border-b border-border bg-background">
+    <div className="min-h-screen text-brand-ink">
+      {/* One fixed chrome wash behind the whole page, so hero, gaps and
+          transparent sections all share the same metal. */}
+      <ChromeBackdrop intensity={0.85} />
+      <header className="chrome-bar sticky top-0 z-50 border-b">
         <motion.div
           aria-hidden
-          className="absolute inset-x-0 bottom-0 h-[2px] origin-left bg-[#5B3DF5]"
+          className="chrome-progress absolute inset-x-0 bottom-0 h-[2px] origin-left"
           style={{ scaleX: scrollYProgress }}
         />
         <div className="mx-auto flex h-[72px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
@@ -305,12 +308,11 @@ export default function Landing() {
         </div>
       </header>
 
-      <section className="relative overflow-hidden border-b border-border bg-background">
-        {/* Animated WebGPU wash; the CSS gradient inside is the fallback. */}
-        <ShaderBackdrop intensity={0.92} />
+      <section className="relative overflow-hidden border-b border-border">
+        {/* A single specular band across the hero, on top of the page metal. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/45 via-transparent to-background/70"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-background/55 dark:from-white/5 dark:to-black/40"
         />
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
@@ -324,7 +326,7 @@ export default function Landing() {
             </motion.div>
 
             <motion.h1
-              className="mt-5 max-w-[34rem] font-display text-[2.9rem] font-extrabold leading-[0.98] tracking-[-0.045em] sm:text-[3.7rem] lg:text-[4.1rem]"
+              className="chrome-title mt-5 max-w-[34rem] font-display text-[2.9rem] font-extrabold leading-[0.98] tracking-[-0.045em] sm:text-[3.7rem] lg:text-[4.1rem]"
               {...enter(0.12, 24)}
             >
               A page of notes becomes a{" "}
@@ -732,8 +734,7 @@ export default function Landing() {
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-        <Reveal className="relative overflow-hidden rounded-[2rem] border border-border px-6 py-9 sm:px-10 sm:py-11">
-          <ShaderBackdrop className="rounded-[2rem]" intensity={0.95} />
+        <Reveal className="chrome-hero relative overflow-hidden rounded-[2rem] px-6 py-9 sm:px-10 sm:py-11">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/55 via-white/20 to-transparent dark:from-black/50 dark:via-black/20"

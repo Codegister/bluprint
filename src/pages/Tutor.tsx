@@ -193,7 +193,7 @@ export default function TutorPage() {
     <AppShell>
       <div className="mx-auto w-full max-w-4xl">
         <motion.header
-          className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5"
+          className="chrome-bar flex items-center justify-between gap-3 border-b px-4 py-4 sm:px-5"
           {...enter(0.04, 10)}
         >
           <div className="min-w-0">

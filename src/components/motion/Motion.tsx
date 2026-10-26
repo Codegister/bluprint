@@ -41,7 +41,7 @@ export const SPRING: Transition = {
  *
  *   <motion.li {...reveal(index * 0.06)} className="...">
  */
-export function reveal(delay = 0, distance = 18): MotionProps {
+export function reveal(delay = 0, distance = 14): MotionProps {
   return {
     initial: { opacity: 0, y: distance },
     whileInView: { opacity: 1, y: 0 },
@@ -49,16 +49,18 @@ export function reveal(delay = 0, distance = 18): MotionProps {
     // taller than a phone screen, so 20% of it can never be visible at once and
     // the whole section stayed at opacity 0. Any visible sliver now reveals it.
     viewport: { once: true, amount: "some", margin: "0px 0px -24px 0px" },
-    transition: { duration: 0.58, ease: EASE, delay },
+    // Shorter travel and a slightly quicker curve: the entrance is still
+    // noticeable but it settles before the next scroll frame arrives.
+    transition: { duration: 0.5, ease: EASE, delay },
   };
 }
 
 /** Same idea, but for content that is already on screen at mount (hero/headers). */
-export function enter(delay = 0, distance = 18): MotionProps {
+export function enter(delay = 0, distance = 14): MotionProps {
   return {
     initial: { opacity: 0, y: distance },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.6, ease: EASE, delay },
+    transition: { duration: 0.5, ease: EASE, delay },
   };
 }
 
@@ -72,8 +74,8 @@ export const staggerOnMount = (gap = 0.07, delay = 0): Variants => ({
 
 /** Child variants for either stagger container. */
 export const staggerChild: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } },
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: EASE } },
 };
 
 export const staggerChildScale: Variants = {
@@ -244,11 +246,13 @@ export function Meter({
       aria-valuenow={Math.round(clamped)}
       aria-label={label}
     >
+      {/* The fill animates its transform, not its width: the bar grows without
+          the browser recomputing layout on every frame. */}
       <motion.div
-        className={cn("h-full rounded-full", barClassName)}
-        style={barStyle}
-        initial={{ width: 0 }}
-        whileInView={{ width: `${clamped}%` }}
+        className={cn("h-full origin-left rounded-full", barClassName)}
+        style={{ ...barStyle, width: `${clamped}%` }}
+        initial={{ scaleX: 0 }}
+        whileInView={{ scaleX: 1 }}
         viewport={{ once: true, amount: 0.6 }}
         transition={{ duration, ease: EASE, delay }}
       />

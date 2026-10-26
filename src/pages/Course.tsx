@@ -465,7 +465,7 @@ export default function Course() {
 
     return (
       <>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="chrome-plate flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4">
           <Link
             to="/dashboard"
             className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
