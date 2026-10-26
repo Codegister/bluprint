@@ -309,11 +309,11 @@ export default function Landing() {
       </header>
 
       <section className="relative overflow-hidden border-b border-border">
-        {/* A bold violet-to-magenta band across the hero, layered on the page
-            chrome so the gradient stays saturated instead of being washed out. */}
+        {/* A quiet violet-to-periwinkle band across the hero, layered on the
+            page chrome so it reads as a lit panel rather than a colour wash. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#8b5cff]/15 via-transparent to-[#ff9ecb]/25 dark:from-[#7c5cff]/25 dark:to-[#ff4f9a]/25"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#8b5cff]/14 via-transparent to-[#8ea2ff]/20 dark:from-[#7c5cff]/22 dark:to-[#4f63d8]/20"
         />
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
@@ -738,7 +738,7 @@ export default function Landing() {
         <Reveal className="chrome-hero relative overflow-hidden rounded-[2rem] px-6 py-9 sm:px-10 sm:py-11">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/30 via-white/5 to-[#8cc9ff]/25 dark:from-black/45 dark:via-black/10 dark:to-[#4f2bb8]/30"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/30 via-white/5 to-[#b8a8ff]/25 dark:from-black/45 dark:via-black/10 dark:to-[#3b4bb0]/30"
           />
           <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
