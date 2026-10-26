@@ -68,10 +68,10 @@
   --radius: 1rem;
 
   --brand-ink: #191a1e;
-  --brand-cream: #f7f6f2;
-  --brand-panel: #efece5;
+  --brand-cream: #f7f3fd;
+  --brand-panel: #efe8fb;
   --brand-panel-2: #ffffff;
-  --brand-void: #ffffff;
+  --brand-void: #fdfbff;
 
   --brand-pink: #6b4bff;
   --brand-pink-deep: #5636e0;
@@ -86,7 +86,7 @@
   --brand-butter: #ffe6a3;
   --brand-blush: #ffd7e6;
 
-  --background: #f7f6f2;
+  --background: #f7f3fd;
   --foreground: #191a1e;
   --card: #ffffff;
   --card-foreground: #191a1e;
@@ -94,115 +94,123 @@
   --popover-foreground: #191a1e;
   --primary: #191a1e;
   --primary-foreground: #ffffff;
-  --secondary: #efece5;
+  --secondary: #efe8fb;
   --secondary-foreground: #191a1e;
-  --muted: #efece5;
+  --muted: #efe8fb;
   --muted-foreground: #5d6070;
-  --accent: #ece7ff;
+  --accent: #e6dbff;
   --accent-foreground: #3f24b8;
   --destructive: #c33444;
-  --border: #e2ded4;
-  --input: #d9d4c8;
+  --border: #ddd3f2;
+  --input: #d3c8ec;
   --ring: #6b4bff;
   --chart-1: #7c5cff;
   --chart-2: #22a06b;
   --chart-3: #e8a317;
   --chart-4: #3b82f6;
   --chart-5: #ef5f6b;
-  --sidebar: #fbfaf7;
+  --sidebar: #faf6ff;
   --sidebar-foreground: #191a1e;
   --sidebar-primary: #191a1e;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #efece5;
+  --sidebar-accent: #efe8fb;
   --sidebar-accent-foreground: #191a1e;
-  --sidebar-border: #e7e3da;
+  --sidebar-border: #e4dbf6;
   --sidebar-ring: #6b4bff;
 
   /* -------------------------------------------------------------------------
-     Chrome metal system.
+     Iridescent chrome system.
 
-     The app is skinned like brushed metal: warm neutral silver, a soft
-     specular highlight and one slow moving reflection. These tokens are the
-     only place the metal is defined - every surface, card, heading and button
-     below is painted from them, so the theme reaches screens that were built
-     before it existed.
+     The app is skinned like coloured chrome: bold violet, magenta, cyan and
+     mint light rolling across a bright surface. The gradients are the point,
+     not a hint - these tokens are the only place they are defined, so every
+     surface, card, heading and button below is painted from them.
      ------------------------------------------------------------------------- */
   --chrome-hi: #ffffff;
-  --chrome-1: #f7f6f3;
-  --chrome-2: #edeae4;
-  --chrome-3: #dedbd4;
-  --chrome-4: #c9c6bf;
-  --chrome-steel: #a9adb8;
-  --chrome-line: rgba(25, 26, 30, 0.11);
-  --chrome-sheen: rgba(255, 255, 255, 0.92);
-  --chrome-shadow: rgba(74, 76, 86, 0.2);
+  --chrome-1: #f0eaff;
+  --chrome-2: #e4daff;
+  --chrome-3: #d2c5ff;
+  --chrome-4: #b9a8f5;
+  --chrome-steel: #8b8fb8;
+  --chrome-line: rgba(58, 36, 130, 0.18);
+  --chrome-sheen: rgba(255, 255, 255, 0.95);
+  --chrome-shadow: rgba(64, 38, 140, 0.3);
 
-  /* Page wash: silver light from the top left, a cool hint at the top right,
-     warmer metal at the bottom. No saturated colour anywhere. */
+  /* Page wash: bold violet from the top left, hot magenta at the top right,
+     cyan down the right edge and mint at the bottom, over a pastel rainbow.
+     The tints stay light enough for ink text, but they are saturated. */
   --chrome-page:
-    radial-gradient(120% 85% at 12% -12%, #ffffff 0%, transparent 58%),
-    radial-gradient(90% 70% at 96% 2%, #ecebf3 0%, transparent 60%),
-    radial-gradient(100% 80% at 50% 108%, #e6e3dc 0%, transparent 62%),
-    linear-gradient(155deg, #fbfaf8 0%, #efede8 42%, #e2dfd8 72%, #f4f2ee 100%);
+    radial-gradient(110% 78% at 4% -14%, #b79dff 0%, transparent 56%),
+    radial-gradient(80% 62% at 100% -6%, #ff9ecb 0%, transparent 58%),
+    radial-gradient(85% 65% at 96% 72%, #8fd8ff 0%, transparent 60%),
+    radial-gradient(95% 70% at 2% 106%, #8fe8c4 0%, transparent 58%),
+    linear-gradient(158deg, #e6dbff 0%, #f6e7ff 30%, #ffe9f4 56%, #e8f4ff 80%, #e7fbf1 100%);
 
-  /* Big polished panel, used by hero headers and the landing CTA. */
+  /* Big polished panel, used by hero headers and the landing CTA. Three bold
+     corner glows over a violet-to-pink-to-cyan sweep. */
   --chrome-panel:
+    radial-gradient(120% 130% at 0% 0%, #cdb7ff 0%, transparent 58%),
+    radial-gradient(110% 120% at 100% 0%, #ffadd3 0%, transparent 55%),
+    radial-gradient(120% 120% at 100% 100%, #9fd8ff 0%, transparent 58%),
     linear-gradient(
-      148deg,
-      #ffffff 0%,
-      #f4f2ed 30%,
-      #e6e3dc 62%,
-      #d8d5ce 82%,
-      #ffffff 100%
+      146deg,
+      #f3ecff 0%,
+      #dccbff 34%,
+      #ffd3e8 64%,
+      #d3e8ff 88%,
+      #fdf3e2 100%
     );
 
-  /* Translucent card wash. Transparent enough that hover background colours
-     still show through, so existing interactions keep their feedback. */
+  /* Translucent card wash. Tinted, but light enough that body copy stays
+     crisp; transparent enough that hover background colours still show
+     through, so existing interactions keep their feedback. */
   --chrome-surface:
     linear-gradient(
       152deg,
-      rgba(255, 255, 255, 0.98) 0%,
-      rgba(239, 236, 230, 0.85) 34%,
-      rgba(212, 208, 200, 0.62) 62%,
-      rgba(247, 245, 241, 0.92) 100%
+      rgba(255, 255, 255, 0.96) 0%,
+      rgba(240, 232, 255, 0.9) 32%,
+      rgba(255, 231, 245, 0.82) 58%,
+      rgba(255, 255, 255, 0.94) 100%
     );
 
-  /* The moving reflection band that makes the metal read as metal. */
+  /* The moving reflection band: bold violet, magenta, amber, mint and sky.
+     This is the loudest gradient in the app, which is what makes the surface
+     read as coloured chrome rather than flat pastel. */
   --chrome-metal:
     linear-gradient(
       106deg,
-      #f7f6f3 0%,
-      #ffffff 14%,
-      #d6d3cc 30%,
-      #f8f6f2 46%,
-      #c6c3bd 60%,
-      #ffffff 74%,
-      #dedbd5 88%,
-      #f7f6f3 100%
+      #a98cff 0%,
+      #e3d7ff 12%,
+      #ff8fc4 26%,
+      #ffd98a 42%,
+      #7fe0bb 58%,
+      #8cc9ff 74%,
+      #e0d0ff 88%,
+      #a98cff 100%
     );
 
-  /* Ink fills get a metal overlay rather than a flat colour. */
+  /* Ink fills get a violet-to-magenta chrome overlay rather than flat black. */
   --chrome-ink:
     linear-gradient(
       158deg,
-      rgba(255, 255, 255, 0.26) 0%,
-      rgba(255, 255, 255, 0.05) 32%,
-      rgba(0, 0, 0, 0.16) 60%,
-      rgba(255, 255, 255, 0.12) 100%
+      rgba(150, 120, 255, 0.42) 0%,
+      rgba(70, 45, 160, 0.18) 34%,
+      rgba(0, 0, 0, 0.22) 64%,
+      rgba(255, 140, 200, 0.22) 100%
     );
 
-  /* Metallic type for page titles. */
+  /* Gradient type for page titles: deep indigo through violet to magenta. */
   --chrome-type:
     linear-gradient(
-      178deg,
-      #14151a 0%,
-      #31353f 34%,
-      #6a7080 52%,
-      #262932 74%,
-      #121317 100%
+      175deg,
+      #2b1a78 0%,
+      #6d3ff0 30%,
+      #c22a80 58%,
+      #14659e 82%,
+      #0f1240 100%
     );
 
-  /* Brushed-metal hairlines layered over panels. */
+  /* Brushed hairlines layered over panels. */
   --chrome-brush: rgba(255, 255, 255, 0.7);
 
   color-scheme: light;
@@ -225,10 +233,10 @@
   color-scheme: dark;
 
   --brand-ink: #f8fafc;
-  --brand-cream: #050608;
-  --brand-panel: #1c2230;
-  --brand-panel-2: #10141c;
-  --brand-void: #050608;
+  --brand-cream: #07051a;
+  --brand-panel: #201a3a;
+  --brand-panel-2: #141024;
+  --brand-void: #07051a;
 
   /* Accents are brightened so they survive on a near-black page. */
   --brand-pink: #c3b2ff;
@@ -244,99 +252,106 @@
   --brand-butter: #3a2a08;
   --brand-blush: #3a1526;
 
-  --background: #050608;
+  --background: #07051a;
   --foreground: #f8fafc;
-  --card: #10141c;
+  --card: #141024;
   --card-foreground: #f8fafc;
-  --popover: #161b25;
+  --popover: #1a1430;
   --popover-foreground: #f8fafc;
   --primary: #f4f7ff;
-  --primary-foreground: #050608;
-  --secondary: #1c2230;
+  --primary-foreground: #07051a;
+  --secondary: #1e1836;
   --secondary-foreground: #f8fafc;
-  --muted: #1c2230;
+  --muted: #1e1836;
   --muted-foreground: #cbd5e4;
-  --accent: #2a2159;
+  --accent: #2c2160;
   --accent-foreground: #e2d9ff;
   --destructive: #ff6b7a;
-  --border: #4b566c;
-  --input: #5c6880;
+  --border: #4a3f70;
+  --input: #5b4f85;
   --ring: #d8ccff;
   --chart-1: #a78bfa;
   --chart-2: #6fe3ac;
   --chart-3: #ffc45c;
   --chart-4: #8fc2ff;
   --chart-5: #ff9da8;
-  --sidebar: #080a0f;
+  --sidebar: #08051a;
   --sidebar-foreground: #f8fafc;
   --sidebar-primary: #f4f7ff;
-  --sidebar-primary-foreground: #050608;
-  --sidebar-accent: #1c2230;
+  --sidebar-primary-foreground: #07051a;
+  --sidebar-accent: #1e1836;
   --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: #3a4457;
+  --sidebar-border: #3b3360;
   --sidebar-ring: #d8ccff;
 
-  /* Gunmetal counterparts of the light chrome tokens above. */
-  --chrome-hi: #414a59;
-  --chrome-1: #242b36;
-  --chrome-2: #171c25;
-  --chrome-3: #0e1219;
-  --chrome-4: #070a0e;
-  --chrome-steel: #8b97ac;
-  --chrome-line: rgba(226, 233, 245, 0.16);
-  --chrome-sheen: rgba(226, 233, 245, 0.24);
-  --chrome-shadow: rgba(0, 0, 0, 0.7);
+  /* Deep-colour counterparts of the light chrome tokens above. The palette is
+     the same, pushed to full saturation on near-black metal. */
+  --chrome-hi: #4b3a86;
+  --chrome-1: #160f2e;
+  --chrome-2: #0e0921;
+  --chrome-3: #070514;
+  --chrome-4: #03020a;
+  --chrome-steel: #a397e6;
+  --chrome-line: rgba(196, 180, 255, 0.2);
+  --chrome-sheen: rgba(214, 200, 255, 0.26);
+  --chrome-shadow: rgba(0, 0, 0, 0.75);
 
+  /* Electric violet top left, magenta top right, cyan and emerald glows at the
+     bottom, over a near-black indigo base. */
   --chrome-page:
-    radial-gradient(120% 85% at 10% -10%, #2c3440 0%, transparent 60%),
-    radial-gradient(90% 70% at 96% 0%, #1b2130 0%, transparent 62%),
-    linear-gradient(158deg, #141922 0%, #0a0d12 52%, #05070a 100%);
+    radial-gradient(110% 82% at 6% -12%, #4a1fb0 0%, transparent 58%),
+    radial-gradient(78% 62% at 100% -6%, #a3115f 0%, transparent 60%),
+    radial-gradient(85% 70% at 92% 74%, #0e5f8a 0%, transparent 60%),
+    radial-gradient(90% 70% at 0% 104%, #0b5c46 0%, transparent 58%),
+    linear-gradient(158deg, #1a0f3d 0%, #0d0a24 52%, #04050c 100%);
 
   --chrome-panel:
+    radial-gradient(130% 130% at 0% 0%, #4f2bb8 0%, transparent 58%),
+    radial-gradient(120% 120% at 100% 0%, #8c1150 0%, transparent 56%),
     linear-gradient(
       148deg,
-      #333b48 0%,
-      #232a35 34%,
-      #141922 68%,
-      #0a0d13 100%
+      #2a1866 0%,
+      #3a1d63 34%,
+      #1a1236 70%,
+      #090713 100%
     );
 
   --chrome-surface:
     linear-gradient(
       152deg,
-      rgba(132, 148, 172, 0.24) 0%,
-      rgba(20, 25, 33, 0.32) 42%,
-      rgba(0, 0, 0, 0.5) 100%
+      rgba(92, 70, 168, 0.55) 0%,
+      rgba(35, 26, 66, 0.72) 40%,
+      rgba(8, 7, 18, 0.88) 100%
     );
 
   --chrome-metal:
     linear-gradient(
       106deg,
-      #232a35 0%,
-      #4a5464 14%,
-      #151a22 32%,
-      #333b47 50%,
-      #0d1117 64%,
-      #3c4553 80%,
-      #171d25 100%
+      #2a1668 0%,
+      #6f45ff 14%,
+      #1b0d3d 32%,
+      #b5166f 50%,
+      #0c0a26 64%,
+      #117f8e 80%,
+      #2a1668 100%
     );
 
   --chrome-ink:
     linear-gradient(
       158deg,
-      rgba(255, 255, 255, 0.5) 0%,
-      rgba(255, 255, 255, 0.12) 34%,
-      rgba(0, 0, 0, 0.12) 66%,
-      rgba(255, 255, 255, 0.3) 100%
+      rgba(255, 255, 255, 0.55) 0%,
+      rgba(255, 255, 255, 0.15) 34%,
+      rgba(120, 90, 220, 0.12) 66%,
+      rgba(255, 255, 255, 0.35) 100%
     );
 
   --chrome-type:
     linear-gradient(
-      178deg,
+      174deg,
       #ffffff 0%,
-      #e4ebf6 34%,
-      #97a3b6 54%,
-      #eef4ff 76%,
+      #d6c6ff 28%,
+      #ff9ecb 58%,
+      #9be3ff 82%,
       #ffffff 100%
     );
 
@@ -431,7 +446,7 @@
     position: absolute;
     inset: -22%;
     background-image: var(--chrome-metal);
-    opacity: calc(var(--chrome-intensity, 1) * 0.4);
+    opacity: calc(var(--chrome-intensity, 1) * 0.48);
     transform: translate3d(-2%, -1%, 0) rotate(-7deg) scale(1.04);
     animation: chrome-drift 26s ease-in-out infinite alternate;
     will-change: transform;
@@ -452,7 +467,7 @@
       rgba(255, 255, 255, 0.45) 58%,
       transparent 100%
     );
-    opacity: calc(var(--chrome-intensity, 1) * 0.5);
+    opacity: calc(var(--chrome-intensity, 1) * 0.62);
     transform: translate3d(-120%, 0, 0) skewX(-12deg);
     animation: chrome-sweep-page 18s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
     will-change: transform;
@@ -467,7 +482,12 @@
       var(--chrome-brush) 0 1px,
       transparent 1px 5px
     );
-    opacity: 0.4;
+    /* Quiet enough that the colour underneath still reads. */
+    opacity: 0.22;
+  }
+
+  .dark .chrome-backdrop-metal {
+    opacity: calc(var(--chrome-intensity, 1) * 0.6);
   }
 
   .dark .chrome-backdrop-sweep {
@@ -547,12 +567,22 @@
   /* Reading progress along the top of the app: polished metal rather than a
      flat accent line. */
   .chrome-progress {
-    background-color: var(--brand-ink);
+    background-color: #6b4bff;
     background-image: linear-gradient(
       90deg,
-      var(--brand-ink) 0%,
-      var(--chrome-steel) 55%,
-      var(--chrome-hi) 100%
+      #6b4bff 0%,
+      #ff5fa8 42%,
+      #ffb547 74%,
+      #22b8a6 100%
+    );
+  }
+  .dark .chrome-progress {
+    background-image: linear-gradient(
+      90deg,
+      #8b5cff 0%,
+      #ff6fb8 42%,
+      #ffc45c 74%,
+      #45e0c8 100%
     );
   }
 
@@ -561,18 +591,18 @@
     background-color: var(--chrome-1);
     background-image: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.9) 0%,
-      rgba(240, 238, 233, 0.82) 55%,
-      rgba(226, 223, 216, 0.86) 100%
+      rgba(255, 255, 255, 0.88) 0%,
+      rgba(240, 232, 255, 0.82) 48%,
+      rgba(255, 231, 245, 0.84) 100%
     );
     border-color: var(--chrome-line);
   }
   .dark .chrome-bar {
     background-image: linear-gradient(
       180deg,
-      rgba(52, 61, 74, 0.9) 0%,
-      rgba(27, 33, 43, 0.92) 55%,
-      rgba(12, 16, 22, 0.96) 100%
+      rgba(66, 48, 124, 0.92) 0%,
+      rgba(28, 20, 56, 0.94) 55%,
+      rgba(10, 8, 22, 0.96) 100%
     );
   }
 
@@ -581,18 +611,18 @@
     background-color: var(--chrome-1);
     background-image: linear-gradient(
       165deg,
-      rgba(255, 255, 255, 0.95) 0%,
-      rgba(239, 237, 232, 0.9) 46%,
-      rgba(222, 219, 212, 0.9) 100%
+      rgba(255, 255, 255, 0.94) 0%,
+      rgba(238, 230, 255, 0.92) 46%,
+      rgba(255, 228, 244, 0.9) 100%
     );
     box-shadow: inset -1px 0 0 var(--chrome-line);
   }
   .dark .chrome-rail {
     background-image: linear-gradient(
       165deg,
-      rgba(44, 52, 64, 0.92) 0%,
-      rgba(23, 28, 37, 0.94) 46%,
-      rgba(9, 12, 17, 0.96) 100%
+      rgba(56, 38, 110, 0.94) 0%,
+      rgba(24, 17, 50, 0.95) 46%,
+      rgba(8, 6, 18, 0.97) 100%
     );
   }
 

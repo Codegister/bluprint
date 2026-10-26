@@ -309,10 +309,11 @@ export default function Landing() {
       </header>
 
       <section className="relative overflow-hidden border-b border-border">
-        {/* A single specular band across the hero, on top of the page metal. */}
+        {/* A bold violet-to-magenta band across the hero, layered on the page
+            chrome so the gradient stays saturated instead of being washed out. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-background/55 dark:from-white/5 dark:to-black/40"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#8b5cff]/15 via-transparent to-[#ff9ecb]/25 dark:from-[#7c5cff]/25 dark:to-[#ff4f9a]/25"
         />
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
@@ -737,7 +738,7 @@ export default function Landing() {
         <Reveal className="chrome-hero relative overflow-hidden rounded-[2rem] px-6 py-9 sm:px-10 sm:py-11">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/55 via-white/20 to-transparent dark:from-black/50 dark:via-black/20"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/30 via-white/5 to-[#8cc9ff]/25 dark:from-black/45 dark:via-black/10 dark:to-[#4f2bb8]/30"
           />
           <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
