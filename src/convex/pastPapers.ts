@@ -31,6 +31,7 @@ const STALE_MS = 10 * 60 * 1000;
 const generatedQuestion = v.object({
   question: v.string(),
   marks: v.number(),
+  marking: v.optional(v.union(v.literal("points"), v.literal("levels"))),
   modelAnswer: v.string(),
   markingGuide: v.array(v.string()),
   // The board's layout, written by the paper generator. Optional so the shape
@@ -299,6 +300,7 @@ export const completeBuild = internalMutation({
         userId: paper.userId,
         question: question.question,
         marks: question.marks,
+        marking: question.marking,
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
         order: index,
@@ -357,7 +359,7 @@ export const saveQuestionResult = internalMutation({
 
     const now = Date.now();
     await ctx.db.patch(questionId, {
-      userAnswer: answer.slice(0, 5000),
+      userAnswer: answer.slice(0, 12000),
       awardedMarks: Math.max(0, Math.min(question.marks, Math.round(awardedMarks))),
       feedback: feedback.slice(0, 4000),
       gradedAt: now,

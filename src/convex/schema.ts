@@ -218,6 +218,9 @@ const schema = defineSchema(
       userId: v.id("users"),
       question: v.string(),
       marks: v.number(),
+      // Point-marked questions have one bullet per mark; levels-marked
+      // questions (essays and extended responses) have level descriptors.
+      marking: v.optional(v.union(v.literal("points"), v.literal("levels"))),
       modelAnswer: v.string(),
       markingGuide: v.array(v.string()),
       order: v.number(),
@@ -235,47 +238,6 @@ const schema = defineSchema(
       feedback: v.optional(v.string()),
       gradedAt: v.optional(v.number()),
     }).index("by_paper", ["paperId"]),
-
-    // Cognito's published past-paper index for one course, shared by everyone
-    // studying that course. Read once and kept, so the same course always shows
-    // the same papers and Cognito is only visited again when the index is old.
-    // The entries point at the official PDFs; exam board papers and mark
-    // schemes are the boards' copyright, so none of them are stored here.
-    cognitoPaperIndexes: defineTable({
-      // Course signature: subject|level|examBoard|variant|tier.
-      key: v.string(),
-      label: v.string(),
-      sourceUrl: v.string(),
-      description: v.optional(v.string()),
-      status: v.union(
-        v.literal("queued"),
-        v.literal("processing"),
-        v.literal("ready"),
-        v.literal("error"),
-      ),
-      errorMessage: v.optional(v.string()),
-      processingStartedAt: v.optional(v.number()),
-      fetchedAt: v.optional(v.number()),
-      // Real board papers by exam series, newest first as Cognito lists them.
-      byYear: v.array(
-        v.object({
-          label: v.string(),
-          year: v.optional(v.string()),
-          specification: v.optional(v.string()),
-          questionPaperUrl: v.string(),
-          markSchemeUrl: v.optional(v.string()),
-        }),
-      ),
-      // The same archive's past-paper questions, grouped by specification topic.
-      byTopic: v.array(
-        v.object({
-          topic: v.string(),
-          unit: v.optional(v.string()),
-          questionPaperUrl: v.string(),
-          markSchemeUrl: v.optional(v.string()),
-        }),
-      ),
-    }).index("by_key", ["key"]),
 
     // One saved revision timetable per account. Dates are UTC calendar keys
     // (YYYY-MM-DD) so a plan renders the same day regardless of server timezone.

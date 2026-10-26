@@ -121,7 +121,7 @@ export default function PastPaper() {
             <span className="font-semibold text-brand-ink">
               {paper.questionCount}
             </span>{" "}
-            questions
+            question{paper.questionCount === 1 ? "" : "s"}
           </span>
           <span aria-hidden>·</span>
           <span>
@@ -204,10 +204,10 @@ export default function PastPaper() {
 
         <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
           Written from the saved specification for this course and laid out in this
-          board's paper format — same cover rubric, numbering, mark notation and
-          command words. Published board papers and mark schemes are copyrighted,
-          so the questions are original and never reproduced from a real paper.
-          Your course page also links the real board papers.
+          subject's paper format — same question types and marks, cover rubric,
+          numbering, mark notation and command words. Published board papers and
+          mark schemes are copyrighted, so the questions are original and never
+          reproduced from a real paper.
         </p>
       </>
     );

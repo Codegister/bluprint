@@ -1,5 +1,4 @@
 import { AppShell } from "@/components/AppShell";
-import { CognitoPaperLibrary } from "@/components/study/CognitoPaperLibrary";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
 import {
   AlertDialog,
@@ -14,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
 import { readableError } from "@/lib/errors";
 import { percent, relativeDate } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
@@ -482,10 +482,10 @@ export default function Course() {
               </p>
             </section>
 
-            {/* The real board papers first, then the AI practice papers. */}
-            <CognitoPaperLibrary courseId={course._id} />
-
-            <CoursePastPapers courseId={course._id} />
+            <CoursePastPapers
+              courseId={course._id}
+              formatSummary={buildPaperBlueprint(course).summary}
+            />
 
             {nextTopic && (
               <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-[#D8CCFF] bg-[#FAF8FF] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">

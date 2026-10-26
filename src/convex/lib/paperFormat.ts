@@ -8,12 +8,9 @@
  *
  * This module encodes those conventions so a generated practice paper is laid
  * out the way the real paper is — same cover wording, same numbering, same
- * "(4 marks)" notation, same advice lines. It also builds a short format
- * exemplar that is handed to the model as the layout to imitate. That exemplar
- * is how the paper is trained on the shape of real papers without reproducing
- * any of their questions: published papers and mark schemes are copyrighted, so
- * only structure is ever copied into a prompt, never a question or a mark
- * scheme point.
+ * "(4 marks)" notation, same advice lines. The questions inside it come from
+ * the subject blueprint in `paperBlueprint.ts`, which fixes the real question
+ * types and marks; this module only fixes the document's layout.
  *
  * The cover is built here on the server rather than by the model so the rubric
  * is exact and identical every time a paper is rebuilt.

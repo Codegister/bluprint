@@ -29,8 +29,11 @@ import { toast } from "sonner";
  */
 export function CoursePastPapers({
   courseId,
+  formatSummary,
 }: {
   courseId: Id<"courses">;
+  /** The subject's real question structure, e.g. "4 questions · 3, 4, 5 and 12 marks". */
+  formatSummary?: string;
 }) {
   const navigate = useNavigate();
   const papers = useQuery(api.pastPapers.listForCourse, { courseId });
@@ -87,10 +90,15 @@ export function CoursePastPapers({
             Practise under exam conditions
           </h2>
           <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
-            A whole paper written from this specification, with a mark scheme for
-            every question. Each paper is saved once, so it is the same paper every
-            time you open it, and it fills a one-hour session in your timetable.
+            A paper written in this subject's real question format, with a mark
+            scheme for every question. Each paper is saved once, so it is the same
+            paper every time you open it, and it can be scheduled in your timetable.
           </p>
+          {formatSummary && (
+            <p className="mt-2 inline-flex rounded-full bg-[#F1F0FB] px-3 py-1 text-[0.7rem] font-semibold text-[#5B3DF5]">
+              {formatSummary}
+            </p>
+          )}
         </div>
         <Button
           type="button"
@@ -121,8 +129,9 @@ export function CoursePastPapers({
             No past papers yet
           </p>
           <p className="mx-auto mt-1 max-w-md text-[0.8rem] leading-relaxed text-muted-foreground">
-            Build one to see exam-style questions in this course's command words,
-            answer them in full sentences, and get each marked against the guide.
+            Build one to see the question types and marks this subject uses,
+            answer them under exam conditions, and get each marked against the
+            guide.
           </p>
         </div>
       ) : (
@@ -164,7 +173,7 @@ export function CoursePastPapers({
                   </div>
                   <p className="mt-1 text-[0.74rem] leading-relaxed text-muted-foreground">
                     {ready
-                      ? `${paper.questionCount} questions · ${paper.totalMarks} marks · about ${paper.durationMinutes} minutes`
+                      ? `${paper.questionCount} question${paper.questionCount === 1 ? "" : "s"} · ${paper.totalMarks} marks · about ${paper.durationMinutes} minutes`
                       : paper.status === "error"
                         ? paper.errorMessage ?? "This paper could not be built."
                         : paper.progress ?? "Waiting to start"}
@@ -213,7 +222,8 @@ export function CoursePastPapers({
 
       <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
         Original questions written for this specification — not reproduced board
-        papers. Always check the official paper structure with your teacher.
+        papers. Marks and question types follow this subject's current paper
+        format; always check the structure with your teacher.
       </p>
 
       <AlertDialog

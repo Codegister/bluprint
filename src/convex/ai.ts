@@ -33,11 +33,12 @@ import {
   NVIDIA_VISION_MODEL,
   readNvidiaKeys,
 } from "./lib/nvidiaConfig";
+import { buildPaperCover } from "./lib/paperFormat";
 import {
-  buildPaperCover,
-  paperFormatBrief,
-  type PaperQualification,
-} from "./lib/paperFormat";
+  buildPaperBlueprint,
+  flattenPaperBlueprint,
+  type PaperBlueprint,
+} from "./lib/paperBlueprint";
 
 
 type TextPart = { type: "text"; text: string };
@@ -66,6 +67,8 @@ type GeneratedExam = {
   marks: number;
   modelAnswer: string;
   markingGuide: string[];
+  /** Set for past papers: whether the answer is marked by points or levels. */
+  marking?: "points" | "levels";
   // Past papers only: the label the board prints ("1 (a)", "0 1 . 1"), the
   // section the question sits in, the command word it opens with, and the
   // specification reference it tests. Study-set exam questions leave these
@@ -570,19 +573,19 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
   for (const item of items) {
     const row = item as Partial<GeneratedExam>;
     const question = asText(row.question, 800);
-    const modelAnswer = asText(row.modelAnswer, 2500);
+    const modelAnswer = asText(row.modelAnswer, 6000);
     const marks = Math.round(Number(row.marks));
-    // A 12-mark extended response needs up to twelve creditable points, so the
-    // cap is high enough for a complete mark scheme to survive intact.
+    // A 40-mark English essay needs a full model essay and a levels-based mark
+    // scheme, so both caps are high enough for a whole paper question.
     const markingGuide = Array.isArray(row.markingGuide)
-      ? row.markingGuide.map((point) => asText(point, 400)).filter(Boolean).slice(0, 14)
+      ? row.markingGuide.map((point) => asText(point, 600)).filter(Boolean).slice(0, 20)
       : [];
     if (
       question &&
       modelAnswer &&
       Number.isFinite(marks) &&
       marks >= 1 &&
-      marks <= 12 &&
+      marks <= 60 &&
       markingGuide.length > 0
     ) {
       questions.push({
@@ -1001,16 +1004,6 @@ async function generateExams(
 // Past papers
 // ---------------------------------------------------------------------------
 
-/**
- * A one-hour practice paper. Real papers run longer (AQA GCSE Biology Paper 1 is
- * 100 marks in 1 hour 45), but every paper in Bluprint fills a one-hour slot in
- * the revision timetable, so a practice paper matches that length and prints a
- * one-hour time allowance on its cover.
- */
-const PAPER_QUESTION_COUNT = 10;
-/** What the paper aims for, so the cover's "advised time per mark" is right. */
-const PAPER_TARGET_MARKS = 60;
-
 /** The course fields a paper needs. The rest of the doc is not sent anywhere. */
 type PaperCourse = {
   subject: string;
@@ -1019,6 +1012,9 @@ type PaperCourse = {
   tier?: string;
   variant?: string;
   poetryTheme?: string;
+  rsRoute?: string;
+  rsReligion?: string;
+  rsReligion2?: string;
   pathway?: {
     units: Array<{
       title: string;
@@ -1046,17 +1042,85 @@ function specificationDigest(course: PaperCourse): string {
 }
 
 /**
+ * The blueprint as prompt text: every question the paper must contain, in the
+ * board's numbering, with its marks and its command word. This is what stops
+ * the model turning an English essay paper into short-answer questions.
+ */
+function blueprintBrief(blueprint: PaperBlueprint): string {
+  const slots = flattenPaperBlueprint(blueprint);
+  const lines = [
+    "PAPER FORMAT — this is the subject's real question structure. Follow it exactly.",
+    `Total: ${slots.length} questions, ${blueprint.totalMarks} marks.`,
+  ];
+  let currentSection = "";
+  for (const slot of slots) {
+    if (slot.section !== currentSection) {
+      currentSection = slot.section;
+      lines.push("", `## ${slot.section}`, slot.sectionInstruction);
+    }
+    lines.push(
+      `${slot.label} — ${slot.marks} mark${slot.marks === 1 ? "" : "s"} — command word: ${slot.command} — ${slot.marking === "levels" ? "levels-marked" : "point-marked"}`,
+      `  ${slot.ask}`,
+    );
+  }
+  lines.push("", "FORMAT RULES", ...blueprint.rules.map((rule) => `- ${rule}`));
+  return lines.join("\n");
+}
+
+/** The first way a parsed paper differs from its blueprint, or null if it fits. */
+function blueprintMismatch(
+  questions: GeneratedExam[],
+  blueprint: PaperBlueprint,
+): string | null {
+  const slots = flattenPaperBlueprint(blueprint);
+  if (questions.length !== slots.length) {
+    return `The paper must have exactly ${slots.length} questions; this reply had ${questions.length}.`;
+  }
+  for (const [index, slot] of slots.entries()) {
+    if (questions[index]?.marks !== slot.marks) {
+      return `Question ${slot.label} must be worth ${slot.marks} marks; this reply made it ${questions[index]?.marks ?? "unmarked"}.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Writes the questions in the blueprint's order, but keeps the blueprint's
+ * labels, sections, marks and marking style. Those are the parts a student can
+ * see, so they must be exact even if the model rounds a mark or forgets a label.
+ */
+function applyBlueprint(
+  questions: GeneratedExam[],
+  blueprint: PaperBlueprint,
+): GeneratedExam[] {
+  const slots = flattenPaperBlueprint(blueprint);
+  return questions.map((question, index) => {
+    const slot = slots[index]!;
+    return {
+      ...question,
+      marks: slot.marks,
+      marking: slot.marking,
+      label: slot.label,
+      section: slot.section,
+      sectionInstruction: slot.sectionInstruction,
+      commandWord: slot.command,
+    };
+  });
+}
+
+/**
  * Writes one full practice paper from the saved pathway. The questions are
  * original — published papers and mark schemes are copyrighted — but the
- * command words, question order and marking style follow the board's papers.
+ * subject's real question types, marks, command words and marking style are
+ * fixed by the blueprint.
  */
 async function generatePaperQuestions(
   apiKeys: string[],
   course: PaperCourse,
   paperTitle: string,
-  durationMinutes: number,
-  target = PAPER_QUESTION_COUNT,
 ): Promise<GeneratedExam[]> {
+  const blueprint = buildPaperBlueprint(course);
+  const slots = flattenPaperBlueprint(blueprint);
   const qualification = qualificationText({
     course: course.subject,
     examBoard: course.examBoard,
@@ -1066,64 +1130,68 @@ async function generatePaperQuestions(
     .filter((part): part is string => Boolean(part))
     .join(" · ");
   const digest = specificationDigest(course);
-  const paperQualification: PaperQualification = {
-    subject: course.subject,
-    level: course.level,
-    examBoard: course.examBoard,
-    tier: course.tier,
-    variant: course.variant,
-    poetryTheme: course.poetryTheme,
-  };
-  // The exemplar is the layout the model is asked to imitate. It is built with
-  // the target mark total; the cover stored with the finished paper is rebuilt
-  // from the marks the paper actually carries.
-  const formatBrief = paperFormatBrief(
-    paperQualification,
-    buildPaperCover(
-      paperQualification,
-      paperTitle,
-      PAPER_TARGET_MARKS,
-      durationMinutes,
-    ),
-  );
+  const hasPoints = slots.some((slot) => slot.marking === "points");
+  const hasLevels = slots.some((slot) => slot.marking === "levels");
+  const schemeNotes = [
+    hasPoints
+      ? `For point-marked questions: ${markSchemeStyle(course.examBoard)}`
+      : "",
+    hasLevels
+      ? "Levels-marked questions use level descriptors with mark ranges, not one mark per bullet."
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-  const raw = await nvidiaChat(apiKeys, {
-    model: NVIDIA_TEXT_MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content:
-          `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
-          `<specification>\n${digest}\n</specification>\n\n` +
-          `${formatBrief}\n\n` +
-          `Write one complete practice paper titled "${paperTitle}" for this qualification, using only the specification above. ` +
-          `Write ${target} original exam-style questions totalling about ${PAPER_TARGET_MARKS} marks, in specification order. ` +
-          "Include short recall questions (1-2 marks), explain questions (4-6 marks), and at least one extended response (8-12 marks). " +
-          "Use this board's command words exactly, and make every question unambiguous and answerable from the specification. " +
-          "Do not copy or paraphrase a published past paper, and do not repeat a question. " +
-          "Each question needs a full-mark model answer and a marking guide written the way the board writes it: " +
-          "one bullet per mark, with examiner wording such as '1 mark: states that …', and the bullets adding up to the marks available. " +
-          `${markSchemeStyle(course.examBoard)} ` +          'Return JSON exactly like: {"questions":[{"label":"1 (a)","section":"Section A","sectionInstruction":"Answer all questions in this section.","commandWord":"Describe","specReference":"4.1.1","question":"...","marks":4,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
+  const basePrompt =
+    `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
+    `<specification>\n${digest}\n</specification>\n\n` +
+    `${blueprintBrief(blueprint)}\n\n` +
+    `Write one complete practice paper titled "${paperTitle}" for this qualification, using only the specification above. ` +
+    `Write exactly ${slots.length} original exam-style question${slots.length === 1 ? "" : "s"} totalling ${blueprint.totalMarks} marks. ` +
+    "Do not add, remove, reorder or re-mark a question: the paper format above is fixed. " +
+    "Make every question unambiguous and answerable from the specification, and do not copy or paraphrase a published past paper. " +
+    "Each question needs a full-mark model answer and a marking guide written the way the board writes it. " +
+    `${schemeNotes} ` +
+    `Return JSON exactly like: {"questions":[{"question":"...","marks":${slots[0]?.marks ?? 3},"modelAnswer":"...","markingGuide":["the mark scheme"],"commandWord":"Outline","specReference":"1.1"}]}`;
+
+  let mismatch = "";
+  // One retry is enough to recover a reply that drifted from the format, and
+  // costs a second call only when the first paper is unusable.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const raw = await nvidiaChat(apiKeys, {
+      model: NVIDIA_TEXT_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content:
+            basePrompt +
+            (attempt > 0
+              ? `\n\nFORMAT CORRECTION: the previous reply did not match the paper format. ${mismatch} Rewrite the complete paper with exactly the questions, marks and order listed above.`
+              : ""),
         },
       ],
       maxTokens: 14000,
-    temperature: 0.2,
-    topP: 1.0,
-    disableThinking: true,
-    // A whole paper with model answers and mark schemes is a long reply.
-    timeoutMs: 240_000,
-  });
+      temperature: attempt === 0 ? 0.2 : 0.1,
+      topP: 1.0,
+      disableThinking: true,
+      // A whole paper with model answers and mark schemes is a long reply.
+      timeoutMs: 240_000,
+    });
 
-  // The paper uses the same validated question shape as a study set's exam
-  // questions, so one parser keeps both honest.
-  const questions = parseExams(raw, target);
-  if (questions.length < 3) {
-    throw new Error(
-      "NVIDIA did not return enough usable questions to make a paper. Try building it again.",
-    );
+    // The paper uses the same validated question shape as a study set's exam
+    // questions, so one parser keeps both honest. Parse more than the blueprint
+    // expects so an extra question is caught as a mismatch instead of being
+    // silently sliced off.
+    const questions = parseExams(raw, slots.length + 4);
+    mismatch = blueprintMismatch(questions, blueprint) ?? "";
+    if (!mismatch) return applyBlueprint(questions, blueprint);
   }
-  return questions;
+
+  throw new Error(
+    `NVIDIA returned a paper that did not match the ${blueprint.summary} format. Try building it again.`,
+  );
 }
 
 /** Builds one saved past paper for a course. Scheduled by `pastPapers.create`. */
@@ -1148,7 +1216,6 @@ export const buildPastPaper = internalAction({
         apiKeys,
         course,
         paper.title,
-        paper.durationMinutes,
       );
       // The cover is built from the marks the paper actually carries, so the
       // total it prints is the total the student can score.
@@ -1198,9 +1265,6 @@ export const gradePastPaperAnswer = action({
   ): Promise<{ awardedMarks: number; marks: number; feedback: string }> => {
     const userId = await requireUserId(ctx);
     const response = answer.trim();
-    if (response.length < 15) {
-      throw new Error("Write a fuller answer before sending it for grading.");
-    }
 
     const data = await ctx.runQuery(
       internal.pastPapers.getQuestionForGrading,
@@ -1208,6 +1272,13 @@ export const gradePastPaperAnswer = action({
     );
     if (!data || data.paper.userId !== userId) {
       throw new Error("Past paper question not found.");
+    }
+
+    // A one-mark multiple-choice question can be answered with a single letter;
+    // every longer question needs a real answer before an examiner can mark it.
+    const minimum = data.question.marks <= 2 ? 1 : 15;
+    if (response.length < minimum) {
+      throw new Error("Write a fuller answer before sending it for grading.");
     }
 
     const course = await ctx.runQuery(internal.courses.getForBuild, {
@@ -1225,6 +1296,10 @@ export const gradePastPaperAnswer = action({
             level: course.level,
           }
         : undefined,
+      // Older papers predate the stored marking flag; long answers were always
+      // meant to be levels-marked, so fall back to their length.
+      data.question.marking ??
+        (data.question.marks >= 12 ? "levels" : "points"),
     );
 
     await ctx.runMutation(internal.pastPapers.saveQuestionResult, {
@@ -1955,7 +2030,7 @@ export const processStudySet = action({
  * examiner would defend, not an encouraging estimate.
  */
 const EXAMINER_SYSTEM_PROMPT =
-  "You are a senior examiner marking a written exam answer against an official past-paper mark scheme. " +
+  "You are a senior examiner marking a written exam answer against the mark scheme provided. " +
   "You are rigorous and ungenerous: a mark is only earned by evidence in the answer. " +
   "Answer with strict JSON only, no markdown fences, no commentary.";
 
@@ -1986,9 +2061,34 @@ const EXAMINER_OUTPUT_SHAPE =
 type PointCheck = { point: string; marks: number; awarded: number };
 
 /**
+ * Levels marking is how essays and long responses are assessed: the examiner
+ * chooses the highest level the whole answer consistently reaches, then a mark
+ * inside that band. It cannot be reduced to one mark per bullet.
+ */
+function levelsExaminerRules(marksAvailable: number): string {
+  return (
+    "MARK EXACTLY AS A REAL EXAMINER WOULD:\n" +
+    "1. Read the whole answer before choosing a level. Use the level descriptors as the mark scheme.\n" +
+    "2. Choose the highest level the answer consistently reaches. One good sentence does not lift an otherwise weak answer into the next level;\n" +
+    "a whole answer that meets the descriptors does not stay in the level below because it is short.\n" +
+    "3. Choose a mark inside the level: the top of the band when the answer meets every descriptor, the bottom when it only just meets them.\n" +
+    "4. Judge the whole essay: argument, analysis of the writer's methods or the evidence, use of supporting detail, and technical accuracy where the board assesses it.\n" +
+    "5. Do not reward length, effort, confidence or a list of facts that does not answer the question.\n" +
+    `6. Award whole marks only, between 0 and ${marksAvailable}. Never exceed the level's upper mark.\n` +
+    "7. The feedback must name the level awarded, what lifted the answer, and the single change that would move it into the next level. No praise, no encouragement."
+  );
+}
+
+const LEVELS_OUTPUT_SHAPE =
+  'Return JSON exactly like: {"level":3,"awardedMarks":14,"feedback":"terse examiner note"}. ' +
+  "awardedMarks must sit inside the level's mark range and must not exceed the marks available. " +
+  "The feedback is at most 110 words.";
+
+/**
  * Sends one answer to NVIDIA for marking and reconciles the model's totals with
- * its own point ledger. The ledger acts as a ceiling: an answer cannot be
- * awarded more marks than the credits it can point to.
+ * its own point ledger (for point-marked questions) or its chosen level (for
+ * essays). The ledger acts as a ceiling: an answer cannot be awarded more marks
+ * than the credits it can point to.
  */
 async function markExamAnswer(
   apiKeys: string[],
@@ -2000,29 +2100,39 @@ async function markExamAnswer(
   },
   response: string,
   context?: StudyContext,
+  marking: "points" | "levels" = "points",
 ): Promise<{ awardedMarks: number; feedback: string }> {
   const qualification = qualificationText(context);
+  const levels = marking === "levels";
   const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
       { role: "system", content: EXAMINER_SYSTEM_PROMPT },
       {
         role: "user",
-        content:
-          `<qualification>${qualification || "Not specified"}</qualification>\n` +
-          `<question>${exam.question}</question>\n` +
-          `<marks_available>${exam.marks}</marks_available>\n` +
-          `<marking_guide>\n${exam.markingGuide.join("\n")}\n</marking_guide>\n` +
-          `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
-          `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
-          `${examinerRules(exam.marks)}\n\n` +
-          `BOARD CONVENTIONS — apply these when deciding whether a point is creditable:\n${markSchemeStyle(context?.examBoard)}\n\n` +
-          EXAMINER_OUTPUT_SHAPE,
+        content: levels
+          ? `<qualification>${qualification || "Not specified"}</qualification>\n` +
+            `<question>${exam.question}</question>\n` +
+            `<marks_available>${exam.marks}</marks_available>\n` +
+            `<level_descriptors>\n${exam.markingGuide.join("\n")}\n</level_descriptors>\n` +
+            `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
+            `<student_answer>${response.slice(0, 8000)}</student_answer>\n\n` +
+            `${levelsExaminerRules(exam.marks)}\n\n` +
+            LEVELS_OUTPUT_SHAPE
+          : `<qualification>${qualification || "Not specified"}</qualification>\n` +
+            `<question>${exam.question}</question>\n` +
+            `<marks_available>${exam.marks}</marks_available>\n` +
+            `<marking_guide>\n${exam.markingGuide.join("\n")}\n</marking_guide>\n` +
+            `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
+            `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
+            `${examinerRules(exam.marks)}\n\n` +
+            `BOARD CONVENTIONS — apply these when deciding whether a point is creditable:\n${markSchemeStyle(context?.examBoard)}\n\n` +
+            EXAMINER_OUTPUT_SHAPE,
       },
     ],
     // Point-by-point marking plus the note needs more room than a bare score,
     // and a decisive temperature keeps the same answer scoring the same way.
-    maxTokens: 1400,
+    maxTokens: levels ? 2000 : 1400,
     temperature: 0,
     disableThinking: true,
   });
@@ -2030,8 +2140,21 @@ async function markExamAnswer(
   const parsed = parseModelJson<{
     awardedMarks?: number;
     feedback?: string;
+    level?: number;
     pointChecks?: unknown;
   }>(raw);
+
+  if (levels) {
+    const awarded = Math.round(Number(parsed.awardedMarks));
+    const feedback = asText(parsed.feedback, 2500);
+    if (!Number.isFinite(awarded) || !feedback) {
+      throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
+    }
+    return {
+      awardedMarks: Math.max(0, Math.min(exam.marks, awarded)),
+      feedback,
+    };
+  }
 
   const checks: PointCheck[] = Array.isArray(parsed.pointChecks)
     ? parsed.pointChecks

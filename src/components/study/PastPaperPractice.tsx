@@ -80,10 +80,17 @@ export function PastPaperPractice({
 
   const handleMark = async (question: PaperQuestion) => {
     const answer = (answers[question._id] ?? "").trim();
-    if (answer.length < 15) {
+    // An essay needs a few sentences before an examiner can place it in a
+    // level, and a one-mark multiple-choice question can be answered with a
+    // single letter.
+    const minimum = question.marks >= 20 ? 120 : question.marks <= 2 ? 1 : 15;
+    if (answer.length < minimum) {
       setErrors((current) => ({
         ...current,
-        [question._id]: "Write a fuller answer before sending it for grading.",
+        [question._id]:
+          minimum > 15
+            ? "Write a few sentences before sending this essay for marking."
+            : "Write a fuller answer before sending it for grading.",
       }));
       return;
     }
@@ -147,6 +154,14 @@ export function PastPaperPractice({
             const scorePercent = question.marks
               ? Math.round((score / question.marks) * 100)
               : 0;
+            const wordCount = answer.trim()
+              ? answer.trim().split(/\s+/).length
+              : 0;
+            // Essays and long responses need a bigger box and essay guidance;
+            // a short-answer question keeps the compact layout.
+            const isEssay = question.marking === "levels" && question.marks >= 20;
+            const isExtended =
+              question.marking === "levels" || question.marks >= 12;
             const totalLine = questionTotalLine(
               family,
               question.label?.replace(/\s*\(.*\)$/, "") || String(position),
@@ -200,6 +215,11 @@ export function PastPaperPractice({
                             Spec {question.specReference}
                           </span>
                         )}
+                        {question.marking === "levels" && (
+                          <span className="rounded-full bg-[#E9FBF3] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-[#128A5B]">
+                            Levels-marked
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -213,17 +233,33 @@ export function PastPaperPractice({
                       [question._id]: event.target.value,
                     }))
                   }
-                  placeholder="Write your answer here…"
-                  rows={6}
-                  maxLength={5000}
+                  placeholder={
+                    isEssay
+                      ? "Write your essay here…"
+                      : "Write your answer here…"
+                  }
+                  rows={isEssay ? 16 : isExtended ? 10 : 6}
+                  maxLength={12000}
                   disabled={isGrading}
-                  className="mt-4 min-h-[140px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
+                  className={cn(
+                    "mt-4 resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15",
+                    isEssay
+                      ? "min-h-[320px]"
+                      : isExtended
+                        ? "min-h-[220px]"
+                        : "min-h-[140px]",
+                  )}
                 />
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs font-medium text-muted-foreground">
-                    {answer.trim().length} characters · aim for {question.marks} clear
-                    point{question.marks === 1 ? "" : "s"}
+                    {isEssay
+                      ? `${wordCount} words · write a full essay with a clear argument`
+                      : isExtended
+                        ? `${wordCount} words · build a developed answer`
+                        : question.marks <= 2
+                          ? `${answer.trim().length} characters · a short answer is enough`
+                          : `${answer.trim().length} characters · aim for ${question.marks} clear point${question.marks === 1 ? "" : "s"}`}
                   </p>
                   <Button
                     onClick={() => void handleMark(question)}
