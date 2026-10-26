@@ -45,7 +45,10 @@ export function reveal(delay = 0, distance = 18): MotionProps {
   return {
     initial: { opacity: 0, y: distance },
     whileInView: { opacity: 1, y: 0 },
-    viewport: { once: true, amount: 0.2, margin: "0px 0px -40px 0px" },
+    // "some" rather than a fraction: a pathway with ten expanded units is far
+    // taller than a phone screen, so 20% of it can never be visible at once and
+    // the whole section stayed at opacity 0. Any visible sliver now reveals it.
+    viewport: { once: true, amount: "some", margin: "0px 0px -24px 0px" },
     transition: { duration: 0.58, ease: EASE, delay },
   };
 }

@@ -619,7 +619,9 @@ export default function Course() {
               </section>
             )}
 
-            <motion.section className="mt-6" {...reveal(0.05)}>
+            {/* The pathway is tall enough to exceed a phone screen, so it
+                animates on mount instead of waiting to be "in view". */}
+            <motion.section className="mt-6" {...enter(0.05, 10)}>
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">

@@ -621,13 +621,18 @@ export default function StudySet() {
                   <QuizRunner
                     quiz={details.quiz}
                     setId={set._id}
+                    qualification={qualification}
                     onReviewCards={() => setTab("cards")}
                   />
                 </motion.div>
               </TabsContent>
               <TabsContent value="exam" className="mt-1">
                 <motion.div {...panel}>
-                  <ExamPractice exams={details.exams} qualification={qualification} />
+                  <ExamPractice
+                    exams={details.exams}
+                    setId={set._id}
+                    qualification={qualification}
+                  />
                 </motion.div>
               </TabsContent>
               <TabsContent value="tutor" className="mt-1">

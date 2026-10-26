@@ -1,3 +1,4 @@
+import { ExplainDialog } from "@/components/study/ExplainDialog";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -58,10 +59,12 @@ function ScoreRing({
 export function QuizRunner({
   quiz,
   setId,
+  qualification,
   onReviewCards,
 }: {
   quiz: Doc<"quizQuestions">[];
   setId: Id<"studySets">;
+  qualification?: string;
   onReviewCards?: () => void;
 }) {
   const submitQuiz = useMutation(api.studySets.submitQuiz);
@@ -248,18 +251,35 @@ export function QuizRunner({
               correct ? "bg-[#E9FBF3]" : "bg-[#FFEEF0]",
             )}
           >
-            <p
-              className={cn(
-                "text-xs font-semibold",
-                correct ? "text-[#0F7A50]" : "text-[#C93C49]",
-              )}
-            >
-              {correct
-                ? "Correct"
-                : `Not quite. The answer is ${String.fromCharCode(
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p
+                className={cn(
+                  "text-xs font-semibold",
+                  correct ? "text-[#0F7A50]" : "text-[#C93C49]",
+                )}
+              >
+                {correct
+                  ? "Correct"
+                  : `Not quite. The answer is ${String.fromCharCode(
+                      65 + question.correctIndex,
+                    )}`}
+              </p>
+              {/* The explanation is already useful; the button opens a small
+                  tutor for "why", without touching the saved tutor thread. */}
+              <ExplainDialog
+                setId={setId}
+                qualification={qualification}
+                context={{
+                  kind: "quiz",
+                  question: question.question,
+                  options: question.options,
+                  correctAnswer: `${String.fromCharCode(
                     65 + question.correctIndex,
-                  )}`}
-            </p>
+                  )}. ${question.options[question.correctIndex] ?? ""}`,
+                  explanation: question.explanation,
+                }}
+              />
+            </div>
             <p className="mt-1.5 text-sm leading-relaxed text-brand-ink/80">
               {question.explanation}
             </p>

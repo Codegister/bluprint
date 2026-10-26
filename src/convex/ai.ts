@@ -65,7 +65,10 @@ type TextPart = { type: "text"; text: string };
 type ImagePart = { type: "image_url"; image_url: { url: string } };
 type ContentPart = TextPart | ImagePart;
 type ChatMessage = {
-  role: "system" | "user";
+  // "assistant" is used by the tutor: earlier replies are replayed as real
+  // turns so the model can see the questions it asked and mark the answers,
+  // instead of re-reading one flattened transcript block.
+  role: "system" | "user" | "assistant";
   content: string | ContentPart[];
 };
 
@@ -2398,6 +2401,22 @@ const TUTOR_SYSTEM_PROMPT =
   "Answer in plain text with short paragraphs and hyphen bullets. No markdown headings, tables, or code fences. " +
   "Be direct and warm, not effusive. Keep answers under 250 words unless the student asks for a model answer or a step-by-step walkthrough.";
 
+/**
+ * The rule that keeps one continuous lesson continuous.
+ *
+ * Previously the whole conversation was flattened into one prompt string, and
+ * a fast model would lose the thread: asked to quiz the student, then given
+ * "11, 6, 2", it replied with a definition of a function instead of marking
+ * the answers. Replaying the turns with their real roles fixes most of that;
+ * this instruction fixes the rest, including the one-question-at-a-time rule.
+ */
+const TUTOR_CONTINUITY_RULES =
+  "This is one continuous conversation, not a set of unrelated questions. Read the entire exchange before replying. " +
+  "If your previous message asked the student anything, their newest message is their answer: mark each answer as correct or incorrect, give the right answer where it is wrong, and only then continue. " +
+  "Never restart the topic, never reply with a definition or a new explanation the student did not ask for, and never ignore answers you are holding. " +
+  "If the student asked for several practice questions, keep your own numbered list and mark their replies against it in order. " +
+  "Ask one question at a time unless the student explicitly asked for a set of questions. ";
+
 /** What the tutor is pointed at, already reduced to plain text. */
 type TutorContext = {
   /** Set title, or "Subject · Unit" for a pathway conversation. */
@@ -2417,36 +2436,49 @@ function tutorPrompt(
   effort?: TutorEffort,
 ): ChatMessage[] {
   const qualification = qualificationText(context);
-  const history = context.messages
-    .map(
-      (message) =>
-        `${message.role === "user" ? "Student" : "Tutor"}: ${message.content.slice(0, 1200)}`,
-    )
+
+  // Reference material lives in the system turn: it is context, not something
+  // the student said, and keeping it out of the last user turn leaves that turn
+  // focused on the reply they are waiting for.
+  const system = [
+    TUTOR_SYSTEM_PROMPT,
+    TUTOR_CONTINUITY_RULES,
+    materialBlock(context.material),
+    `<material_title>${context.title}</material_title>`,
+    `<qualification>${qualification || "Not specified"}</qualification>`,
+    context.examBoard
+      ? `<mark_scheme_style>${markSchemeStyle(context.examBoard)}</mark_scheme_style>`
+      : "",
+    context.level
+      ? `Pitch the explanation at ${context.level} depth and use that qualification's command words when discussing exam technique.`
+      : "",
+    web.length > 0 ? webResultsBlock(web) : "",
+  ]
+    .filter(Boolean)
     .join("\n\n");
 
-  return [
-    { role: "system", content: TUTOR_SYSTEM_PROMPT },
-    {
-      role: "user",
-      content:
-        `${materialBlock(context.material)}\n\n` +
-        (web.length > 0 ? `${webResultsBlock(web)}\n\n` : "") +
-        `<material_title>${context.title}</material_title>\n` +
-        `<qualification>${qualification || "Not specified"}</qualification>\n` +
-        (context.examBoard
-          ? `<mark_scheme_style>${markSchemeStyle(context.examBoard)}</mark_scheme_style>\n`
-          : "") +
-        (context.level
-          ? `Pitch the explanation at ${context.level} depth and use that qualification's command words when discussing exam technique.\n`
-          : "") +
-        `<conversation>\n${history || "(this is the student's first question)"}\n</conversation>\n\n` +
-        `<student_question>${question}</student_question>\n\n` +
-        // The effort bars write their choice into the prompt, so Low really is
-        // shorter and Max Effort really is deeper rather than only relabelled.
-        (effort?.guidance ? `${effort.guidance}\n\n` : "") +
-        "Answer as the tutor. If the student asks for exam practice, give one question at a time and wait for their answer before marking it.",
-    },
-  ];
+  const messages: ChatMessage[] = [{ role: "system", content: system }];
+
+  // Real turns, not one transcript: a model treats its own previous replies as
+  // things it said, which is what makes "mark my answers" reliable.
+  for (const message of context.messages) {
+    messages.push({
+      role: message.role === "user" ? "user" : "assistant",
+      content: message.content.slice(0, 2000),
+    });
+  }
+
+  messages.push({
+    role: "user",
+    content:
+      `<student_message>${question}</student_message>\n\n` +
+      // The effort bars write their choice into the prompt, so Low really is
+      // shorter and Max Effort really is deeper rather than only relabelled.
+      (effort?.guidance ? `${effort.guidance}\n\n` : "") +
+      "Continue the conversation above. If the student is answering questions you asked, mark those answers first. If they ask for exam practice, give one question at a time unless they asked for several, and wait for their answers before marking them.",
+  });
+
+  return messages;
 }
 
 /** A page an answer cited, stored beside the message. */
@@ -3093,6 +3125,164 @@ export const askCourseTutor = action({
       await ctx.runMutation(internal.tutor.discardCourseTutorAnswer, { messageId });
       throw error;
     }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// "AI explain" — a small, session-only tutor window
+// ---------------------------------------------------------------------------
+
+/**
+ * The compact tutor behind the AI explain button on a quiz question or an
+ * exam-style question.
+ *
+ * It is deliberately not the main tutor: nothing is written to
+ * `tutorMessages`, so the conversation disappears when the window closes, and
+ * the main tutor's history is never touched. The question is preloaded so the
+ * student only has to send "Explain this.", and follow-ups stay in the window.
+ */
+const EXPLAIN_SYSTEM_PROMPT =
+  "You are Bluprint's tutor in a small 'explain this' window opened beside one quiz or exam question. " +
+  "Explain only the question in front of you. Say why the right answer is right, and if the student chose a wrong option or wrote a weak answer, name the misconception that led them there. " +
+  "For an exam-style question, show where the marks come from using the marking guide. " +
+  "Be brief and efficient: two short paragraphs or a few hyphen bullets, under 180 words unless the student asks for more. " +
+  "Plain text with no markdown headings, tables or code fences.";
+
+/** Text fields the browser can send with one explanation request. */
+function explainContextBlock(args: {
+  kind: "quiz" | "exam";
+  question: string;
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
+  marks?: number;
+  markingGuide?: string[];
+  studentAnswer?: string;
+  qualification?: string;
+}): string {
+  const lines = [
+    args.qualification ? `<qualification>${args.qualification}</qualification>` : "",
+    `<question_type>${args.kind === "quiz" ? "multiple-choice quiz" : "exam-style written question"}</question_type>`,
+    `<question>${args.question.slice(0, 2000)}</question>`,
+    args.options && args.options.length > 0
+      ? `<options>${args.options
+          .slice(0, 8)
+          .map((option, index) => `${String.fromCharCode(65 + index)}. ${option.slice(0, 400)}`)
+          .join("\n")}</options>`
+      : "",
+    args.correctAnswer ? `<correct_answer>${args.correctAnswer.slice(0, 1200)}</correct_answer>` : "",
+    args.explanation ? `<stored_explanation>${args.explanation.slice(0, 1200)}</stored_explanation>` : "",
+    typeof args.marks === "number" ? `<marks>${args.marks}</marks>` : "",
+    args.markingGuide && args.markingGuide.length > 0
+      ? `<marking_guide>${args.markingGuide
+          .slice(0, 20)
+          .map((point) => `- ${point.slice(0, 400)}`)
+          .join("\n")}</marking_guide>`
+      : "",
+    args.studentAnswer
+      ? `<student_answer>${args.studentAnswer.slice(0, 3000)}</student_answer>`
+      : "",
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+/**
+ * Explains one quiz or exam question, with the student's own attempt when there
+ * is one. The history is supplied by the browser and never stored, so this
+ * window cannot leak into, or be continued from, the main tutor thread.
+ */
+export const explainQuestion = action({
+  args: {
+    setId: v.id("studySets"),
+    kind: v.union(v.literal("quiz"), v.literal("exam")),
+    question: v.string(),
+    options: v.optional(v.array(v.string())),
+    correctAnswer: v.optional(v.string()),
+    explanation: v.optional(v.string()),
+    marks: v.optional(v.number()),
+    markingGuide: v.optional(v.array(v.string())),
+    studentAnswer: v.optional(v.string()),
+    qualification: v.optional(v.string()),
+    // Earlier turns in this window only. The client keeps them in memory.
+    history: v.optional(
+      v.array(
+        v.object({
+          role: v.union(v.literal("user"), v.literal("assistant")),
+          content: v.string(),
+        }),
+      ),
+    ),
+    // The tiny prompt the window sends: "Explain this." unless the student
+    // typed a follow-up.
+    prompt: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    {
+      setId,
+      kind,
+      question,
+      options,
+      correctAnswer,
+      explanation,
+      marks,
+      markingGuide,
+      studentAnswer,
+      qualification,
+      history,
+      prompt,
+    },
+  ): Promise<{ reply: string }> => {
+    const userId = await requireUserId(ctx);
+    const set = await ctx.runQuery(internal.studySets.getForProcessing, { setId });
+    if (!set || set.userId !== userId) throw new Error("Study set not found.");
+
+    const asked = (prompt ?? "").trim() || "Explain this.";
+    if (asked.length > 600) {
+      throw new Error("Keep the follow-up under 600 characters.");
+    }
+
+    const apiKeys = resolveNvidiaKeys();
+    const system = [
+      EXPLAIN_SYSTEM_PROMPT,
+      explainContextBlock({
+        kind,
+        question,
+        options,
+        correctAnswer,
+        explanation,
+        marks,
+        markingGuide,
+        studentAnswer,
+        qualification:
+          (qualification && qualification.trim()) ||
+          qualificationText({
+            course: set.course,
+            examBoard: set.examBoard,
+            level: set.level,
+          }),
+      }),
+    ].join("\n\n");
+
+    const messages: ChatMessage[] = [{ role: "system", content: system }];
+    for (const turn of (history ?? []).slice(-8)) {
+      const content = turn.content.trim().slice(0, 1500);
+      if (content) messages.push({ role: turn.role, content });
+    }
+    messages.push({ role: "user", content: asked });
+
+    // Balanced is the everyday model and the shortest sensible answer budget:
+    // an explanation beside a question should arrive quickly.
+    const tier = readTutorTier("Balanced");
+    const raw = await nvidiaChat(apiKeys, {
+      model: tier.model,
+      messages,
+      maxTokens: 1100,
+      temperature: 0.25,
+      disableThinking: true,
+    });
+
+    return { reply: stripReasoning(raw).trim() };
   },
 });
 

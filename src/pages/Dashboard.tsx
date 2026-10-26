@@ -261,7 +261,10 @@ export default function Dashboard() {
         course.status === "error" ||
         (course.status === "processing" &&
           (course.processingStartedAt === undefined ||
-            now - course.processingStartedAt > 10 * 60 * 1000)),
+            now - course.processingStartedAt > 10 * 60 * 1000)) ||
+        // A queued map is normally picked up within seconds; one that is still
+        // queued after two minutes lost its scheduled build.
+        (course.status === "queued" && now - course.updatedAt > 2 * 60 * 1000),
     );
     if (!needsRecovery) {
       recoveryRequested.current = false;

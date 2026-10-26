@@ -47,6 +47,28 @@ function normalizeLevel(value: string): string | undefined {
   return trimmed.length > 0 ? trimmed.slice(0, 40) : undefined;
 }
 
+/** A build that never started, or one that stopped part-way through. */
+const QUEUED_STALE_MS = 2 * 60 * 1000;
+const PROCESSING_STALE_MS = 10 * 60 * 1000;
+
+function buildStalled(
+  course: { status: string; processingStartedAt?: number; updatedAt: number },
+  now: number,
+): boolean {
+  if (course.status === "processing") {
+    return (
+      course.processingStartedAt === undefined ||
+      now - course.processingStartedAt > PROCESSING_STALE_MS
+    );
+  }
+  // A queue row is picked up within seconds. One that is still queued minutes
+  // later means its scheduled action was lost (an interrupted deploy, a
+  // scheduler failure), so it needs to be queued again rather than left to sit
+  // at "Mapping specification" forever.
+  if (course.status === "queued") return now - course.updatedAt > QUEUED_STALE_MS;
+  return false;
+}
+
 /** The main screen's course table: one row per qualification, with progress. */
 export const listMine = query({
   args: {},
@@ -132,10 +154,7 @@ export const getDetails = query({
           examCount: set.examCount,
           updatedAt: set.updatedAt,
         })),
-      processingStale:
-        course.status === "processing" &&
-        (course.processingStartedAt === undefined ||
-          Date.now() - course.processingStartedAt > 10 * 60 * 1000),
+      processingStale: buildStalled(course, Date.now()),
     };
   },
 });
@@ -224,11 +243,14 @@ export const createMany = mutation({
       variant?: string | null;
       tier?: string | null;
       rsRoute?: string | null;
+      rsReligion?: string | null;
       rsReligion2?: string | null;
       rsSpec?: string | null;
       rsSpec2?: string | null;
     }) =>
-      `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.rsRoute ?? ""}|${course.rsReligion2 ?? ""}|${course.rsSpec ?? ""}|${course.rsSpec2 ?? ""}`.toLowerCase();
+      // Every RS choice is part of the identity: changing the main religion or
+      // an Area of Study is a different pathway, not a duplicate.
+      `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.rsRoute ?? ""}|${course.rsReligion ?? ""}|${course.rsReligion2 ?? ""}|${course.rsSpec ?? ""}|${course.rsSpec2 ?? ""}`.toLowerCase();
 
     const known = new Set(
       existing.map((course) =>
@@ -239,6 +261,7 @@ export const createMany = mutation({
           variant: course.variant,
           tier: course.tier,
           rsRoute: course.rsRoute,
+          rsReligion: course.rsReligion,
           rsReligion2: course.rsReligion2,
           rsSpec: course.rsSpec,
           rsSpec2: course.rsSpec2,
@@ -753,10 +776,7 @@ export const recoverMine = mutation({
     const now = Date.now();
     let recovered = 0;
     for (const course of courses) {
-      const stale =
-        course.status === "processing" &&
-        (course.processingStartedAt === undefined ||
-          now - course.processingStartedAt > 10 * 60 * 1000);
+      const stale = buildStalled(course, now);
       if (course.status !== "error" && !stale) continue;
 
       await ctx.db.patch(course._id, {
@@ -785,10 +805,7 @@ export const recoverAllFailed = internalMutation({
     const now = Date.now();
     let recovered = 0;
     for (const course of courses) {
-      const stale =
-        course.status === "processing" &&
-        (course.processingStartedAt === undefined ||
-          now - course.processingStartedAt > 10 * 60 * 1000);
+      const stale = buildStalled(course, now);
       if (course.status !== "error" && !stale) continue;
 
       await ctx.db.patch(course._id, {

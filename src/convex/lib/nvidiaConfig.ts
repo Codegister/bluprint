@@ -189,7 +189,7 @@ export const TUTOR_EFFORTS: TutorEffort[] = [
     budgetScale: 0.55,
     temperatureShift: -0.05,
     guidance:
-      "The student chose LOW effort: give the shortest correct answer — a couple of sentences or one short bullet list, with no worked example.",
+      "The student chose LOW effort: give the shortest correct answer — a couple of sentences or one short bullet list, with no worked example. Shortness never overrides the conversation: if the student is answering questions you already asked, mark each one briefly before anything else.",
   },
   {
     id: "medium",

@@ -27,8 +27,30 @@ function normalizeTutorText(value: string, max = 4000): string {
     .slice(0, max);
 }
 
-/** How many previous turns are replayed as context for the next answer. */
-const HISTORY_LIMIT = 10;
+/**
+ * Tutor answers keep their line breaks: numbered practice questions and hyphen
+ * bullets are structure the next turn needs to see. Collapsing them to a single
+ * line (as questions are) made the saved lesson harder to follow and left the
+ * model re-reading a wall of text when the student answered.
+ */
+function normalizeAnswerText(value: string, max = 8000): string {
+  return value
+    .replace(/\x00/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, max);
+}
+
+/**
+ * How many previous turns are replayed as context for the next answer.
+ *
+ * Eight exchanges is enough for a worked example, a set of practice questions
+ * and the student's answers to all of them. Trimming it to five pairs is what
+ * let a fast model lose the questions it had just asked.
+ */
+const HISTORY_LIMIT = 16;
 
 /**
  * `_creationTime` can tie for rows inserted in one transaction, so the saved
@@ -294,7 +316,7 @@ export const appendTutorAnswer = internalMutation({
     const row = await ctx.db.get(messageId);
     if (!row) return;
     await ctx.db.patch(messageId, {
-      content: normalizeTutorText(content, MAX_ANSWER_CHARS),
+      content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
     });
   },
@@ -397,7 +419,7 @@ export const appendCourseTutorAnswer = internalMutation({
     const row = await ctx.db.get(messageId);
     if (!row) return;
     await ctx.db.patch(messageId, {
-      content: normalizeTutorText(content, MAX_ANSWER_CHARS),
+      content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
     });
   },

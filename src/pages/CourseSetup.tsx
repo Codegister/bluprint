@@ -876,8 +876,11 @@ export default function CourseSetup() {
                       })}
                     </div>
                   </>
-                ) : (
+                ) : currentQuestion === "tier" ? (
                   <>
+                    {/* Only on the tier step. The Religious Studies card is its
+                        own step, and repeating the tier buttons there sent a
+                        stray tap straight back to the subject list mid-route. */}
                     <h2 className="mt-5 font-display text-[1.06rem] font-bold text-brand-ink">
                       {activeChoices.tiers.length > 0
                         ? "Which tier?"
@@ -925,7 +928,7 @@ export default function CourseSetup() {
                       })}
                     </div>
                   </>
-                )}
+                ) : null}
 
                 {currentQuestion === "rs" ? (
                   <section className="mt-6 space-y-4">

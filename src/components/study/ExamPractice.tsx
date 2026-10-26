@@ -1,8 +1,9 @@
+import { ExplainDialog } from "@/components/study/ExplainDialog";
 import { EASE } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
@@ -13,9 +14,11 @@ import { toast } from "sonner";
 
 export function ExamPractice({
   exams,
+  setId,
   qualification,
 }: {
   exams: Doc<"examQuestions">[];
+  setId: Id<"studySets">;
   qualification?: string;
 }) {
   const gradeAnswer = useAction(api.ai.gradeExamAnswer);
@@ -94,7 +97,21 @@ export function ExamPractice({
               <span className="text-xs font-semibold text-muted-foreground">
                 Question {index + 1}
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Available before writing, so it can help plan the answer;
+                    the model answer is only sent once grading has revealed it. */}
+                <ExplainDialog
+                  setId={setId}
+                  qualification={qualification}
+                  context={{
+                    kind: "exam",
+                    question: exam.question,
+                    marks: exam.marks,
+                    markingGuide: exam.markingGuide,
+                    studentAnswer: answer.trim() || undefined,
+                    ...(graded ? { correctAnswer: exam.modelAnswer } : {}),
+                  }}
+                />
                 <span className="rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70">
                   {exam.marks} marks
                 </span>
