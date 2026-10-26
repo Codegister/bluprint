@@ -534,7 +534,8 @@ same rate-limit messages as the rest of the app.
 - **The day is spread out, not stacked.** Spare time in the day is shared between sessions
   as longer gaps (up to two hours), so four hours on a day off is not four hours back to
   back. If the day has no spare room the planner packs it tightly instead, so no work is
-  lost.
+  lost. Starts land on the hour, quarter past, half past or quarter to, so a break or a
+  meal never leaves a session beginning at an odd minute.
 - **Meals are kept free automatically.** Lunch (12:30–13:15) and dinner (18:00–18:45) are
   removed from the study window when there is real study time on both sides of them, and
   the timetable screen shows them as breaks. If keeping a meal free would drop a session,
@@ -544,8 +545,9 @@ same rate-limit messages as the rest of the app.
   disables start times too late for your session length, and the server rejects a plan whose
   sessions would run past the cutoff.
 - **Blocked time is skipped.** Any day can have periods blocked out (a match, a shift,
-  weekend plans). Saving the blocks rebuilds that day immediately and keeps any sessions
-  already ticked done. Up to eight blocked periods are accepted per day.
+  weekend plans). Enter the start and end as typed times such as `18:00` (or `6:30pm`) in
+  the Block time dialog. Saving the blocks rebuilds that day immediately and keeps any
+  sessions already ticked done. Up to eight blocked periods are accepted per day.
 - **Sessions are ticked done one at a time.** An unticked session on a past generated day
   is missed work. The next day takes one or two of the oldest missed sessions as
   **Catch-up** blocks, and the rest follow on later days, so catch-up never becomes one long

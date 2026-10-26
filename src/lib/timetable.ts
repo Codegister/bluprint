@@ -143,6 +143,27 @@ export function formatTimeRange(startMinutes: number, duration: number): string 
   return `${formatTime24(startMinutes)}–${formatTime24(startMinutes + duration)}`;
 }
 
+/**
+ * Reads a time typed into the block-time dialog. Accepts "18:00", "18.00",
+ * "6pm" and "6:30 pm". Returns minutes from midnight, or null when the text is
+ * not a clock time.
+ */
+export function parseTimeInput(value: string): number | null {
+  const cleaned = value.trim().toLowerCase().replace(/\s+/g, "").replace(/\./g, ":");
+  if (!cleaned) return null;
+  const match = /^(\d{1,2})(?::?([0-5]\d))?(am|pm)?$/.exec(cleaned);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = match[2] ? Number(match[2]) : 0;
+  const suffix = match[3];
+  if (suffix) {
+    if (hour < 1 || hour > 12) return null;
+    return ((hour % 12) + (suffix === "pm" ? 12 : 0)) * 60 + minute;
+  }
+  if (hour > 23) return null;
+  return hour * 60 + minute;
+}
+
 export function formatDayLabel(value: string): string {
   return new Date(`${value}T00:00:00.000Z`).toLocaleDateString("en-GB", {
     weekday: "short",

@@ -22,6 +22,7 @@ import {
   formatLongDate,
   formatTime24,
   formatTimeRange,
+  parseTimeInput,
   SUBJECT_COLORS,
   type SubjectColor,
 } from "@/lib/timetable";
@@ -356,8 +357,6 @@ function BlockedRow({ period }: { period: Blocked }) {
   );
 }
 
-const TIME_OPTIONS = Array.from({ length: 35 }, (_, index) => 6 * 60 + index * 30);
-
 function BlockTimeDialog({
   open,
   onOpenChange,
@@ -371,12 +370,20 @@ function BlockTimeDialog({
   blocked: Blocked[];
   onSaved: (blocks: Blocked[]) => Promise<void>;
 }) {
-  const [start, setStart] = useState(18 * 60);
-  const [end, setEnd] = useState(20 * 60);
+  // Typed rather than picked from a long list: most blocks are a familiar
+  // time, and 35 options in a dropdown were harder to scan than one field.
+  const [fromText, setFromText] = useState("18:00");
+  const [untilText, setUntilText] = useState("20:00");
   const [label, setLabel] = useState("");
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
+    const start = parseTimeInput(fromText);
+    const end = parseTimeInput(untilText);
+    if (start === null || end === null) {
+      toast.error("Type a time like 18:00 (or 6:30pm).");
+      return;
+    }
     if (end <= start) {
       toast.error("Choose an end time after the start time.");
       return;
@@ -401,8 +408,8 @@ function BlockTimeDialog({
       ];
       await onSaved(next);
       // Start the next block from a clean form rather than the one just saved.
-      setStart(18 * 60);
-      setEnd(20 * 60);
+      setFromText("18:00");
+      setUntilText("20:00");
       setLabel("");
       onOpenChange(false);
     } catch (error) {
@@ -430,32 +437,30 @@ function BlockTimeDialog({
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           <label className="block text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             From
-            <select
-              value={start}
-              onChange={(event) => setStart(Number(event.target.value))}
-              className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-2 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9B0E8]"
-            >
-              {TIME_OPTIONS.map((minutes) => (
-                <option key={minutes} value={minutes}>
-                  {formatTime24(minutes)}
-                </option>
-              ))}
-            </select>
+            <Input
+              value={fromText}
+              onChange={(event) => setFromText(event.target.value)}
+              autoComplete="off"
+              maxLength={8}
+              placeholder="18:00"
+              className="mt-1.5 h-10 rounded-xl border-border bg-white text-[0.82rem] font-medium normal-case tracking-normal shadow-none"
+            />
           </label>
           <label className="block text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
             Until
-            <select
-              value={end}
-              onChange={(event) => setEnd(Number(event.target.value))}
-              className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-2 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9B0E8]"
-            >
-              {TIME_OPTIONS.map((minutes) => (
-                <option key={minutes} value={minutes}>
-                  {formatTime24(minutes)}
-                </option>
-              ))}
-            </select>
+            <Input
+              value={untilText}
+              onChange={(event) => setUntilText(event.target.value)}
+              autoComplete="off"
+              maxLength={8}
+              placeholder="20:00"
+              className="mt-1.5 h-10 rounded-xl border-border bg-white text-[0.82rem] font-medium normal-case tracking-normal shadow-none"
+            />
           </label>
+          <p className="text-[0.7rem] leading-relaxed text-muted-foreground sm:col-span-2">
+            Type a time using the 24-hour clock, for example 18:00. Times like
+            6:30pm work too.
+          </p>
           <label className="block text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-muted-foreground sm:col-span-2">
             What's happening? (optional)
             <Input

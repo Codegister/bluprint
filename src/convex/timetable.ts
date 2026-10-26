@@ -48,10 +48,11 @@ type StudyMethod = (typeof STUDY_METHODS)[number];
 const PAPER_MINUTES = 60;
 /**
  * Shape of a generated day. Older plans (no version) were filled with uniform
- * session lengths, and version 2 days could leave the tail of a day unused, so
- * saved days are rebuilt once when next opened.
+ * session lengths, version 2 days could leave the tail of a day unused, and
+ * version 3 starts could land on odd minutes after a break, so saved days are
+ * rebuilt once when next opened.
  */
-const PLANNER_VERSION = 3;
+const PLANNER_VERSION = 4;
 
 /**
  * Revision stops at 8pm. Evenings after that are for the rest of a student's
@@ -60,6 +61,11 @@ const PLANNER_VERSION = 3;
 const LATEST_END_MINUTES = 20 * 60;
 /** Every session is followed by a 10-minute break, so nothing runs together. */
 const GAP_MINUTES = 10;
+/**
+ * Sessions begin on the clock: on the hour or at quarter past, half past or
+ * quarter to. A break or a meal would otherwise leave a start at 18:05.
+ */
+const START_GRANULARITY_MINUTES = 15;
 const MIN_BLOCK_MINUTES = 10;
 /**
  * The shortest topic session. A topic with a couple of key points does not
@@ -430,14 +436,22 @@ function placeDay(
   return placed(withoutMeals) > placed(compact) ? withoutMeals : compact;
 }
 
-/** Earliest slot at or after `from` that can hold `minutes`, or null. */
+/** Rounds a minute-of-day up to the next quarter-hour mark. */
+function snapStart(minutes: number): number {
+  return Math.ceil(minutes / START_GRANULARITY_MINUTES) * START_GRANULARITY_MINUTES;
+}
+
+/**
+ * Earliest quarter-hour slot at or after `from` that can hold `minutes`, or
+ * null. Rounding up rather than down keeps the 10-minute break intact.
+ */
 function fitFrom(
   windows: Window[],
   from: number,
   minutes: number,
 ): number | null {
   for (const window of windows) {
-    const start = Math.max(from, window.start);
+    const start = snapStart(Math.max(from, window.start));
     if (start + minutes <= window.end) return start;
   }
   return null;
@@ -459,9 +473,9 @@ function placeBlocks(
     while (windowIndex < windows.length) {
       const window = windows[windowIndex]!;
       if (clock < window.start) clock = window.start;
-      if (clock + block.minutes <= window.end) {
-        const start = clock;
-        clock += block.minutes + GAP_MINUTES;
+      const start = snapStart(clock);
+      if (start + block.minutes <= window.end) {
+        clock = start + block.minutes + GAP_MINUTES;
         return start;
       }
       windowIndex += 1;

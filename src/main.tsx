@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -29,11 +30,34 @@ const TimetableBuilder = lazy(() => import("./pages/TimetableBuilder.tsx"));
 const Tutor = lazy(() => import("./pages/Tutor.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
-// Simple loading fallback for route transitions
+/**
+ * Fallback while a route's code chunk is fetched. It is intentionally silent:
+ * a page-shaped skeleton keeps the screen steady instead of flashing a
+ * "Loading..." label that disappears before it can be read.
+ */
 function RouteLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground">Loading...</div>
+    <div
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
+      className="min-h-screen bg-background px-4 py-7 sm:px-6 lg:px-10 lg:py-10"
+    >
+      <span className="sr-only">Loading page</span>
+      <div className="mx-auto w-full max-w-[1080px] space-y-5">
+        <div className="space-y-3">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-8 w-2/3 max-w-sm" />
+          <Skeleton className="h-3.5 w-1/2 max-w-xs" />
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <Skeleton className="h-72 rounded-[1.7rem]" />
+          <div className="space-y-4">
+            <Skeleton className="h-32 rounded-[1.7rem]" />
+            <Skeleton className="h-32 rounded-[1.7rem]" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
