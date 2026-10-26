@@ -130,26 +130,9 @@
   }
   body {
     @apply bg-background font-sans text-foreground antialiased;
-    /* A very soft three-corner wash of lilac, blush and mint. It is painted
-       behind everything and never sits under body copy, so text contrast is
-       unaffected while the workspace still feels warm rather than flat. */
-    background-image:
-      radial-gradient(
-        55rem 55rem at 108% -8%,
-        rgba(167, 139, 250, 0.22),
-        transparent 62%
-      ),
-      radial-gradient(
-        42rem 42rem at -12% 4%,
-        rgba(244, 114, 182, 0.16),
-        transparent 58%
-      ),
-      radial-gradient(
-        48rem 48rem at 52% 112%,
-        rgba(18, 184, 166, 0.12),
-        transparent 60%
-      );
-    background-attachment: fixed;
+    /* Flat warm paper. Interest comes from type, spacing and scroll motion, not
+       from a multi-colour backdrop wash. */
+    background-color: var(--brand-cream);
   }
   h1,
   h2,
@@ -196,44 +179,6 @@
   .lift:hover {
     transform: translateY(-2px);
     box-shadow: 0 20px 36px -28px rgba(60, 40, 120, 0.45);
-  }
-
-  /* Blurred colour spots used behind hero panels and the workspace canvas. */
-  .blob {
-    position: absolute;
-    border-radius: 9999px;
-    filter: blur(46px);
-    pointer-events: none;
-  }
-
-  .text-gradient {
-    background-image: linear-gradient(
-      100deg,
-      #6b4bff 0%,
-      #ec4899 52%,
-      #f0a03c 100%
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  /* The same gradient with a very slow light sweep across it. Used once, on
-     the landing headline, so the page has one living focal point. */
-  .text-gradient-live {
-    background-image: linear-gradient(
-      100deg,
-      #6b4bff 0%,
-      #ec4899 28%,
-      #f0a03c 46%,
-      #ec4899 64%,
-      #6b4bff 100%
-    );
-    background-size: 220% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    animation: gradient-drift 14s ease-in-out infinite;
   }
 
   /* Stagger children as they appear, without adding wrapper elements. Useful
@@ -410,15 +355,16 @@
     background-size: 22px 22px;
   }
 
-  /* Hero wash used by the dashboard and landing page. Warm paper at the right
-     edge keeps the lilac from looking like a generic gradient. */
-  .hero-wash {
-    background-image: linear-gradient(
-      118deg,
-      #f0e8ff 0%,
-      #fdf1f6 48%,
-      #fff6e4 100%
+  /* Flat paper panel used by heroes: one ink-coloured dot grid at a very low
+     contrast, so the surface has texture without a colour gradient. */
+  .paper-panel {
+    background-color: #fbfaf6;
+    background-image: radial-gradient(
+      circle,
+      rgba(25, 26, 30, 0.06) 1px,
+      transparent 1px
     );
+    background-size: 20px 20px;
   }
 
   .flip-scene {
@@ -455,16 +401,6 @@
   }
 }
 
-@keyframes gradient-drift {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
 @keyframes pulse-ring {
   0% {
     transform: scale(0.7);
@@ -489,21 +425,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* Slow drift for the background colour spots. */
-@keyframes blob-drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(14px, -18px, 0) scale(1.06);
-  }
-}
-
-.blob-float {
-  animation: blob-drift 16s ease-in-out infinite;
 }
 
 /* Build progress uses a single accent and a pulse, not a moving gradient. */
@@ -570,8 +491,6 @@
   .animate-soft-pop,
   .progress-live,
   .animate-rise,
-  .blob-float,
-  .text-gradient-live,
   .pulse-ring::after,
   .rise-stagger > * {
     animation: none;

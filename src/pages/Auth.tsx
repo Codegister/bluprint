@@ -97,14 +97,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[1.02fr_0.98fr]">
       {/* Context panel */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[#ece7ff] p-10 lg:flex xl:p-14">
-        {/* Slow colour behind the copy, so the panel is never a flat block. */}
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="blob -left-24 -top-24 size-72 bg-white/60 blob-float" />
-          <div className="blob -right-24 bottom-10 size-80 bg-[#FFD7E6]/60 blob-float" />
-          <div className="blob left-1/3 top-1/2 size-64 bg-[#C4B5FD]/40" />
-        </div>
-
+      <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[#EFEBFF] p-10 lg:flex xl:p-14">
         <motion.div className="relative" {...enter(0.05)}>
           <Brand />
         </motion.div>

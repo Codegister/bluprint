@@ -31,12 +31,12 @@ export function Mascot({
           <stop offset="1" stopColor="#6D5AF0" />
         </linearGradient>
         <linearGradient id="blu-fin" x1="20" y1="120" x2="96" y2="176">
-          <stop offset="0" stopColor="#F9A8D4" />
-          <stop offset="1" stopColor="#EC4899" />
+          <stop offset="0" stopColor="#C4B5FD" />
+          <stop offset="1" stopColor="#8B5CF6" />
         </linearGradient>
         <linearGradient id="blu-gill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FDA4AF" />
-          <stop offset="1" stopColor="#F472B6" />
+          <stop offset="0" stopColor="#C4B5FD" />
+          <stop offset="1" stopColor="#A78BFA" />
         </linearGradient>
       </defs>
 
@@ -99,8 +99,8 @@ export function Mascot({
         strokeWidth="4"
         strokeLinecap="round"
       />
-      <ellipse cx="84" cy="118" rx="8" ry="5" fill="#F9A8D4" opacity="0.7" />
-      <ellipse cx="156" cy="118" rx="8" ry="5" fill="#F9A8D4" opacity="0.7" />
+      <ellipse cx="84" cy="118" rx="8" ry="5" fill="#C4B5FD" opacity="0.7" />
+      <ellipse cx="156" cy="118" rx="8" ry="5" fill="#C4B5FD" opacity="0.7" />
 
       {/* little arms */}
       <path

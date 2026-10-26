@@ -147,7 +147,6 @@ function HeroArt() {
   return (
     <div ref={ref} className="relative mx-auto w-full max-w-[470px] lg:max-w-none">
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-1/2 size-[430px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(167,139,250,0.32),transparent_62%)]" />
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <motion.svg
             viewBox="0 0 200 200"
@@ -164,7 +163,7 @@ function HeroArt() {
               strokeWidth="0.7"
               strokeDasharray="2 8"
             />
-            <circle cx="100" cy="6" r="2.6" fill="#EC4899" />
+            <circle cx="100" cy="6" r="2.6" fill="#5B3DF5" />
             <circle cx="194" cy="100" r="1.8" fill="#6B4BFF" />
           </motion.svg>
         </div>
@@ -261,7 +260,7 @@ export default function Landing() {
       <header className="sticky top-0 z-50 border-b border-border bg-background">
         <motion.div
           aria-hidden
-          className="absolute inset-x-0 bottom-0 h-[2px] origin-left bg-[linear-gradient(90deg,#6B4BFF,#EC4899,#F0A03C)]"
+          className="absolute inset-x-0 bottom-0 h-[2px] origin-left bg-[#5B3DF5]"
           style={{ scaleX: scrollYProgress }}
         />
         <div className="mx-auto flex h-[72px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
@@ -301,13 +300,7 @@ export default function Landing() {
         </div>
       </header>
 
-      <section className="hero-wash relative overflow-hidden border-b border-[#EBE1F7]">
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="blob -left-24 top-16 size-72 bg-[#FFD7E6]/60 blob-float" />
-          <div className="blob -right-20 -top-24 size-80 bg-[#C4B5FD]/55" />
-          <div className="blob -bottom-28 left-1/3 size-64 bg-[#FFE6A3]/55" />
-        </div>
-
+      <section className="paper-panel relative overflow-hidden border-b border-border">
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
             <motion.div className="flex flex-wrap gap-2" {...enter(0.04)}>
@@ -324,7 +317,7 @@ export default function Landing() {
               {...enter(0.12, 24)}
             >
               A page of notes becomes a{" "}
-              <span className="text-gradient-live">revision session.</span>
+              <span className="text-[#5B3DF5]">revision session.</span>
             </motion.h1>
 
             <motion.p
@@ -391,7 +384,7 @@ export default function Landing() {
             {/* The rule above the steps draws itself as the section arrives. */}
             <motion.div
               aria-hidden
-              className="absolute inset-x-0 top-0 h-px origin-left bg-[linear-gradient(90deg,#6B4BFF,#EC4899,#F0A03C)]"
+              className="absolute inset-x-0 top-0 h-px origin-left bg-[#5B3DF5]"
               initial={{ scaleX: 0 }}
               whileInView={{ scaleX: 1 }}
               viewport={{ once: true, amount: 0.4 }}
@@ -728,11 +721,7 @@ export default function Landing() {
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-        <Reveal className="relative overflow-hidden rounded-[2rem] bg-[#ece7ff] px-6 py-9 sm:px-10 sm:py-11">
-          <div aria-hidden className="pointer-events-none absolute inset-0">
-            <div className="blob -left-16 -bottom-24 size-64 bg-white/55 blob-float" />
-            <div className="blob -right-20 -top-24 size-72 bg-[#FFD7E6]/55" />
-          </div>
+        <Reveal className="relative overflow-hidden rounded-[2rem] bg-[#EFEBFF] px-6 py-9 sm:px-10 sm:py-11">
           <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
               <h2 className="max-w-xl text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2.4rem]">

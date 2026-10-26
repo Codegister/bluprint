@@ -19,7 +19,7 @@ import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { motion } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import {
   ArrowRight,
   CalendarPlus,
@@ -306,6 +306,16 @@ export default function Dashboard() {
   const rsDescription =
     "Pick what you study. Bluprint maps each course from its published specification, then builds revision material for every topic. Religious Studies is split into Edexcel Religious Studies A and B, and the religions and units you study.";
 
+  // The hero drifts up slightly as the page scrolls away. It is a small,
+  // scroll-linked move rather than a colour wash, so the screen has depth
+  // without adding another palette.
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress: heroScroll } = useScroll({
+    target: heroRef,
+    offset: ["start start", "end start"],
+  });
+  const mascotY = useTransform(heroScroll, [0, 1], [0, -30]);
+
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return (sets ?? []).filter((set) => {
@@ -322,14 +332,10 @@ export default function Dashboard() {
   return (
     <AppShell>
       <motion.header
-        className="hero-wash relative overflow-hidden rounded-[2rem] border border-[#E7DCF8] px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7"
+        ref={heroRef}
+        className="paper-panel relative overflow-hidden rounded-[2rem] border border-[#E4DFD3] px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7"
         {...enter(0.04, 14)}
       >
-        <div aria-hidden className="pointer-events-none absolute inset-0">
-          <div className="blob -right-12 -top-20 size-52 bg-white/70" />
-          <div className="blob -bottom-24 left-[26%] size-48 bg-[#FFE6A3]/60" />
-        </div>
-
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <span className="sticker bg-white/85 text-[#5B3DF5]">
@@ -338,7 +344,7 @@ export default function Dashboard() {
             </span>
             <h1 className="mt-3 font-display text-[1.75rem] font-extrabold leading-[1.05] tracking-[-0.035em] text-brand-ink sm:text-[2.2rem]">
               Welcome back,{" "}
-              <span className="text-gradient">
+              <span className="text-[#5B3DF5]">
                 {displayName(user?.name, user?.email)}
               </span>
             </h1>
@@ -371,6 +377,7 @@ export default function Dashboard() {
 
           <motion.div
             className="hidden shrink-0 sm:block"
+            style={{ y: mascotY }}
             initial={{ opacity: 0, scale: 0.9, rotate: -4 }}
             animate={{ opacity: 1, scale: 1, rotate: 0 }}
             transition={{ duration: 0.8, ease: EASE, delay: 0.25 }}

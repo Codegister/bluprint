@@ -1,12 +1,12 @@
-import type { Doc } from "@/convex/_generated/dataModel";
-
-export type RevisionPlan = Doc<"revisionPlans">;
-export type RevisionEntry = RevisionPlan["entries"][number];
+/**
+ * Subject colours and date/time formatting shared by the timetable builder and
+ * the one-day-at-a-time timetable screen.
+ */
 
 /**
  * Subject colours are assigned by course order, so a subject keeps the same
- * colour across the grid, the day cards and the legend. All classes are written
- * out in full here so Tailwind can see them.
+ * colour on its session cards and in the legend. All classes are written out in
+ * full here so Tailwind can see them.
  */
 export type SubjectColor = {
   bar: string;
@@ -109,7 +109,7 @@ export function colorForCourses(
   return new Map(
     courseSettings.map((setting, index) => [
       setting.courseId,
-      SUBJECT_COLORS[index % SUBJECT_COLORS.length],
+      SUBJECT_COLORS[index % SUBJECT_COLORS.length]!,
     ]),
   );
 }
@@ -118,13 +118,6 @@ export function addDaysKey(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
-}
-
-/** Monday of the week containing `value`, using ISO weekdays. */
-export function startOfWeek(value: string): string {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  const offset = (date.getUTCDay() + 6) % 7;
-  return addDaysKey(value, -offset);
 }
 
 export function formatTime(minutes: number): string {
@@ -136,40 +129,18 @@ export function formatTime(minutes: number): string {
   return `${displayHour}:${minute.toString().padStart(2, "0")} ${suffix}`;
 }
 
-/** 24-hour clock used by the timetable grid, e.g. 17:05. */
+/** 24-hour clock used by session cards, e.g. 17:05. */
 export function formatTime24(minutes: number): string {
   const normalized = ((minutes % 1440) + 1440) % 1440;
   const hour = Math.floor(normalized / 60);
   const minute = normalized % 60;
-  return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
+  return `${hour.toString().padStart(2, "0")}:${minute
+    .toString()
+    .padStart(2, "0")}`;
 }
 
 export function formatTimeRange(startMinutes: number, duration: number): string {
   return `${formatTime24(startMinutes)}–${formatTime24(startMinutes + duration)}`;
-}
-
-/**
- * Legacy fallback only. Plans built before the day-off budget was asked for
- * used a simple 1.5–2× school-day figure; this reproduces that so those
- * timetables still report the capacity they were actually built with. New
- * plans store the chosen `dayOffMinutes` and never call this.
- */
-export function extendedDailyMinutes(
-  schoolDayMinutes: number,
-  minSessionMinutes = 25,
-): number {
-  return Math.max(
-    Math.round((schoolDayMinutes * 2) / 5) * 5,
-    schoolDayMinutes + minSessionMinutes,
-  );
-}
-
-export function formatDayHeading(value: string): string {
-  return new Date(`${value}T00:00:00.000Z`).toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
 }
 
 export function formatDayLabel(value: string): string {
@@ -190,106 +161,3 @@ export function formatLongDate(value: string): string {
     timeZone: "UTC",
   });
 }
-
-export type TimetableDay = {
-  date: string;
-  label: string;
-  dayNumber: string;
-  isWeekend: boolean;
-  isHoliday: boolean;
-  holidayName: string | null;
-  isSchoolHoliday: boolean;
-  schoolHolidayName: string | null;
-  isExamDay: boolean;
-  entries: RevisionEntry[];
-  minutes: number;
-};
-
-export type TimetableWeek = {
-  weekStart: string;
-  label: string;
-  days: TimetableDay[];
-  minutes: number;
-};
-
-const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-/**
- * Builds complete Monday-to-Sunday weeks so the grid reads like a calendar,
- * including days with no sessions and bank holidays.
- */
-export function buildTimetableWeeks(plan: RevisionPlan): TimetableWeek[] {
-  const entriesByDate = new Map<string, RevisionEntry[]>();
-  for (const entry of plan.entries) {
-    const list = entriesByDate.get(entry.date) ?? [];
-    list.push({ ...entry });
-    entriesByDate.set(entry.date, list);
-  }
-  for (const list of entriesByDate.values()) {
-    list.sort((a, b) => (a.startMinutes ?? 0) - (b.startMinutes ?? 0));
-    // Plans built before start times existed get sequential times for display
-    // rather than every session appearing at the same moment.
-    let clock = plan.startMinutes ?? 17 * 60;
-    for (const entry of list) {
-      if (entry.startMinutes === undefined) {
-        entry.startMinutes = clock;
-      }
-      clock = Math.max(clock, entry.startMinutes + entry.minutes);
-    }
-  }
-
-  const holidaysByDate = new Map(
-    (plan.holidays ?? []).map((holiday) => [holiday.date, holiday.name]),
-  );
-  const schoolHolidaysByDate = new Map(
-    (plan.schoolHolidays ?? []).map((holiday) => [holiday.date, holiday.name]),
-  );
-  const lastEntryDate = plan.entries.reduce(
-    (latest, entry) => (entry.date > latest ? entry.date : latest),
-    plan.startDate,
-  );
-  // Include the first exam when it lands in the week straight after the last
-  // revision day, so the calendar ends on the exam rather than cutting off.
-  const includeExamWeek =
-    plan.examDate > lastEntryDate && plan.examDate <= addDaysKey(lastEntryDate, 6);
-  const firstWeek = startOfWeek(plan.startDate);
-  const lastWeek = startOfWeek(includeExamWeek ? plan.examDate : lastEntryDate);
-  const weeks: TimetableWeek[] = [];
-
-  for (
-    let weekStart = firstWeek;
-    weekStart <= lastWeek;
-    weekStart = addDaysKey(weekStart, 7)
-  ) {
-    const days: TimetableDay[] = WEEKDAY_NAMES.map((_, offset) => {
-      const date = addDaysKey(weekStart, offset);
-      const entries = entriesByDate.get(date) ?? [];
-      const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
-      return {
-        date,
-        label: formatDayLabel(date),
-        dayNumber: new Date(`${date}T00:00:00.000Z`).toLocaleDateString("en-GB", {
-          day: "numeric",
-          timeZone: "UTC",
-        }),
-        isWeekend: weekday === 0 || weekday === 6,
-        isHoliday: holidaysByDate.has(date),
-        holidayName: holidaysByDate.get(date) ?? null,
-        isSchoolHoliday: schoolHolidaysByDate.has(date),
-        schoolHolidayName: schoolHolidaysByDate.get(date) ?? null,
-        isExamDay: date === plan.examDate,
-        entries,
-        minutes: entries.reduce((sum, entry) => sum + entry.minutes, 0),
-      };
-    });
-    weeks.push({
-      weekStart,
-      label: `Week of ${formatDayLabel(weekStart)}`,
-      days,
-      minutes: days.reduce((sum, day) => sum + day.minutes, 0),
-    });
-  }
-
-  return weeks;
-}
-

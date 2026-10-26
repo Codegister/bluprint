@@ -343,6 +343,18 @@ const schema = defineSchema(
           }),
         ),
       ),
+      // Periods the student cannot study: a match, a shift, weekend plans. They
+      // are stored per date so time can be blocked before that day is generated.
+      blockedPeriods: v.optional(
+        v.array(
+          v.object({
+            date: v.string(),
+            startMinutes: v.number(),
+            endMinutes: v.number(),
+            label: v.optional(v.string()),
+          }),
+        ),
+      ),
       entries: v.array(
         v.object({
           date: v.string(),
@@ -360,6 +372,14 @@ const schema = defineSchema(
           ),
           paperId: v.optional(v.id("pastPapers")),
           startMinutes: v.optional(v.number()),
+          // Stable id for one generated session, used when it is ticked done.
+          id: v.optional(v.string()),
+          done: v.optional(v.boolean()),
+          doneAt: v.optional(v.number()),
+          // Screenshot of where a missed session was moved from, and a marker on
+          // the original so it is only carried forward once.
+          carriedFrom: v.optional(v.string()),
+          carriedOn: v.optional(v.string()),
           // Legacy: plans built when a break as long as the session followed
           // it stored that gap here. New plans space sessions with one equal
           // gap instead and do not write this field.
@@ -392,6 +412,45 @@ const schema = defineSchema(
       createdAt: v.number(),
       updatedAt: v.number(),
     }).index("by_user", ["userId"]),
+
+    // One generated revision day. Days are created one at a time when the
+    // student opens the timetable (or asks for a later day), instead of the
+    // whole plan being filled in up front. `sessions` is the day's own copy, so
+    // blocking out an evening only regenerates that day.
+    timetableDays: defineTable({
+      userId: v.id("users"),
+      planId: v.id("revisionPlans"),
+      date: v.string(),
+      sessions: v.array(
+        v.object({
+          id: v.string(),
+          courseId: v.id("courses"),
+          course: v.string(),
+          unit: v.string(),
+          topicId: v.string(),
+          topic: v.string(),
+          minutes: v.number(),
+          paper: v.optional(v.string()),
+          kind: v.optional(
+            v.union(v.literal("topic"), v.literal("paper")),
+          ),
+          paperId: v.optional(v.id("pastPapers")),
+          startMinutes: v.number(),
+          done: v.optional(v.boolean()),
+          doneAt: v.optional(v.number()),
+          // Set when this session is a missed one being caught up. The date is
+          // the day it was originally missed.
+          carriedFrom: v.optional(v.string()),
+          // Set on a missed session once it has been moved to a later day, so
+          // the same work is never carried twice.
+          carriedOn: v.optional(v.string()),
+        }),
+      ),
+      generatedAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_plan_date", ["planId", "date"])
+      .index("by_user_date", ["userId", "date"]),
 
     flashcards: defineTable({
       setId: v.id("studySets"),

@@ -38,7 +38,7 @@ export function Brand({
             d="M6.5 12.1h7a3.9 3.9 0 1 1 0 7.9h-7v-7.9Z"
             fill="#A78BFA"
           />
-          <circle cx="18.5" cy="5.5" r="1.9" fill="#F472B6" />
+          <circle cx="18.5" cy="5.5" r="1.9" fill="#8B5CF6" />
         </svg>
       </span>
       {!markOnly && (

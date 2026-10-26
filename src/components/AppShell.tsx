@@ -12,7 +12,7 @@ import { readableError } from "@/lib/errors";
 import { displayName, initialFor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
-import { motion } from "framer-motion";
+import { motion, useScroll } from "framer-motion";
 import {
   CalendarDays,
   Flame,
@@ -127,7 +127,7 @@ function GoalCard() {
       <Meter
         value={progress}
         className="mt-2 h-1.5 bg-[#ECE6FF]"
-        barClassName="bg-[linear-gradient(90deg,#6B4BFF,#EC4899)]"
+        barClassName="bg-[#5B3DF5]"
         label="Cards reviewed today"
       />
       <p className="mt-2 flex items-center gap-1.5 text-[0.72rem] leading-snug text-brand-ink/60">
@@ -180,14 +180,7 @@ function Sidebar({
   };
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,#F6F1FF_0%,#FCF9F3_36%,#FBFAF7_100%)]">
-      {/* Colour spots sitting behind the nav give the panel depth without
-          tinting any text. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="blob -left-16 -top-24 size-56 bg-[#C4B5FD]/55 blob-float" />
-        <div className="blob -right-20 top-40 size-48 bg-[#FFD7E6]/50" />
-        <div className="blob -left-10 bottom-24 size-44 bg-[#B9F0E4]/40" />
-      </div>
+    <div className="relative flex h-full flex-col overflow-hidden bg-[#FBFAF6]">
 
       <div className="relative px-5 pb-5 pt-6">
         <Brand onNavigate={onNavigate} />
@@ -283,7 +276,7 @@ function Sidebar({
 
       <div className="relative border-t border-white/70 px-4 py-4">
         <div className="flex items-center gap-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,#8B5CF6,#EC4899)] text-[0.85rem] font-bold text-white shadow-[0_8px_18px_-12px_rgba(109,40,217,0.9)]">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#191B27] text-[0.85rem] font-bold text-white">
             {initialFor(user?.name, user?.email)}
           </span>
           <div className="min-w-0 flex-1">
@@ -310,9 +303,17 @@ function Sidebar({
 /** Shared layout for every signed-in screen. */
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // A single accent rule that fills as the page scrolls. It replaces the
+  // decorative colour wash as the thing that makes a long screen feel alive.
+  const { scrollYProgress } = useScroll();
 
   return (
     <div className="min-h-screen">
+      <motion.div
+        aria-hidden
+        className="fixed inset-x-0 top-0 z-40 h-[2px] origin-left bg-[#5B3DF5]"
+        style={{ scaleX: scrollYProgress }}
+      />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[292px] border-r border-[#E9E2F5] lg:block">
         <Sidebar idPrefix="desktop" />
       </aside>
@@ -339,16 +340,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Sheet>
 
       <main className="relative lg:pl-[292px]">
-        {/* Soft colour behind page content. Fixed to the top of the canvas so
-            long pages do not scroll a hard gradient edge through the copy. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-[520px] overflow-hidden"
-        >
-          <div className="blob right-[-120px] top-[-140px] size-[360px] bg-[#D8CCFF]/60 blob-float" />
-          <div className="blob left-[18%] top-[220px] size-[240px] bg-[#FFD7E6]/45" />
-        </div>
-
         <div className="relative mx-auto w-full max-w-[1080px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
           {children}
         </div>

@@ -498,18 +498,24 @@ same rate-limit messages as the rest of the app.
 - Paper sessions rotate through the course's saved papers in creation order. A course with
   no saved paper still gets a labelled "Past paper practice" slot, whose card opens the
   course page where one can be built.
-- The server fills each school day up to the chosen budget with interleaved subject
-  sessions. A subject that no longer has time for a whole session waits
-  for the next revision day. A different subject starts each day so the same course does
+- Days are generated **one at a time**, the first time a day is opened. The builder only
+  stores the settings; it does not pre-fill a whole calendar. Each generated day continues
+  from the topics used by earlier generated days, so the plan still runs in a sensible
+  sequence.
+- The day is filled up to the chosen budget with interleaved subject sessions, with a short
+  ten-minute gap between them. A different subject starts each day so the same course does
   not always occupy the first slot.
-- Sessions never run back to back. A break as long as the session before it is inserted
-  before the next subject, so a 45-minute session is followed by 45 minutes off. Breaks sit
-  outside the study budget: the student chose study time, not desk time. The day's last
-  session has no trailing break.
-- **Nothing is scheduled to end after 8:00 pm.** A session that would cross that line waits
-  for the next revision day, and if the topics then will not fit before the exam the plan
-  starts earlier. The builder disables start times too late for your session length, and the
-  server rejects a plan whose sessions would run past the cutoff.
+- **Nothing is scheduled to end after 8:00 pm.** A session that would cross that line is
+  left out. The cutoff plus any blocked periods decide how many sessions fit; the builder
+  disables start times too late for your session length, and the server rejects a plan whose
+  sessions would run past the cutoff.
+- **Blocked time is skipped.** Any day can have periods blocked out (a match, a shift,
+  weekend plans). Saving the blocks rebuilds that day immediately and keeps any sessions
+  already ticked done. Up to eight blocked periods are accepted per day.
+- **Sessions are ticked done one at a time.** An unticked session on a past generated day
+  is missed work. The next day takes one or two of the oldest missed sessions as
+  **Catch-up** blocks, and the rest follow on later days, so catch-up never becomes one long
+  block. At most two extra sessions are added to any day.
 - Bank holidays, weekends and school-holiday weekdays use the **day-off budget the student
   chose** — nothing is multiplied or assumed. This lets a busy weekend stay short and a
   free half-term carry longer days.
@@ -520,23 +526,21 @@ same rate-limit messages as the rest of the app.
   substitute days for Christmas and New Year, and treats them as days off. Dates are
   calculated per year (Easter is derived, not hard-coded), so the plan stays correct across
   different exam seasons.
-- Sessions run from the start date up to the day before the first exam, capped at 60
-  revision days. If the topics do not all fit by then, the planner moves the start back a
-  day at a time (up to twelve weeks, never before today) and builds again, so a complete
-  plan can begin earlier than the date entered. The timetable reports when it did this.
+- The plan runs from the start date up to the day before the first exam. If the estimated
+  number of sessions is not enough for every topic, the planner moves the start back a day
+  at a time (up to twelve weeks, never before today) and reports when it did this. Because
+  days are generated lazily, this is a capacity estimate rather than a guarantee.
 - A plan is deterministic and does not call an AI model, so it builds instantly and cannot
   fail on a model rate limit.
-- The saved plan is rendered as a real week table: days run across the top, start times
-  run down the left, and each cell holds that day's session or a hatched **Free** block.
-  One week is shown at a time with previous/next controls, and it opens on the week that
-  holds the first scheduled session rather than an empty calendar week. Each subject has a colour,
-  every session shows its start and end time, duration, paper and topic, and bank
-  holidays and school breaks are labelled with the longer day they carry. The grid is
-  fluid rather than fixed-width, so the whole week fits the screen (a narrower time
-  gutter and compact session cards on phones) with no horizontal scrolling.
-- Every entry is clickable. A topic entry calls the same topic-to-study-set mutation as the
-  course page, reusing an existing set for that topic or creating one and opening it. A past
-  paper entry opens its saved paper.
+- The timetable screen shows **one day at a time**, not a week grid. A seven-day strip
+  selects which day to open; a day is generated and saved the first time it is opened. The
+  default is today, so the screen leads with the work in front of you rather than a whole
+  week of it.
+- Sessions show their start and end time, duration, subject colour, paper and topic, plus a
+  **Mark done** toggle. Blocked periods appear inline at their time. Topic blocks call the
+  same topic-to-study-set mutation as the course page, reusing an existing set for that
+  topic or creating one and opening it. A past paper block opens its saved paper, or the
+  course page when no paper exists yet.
 - Only one plan is stored per account. Building again replaces it, so the sidebar never
   shows a stale schedule beside a new one.
 
@@ -593,7 +597,7 @@ src/
                          AI-marked questions
     StudySet.tsx         set detail, compile progress, and the five study tabs
     TimetableBuilder.tsx subjects, session length, one paper answer, budgets, exam dates
-    Timetable.tsx        colour-coded weekly plan with holidays and clickable sessions
+    Timetable.tsx        one day at a time: blocked periods, done ticks, catch-up
   components/
     AppShell.tsx         sidebar / mobile navigation for signed-in pages
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
@@ -606,7 +610,7 @@ src/
                          tutor, study days, plans
     courses.ts           pathway CRUD, topic progress, topic-to-set creation, schedulers
     pastPapers.ts        saved practice papers, build queue, progress and marked answers
-    timetable.ts         deterministic revision-plan generation (topics, papers, mixed)
+    timetable.ts         per-day plan generation, blocked periods, catch-up, completion
     studySets.ts         ownership-checked queries/mutations + internal compile writes
     tutor.ts             saved tutor threads and the context the action reads
     ai.ts                "use node" NVIDIA calls, key rotation, OCR, JSON validation, marking,
@@ -637,10 +641,10 @@ src/
   timetable can mix AQA, Edexcel, OCR, and Cambridge. The level is shared across a setup
   batch; add another batch for a different qualification.
 - **There is one active revision timetable per account.** Rebuilding replaces the previous
-  plan. It fills up to 60 revision days with as many subject sessions as the daily budget
-  allows, and cycles back through topics if there are more revision days than topics. If
-  there are more topics than sessions, the page states how many are covered so the plan is
-  not mistaken for a complete pass.
+  plan and its generated days. Each day is generated on demand, holds as many subject
+  sessions as the daily budget and blocked periods allow, and cycles back through topics if
+  there are more revision days than topics. Because plans are lazy, days you never opened
+  were never assigned work, so there is no hidden backlog for them.
 - **Timetable holidays cover England and Wales.** Scotland and Northern Ireland have
   different bank holiday dates; supporting those would need a region choice, which version 1
   leaves out to keep the setup short.
@@ -650,17 +654,15 @@ src/
   table labels the break it used, and rebuilding after checking your school calendar is the
   simplest adjustment. Weekends, bank holidays and these break weekdays all use the
   day-off budget the student chose in the builder; nothing is multiplied or assumed.
-- **Breaks count as time, not study time.** The budget the student picks is study time.
-  Between two subjects Bluprint inserts a break as long as the session before it, so a
-  45-minute session is followed by 45 minutes off before the next one. The timetable's
-  clock includes those gaps; the day's study total does not. This is the simplest reading
-  of "a break as long as the study before it", and it means a longer session buys a longer
-  break rather than a shorter one.
+- **Gaps count as time, not study time.** The budget the student picks is study time.
+  Bluprint leaves a ten-minute gap between sessions rather than a break as long as the
+  session before it, so a short evening still fits its blocks. The day's start and end
+  times include those gaps; the study total does not.
 - **One session length for the whole plan.** Sessions are the same length for every
   subject, because a study block is a habit rather than a per-subject setting. **One paper
   answer covers the whole timetable** instead of a paper per subject, since friends revise
   the same paper across their subjects. A session that does not fit the day's remaining
-  budget or would cross 8:00 pm moves to the next revision day.
+  budget, the blocked periods, or the 8:00 pm cutoff is left out of that day.
 - **The study method is also one choice for the whole plan.** Topics, past papers only, or
   a mix of both is chosen once in the builder, like the session length. A past paper is a
   fixed 60-minute block, so a paper or mixed plan needs at least an hour of daily budget on
@@ -709,5 +711,6 @@ src/
   working when Wikipedia is parked.
 - **Tutor reply stops mid-sentence** — the stream was cut off by a timeout. Ask again; the
   half-written reply is removed automatically before the next question.
-- **A session is missing from the timetable** — it would have run past 8:00 pm, so it moved
-  to the next revision day. Start earlier or shorten that subject's session to fit more in.
+- **A session is missing from the timetable** — it would have run past 8:00 pm or into a
+  blocked period, so it was left out of that day. Remove a block, start earlier, or shorten
+  the session to fit more in.

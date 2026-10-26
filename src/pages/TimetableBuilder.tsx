@@ -354,7 +354,7 @@ export default function TimetableBuilder() {
           initial={{ width: `${((step - 1) / STEPS.length) * 100}%` }}
           animate={{ width: `${(step / STEPS.length) * 100}%` }}
           transition={{ duration: 0.5, ease: EASE }}
-          className="h-full rounded-full bg-[linear-gradient(90deg,#128A4C,#6B4DBE,#2B7FB8,#B7791F)]"
+          className="h-full rounded-full bg-[#5B3DF5]"
         />
       </div>
 
