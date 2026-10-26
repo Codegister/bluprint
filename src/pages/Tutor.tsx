@@ -97,13 +97,24 @@ export default function TutorPage() {
   const aiStatus = useQuery(api.settings.aiStatus);
   const tierLabels = aiStatus?.tutorTiers ?? ["Balanced"];
   const defaultTier = aiStatus?.defaultTutorTier ?? "Balanced";
+  // The picker shows a tagline and a distinct icon per tier; both come from the
+  // server, so "Ultra" can say "ultra fast" without the browser knowing models.
+  const modelDetails = Object.fromEntries(
+    (aiStatus?.tutorTierDetails ?? []).map((tier) => [
+      tier.label,
+      { tagline: tier.tagline, icon: tier.icon },
+    ]),
+  );
+  const effortLabels = aiStatus?.tutorEfforts ?? ["Low", "Medium", "Max Effort"];
 
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useWeb, setUseWeb] = useState(false);
-  const [effort, setEffort] = useState<"Low" | "Medium" | "Max Effort">("Medium");
+  const [effort, setEffort] = useState<string>(
+    aiStatus?.defaultTutorEffort ?? "Medium",
+  );
   // Last tier used, so a suggested question keeps the same answer style.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -133,7 +144,11 @@ export default function TutorPage() {
 
     // The picker reports a tier label; the server maps it to a NVIDIA model.
     const chosenTier = meta.model || tier;
+    // The effort bars report a label the server turns into a budget, a
+    // temperature and a depth instruction.
+    const chosenEffort = meta.effort || effort;
     setTier(chosenTier);
+    setEffort(chosenEffort);
     setError(null);
     setSending(true);
     setPending(question);
@@ -145,6 +160,7 @@ export default function TutorPage() {
           question,
           useWeb,
           tier: chosenTier,
+          effort: chosenEffort,
         });
       } else if (validCourseId && courseId) {
         await askCourseTutor({
@@ -153,6 +169,7 @@ export default function TutorPage() {
           question,
           useWeb,
           tier: chosenTier,
+          effort: chosenEffort,
         });
       }
     } catch (sendError) {
@@ -317,7 +334,8 @@ export default function TutorPage() {
             fullWidth
             maxAttachments={1}
             models={tierLabels}
-            modelIcons={{}}
+            modelDetails={modelDetails}
+            efforts={effortLabels}
             onDictate={async (audio, format) =>
               (await transcribe({ audio, format })).text
             }
@@ -328,7 +346,8 @@ export default function TutorPage() {
             {useWeb
               ? "web search is on, so recent and specification details can be checked online."
               : "web search is off, so answers come from your material and the model only."}{" "}
-            Answers can be wrong, so check them against your notes.
+            Effort sets how long and deep the answer is. Answers can be wrong, so
+            check them against your notes.
           </p>
         </div>
       </div>

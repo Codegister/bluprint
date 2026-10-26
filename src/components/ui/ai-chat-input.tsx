@@ -2,6 +2,15 @@
 
 import * as React from "react";
 import { useRef, useState, useEffect, useCallback } from "react";
+import {
+  Crown,
+  Flame,
+  Rabbit,
+  Scale,
+  Sparkles,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
@@ -59,25 +68,50 @@ function MorphingText({ text, className }: { text: string; className?: string })
   );
 }
 
+/** One distinct glyph and tint per model tier, keyed by the server's icon name. */
+const MODEL_GLYPHS: Record<string, { Glyph: LucideIcon; tint: string }> = {
+  // Ultra is the speed tier, so it gets the lightning bolt.
+  zap: { Glyph: Zap, tint: "text-[#D08A00]" },
+  rabbit: { Glyph: Rabbit, tint: "text-[#14866D]" },
+  scale: { Glyph: Scale, tint: "text-[#4C5FD5]" },
+  flame: { Glyph: Flame, tint: "text-[#D2542A]" },
+  crown: { Glyph: Crown, tint: "text-[#8A4BC6]" },
+};
+
+/** Fallback when a tier arrives without an icon name (an older deployment). */
+const LABEL_GLYPHS: Record<string, string> = {
+  ultra: "zap",
+  fast: "rabbit",
+  balanced: "scale",
+  powerful: "flame",
+  max: "crown",
+};
+
 function ModelIcon({
   model,
   className,
   modelIcons,
+  details,
 }: {
   model: string;
   className?: string;
+  /** Optional image URL override, kept for deployments that brand a model. */
   modelIcons?: Record<string, string>;
+  details?: { tagline?: string; icon?: string };
 }) {
-  const src =
-    modelIcons?.[model] ?? modelIcons?.["NVIDIA"] ?? "https://placehold.co/64x64/1d1d2d/7c5cff?text=NVIDIA";
+  const src = modelIcons?.[model];
+  if (src) {
+    return <img src={src} alt="" className={cn("object-contain", className)} />;
+  }
 
-  return (
-    <img
-      src={src}
-      alt={model}
-      className={cn("object-contain", className)}
-    />
-  );
+  const iconKey = details?.icon ?? LABEL_GLYPHS[model.trim().toLowerCase()];
+  const glyph = iconKey ? MODEL_GLYPHS[iconKey] : undefined;
+  if (!glyph) {
+    return <Sparkles aria-hidden className={cn("shrink-0", className)} />;
+  }
+
+  const { Glyph, tint } = glyph;
+  return <Glyph aria-hidden className={cn("shrink-0", tint, className)} />;
 }
 
 function ArrowUpIcon() {
@@ -507,6 +541,11 @@ export interface PromptInputProps {
   className?: string;
   models?: string[];
   modelIcons?: Record<string, string>;
+  /**
+   * Picker copy per model: one line of explanation (e.g. "Ultra fast · quickest
+   * reply") and an icon name. Icons are drawn here, never fetched.
+   */
+  modelDetails?: Record<string, { tagline?: string; icon?: string }>;
   efforts?: string[];
   defaultValue?: string;
   value?: string;
@@ -534,6 +573,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       className,
       models = ["NVIDIA"],
       modelIcons: propModelIcons = {},
+      modelDetails = {},
       efforts = ["Low", "Medium", "Max Effort"],
       defaultValue = "",
       value: controlledValue,
@@ -551,6 +591,13 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     const [modelIcons, setModelIcons] = useState<Record<string, string>>(propModelIcons);
     const [effortIndex, setEffortIndex] = useState(1);
     const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
+
+    // Rows grow when a model carries a tagline, so the moving highlight follows
+    // the real row height instead of a fixed 34px.
+    const rowsHaveTaglines = models.some((model) =>
+      Boolean(modelDetails[model]?.tagline),
+    );
+    const rowHeight = rowsHaveTaglines ? 46 : 34;
 
     const [attachments, setAttachments] = useState<Attachment[]>([]);
     const [activeAttachment, setActiveAttachment] = useState<{
@@ -1337,11 +1384,13 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                     isModelSelectOpen ? "bg-accent/60 text-foreground" : "",
                   )}
                   aria-label={`Select model. Current: ${selectedModel}`}
+                  title={modelDetails[selectedModel]?.tagline ?? selectedModel}
                 >
                   <ModelIcon
                     model={selectedModel}
-                    className="size-3.5 opacity-70 group-hover:opacity-100 transition-opacity"
+                    className="size-3.5 opacity-80 group-hover:opacity-100 transition-opacity"
                     modelIcons={modelIcons}
+                    details={modelDetails[selectedModel]}
                   />
                   <span className="text-xs font-semibold select-none transition-colors">
                     <MorphingText text={selectedModel} className="max-w-[260px]" />
@@ -1366,44 +1415,60 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                 >
                   <div className="relative flex flex-col gap-0.5">
                     <div
-                      style={hoverStyle}
-                      className="absolute left-0 right-0 top-0 h-8 -z-10 rounded-xl bg-accent pointer-events-none"
+                      style={{ ...hoverStyle, height: rowHeight - 2 }}
+                      className="absolute left-0 right-0 top-0 -z-10 rounded-xl bg-accent pointer-events-none"
                     />
-                    {models.map((model, idx) => (
-                      <button
-                        key={model}
-                        type="button"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onMouseEnter={() => {
-                          setHoverStyle((prev) => ({
-                            opacity: 1,
-                            transform: `translateY(${idx * 34}px) scale(1)`,
-                            transition:
-                              prev.opacity === 0
-                                ? "opacity 0.15s ease-out"
-                                : "transform 0.3s cubic-bezier(0.175,0.885,0.32,1.275), opacity 0.15s ease",
-                          }));
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedModel(model);
-                          setIsModelSelectOpen(false);
-                        }}
-                        className="group relative flex h-8 w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-xs font-medium text-foreground/80 outline-none active:scale-[0.98] cursor-default"
-                      >
-                        <span
-                          className="flex min-w-0 items-center gap-2 truncate"
-                          title={model}
+                    {models.map((model, idx) => {
+                      const detail = modelDetails[model];
+                      return (
+                        <button
+                          key={model}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onMouseEnter={() => {
+                            setHoverStyle((prev) => ({
+                              opacity: 1,
+                              transform: `translateY(${idx * rowHeight}px) scale(1)`,
+                              transition:
+                                prev.opacity === 0
+                                  ? "opacity 0.15s ease-out"
+                                  : "transform 0.3s cubic-bezier(0.175,0.885,0.32,1.275), opacity 0.15s ease",
+                            }));
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedModel(model);
+                            setIsModelSelectOpen(false);
+                          }}
+                          className={cn(
+                            "group relative flex w-full items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-left text-xs font-medium text-foreground/80 outline-none active:scale-[0.98] cursor-default",
+                            rowsHaveTaglines ? "h-11 items-start" : "h-8",
+                          )}
                         >
-                          <ModelIcon
-                            model={model}
-                            className="size-3.5 shrink-0 opacity-85 group-hover:opacity-100 transition-opacity"
-                            modelIcons={modelIcons}
-                          />
-                          <span className="truncate">{model}</span>
-                        </span>
-                      </button>
-                    ))}
+                          <span className="flex min-w-0 flex-1 items-start gap-2">
+                            <ModelIcon
+                              model={model}
+                              // Nudge the glyph onto the label's baseline when a
+                              // tagline sits underneath it.
+                              className={cn(
+                                "size-3.5 opacity-90 transition-opacity group-hover:opacity-100",
+                                rowsHaveTaglines && "mt-[3px]",
+                              )}
+                              modelIcons={modelIcons}
+                              details={detail}
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate">{model}</span>
+                              {detail?.tagline && (
+                                <span className="mt-0.5 block whitespace-normal text-[0.66rem] font-normal leading-snug text-muted-foreground">
+                                  {detail.tagline}
+                                </span>
+                              )}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -1412,6 +1477,10 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={cycleEffort}
+                // The bars are a real setting: the label is sent with the question
+                // and changes how long and how deep the answer is.
+                title={`Answer effort: ${efforts[effortIndex]}. Click to cycle ${efforts.join(" → ")}.`}
+                aria-label={`Answer effort. Current: ${efforts[effortIndex]}. Click to change.`}
                 className="group flex items-center gap-1 rounded-full px-2 py-1 text-foreground/50 transition-all duration-200 hover:bg-accent/60 hover:text-foreground outline-none cursor-default"
               >
                 <DynamicBarsIcon level={efforts[effortIndex]} />

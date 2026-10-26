@@ -1,8 +1,11 @@
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import {
+  DEFAULT_TUTOR_EFFORT_LABEL,
   DEFAULT_TUTOR_TIER_LABEL,
   NVIDIA_KEY_NAME,
+  TUTOR_EFFORTS,
+  TUTOR_TIER_DETAILS,
   TUTOR_TIER_LABELS,
   readNvidiaKeys,
 } from "./lib/nvidiaConfig";
@@ -33,7 +36,13 @@ export const aiStatus = query({
       // Tutor tiers are shown by label only: Ultra (ultra fast) through Max
       // (maximum strength). The NVIDIA model behind each one stays on the server.
       tutorTiers: TUTOR_TIER_LABELS,
+      // Tagline and icon name per label, so the picker can say "Ultra fast" next
+      // to Ultra and draw a different glyph for every model.
+      tutorTierDetails: TUTOR_TIER_DETAILS,
       defaultTutorTier: DEFAULT_TUTOR_TIER_LABEL,
+      // Effort bars mirror these labels; the value is sent with each question.
+      tutorEfforts: TUTOR_EFFORTS.map((effort) => effort.label),
+      defaultTutorEffort: DEFAULT_TUTOR_EFFORT_LABEL,
     };
   },
 });

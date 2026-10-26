@@ -46,8 +46,11 @@ import {
   NVIDIA_CHAT_URL,
   NVIDIA_TEXT_MODEL,
   NVIDIA_VISION_MODEL,
+  applyTutorEffort,
   readNvidiaKeys,
+  readTutorEffort,
   readTutorTier,
+  type TutorEffort,
   type TutorTier,
 } from "./lib/nvidiaConfig";
 import { buildPaperCover } from "./lib/paperFormat";
@@ -2411,6 +2414,7 @@ function tutorPrompt(
   context: TutorContext,
   question: string,
   web: WebResult[] = [],
+  effort?: TutorEffort,
 ): ChatMessage[] {
   const qualification = qualificationText(context);
   const history = context.messages
@@ -2437,6 +2441,9 @@ function tutorPrompt(
           : "") +
         `<conversation>\n${history || "(this is the student's first question)"}\n</conversation>\n\n` +
         `<student_question>${question}</student_question>\n\n` +
+        // The effort bars write their choice into the prompt, so Low really is
+        // shorter and Max Effort really is deeper rather than only relabelled.
+        (effort?.guidance ? `${effort.guidance}\n\n` : "") +
         "Answer as the tutor. If the student asks for exam practice, give one question at a time and wait for their answer before marking it.",
     },
   ];
@@ -2629,6 +2636,7 @@ async function streamNvidiaAnswer(
  */
 async function streamWebAnswer(
   messages: ChatMessage[],
+  effort: TutorEffort,
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
   const apiKey = readOpenRouterKey();
@@ -2646,8 +2654,9 @@ async function streamWebAnswer(
     body: JSON.stringify({
       model: OPENROUTER_TUTOR_MODEL,
       messages,
-      temperature: 0.3,
-      max_tokens: 1500,
+      // The browsing model follows the same effort dial as the NVIDIA one.
+      temperature: Math.max(0, 0.3 + effort.temperatureShift),
+      max_tokens: Math.round(1500 * effort.budgetScale),
       stream: true,
       plugins: [{ id: "web", max_results: 4 }],
     }),
@@ -2687,13 +2696,18 @@ async function streamTutorAnswer(
   question: string,
   useWeb: boolean,
   tier: TutorTier,
+  effort: TutorEffort,
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
+  // Effort scales the tier's answer budget and nudges its temperature, so the
+  // bars beside the model picker change the reply itself.
+  const answerTier = applyTutorEffort(tier, effort);
+
   if (!useWeb) {
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question),
-      tier,
+      tutorPrompt(context, question, [], effort),
+      answerTier,
       onSnapshot,
     );
   }
@@ -2704,20 +2718,24 @@ async function streamTutorAnswer(
   if (results.length > 0) {
     const grounded = await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, results),
-      tier,
+      tutorPrompt(context, question, results, effort),
+      answerTier,
       onSnapshot,
     );
     return { text: grounded.text, sources: sourcesFrom(results) };
   }
 
   try {
-    return await streamWebAnswer(tutorPrompt(context, question), onSnapshot);
+    return await streamWebAnswer(
+      tutorPrompt(context, question, [], effort),
+      effort,
+      onSnapshot,
+    );
   } catch {
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question),
-      tier,
+      tutorPrompt(context, question, [], effort),
+      answerTier,
       onSnapshot,
     );
   }
@@ -2939,14 +2957,17 @@ export const askTutor = action({
     useWeb: v.optional(v.boolean()),
     // A tier label such as "Ultra"; the matching NVIDIA model stays server-side.
     tier: v.optional(v.string()),
+    // "Low" | "Medium" | "Max Effort" from the effort bars beside the picker.
+    effort: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { setId, question, useWeb, tier },
+    { setId, question, useWeb, tier, effort },
   ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
     const chosenTier = readTutorTier(tier);
+    const chosenEffort = readTutorEffort(effort);
 
     const context = await ctx.runQuery(internal.tutor.getTutorContext, {
       setId,
@@ -2977,6 +2998,7 @@ export const askTutor = action({
         // Off unless the browser explicitly asks for it.
         useWeb === true,
         chosenTier,
+        chosenEffort,
         async (content, sources) => {
           await ctx.runMutation(internal.tutor.appendTutorAnswer, {
             messageId,
@@ -3015,14 +3037,17 @@ export const askCourseTutor = action({
     useWeb: v.optional(v.boolean()),
     // Same tier labels as `askTutor`; the model mapping is shared.
     tier: v.optional(v.string()),
+    // Same effort labels as `askTutor`.
+    effort: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { courseId, unitTitle, question, useWeb, tier },
+    { courseId, unitTitle, question, useWeb, tier, effort },
   ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
     const chosenTier = readTutorTier(tier);
+    const chosenEffort = readTutorEffort(effort);
 
     const context = await ctx.runQuery(internal.tutor.getCourseTutorContext, {
       courseId,
@@ -3045,6 +3070,7 @@ export const askCourseTutor = action({
         // Off unless the browser explicitly asks for it.
         useWeb === true,
         chosenTier,
+        chosenEffort,
         async (content, sources) => {
           await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
             messageId,

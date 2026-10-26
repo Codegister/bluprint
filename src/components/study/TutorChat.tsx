@@ -101,6 +101,15 @@ export function TutorChat({
   const aiStatus = useQuery(api.settings.aiStatus);
   const tierLabels = aiStatus?.tutorTiers ?? ["Balanced"];
   const defaultTier = aiStatus?.defaultTutorTier ?? "Balanced";
+  // Each tier gets its own tagline and glyph, so the picker can say "ultra
+  // fast" beside Ultra and no two models share an icon.
+  const modelDetails = Object.fromEntries(
+    (aiStatus?.tutorTierDetails ?? []).map((tier) => [
+      tier.label,
+      { tagline: tier.tagline, icon: tier.icon },
+    ]),
+  );
+  const effortLabels = aiStatus?.tutorEfforts ?? ["Low", "Medium", "Max Effort"];
 
   const groundedIn =
     scope.kind === "set"
@@ -116,7 +125,9 @@ export function TutorChat({
   // Web search stays off unless the student asks for it: the tutor answers
   // from the saved notes and specification first.
   const [useWeb, setUseWeb] = useState(false);
-  const [effort, setEffort] = useState<"Low" | "Medium" | "Max Effort">("Medium");
+  const [effort, setEffort] = useState<string>(
+    aiStatus?.defaultTutorEffort ?? "Medium",
+  );
   // The last tier the student used, so a suggested question uses the same one.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -138,14 +149,24 @@ export function TutorChat({
     // The composer's model picker reports a tier label; an unknown one falls
     // back to the default on the server.
     const chosenTier = meta.model || tier;
+    // Effort is a real setting: the server turns this label into the answer
+    // budget, temperature and a short/long-answer instruction.
+    const chosenEffort = meta.effort || effort;
     setTier(chosenTier);
+    setEffort(chosenEffort);
     setError(null);
     setSending(true);
     setPending(question);
 
     try {
       if (scope.kind === "set") {
-        await askTutor({ setId: scope.setId, question, useWeb, tier: chosenTier });
+        await askTutor({
+          setId: scope.setId,
+          question,
+          useWeb,
+          tier: chosenTier,
+          effort: chosenEffort,
+        });
       } else {
         await askCourseTutor({
           courseId: scope.courseId,
@@ -153,6 +174,7 @@ export function TutorChat({
           question,
           useWeb,
           tier: chosenTier,
+          effort: chosenEffort,
         });
       }
     } catch (sendError) {
@@ -312,6 +334,8 @@ export function TutorChat({
             fullWidth
             maxAttachments={1}
             models={tierLabels}
+            modelDetails={modelDetails}
+            efforts={effortLabels}
             onDictate={async (audio, format) =>
               (await transcribe({ audio, format })).text
             }
@@ -322,7 +346,8 @@ export function TutorChat({
             {useWeb
               ? "web search is on, so recent and specification details can be checked online."
               : "web search is off, so answers come from your material and the model only."}{" "}
-            Answers can be wrong, so check them against your notes.
+            Effort sets how long and deep the answer is. Answers can be wrong, so
+            check them against your notes.
           </p>
         </div>
       </section>
