@@ -30,16 +30,23 @@ import { toast } from "sonner";
 export function CoursePastPapers({
   courseId,
   formatSummary,
+  formatId,
 }: {
   courseId: Id<"courses">;
-  /** The subject's real question structure, e.g. "4 questions · 3, 4, 5 and 12 marks". */
+  /** The subject's real question structure, e.g. "8 questions · 3, 4, 5 and 12 marks". */
   formatSummary?: string;
+  /** The blueprint the course uses now, so an older paper can be flagged. */
+  formatId?: string;
 }) {
   const navigate = useNavigate();
   const papers = useQuery(api.pastPapers.listForCourse, { courseId });
   const createPaper = useMutation(api.pastPapers.create);
   const removePaper = useMutation(api.pastPapers.remove);
+  const rebuildPaper = useMutation(api.pastPapers.rebuild);
   const [building, setBuilding] = useState(false);
+  const [rebuildingId, setRebuildingId] = useState<Id<"pastPapers"> | null>(
+    null,
+  );
   const [removal, setRemoval] = useState<{ id: Id<"pastPapers">; title: string } | null>(
     null,
   );
@@ -62,6 +69,18 @@ export function CoursePastPapers({
       toast.error(readableError(error, "Could not build that past paper."));
     } finally {
       setBuilding(false);
+    }
+  };
+
+  const handleRebuild = async (paperId: Id<"pastPapers">) => {
+    setRebuildingId(paperId);
+    try {
+      await rebuildPaper({ paperId });
+      toast.success("Rebuilding this paper in the current format.");
+    } catch (error) {
+      toast.error(readableError(error, "Could not rebuild that paper."));
+    } finally {
+      setRebuildingId(null);
     }
   };
 
@@ -138,6 +157,11 @@ export function CoursePastPapers({
         <ul className="mt-5 grid gap-2.5">
           {list.map((paper) => {
             const ready = paper.status === "ready";
+            // Papers saved before the subject's format changed keep the marks
+            // and question types they were built with, so they are rebuilt on
+            // request rather than silently showing the wrong paper.
+            const outdated =
+              ready && Boolean(formatId) && paper.formatId !== formatId;
             const progress = Math.min(
               100,
               paper.questionCount > 0
@@ -170,10 +194,18 @@ export function CoursePastPapers({
                           ? "Build failed"
                           : "Building"}
                     </span>
+                    {outdated && (
+                      <span
+                        title="Built before this subject's paper format was updated"
+                        className="rounded-full bg-[#FFF6E5] px-2 py-0.5 text-[0.62rem] font-semibold text-[#96650A]"
+                      >
+                        Older format
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1 text-[0.74rem] leading-relaxed text-muted-foreground">
                     {ready
-                      ? `${paper.questionCount} question${paper.questionCount === 1 ? "" : "s"} · ${paper.totalMarks} marks · about ${paper.durationMinutes} minutes`
+                      ? `${paper.questionCount} question${paper.questionCount === 1 ? "" : "s"} · ${paper.totalMarks} marks · about ${paper.durationMinutes} minutes${outdated ? " · rebuild to use the current question types and marks" : ""}`
                       : paper.status === "error"
                         ? paper.errorMessage ?? "This paper could not be built."
                         : paper.progress ?? "Waiting to start"}
@@ -195,6 +227,21 @@ export function CoursePastPapers({
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
+                  {outdated && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void handleRebuild(paper._id)}
+                      disabled={rebuildingId === paper._id}
+                      title="Writes this paper again with the current question types and marks. Your old answers are cleared."
+                      className="h-8 rounded-full border-[#EBD6AB] bg-[#FFFBF2] px-3 text-[0.76rem] font-semibold text-[#8A5A12] shadow-none hover:bg-[#FFF3DC]"
+                    >
+                      {rebuildingId === paper._id ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : null}
+                      Rebuild
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"

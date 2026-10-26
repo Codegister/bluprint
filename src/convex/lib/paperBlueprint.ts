@@ -40,7 +40,7 @@ export type PaperSection = {
 
 export type PaperBlueprint = {
   id: string;
-  /** "4 questions · 3, 4, 5 and 12 marks" */
+  /** "8 questions · 3, 4, 5 and 12 marks" */
   summary: string;
   /** One sentence for the course page. */
   description: string;
@@ -61,6 +61,10 @@ export type BlueprintCourse = {
   rsRoute?: string | null;
   rsReligion?: string | null;
   rsReligion2?: string | null;
+  /** Route A's third paper, or Route B's first Area of Study. */
+  rsSpec?: string | null;
+  /** Route B's second Area of Study. */
+  rsSpec2?: string | null;
   poetryTheme?: string | null;
 };
 
@@ -175,10 +179,15 @@ function isAdvanced(level: string): boolean {
 
 /** "Christianity and Judaism", or a neutral label when the course has none. */
 function religionsLabel(course: BlueprintCourse): string {
-  const list = [course.rsReligion, course.rsReligion2]
+  const list = religionPair(course);
+  return list.length > 0 ? list.join(" and ") : "the religions you study";
+}
+
+/** The religions a GCSE RS course studies, in the order the student chose them. */
+function religionPair(course: BlueprintCourse): string[] {
+  return [course.rsReligion, course.rsReligion2]
     .map((value) => value?.trim())
     .filter((value): value is string => Boolean(value));
-  return list.length > 0 ? list.join(" and ") : "the religions you study";
 }
 
 // ---------------------------------------------------------------------------
@@ -186,52 +195,76 @@ function religionsLabel(course: BlueprintCourse): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Edexcel: 1 (a) 3 marks, 1 (b) 4 marks, 1 (c) 5 marks, 1 (d) 12 marks. This is
- * the one the user's RS A course uses, and the four question types are the
- * whole paper.
+ * One Edexcel RS question group: 3, 4, 5 and 12 marks, printed as 1 (a) to
+ * 1 (d). A real paper repeats this group for each religion, so the blueprint
+ * does too instead of mashing both religions into one four-question paper.
+ */
+function edexcelRsGroup(): PaperSlot[] {
+  return [
+    q(
+      3,
+      "Outline",
+      "Ask the student to outline three beliefs, practices or teachings from the specification. The answer needs three separate points.",
+      { part: "a" },
+    ),
+    q(
+      4,
+      "Explain",
+      "Ask the student to explain two beliefs or practices, giving a reason or example for each.",
+      { part: "b" },
+    ),
+    q(
+      5,
+      "Explain",
+      "Ask the student to explain two beliefs or practices, referring to a source of authority or a religious teaching.",
+      { part: "c" },
+    ),
+    q(
+      12,
+      "Evaluate",
+      "Give a statement students can agree or disagree with and ask 'Evaluate this statement.' Require a justified conclusion and reference to non-religious beliefs as well as religious ones.",
+      { part: "d", marking: "levels" },
+    ),
+  ];
+}
+
+/**
+ * Edexcel: 1 (a) 3, 1 (b) 4, 1 (c) 5, 1 (d) 12 — once per religion. Route A
+ * examines both religions through the Study of Religion, while Route B examines
+ * one Area of Study through both religions.
  */
 function edexcelRs(course: BlueprintCourse): PaperBlueprint {
-  const religions = religionsLabel(course);
+  const routeB = /studies b|route b/i.test(course.rsRoute ?? "");
+  const religions = religionPair(course);
+  const list = religions.length > 0 ? religions : ["the religion you study"];
+  const area = course.rsSpec?.trim();
+  const sectionTitle = (religion: string, index: number) =>
+    routeB
+      ? `Section ${index + 1} — ${area ?? "Area of Study"} · ${religion}`
+      : `Section ${index + 1} — Study of Religion · ${religion}`;
+
+  const sections = list.map((religion, index) =>
+    section(
+      sectionTitle(religion, index),
+      "Answer all questions. Answer in full sentences.",
+      edexcelRsGroup(),
+    ),
+  );
+  const groups = list.map((_, index) => `${index + 1} (a) to ${index + 1} (d)`);
+
   return makeBlueprint(
-    "rs-edexcel",
-    "Edexcel format: 3, 4, 5 and 12-mark questions, with a 12-mark evaluation.",
+    routeB ? "rs-edexcel-b" : "rs-edexcel-a",
+    routeB
+      ? "Edexcel Route B format: 3, 4, 5 and 12-mark questions for each religion in one Area of Study."
+      : "Edexcel Route A format: 3, 4, 5 and 12-mark questions for each religion.",
+    sections,
     [
-      section(
-        `Section A — ${religions}`,
-        "Answer all questions. Answer in full sentences.",
-        [
-          q(
-            3,
-            "Outline",
-            "Ask the student to outline three beliefs, practices or teachings from the specification. The answer needs three separate points.",
-            { part: "a" },
-          ),
-          q(
-            4,
-            "Explain",
-            "Ask the student to explain two beliefs or practices, giving a reason or example for each.",
-            { part: "b" },
-          ),
-          q(
-            5,
-            "Explain",
-            "Ask the student to explain two beliefs or practices, referring to a source of authority or a religious teaching.",
-            { part: "c" },
-          ),
-          q(
-            12,
-            "Evaluate",
-            "Give a statement students can agree or disagree with and ask 'Evaluate this statement.' Require a justified conclusion and reference to non-religious beliefs as well as religious ones.",
-            { part: "d", marking: "levels" },
-          ),
-        ],
-      ),
-    ],
-    [
-      "Write exactly four questions, numbered 1 (a), 1 (b), 1 (c) and 1 (d).",
-      "The marks must be exactly 3, 4, 5 and 12. Never write a question worth any other number of marks.",
-      "Use only the religions on this course. Keep each question to one religion, and do not invent a religion.",
-      "The 1 (d) question must be a statement to evaluate, not an explain question. It must ask for a justified conclusion and must refer to non-religious beliefs.",
+      `Write exactly ${sections.length * 4} questions, numbered ${groups.join(" and ")}.`,
+      "Every group of four questions must be worth exactly 3, 4, 5 and 12 marks. Never change those marks.",
+      routeB
+        ? `Both sections examine ${area ?? "the same Area of Study"}: Section 1 through ${list[0]} and Section 2 through ${list[1] ?? "the second religion"}.`
+        : `Section 1 is on ${list[0]}${list[1] ? ` and Section 2 is on ${list[1]}` : ""}. Keep each question to one religion, and do not invent a religion.`,
+      "Each 12-mark question must be a statement to evaluate, not an explain question. It must ask for a justified conclusion and must refer to non-religious beliefs.",
       POINT_RULE,
       LEVEL_RULE,
       "Do not write a mark notation, answer lines or a cover page; the app adds those.",
@@ -239,55 +272,67 @@ function edexcelRs(course: BlueprintCourse): PaperBlueprint {
   );
 }
 
-/** AQA: 1, 2, 4, 5 and 12 marks, including a one-mark multiple-choice opener. */
+/**
+ * One AQA RS question group. AQA's papers run 1, 1, 4, 6 and 12 marks from
+ * summer 2026 (before that the second and fourth parts were worth 2 and 5).
+ */
+function aqaRsGroup(): PaperSlot[] {
+  return [
+    q(
+      1,
+      "Choose",
+      "Ask a one-mark multiple-choice question with four options labelled A, B, C and D. The student answers with the correct letter.",
+      { part: "a" },
+    ),
+    q(
+      1,
+      "Give",
+      "Ask for one belief, practice or example. There is exactly one mark for it.",
+      { part: "b" },
+    ),
+    q(
+      4,
+      "Explain",
+      "Ask the student to explain two beliefs or practices, giving a reason or example for each.",
+      { part: "c" },
+    ),
+    q(
+      6,
+      "Explain",
+      "Ask the student to explain two beliefs or practices, referring to a source of authority or a religious teaching.",
+      { part: "d" },
+    ),
+    q(
+      12,
+      "Evaluate",
+      "Give a statement students can agree or disagree with and ask them to evaluate it. Require a justified conclusion and reference to non-religious beliefs as well as religious ones.",
+      { part: "e", marking: "levels" },
+    ),
+  ];
+}
+
+/** AQA: 1, 1, 4, 6 and 12 marks for each religion on the course. */
 function aqaRs(course: BlueprintCourse): PaperBlueprint {
-  const religions = religionsLabel(course);
+  const religions = religionPair(course);
+  const list = religions.length > 0 ? religions : ["the religion you study"];
+  const sections = list.map((religion, index) =>
+    section(
+      `Section ${index === 0 ? "A" : "B"} — ${religion}`,
+      "Answer all questions. Answer in full sentences.",
+      aqaRsGroup(),
+    ),
+  );
+  const groups = list.map((_, index) => `${index + 1} (a) to ${index + 1} (e)`);
+
   return makeBlueprint(
     "rs-aqa",
-    "AQA format: 1, 2, 4, 5 and 12-mark questions, ending with a 12-mark evaluation.",
+    "AQA format: 1, 1, 4, 6 and 12-mark questions for each religion, ending with a 12-mark evaluation.",
+    sections,
     [
-      section(
-        `Section A — ${religions}`,
-        "Answer all questions. Answer in full sentences.",
-        [
-          q(
-            1,
-            "Choose",
-            "Ask a one-mark multiple-choice question with four options labelled A, B, C and D. The student answers with the correct letter.",
-            { part: "a" },
-          ),
-          q(
-            2,
-            "Give",
-            "Ask the student to give two beliefs, practices or examples. One mark for each.",
-            { part: "b" },
-          ),
-          q(
-            4,
-            "Explain",
-            "Ask the student to explain two beliefs or practices, giving a reason or example for each.",
-            { part: "c" },
-          ),
-          q(
-            5,
-            "Explain",
-            "Ask the student to explain two beliefs or practices, referring to a source of authority or a religious teaching.",
-            { part: "d" },
-          ),
-          q(
-            12,
-            "Evaluate",
-            "Give a statement students can agree or disagree with and ask them to evaluate it. Require a justified conclusion and reference to non-religious beliefs as well as religious ones.",
-            { part: "e", marking: "levels" },
-          ),
-        ],
-      ),
-    ],
-    [
-      "Write exactly five questions, numbered 1 (a) to 1 (e).",
-      "The marks must be exactly 1, 2, 4, 5 and 12. Never write a question worth any other number of marks.",
-      "Use only the religions on this course. Keep each question to one religion, and do not invent a religion.",
-      "The 1 (e) question must be a statement to evaluate, not an explain question. It must ask for a justified conclusion and must refer to non-religious beliefs.",
+      `Write exactly ${sections.length * 5} questions, numbered ${groups.join(" and ")}.`,
+      "Every group of five questions must be worth exactly 1, 1, 4, 6 and 12 marks. Never change those marks.",
+      `Keep each section to its own religion: ${list.join(" and ")}. Do not invent a religion.`,
+      "Each 12-mark question must be a statement to evaluate, not an explain question. It must ask for a justified conclusion and must refer to non-religious beliefs.",
       POINT_RULE,
       LEVEL_RULE,
       "Do not write a mark notation, answer lines or a cover page; the app adds those.",
@@ -493,9 +538,91 @@ function religiousStudies(course: BlueprintCourse): PaperBlueprint {
 // ---------------------------------------------------------------------------
 
 /**
+ * The two essay sections of this board's literature paper. Each section is one
+ * long essay on a text the course actually studies, never an extract, unseen
+ * text or short-answer question the student has not prepared for.
+ */
+function essaySections(
+  course: BlueprintCourse,
+): Array<{ title: string; focus: string }> {
+  const family = boardFamily(course.examBoard);
+  const poetry = course.poetryTheme?.trim();
+  if (isAdvanced(course.level)) {
+    return [
+      { title: "Section A — Set text", focus: "the set text you have studied" },
+      {
+        title: poetry ? `Section B — Poetry: ${poetry}` : "Section B — Poetry or second text",
+        focus: poetry
+          ? `a poem from the ${poetry} anthology`
+          : "a poem or second text you have studied",
+      },
+    ];
+  }
+  switch (family) {
+    case "aqa":
+      return [
+        {
+          title: "Section A — Shakespeare",
+          focus: "the Shakespeare play you have studied",
+        },
+        {
+          title: "Section B — 19th-century novel",
+          focus: "the 19th-century novel you have studied",
+        },
+      ];
+    case "edexcel":
+      return [
+        {
+          title: "Section A — Shakespeare",
+          focus: "the Shakespeare play you have studied",
+        },
+        {
+          title: "Section B — Post-1914 literature",
+          focus: "the post-1914 play or novel you have studied",
+        },
+      ];
+    case "ocr":
+      return [
+        {
+          title: "Section A — Modern prose or drama",
+          focus: "the modern prose or drama text you have studied",
+        },
+        {
+          title: "Section B — 19th-century prose",
+          focus: "the 19th-century prose text you have studied",
+        },
+      ];
+    case "wjec":
+      return [
+        {
+          title: "Section A — Shakespeare",
+          focus: "the Shakespeare play you have studied",
+        },
+        {
+          title: poetry ? `Section B — Poetry anthology: ${poetry}` : "Section B — Poetry anthology",
+          focus: poetry
+            ? `a poem from the ${poetry} anthology`
+            : "a poem from the anthology you have studied",
+        },
+      ];
+    default:
+      return [
+        { title: "Section A — Set text", focus: "the set text you have studied" },
+        {
+          title: poetry ? `Section B — Poetry: ${poetry}` : "Section B — Poetry",
+          focus: poetry
+            ? `a poem from the ${poetry} anthology`
+            : "a poem you have studied",
+        },
+      ];
+  }
+}
+
+/**
  * English Literature is made of long essays, not short answers. AQA's essays
  * are 30 marks (plus 4 for SPaG on the real paper); Edexcel, OCR and Eduqas use
- * 40-mark essays; Cambridge and IB use 25.
+ * 40-mark essays; Cambridge and IB use 25. A practice paper carries one essay
+ * for each of the two sections the board's paper examines.
  */
 function englishLiterature(course: BlueprintCourse): PaperBlueprint {
   const family = boardFamily(course.examBoard);
@@ -508,38 +635,34 @@ function englishLiterature(course: BlueprintCourse): PaperBlueprint {
         ? 25
         : 30;
   const twoPart = family === "edexcel" || family === "ocr";
-  const poetry = course.poetryTheme?.trim();
 
   const blueprint = makeBlueprint(
     "english-literature",
-    "English Literature format: one full essay question, marked against level descriptors.",
-    [
-      section("Section A — Essay", "Answer the question.", [
+    "English Literature format: two full essay questions, marked against level descriptors.",
+    essaySections(course).map((essay) =>
+      section(essay.title, "Answer the question.", [
         q(
           marks,
           "Explore",
-          "Set one essay question on a text or poem from the specification. If the specification names the text or poem, name it; otherwise say 'the text you have studied' and make the question work for any text in that unit. Use the board's essay wording (for example 'Explore how…', 'How does the writer…' or 'To what extent…'). Ask about a character, theme, relationship or the writer's methods, and require analysis of the writer's choices rather than plot summary." +
+          `Set one essay question on ${essay.focus}. If the specification names the text or poem, name it; otherwise say 'the text you have studied' and make the question work for any text in that unit. Use the board's essay wording (for example 'Explore how…', 'How does the writer…' or 'To what extent…'). Ask about a character, theme, relationship or the writer's methods, and require analysis of the writer's choices rather than plot summary.` +
             (twoPart
               ? " Combine close analysis of a key moment with the whole text in the same question."
-              : "") +
-            (poetry
-              ? ` The course studies the ${poetry} poetry anthology, so a poetry question may be set from it.`
               : ""),
           { marking: "levels" },
         ),
       ]),
-    ],
+    ),
     [
-      `Write exactly one question, worth ${marks} marks. It is a single extended essay.`,
+      `Write exactly two questions, worth ${marks} marks each. Each is an extended essay.`,
       "Do not write short-answer, recall, comprehension, multiple-choice, true/false or one-mark questions.",
       "Ask about a text or poem from the specification. Never invent a text, poem, character or scene; use 'the text you have studied' when the specification does not name one.",
-      "The question must ask the student to analyse the writer's methods and support a line of argument with evidence from the whole text.",
+      "Each question must ask the student to analyse the writer's methods and support a line of argument with evidence from the whole text.",
       "Do not reproduce an extract or a long quotation. Tell the student to use their own copy of the text.",
       LEVEL_RULE,
-      "The model answer must be a full essay with an introduction, developed paragraphs and a conclusion, not a list of points.",
+      "Each model answer must be a full essay with an introduction, developed paragraphs and a conclusion, not a list of points.",
       ...(family === "aqa" && !advanced
         ? [
-            "On the real AQA paper 4 extra marks are awarded for AO4 (SPaG); this practice question is marked out of 30 for the essay itself.",
+            "On the real AQA paper 4 extra marks are awarded for AO4 (SPaG); each practice essay is marked out of 30 for the essay itself.",
           ]
         : []),
       "Do not write a mark notation, answer lines or a cover page; the app adds those.",
@@ -547,7 +670,7 @@ function englishLiterature(course: BlueprintCourse): PaperBlueprint {
   );
   // Say "essay", not "question": the format is the point the student needs to
   // see before building.
-  return { ...blueprint, summary: `1 essay · ${marks} marks` };
+  return { ...blueprint, summary: `2 essays · ${marks} marks each` };
 }
 
 /** English Language is one extended writing task, not a reading quiz. */
@@ -989,7 +1112,7 @@ export function buildPaperBlueprint(
   return generic();
 }
 
-/** One line for the course page, e.g. "4 questions · 3, 4, 5 and 12 marks". */
+/** One line for the course page, e.g. "8 questions · 3, 4, 5 and 12 marks". */
 export function paperFormatSummary(course: BlueprintCourse): string {
   return buildPaperBlueprint(course).summary;
 }

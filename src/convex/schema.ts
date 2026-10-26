@@ -171,6 +171,11 @@ const schema = defineSchema(
       userId: v.id("users"),
       courseId: v.id("courses"),
       title: v.string(),
+      // Which subject blueprint the paper was written to ("rs-edexcel-a",
+      // "english-literature", …). The course page compares it with the format
+      // the course uses now, so a paper saved before the format changed is
+      // offered a rebuild instead of silently staying wrong.
+      formatId: v.optional(v.string()),
       // Every paper is one hour long. The timetable assumes 60 minutes per
       // paper, so the duration is stored rather than guessed at render time.
       durationMinutes: v.number(),

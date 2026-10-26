@@ -103,8 +103,14 @@ function materialsFor(qualification: PaperQualification): string[] {
 
 /** "GCSE Biology · AQA · Higher tier" — one line for the cover and the header. */
 export function qualificationLine(qualification: PaperQualification): string {
+  // Religious Studies papers name the religions they examine, because a paper
+  // without them cannot be revised from.
+  const religions = [qualification.rsReligion, qualification.rsReligion2]
+    .map((religion) => religion?.trim())
+    .filter((religion): religion is string => Boolean(religion));
   return [
     `${qualification.level} ${qualification.subject}`.trim(),
+    religions.length > 0 ? religions.join(" and ") : null,
     qualification.examBoard && qualification.examBoard !== "None"
       ? qualification.examBoard
       : null,

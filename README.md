@@ -21,10 +21,10 @@ their own dashboard containing only their courses and study sets.
 - **Convex Auth (email one-time code)** — separate accounts without password management
 - **NVIDIA API** — study-set and past-paper generation, vision, marking, and tutoring,
   through the OpenAI-compatible endpoint at `integrate.api.nvidia.com`
-- **Cognito (`cognito.org`, scraped)** — the published topic outline for each course. The
-  pathway builder follows Cognito's qualification → subject → exam board → tier route, so
-  the map matches the board's own specification headings exactly. No AI is used for the
-  pathway.
+- **Published specification outlines (scraped)** — the official topic outline for each
+  course. The pathway builder follows the published qualification → subject → exam board →
+  tier route, so the map matches the board's own specification headings exactly. No AI is
+  used for the pathway.
 - **Bun** — package manager and scripts
 
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
@@ -56,14 +56,14 @@ shows the choice with a small star, and the row is briefly highlighted as it app
 Clicking an already-added subject reopens its questions so a subject with a different
 board or tier can be changed (changing it then updates only that subject, not the
 default), and finishing the questions returns you to the same scroll position in the list. KS3 stores no board
-or tier and is scraped from Cognito's KS3 subject pages. Combined Science is its own
+or tier and is read from the published KS3 subject pages. Combined Science is its own
 subject, so there is no separate Triple/Combined toggle. Poetry is
 not chosen in the picker: every anthology cluster the board publishes arrives as its own
 unit, and the ones your school does not teach are removed from the pathway.
 
 Bluprint queues each course immediately and maps the current specification server-side. It
-starts from the published outline on [Cognito](https://cognito.org) for that exact level,
-subject and board, so every paper, topic and subtopic in the specification reaches the map,
+starts from the published outline for that exact level, subject and board, so every paper,
+topic and subtopic in the specification reaches the map,
 then writes a summary, key points and an exam skill for each topic.
 
 Each course gets its own workspace on the dashboard, with topic-level progress. Open any
@@ -77,7 +77,7 @@ pathway: study sets already built from it stay in the library, and a rebuild bri
 full published outline back. That is how a student keeps one poetry cluster, drops an
 optional unit, or skips a paper their school does not enter them for.
 
-The mapping is deterministic: Cognito's published outline is scraped, then each topic's
+The mapping is deterministic: the published outline is read from source, then each topic's
 summary and key points are assembled from its own subtopics. No model is consulted, so a
 slow or rate-limited AI provider can never leave a course half-mapped or invent a topic. A
 course never lands in a "needs a retry" state.
@@ -176,10 +176,10 @@ it. Sets built from a course topic link back to that course.
 
 ## Assumptions
 
-- **Course pathways are scraped from Cognito, not written by a model.** The builder reads
-  the published page for the exact qualification, subject, board and tier — including the
-  specification page when the notes page is not server-rendered. If Cognito has no page for
-  a course, Bluprint stores a small starter map instead of inventing topics. Always check
+- **Course pathways are scraped from the published specification, not written by a model.**
+  The builder reads the page for the exact qualification, subject, board and tier —
+  including the specification page when the notes page is not server-rendered. If there is
+  no published page for a course, Bluprint stores a small starter map instead of inventing topics. Always check
   the official specification; the course page says this too. Topic study sets are generated
   lazily (one tap per topic), which keeps a nine-course setup affordable on free tiers.
 - **The course picker is a curated catalogue plus custom entry.** It covers common GCSE,
@@ -208,8 +208,9 @@ it. Sets built from a course topic link back to that course.
   bullet.
 - **A saved practice paper is original, but set out in the subject's format.** It is
   written from the course's stored specification in that subject's real question structure
-  — for example RS 3/4/5/12-mark parts, or one English Literature essay — and laid out the
-  way the board lays out its own papers: cover rubric, question numbering, mark notation
+  — for example RS 3/4/5/12-mark parts for each religion, or two long English Literature
+  essays — and laid out the way the board lays out its own papers: cover rubric, question
+  numbering, mark notation
   and command words. Published board papers and mark schemes are copyrighted, so the
   questions are original. The app does not link to or reproduce external papers. The
   timetable counts a paper as one hour, and the cover states that allowance. Papers are
@@ -362,7 +363,7 @@ Startpage and Qwant forbid automated retrieval in their terms.
 
 ### Course pathways need no key
 
-Pathways are scraped from Cognito's published pages, so they build with no AI key at all.
+Pathways are read from the published specification pages, so they build with no AI key at all.
 `NVIDIA_API_KEY` is used only to build study sets and past papers, mark written answers
 and answer tutor questions.
 
@@ -406,11 +407,11 @@ same rate-limit messages as the rest of the app.
 
 - Choosing courses writes every course with status **queued** in one transaction, then
   schedules one Convex action per course, 1.5 seconds apart. The browser is not held open.
-- The builder walks Cognito's own route: qualification, subject, exam board, then tier. It
-  fetches `/courses/<level>/<subject>/<board>/<tier>/notes`, lets Cognito redirect to its
-  dated route (Biology → biology-triple) and reads the paper, module, topic and subtopic
+- The builder walks the published route: qualification, subject, exam board, then tier. It
+  fetches `/courses/<level>/<subject>/<board>/<tier>/notes`, follows the site's redirect to
+  its dated route (Biology → biology-triple) and reads the paper, module, topic and subtopic
   headings from the page. IB uses its `ibhl` / `ibsl` route instead of a board segment.
-- Combined Science is the exception Cognito splits before the exam board: Biology,
+- Combined Science is the one qualification split before the exam board: Biology,
   Chemistry and Physics are separate component routes. The scraper reads all three and
   merges them into one pathway with a unit per science, so a Combined Science course covers
   the whole qualification.
@@ -419,9 +420,9 @@ same rate-limit messages as the rest of the app.
 - The pathway is a direct mapping of those headings: summaries, key points and exam skills
   are assembled from the scraped subtopics. Nothing is invented, so the map covers the
   entire published specification and no unit needs a model call.
-- If Cognito has no page for a course, the deterministic starter map keeps it usable, and
-  a rebuild replaces it once Cognito publishes the course. Students are never asked to
-  retry.
+- If there is no published page for a course, the deterministic starter map keeps it
+  usable, and a rebuild replaces it once the outline is published. Students are never asked
+  to retry.
 - **Study this topic** writes the topic's summary and key points into a study set and opens
   it. The existing compile pipeline takes over, so the topic set has the same summary,
   cards, quiz, exam marking, scheduling, and tutor as an uploaded set.
@@ -497,8 +498,9 @@ same rate-limit messages as the rest of the app.
   specification as a list of units, topics and specification references, and a **subject
   blueprint** from `convex/lib/paperBlueprint.ts`: the exact number of questions, each
   question's printed label, marks and command word, and whether it is point-marked or
-  levels-marked. RS gets 3/4/5/12 (or the board's own sequence), English Literature gets one
-  long essay, maths gets calculations and no essays. The model writes the question stems,
+  levels-marked. RS repeats 3/4/5/12 once for each religion or Area of Study (AQA's parts
+  are 1/1/4/6/12 from summer 2026); English Literature is two long essays and no short
+  answers; maths gets calculations and no essays. The model writes the question stems,
   model answers and mark schemes to that structure; only the layout and question types are
   imitated, never a real question.
 - The **cover is built on the server**, not by the model, from the board's own rubric in
@@ -512,6 +514,9 @@ same rate-limit messages as the rest of the app.
   count and every mark must match. If they do not, the paper is generated once more with a
   format correction; a second failure leaves a readable **Build again** message rather than
   a half-written paper.
+- The paper stores the blueprint it was written to. When a subject's format changes, an
+  existing paper is marked **Older format** in the course's past-paper list and on its own
+  page, with one tap to rebuild it in the current structure.
 - Questions are stored once the whole paper validates, along with the model answer and
   either a one-bullet-per-mark guide or level descriptors. A levels-marked essay is graded
   against those descriptors; a point-marked question is graded against its bullets, whole
@@ -554,10 +559,10 @@ src/
     studySets.ts         ownership-checked queries/mutations + internal compile writes
     tutor.ts             saved tutor threads and the context the action reads
     ai.ts                "use node" NVIDIA calls, key rotation, OCR, JSON validation, marking,
-                         tutoring, study-set generation, and the Cognito pathway actions
+                         tutoring, study-set generation, and the course-outline pathway actions
     settings.ts          environment key-pool status for the UI
     lib/nvidiaConfig.ts  NVIDIA URL, model IDs, key parsing, notes limit
-    lib/cognito.ts       scrapes the published outline for a course from cognito.org
+    lib/cognito.ts       reads a course's published topic outline
     lib/paperBlueprint.ts each subject's question types, marks and marking style
     lib/paperFormat.ts   each board's cover rubric, numbering, mark notation and format brief
   lib/
@@ -639,9 +644,9 @@ src/
 - **429** — the whole pool is cooling down. Wait about a minute, then retry the set.
 - **404 / 410 model not available** — NVIDIA retired that model. Set
   `NVIDIA_TEXT_MODEL` / `NVIDIA_VISION_MODEL` to a model currently listed on NVIDIA Build.
-- **A pathway is generic** — Cognito has no published page for that qualification yet, so
-  the starter map is used. Rebuild the pathway later to pick up the published outline. The
-  course page always links the current specification as the source of truth.
+- **A pathway is generic** — there is no published page for that qualification yet, so the
+  starter map is used. Rebuild the pathway later to pick up the published outline. Your
+  board's own specification is always the source of truth.
 - **Poor OCR** — use straighter, brighter photos; dark handwriting or blurry frames are
   the usual cause. Pasted text is the most reliable input.
 - **Tutor answers have no web sources** — either the Web switch is off, or the question was

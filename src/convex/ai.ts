@@ -1015,6 +1015,8 @@ type PaperCourse = {
   rsRoute?: string;
   rsReligion?: string;
   rsReligion2?: string;
+  rsSpec?: string;
+  rsSpec2?: string;
   pathway?: {
     units: Array<{
       title: string;
@@ -1126,7 +1128,16 @@ async function generatePaperQuestions(
     examBoard: course.examBoard,
     level: course.level,
   });
-  const detail = [course.variant, course.tier, course.poetryTheme]
+  const religions = [course.rsReligion, course.rsReligion2]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  const detail = [
+    course.variant,
+    course.tier,
+    course.poetryTheme,
+    religions.length > 0 ? religions.join(" and ") : undefined,
+    course.rsSpec,
+  ]
     .filter((part): part is string => Boolean(part))
     .join(" · ");
   const digest = specificationDigest(course);
@@ -1223,6 +1234,7 @@ export const buildPastPaper = internalAction({
         (sum, question) => sum + question.marks,
         0,
       );
+      const blueprint = buildPaperBlueprint(course);
       const cover = buildPaperCover(
         {
           subject: course.subject,
@@ -1231,6 +1243,8 @@ export const buildPastPaper = internalAction({
           tier: course.tier,
           variant: course.variant,
           poetryTheme: course.poetryTheme,
+          rsReligion: course.rsReligion,
+          rsReligion2: course.rsReligion2,
         },
         paper.title,
         totalMarks,
@@ -1238,6 +1252,7 @@ export const buildPastPaper = internalAction({
       );
       await ctx.runMutation(internal.pastPapers.completeBuild, {
         paperId,
+        formatId: blueprint.id,
         cover,
         questions,
       });
@@ -1739,7 +1754,9 @@ async function generateCoursePathway(
 
   if (!pathway) {
     if (!allowFallback) {
-      throw new Error("Cognito has no published outline for this course.");
+      throw new Error(
+        "There is no published outline for this course yet. Try building it again later.",
+      );
     }
     pathway = fallbackPathway(course);
   }

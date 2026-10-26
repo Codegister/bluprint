@@ -82,6 +82,7 @@ export const listForCourse = query({
       .map((paper) => ({
         _id: paper._id,
         title: paper.title,
+        formatId: paper.formatId,
         status: paper.status,
         progress: paper.progress,
         errorMessage: paper.errorMessage,
@@ -286,10 +287,11 @@ export const claimBuild = internalMutation({
 export const completeBuild = internalMutation({
   args: {
     paperId: v.id("pastPapers"),
+    formatId: v.string(),
     cover: paperCover,
     questions: v.array(generatedQuestion),
   },
-  handler: async (ctx, { paperId, cover, questions }) => {
+  handler: async (ctx, { paperId, formatId, cover, questions }) => {
     const paper = await ctx.db.get(paperId);
     if (!paper) throw new Error("Past paper not found.");
 
@@ -317,6 +319,7 @@ export const completeBuild = internalMutation({
       status: "ready",
       progress: undefined,
       errorMessage: undefined,
+      formatId,
       cover,
       questionCount: questions.length,
       totalMarks,

@@ -3,6 +3,7 @@ import { PastPaperPractice } from "@/components/study/PastPaperPractice";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
 import { readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { courseSubtitle } from "@/lib/subjects";
@@ -91,6 +92,11 @@ export default function PastPaper() {
           course: course.subject,
         })
       : undefined;
+    // The structure the course uses now, shown on the paper and used to spot a
+    // paper saved before that structure was corrected.
+    const blueprint = course ? buildPaperBlueprint(course) : null;
+    const outdated =
+      ready && blueprint !== null && paper.formatId !== blueprint.id;
 
     return (
       <>
@@ -140,7 +146,42 @@ export default function PastPaper() {
               ? `, ${paper.earnedMarks} of ${paper.totalMarks} marks earned`
               : ""}
           </span>
+          {blueprint && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="font-semibold text-brand-ink">
+                {blueprint.summary}
+              </span>
+            </>
+          )}
         </section>
+
+        {outdated && (
+          <section className="mt-4 rounded-[2rem] border border-[#EBD6AB] bg-[#FFFBF2] p-5 sm:p-6">
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12]">
+              Older paper format
+            </p>
+            <h2 className="mt-1 font-display text-[1.05rem] font-bold text-brand-ink">
+              This paper was saved before the {course?.subject ?? "subject"} format
+              was updated
+            </h2>
+            <p className="mt-2 text-[0.85rem] leading-relaxed text-muted-foreground">
+              Rebuild it to get this subject's current question types and marks —
+              for example 3, 4, 5 and 12-mark Religious Studies questions, or two
+              long English Literature essays. Rebuilding replaces this paper's
+              questions and clears any answers on it.
+            </p>
+            <Button
+              type="button"
+              onClick={() => void handleRetry()}
+              disabled={retrying}
+              className="mt-4 h-9 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+            >
+              {retrying ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Rebuild in the current format
+            </Button>
+          </section>
+        )}
 
         {paper.status === "error" ? (
           <section className="mt-4 rounded-[2rem] border border-[#F3C9CF] bg-[#FFF7F9] p-6">
