@@ -30,14 +30,16 @@ export const NVIDIA_KEY_NAME = "NVIDIA_API_KEY";
 /**
  * Tutor tiers.
  *
- * Students choose a speed/power trade-off by label only — Fast, Balanced,
- * Powerful, Max, Ultra. The NVIDIA model behind each label never leaves the
+ * Students choose a speed/power trade-off by label only — Ultra, Fast,
+ * Balanced, Powerful, Max. The NVIDIA model behind each label never leaves the
  * server, so the tutor can show plain words instead of model ids and the
  * deployment can re-point a tier through an environment variable without
  * touching the UI.
  *
- * Higher tiers are given a longer answer budget, because they are the ones a
- * student picks for a full worked answer rather than a quick check.
+ * "Ultra" means ultra fast: the quickest endpoint with a short answer budget.
+ * "Max" means maximum strength: the largest reasoning model, given the longest
+ * budget and the lowest temperature for deep deliberation. The tiers in between
+ * step up in power, and each one gets a larger answer budget than the last.
  */
 export type TutorTierId = "fast" | "balanced" | "powerful" | "max" | "ultra";
 
@@ -67,6 +69,18 @@ export const TUTOR_TIERS: TutorTier[] = [
     temperature: 0.3,
   },
   {
+    id: "ultra",
+    label: "Ultra",
+    // Ultra means ultra fast: the lowest-latency model in the catalog with a
+    // short answer budget, for a definition or a quick yes/no while revising.
+    model: tierModel(
+      "NVIDIA_TUTOR_ULTRA_MODEL",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+    ),
+    maxTokens: 900,
+    temperature: 0.35,
+  },
+  {
     id: "fast",
     label: "Fast",
     // Smallest model in the catalog: answers in a second or two, best for
@@ -85,25 +99,14 @@ export const TUTOR_TIERS: TutorTier[] = [
   {
     id: "max",
     label: "Max",
-    // Nemotron Super reasons over long exam questions better than the plain
-    // instruct models while still streaming quickly.
+    // Max means maximum strength: the largest reasoning model on
+    // build.nvidia.com, given the longest budget and the lowest temperature so
+    // it deliberates over a full derivation or a marked essay plan. Slowest.
     model: tierModel(
       "NVIDIA_TUTOR_MAX_MODEL",
-      "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-    ),
-    maxTokens: 2000,
-    temperature: 0.25,
-  },
-  {
-    id: "ultra",
-    label: "Ultra",
-    // The largest reasoning model on build.nvidia.com. Slowest, and reserved
-    // for questions that need a full derivation or a marked essay plan.
-    model: tierModel(
-      "NVIDIA_TUTOR_ULTRA_MODEL",
       "nvidia/llama-3.1-nemotron-ultra-253b-v1",
     ),
-    maxTokens: 2400,
+    maxTokens: 2600,
     temperature: 0.2,
   },
 ];

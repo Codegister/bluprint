@@ -96,8 +96,8 @@ export function TutorChat({
   const askCourseTutor = useAction(api.ai.askCourseTutor);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
-  // Tiers are named by feel only (Fast, Balanced, Powerful, Max, Ultra). The
-  // NVIDIA model behind each label is chosen on the server and never sent here.
+  // Tiers are named by feel only (Ultra is ultra fast, Max is maximum strength).
+  // The NVIDIA model behind each label is chosen on the server, never sent here.
   const aiStatus = useQuery(api.settings.aiStatus);
   const tierLabels = aiStatus?.tutorTiers ?? ["Balanced"];
   const defaultTier = aiStatus?.defaultTutorTier ?? "Balanced";
