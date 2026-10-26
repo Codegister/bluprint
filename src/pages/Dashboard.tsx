@@ -14,7 +14,7 @@ import { subjectMeta } from "@/lib/subjects";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { motion } from "framer-motion";
-import { ArrowRight, ChevronRight, Layers3, Loader2 } from "lucide-react";
+import { ArrowRight, ChevronRight, Layers3, LayoutGrid, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -207,6 +207,16 @@ export default function Dashboard() {
               >
                 New study set
                 <ArrowRight className="size-4" />
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="h-11 rounded-full border-border bg-white px-4 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+              >
+                <Link to="/actions">
+                  <LayoutGrid className="size-4" />
+                  All actions
+                </Link>
               </Button>
               <p className="text-[0.78rem] font-medium text-brand-ink/55">
                 {sets ? (

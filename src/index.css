@@ -448,6 +448,101 @@
     animation-delay: -15s;
   }
 
+  /* -------------------------------------------------------------------------
+     Moving gradient wash.
+
+     Three wide, soft colour ribbons cross the page on loops of different
+     lengths. Each one is a single element with `filter: blur()` and a
+     transform animation, so the compositor moves a cached layer instead of
+     repainting a gradient every frame. The fade in/out at the ends of the
+     loop keeps the restart invisible.
+     ------------------------------------------------------------------------- */
+  .gizmo-flow {
+    position: absolute;
+    inset: -12%;
+    overflow: hidden;
+    opacity: calc(var(--chrome-intensity, 1) * 0.62);
+    pointer-events: none;
+  }
+  .gizmo-ribbon {
+    position: absolute;
+    left: -70%;
+    width: 150%;
+    height: 30%;
+    border-radius: 9999px;
+    filter: blur(68px);
+    will-change: transform, opacity;
+    animation: ribbon-cross 38s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+  .gizmo-ribbon-lime {
+    top: 2%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(217, 244, 91, 0.7) 28%,
+      rgba(169, 210, 255, 0.42) 62%,
+      transparent 100%
+    );
+    animation-duration: 41s;
+  }
+  .gizmo-ribbon-lilac {
+    top: 38%;
+    height: 26%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(201, 184, 255, 0.62) 30%,
+      rgba(255, 195, 154, 0.4) 64%,
+      transparent 100%
+    );
+    animation-duration: 55s;
+    animation-delay: -19s;
+  }
+  .gizmo-ribbon-sky {
+    top: 72%;
+    height: 24%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(185, 239, 201, 0.55) 30%,
+      rgba(217, 244, 91, 0.42) 68%,
+      transparent 100%
+    );
+    animation-duration: 47s;
+    animation-delay: -32s;
+  }
+  /* The dark theme keeps the same ribbons but they read as light rather than
+     pigment, so they need a touch less weight. */
+  .dark .gizmo-flow {
+    opacity: calc(var(--chrome-intensity, 1) * 0.4);
+  }
+
+  /* Ink in water: a canvas of pigment plumes. Multiply makes the ink behave
+     like dye on the cream page; the dark theme switches to screen so the same
+     plumes glow instead of disappearing. */
+  .ink-water {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    -webkit-mask-image: radial-gradient(
+      120% 100% at 50% 45%,
+      #000 48%,
+      transparent 100%
+    );
+    mask-image: radial-gradient(120% 100% at 50% 45%, #000 48%, transparent 100%);
+  }
+  .ink-water canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    mix-blend-mode: multiply;
+  }
+  .dark .ink-water canvas {
+    mix-blend-mode: screen;
+    opacity: 0.75;
+  }
+
   /* The desk texture: a faint dot grid, like a bullet-journal page. */
   .gizmo-dots {
     position: absolute;
@@ -984,6 +1079,28 @@
 .progress-live {
   background-color: var(--brand-pink);
   animation: progress-pulse 1.8s ease-in-out infinite;
+}
+
+/* One ribbon crossing the screen. It travels in from the left, holds its
+   brightness through the middle, then dissolves before looping. */
+@keyframes ribbon-cross {
+  0% {
+    transform: translate3d(-18%, 0, 0) rotate(-7deg) scale(1);
+    opacity: 0;
+  }
+  14% {
+    opacity: 1;
+  }
+  52% {
+    transform: translate3d(28%, -3%, 0) rotate(4deg) scale(1.12);
+  }
+  86% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(64%, 2%, 0) rotate(-4deg) scale(1.04);
+    opacity: 0;
+  }
 }
 
 /* The two backdrop smudges drift in opposite directions. Transform-only, so
@@ -1535,8 +1652,12 @@
   .animate-rise,
   .pulse-ring::after,
   .gizmo-blob,
+  .gizmo-ribbon,
   .rise-stagger > * {
     animation: none;
+  }
+  .gizmo-ribbon {
+    opacity: 0.5;
   }
   .lift:hover {
     transform: none;

@@ -21,6 +21,7 @@ import {
   Flame,
   GraduationCap,
   Layers3,
+  LayoutGrid,
   Menu,
   Sparkles,
   Target,
@@ -44,6 +45,16 @@ const navItems = [
     active: "bg-gizmo-lime text-[#1C1A14]",
     tile: "bg-[#1C1A14] text-gizmo-lime",
     soft: "bg-gizmo-lime/45 text-[#1C1A14] dark:bg-gizmo-lime/20 dark:text-brand-ink",
+  },
+  {
+    to: "/actions",
+    label: "All actions",
+    icon: LayoutGrid,
+    // The hub is deliberately neutral: every other row owns a pastel, so ink
+    // and paper make this one read as the index rather than a sixth subject.
+    active: "bg-brand-panel text-brand-ink ring-1 ring-brand-ink/10",
+    tile: "bg-brand-ink text-gizmo-cream",
+    soft: "bg-brand-panel text-brand-ink/80",
   },
   {
     to: "/courses",

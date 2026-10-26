@@ -1,0 +1,322 @@
+import { cn } from "@/lib/utils";
+import { useEffect, useRef } from "react";
+
+/**
+ * Ink in water.
+ *
+ * A canvas field of soft pigment plumes drifting through a slow curl, drawn
+ * with pre-rendered sprites so each frame is a handful of `drawImage` calls
+ * rather than a gradient rebuild. Overlapping plumes build the density of real
+ * ink; short position trails give each plume the wispy tail you get when a
+ * drop of ink is dropped into a glass.
+ *
+ * The canvas uses `mix-blend-mode: multiply` in the light theme (dye on paper)
+ * and `screen` in the dark theme (light in water); both are set in index.css.
+ * Decorative only: the element is aria-hidden, the loop pauses when the graphic
+ * scrolls out of view or the tab is hidden, and a static frame is drawn for
+ * visitors who ask for reduced motion.
+ */
+
+type Pigment = { rgb: string; weight: number };
+
+// The same highlighter family as the rest of the app, at ink strength.
+const PIGMENTS: Pigment[] = [
+  { rgb: "143, 174, 24", weight: 3 }, // lime
+  { rgb: "125, 91, 214", weight: 2 }, // lilac
+  { rgb: "47, 111, 168", weight: 2 }, // sky
+  { rgb: "47, 122, 108", weight: 1 }, // teal
+  { rgb: "168, 87, 42", weight: 1 }, // peach
+];
+
+const MAX_PUFFS = 150;
+
+type Puff = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  grow: number;
+  life: number;
+  maxLife: number;
+  seed: number;
+  alpha: number;
+  sprite: number;
+};
+
+/** Picks a pigment by weight, so lime appears most often. */
+function pickPigment(): number {
+  const total = PIGMENTS.reduce((sum, pigment) => sum + pigment.weight, 0);
+  let roll = Math.random() * total;
+  for (let index = 0; index < PIGMENTS.length; index += 1) {
+    roll -= PIGMENTS[index].weight;
+    if (roll <= 0) return index;
+  }
+  return 0;
+}
+
+/** A soft radial sprite: one per pigment, reused for every plume. */
+function makeSprites(): HTMLCanvasElement[] {
+  return PIGMENTS.map(({ rgb }) => {
+    const size = 128;
+    const sprite = document.createElement("canvas");
+    sprite.width = size;
+    sprite.height = size;
+    const ctx = sprite.getContext("2d");
+    if (!ctx) return sprite;
+    const half = size / 2;
+    const gradient = ctx.createRadialGradient(half, half, 0, half, half, half);
+    gradient.addColorStop(0, `rgba(${rgb}, 0.95)`);
+    gradient.addColorStop(0.32, `rgba(${rgb}, 0.55)`);
+    gradient.addColorStop(0.62, `rgba(${rgb}, 0.2)`);
+    gradient.addColorStop(1, `rgba(${rgb}, 0)`);
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(half, half, half, 0, Math.PI * 2);
+    ctx.fill();
+    return sprite;
+  });
+}
+
+function makePuff(width: number, height: number, initial: boolean): Puff {
+  // Emitters sit along the edges and across the middle, so the plumes look
+  // like they were released into the water rather than laid out in a grid.
+  const emitter = Math.random();
+  let x: number;
+  let y: number;
+  if (emitter < 0.4) {
+    x = width * (0.04 + Math.random() * 0.16);
+    y = height * (0.1 + Math.random() * 0.85);
+  } else if (emitter < 0.75) {
+    x = width * (0.68 + Math.random() * 0.28);
+    y = height * (0.02 + Math.random() * 0.5);
+  } else {
+    x = width * (0.25 + Math.random() * 0.55);
+    y = height * (0.65 + Math.random() * 0.3);
+  }
+
+  const maxLife = 320 + Math.random() * 420;
+  return {
+    x,
+    y,
+    vx: (Math.random() - 0.5) * 0.5,
+    vy: (Math.random() - 0.5) * 0.4,
+    radius: 26 + Math.random() * 54,
+    grow: 0.09 + Math.random() * 0.18,
+    // Pre-seeded plumes start part-way through their life so the first frame
+    // already shows a developed bloom.
+    life: initial ? Math.random() * maxLife : 0,
+    maxLife,
+    seed: Math.random() * Math.PI * 2,
+    alpha: 0.05 + Math.random() * 0.07,
+    sprite: pickPigment(),
+  };
+}
+
+export function InkInWater({
+  className,
+  intensity = 1,
+}: {
+  className?: string;
+  /** 0-1 scale for the number of plumes and their opacity. */
+  intensity?: number;
+}) {
+  const holderRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const holder = holderRef.current;
+    const canvas = canvasRef.current;
+    if (!holder || !canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const sprites = makeSprites();
+
+    let width = 0;
+    let height = 0;
+    let puffs: Puff[] = [];
+    let frame = 0;
+    let running = false;
+    let visible = true;
+    let last = 0;
+    let time = 0;
+
+    const drawPuff = (puff: Puff, alpha: number, radius: number, x: number, y: number) => {
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(sprites[puff.sprite], x - radius, y - radius, radius * 2, radius * 2);
+    };
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height);
+      for (const puff of puffs) {
+        // Fade in on release and out as the pigment disperses.
+        const progress = Math.min(1, puff.life / puff.maxLife);
+        const envelope = Math.sin(Math.PI * progress) ** 1.35;
+        const alpha = puff.alpha * envelope;
+        if (alpha <= 0.002) continue;
+
+        // Two wake points along the velocity vector stretch the puff into a
+        // teardrop. As the curl field turns the plume, the wake bends with it,
+        // which is what makes the field read as ink rather than soft fog.
+        const speed = Math.hypot(puff.vx, puff.vy);
+        if (speed > 0.2) {
+          drawPuff(
+            puff,
+            alpha * 0.34,
+            puff.radius * 0.78,
+            puff.x - puff.vx * 12,
+            puff.y - puff.vy * 12,
+          );
+          drawPuff(
+            puff,
+            alpha * 0.16,
+            puff.radius * 0.55,
+            puff.x - puff.vx * 26,
+            puff.y - puff.vy * 26,
+          );
+        }
+        drawPuff(puff, alpha, puff.radius, puff.x, puff.y);
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    const step = (delta: number, now: number) => {
+      time = now;
+      const seconds = delta / 1000;
+      // Clamp the step so a tab that was asleep does not teleport every plume.
+      const speed = Math.min(seconds, 1 / 24);
+      const t = time * 0.00016;
+
+      for (const puff of puffs) {
+        puff.life += delta * 0.06;
+        if (
+          puff.life > puff.maxLife ||
+          puff.x < -puff.radius * 2 ||
+          puff.x > width + puff.radius * 2 ||
+          puff.y < -puff.radius * 2 ||
+          puff.y > height + puff.radius * 2
+        ) {
+          Object.assign(puff, makePuff(width, height, false));
+          continue;
+        }
+
+        // A curl field: the two sine terms push neighbouring plumes in
+        // slightly different directions, which is what makes the ink fold and
+        // swirl instead of drifting in straight lines.
+        const flowX =
+          Math.sin(puff.y * 0.0045 + t * 3.4 + puff.seed) * 18 +
+          Math.cos(puff.y * 0.0018 - t * 1.7) * 9;
+        const flowY =
+          Math.cos(puff.x * 0.0038 - t * 2.6 + puff.seed * 1.6) * 15 +
+          Math.sin(puff.x * 0.0015 + t * 1.2) * 7;
+
+        puff.vx = puff.vx * 0.985 + flowX * speed * 0.012;
+        puff.vy = puff.vy * 0.985 + flowY * speed * 0.012;
+        puff.radius += puff.grow * delta * 0.06;
+
+        puff.x += puff.vx * speed * 8;
+        puff.y += puff.vy * speed * 8;
+      }
+
+      render();
+    };
+
+    const loop = (now: number) => {
+      if (!running) return;
+      const delta = last ? Math.min(now - last, 64) : 16.67;
+      last = now;
+      step(delta, now);
+      frame = requestAnimationFrame(loop);
+    };
+
+    const start = () => {
+      if (reducedMotion || running || !visible) return;
+      running = true;
+      last = 0;
+      frame = requestAnimationFrame(loop);
+    };
+
+    const stop = () => {
+      running = false;
+      cancelAnimationFrame(frame);
+    };
+
+    const resize = () => {
+      const rect = holder.getBoundingClientRect();
+      width = Math.max(1, Math.round(rect.width));
+      height = Math.max(1, Math.round(rect.height));
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const target = Math.round(
+        Math.min(MAX_PUFFS, Math.max(60, (width * height) / 12000)) *
+          Math.max(0.35, Math.min(1.4, intensity)),
+      );
+      if (puffs.length > target) puffs = puffs.slice(0, target);
+      while (puffs.length < target) {
+        puffs.push(makePuff(width, height, true));
+      }
+      // The canvas is cleared by resize, so a reduced-motion visitor still gets
+      // a composition rather than a blank layer.
+      if (reducedMotion) {
+        for (const puff of puffs) {
+          puff.life = Math.random() * puff.maxLife;
+        }
+        render();
+      } else {
+        last = 0;
+      }
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(holder);
+    resize();
+
+    let intersection: IntersectionObserver | null = null;
+    if (!reducedMotion) {
+      // Off-screen or hidden tabs cost nothing: the loop is cancelled.
+      intersection = new IntersectionObserver(
+        (entries) => {
+          visible = entries.some((entry) => entry.isIntersecting);
+          if (visible) start();
+          else stop();
+        },
+        { threshold: 0.01 },
+      );
+      intersection.observe(holder);
+    }
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") start();
+      else stop();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    // Set the static frame when animation is off; the observer still starts the
+    // loop for everyone else once the hero is on screen.
+    if (!reducedMotion && holder.getBoundingClientRect().top < window.innerHeight) {
+      start();
+    }
+
+    return () => {
+      stop();
+      observer.disconnect();
+      intersection?.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [intensity]);
+
+  return (
+    <div ref={holderRef} aria-hidden className={cn("ink-water", className)}>
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
+
+export default InkInWater;

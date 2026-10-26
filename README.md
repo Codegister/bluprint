@@ -35,9 +35,14 @@ body copy is ink (`--chrome-8`), cards are warm white with a crisp hairline and 
 2px offset shadow, and one acid-lime highlighter (`--gizmo-lime`) marks actions, active
 navigation and key phrases. Lilac, sky, peach and mint are the only secondary accents, so
 subject tags stay playful without turning the screen into a rainbow. Corners are large,
-headings are Bricolage Grotesque, and the backdrop is a faint dot grid with two slowly
-drifting highlighter smudges instead of a metal ribbon. The little lime blob mascot is
-drawn in SVG with a thick ink outline, so the app still needs no image assets.
+headings are Bricolage Grotesque, and the backdrop is a faint dot grid under three soft
+gradient ribbons that travel across the screen at different speeds, with two slowly
+drifting highlighter smudges instead of a metal ribbon. The landing hero adds an
+**ink-in-water** canvas: pigment plumes drift through a curl field, rendered from
+pre-built sprites so the effect stays on the compositor budget. Both motion layers pause
+when off-screen or when the tab is hidden, and fall back to a still frame under
+`prefers-reduced-motion`. The little lime blob mascot is drawn in SVG with a thick ink
+outline, so the app still needs no image assets.
 
 The neutral shades live in `src/index.css` as `--chrome-0` to `--chrome-8` and are exposed
 to Tailwind as `bg-chrome-*`, `text-chrome-*`, and `border-chrome-*`. The token names are
@@ -230,14 +235,19 @@ earned. Four practice papers per course is the cap; remove one to build another.
     written from its specification in that subject's real question format (RS 3/4/5/12,
     English essays, maths calculations, and so on) and marked question by question against
     their own mark schemes. Progress and marks per paper are kept alongside the course.
+15. **See every action in one place** — **All actions** (`/actions`) is the index of the
+    app: add material, practise, understand, and plan. A course rail at the top scopes the
+    practice actions (topic sets, past papers, exam-style questions, course tutor) to the
+    chosen course; without a course those tiles stay visible and explain how to unlock them.
 
 After signing in, the main screen is **My sets**, and nothing else. It keeps one primary
 action, **New study set**, a search box, and the saved-set list with status, due counts, exam readiness and
 pace or last quiz score. The Today strip sits below the hero and above the list, so the
 library stays the focus. **My courses** is a separate screen with topic progress,
-material counts and **Add courses**; the saved **Revision timetable** and the **AI tutor**
-each have their own sidebar destination. The tutor's first screen asks which course or set
-to discuss, so it never sits in the middle of the set library.
+material counts and **Add courses**; **All actions** is the hub for every workflow; the
+saved **Revision timetable** and the **AI tutor** each have their own sidebar destination.
+The tutor's first screen asks which course or set to discuss, so it never sits in the
+middle of the set library.
 
 Each course opens on its **Pathway**, and **Past papers**, **Topic papers** and **Study
 sets** are separate screens rather than tabs sharing one page. A study set opens on its
@@ -716,6 +726,7 @@ src/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
     Dashboard.tsx        saved study sets, search, and the new-set action
+    Actions.tsx          every app action in one place, with a course rail at the top
     Today.tsx            due queue, quick sprint picker, streak and daily goal
     Courses.tsx          course library with pathway progress
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
@@ -732,7 +743,8 @@ src/
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
-    ChromeBackdrop.tsx   cream desk, dot grid and drifting highlighter smudges
+    ChromeBackdrop.tsx   cream desk, dot grid, moving gradient ribbons and drifting smudges
+    InkInWater.tsx       canvas ink-in-water plumes for the landing hero
     study/               flashcard review (dictation + FSRS), quiz runner, exam practice,
                          practice papers, readiness/pacing panel, weak spots, today strip,
                          tutor chat, set settings

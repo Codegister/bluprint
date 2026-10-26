@@ -35,6 +35,14 @@ export function ChromeBackdrop({
       style={{ "--chrome-intensity": intensity } as CSSProperties}
     >
       <span className="chrome-backdrop-base" />
+      {/* Three gradient ribbons crossing the page at different speeds. This is
+          what makes the backdrop read as moving light rather than a static
+          wash; the smudges and dot grid sit on top of it. */}
+      <span className="gizmo-flow">
+        <span className="gizmo-ribbon gizmo-ribbon-lime" />
+        <span className="gizmo-ribbon gizmo-ribbon-lilac" />
+        <span className="gizmo-ribbon gizmo-ribbon-sky" />
+      </span>
       <span className="gizmo-blob gizmo-blob-lime" />
       <span className="gizmo-blob gizmo-blob-lilac" />
       <span className="gizmo-blob gizmo-blob-peach" />

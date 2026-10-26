@@ -21,6 +21,7 @@ import "./index.css";
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const ActionsPage = lazy(() => import("./pages/Actions.tsx"));
 const Today = lazy(() => import("./pages/Today.tsx"));
 const CourseSetup = lazy(() => import("./pages/CourseSetup.tsx"));
 const CoursesPage = lazy(() => import("./pages/Courses.tsx"));
@@ -213,6 +214,17 @@ createRoot(document.getElementById("root")!).render(
                     description="Your sets, progress and quiz scores live in your account."
                   >
                     <Dashboard />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/actions"
+                element={
+                  <RequireAuth
+                    title="Sign in to see your actions"
+                    description="Every action runs against your own courses and study sets."
+                  >
+                    <ActionsPage />
                   </RequireAuth>
                 }
               />

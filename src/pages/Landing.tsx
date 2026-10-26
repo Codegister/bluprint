@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
+import { InkInWater } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import {
@@ -321,6 +322,10 @@ export default function Landing() {
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-gradient-to-br from-gizmo-lime/25 via-transparent to-gizmo-lilac/25"
         />
+        {/* Ink dropped into water: pigment plumes drift across the hero behind
+            the copy and the preview card. Decorative, so it is silent to
+            screen readers and pauses itself when it leaves the viewport. */}
+        <InkInWater intensity={1} />
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
             <motion.div className="flex flex-wrap gap-2" {...enter(0.04)}>
