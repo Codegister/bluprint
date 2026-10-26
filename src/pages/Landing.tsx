@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { ShaderBackdrop } from "@/components/shader/ShaderBackdrop";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import {
@@ -304,7 +305,13 @@ export default function Landing() {
         </div>
       </header>
 
-      <section className="paper-panel relative overflow-hidden border-b border-border">
+      <section className="relative overflow-hidden border-b border-border bg-background">
+        {/* Animated WebGPU wash; the CSS gradient inside is the fallback. */}
+        <ShaderBackdrop intensity={0.92} />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/45 via-transparent to-background/70"
+        />
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
             <motion.div className="flex flex-wrap gap-2" {...enter(0.04)}>
@@ -725,7 +732,12 @@ export default function Landing() {
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-        <Reveal className="relative overflow-hidden rounded-[2rem] bg-[#EFEBFF] px-6 py-9 sm:px-10 sm:py-11">
+        <Reveal className="relative overflow-hidden rounded-[2rem] border border-border px-6 py-9 sm:px-10 sm:py-11">
+          <ShaderBackdrop className="rounded-[2rem]" intensity={0.95} />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-white/55 via-white/20 to-transparent dark:from-black/50 dark:via-black/20"
+          />
           <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
               <h2 className="max-w-xl text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2.4rem]">

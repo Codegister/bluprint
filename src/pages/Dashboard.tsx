@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { CreateSetDialog } from "@/components/CreateSetDialog";
+import { ShaderBackdrop } from "@/components/shader/ShaderBackdrop";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import { SkeletonChat, SkeletonRows } from "@/components/Skeletons";
 import {
@@ -338,9 +339,14 @@ export default function Dashboard() {
     <AppShell>
       <motion.header
         ref={heroRef}
-        className="paper-panel relative overflow-hidden rounded-[2rem] border border-[#E4DFD3] px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7"
+        className="relative overflow-hidden rounded-[2rem] border border-border px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7"
         {...enter(0.04, 14)}
       >
+        <ShaderBackdrop className="rounded-[2rem]" intensity={0.8} />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-card/55 via-card/25 to-transparent dark:from-black/45 dark:via-black/25"
+        />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <span className="sticker bg-white/85 text-[#5B3DF5]">

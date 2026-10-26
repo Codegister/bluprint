@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { ShaderBackdrop } from "@/components/shader/ShaderBackdrop";
 import { Mascot } from "@/components/Mascot";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EASE, enter } from "@/components/motion/Motion";
@@ -99,6 +100,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[1.02fr_0.98fr]">
       {/* Context panel */}
       <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[#EFEBFF] p-10 lg:flex xl:p-14">
+        <ShaderBackdrop intensity={0.9} />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/35 via-transparent to-white/45 dark:from-black/45 dark:to-black/55"
+        />
         <motion.div className="relative flex items-center justify-between gap-3" {...enter(0.05)}>
           <Brand />
           <ThemeToggle />

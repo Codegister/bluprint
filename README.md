@@ -25,6 +25,9 @@ their own dashboard containing only their courses and study sets.
   course. The pathway builder follows the published qualification → subject → exam board →
   tier route, so the map matches the board's own specification headings exactly. No AI is
   used for the pathway.
+- **`shaders` (WebGPU)** — the animated mesh-gradient backdrops behind the landing page,
+  sign-in panel and dashboard hero. Browsers without WebGPU, and visitors who ask for
+  reduced motion, get the same palette as a static CSS gradient.
 - **Bun** — package manager and scripts
 
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
