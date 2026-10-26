@@ -8,9 +8,20 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  EASE,
+  Floating,
+  Meter,
+  Reveal,
+  Stagger,
+  StaggerItem,
+  enter,
+  reveal,
+} from "@/components/motion/Motion";
 import { cn } from "@/lib/utils";
 import { ArrowRight, Camera, Sparkles } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { motion, useScroll, useTransform } from "framer-motion";
+import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
 /**
@@ -59,16 +70,23 @@ function HeroPreview() {
         <p className="mt-3 font-display text-[1.05rem] font-semibold leading-snug text-brand-ink">
           Why does the mitochondrion have folded inner membranes?
         </p>
-        <div className="mt-3 min-h-[44px]">
-          {revealed ? (
-            <p className="text-[0.86rem] leading-relaxed text-brand-ink/75">
-              Cristae increase the surface area for the electron transport chain, so more
-              ATP is produced.
-            </p>
-          ) : (
-            <p className="text-[0.82rem] text-muted-foreground">Tap to reveal the answer</p>
-          )}
-        </div>
+        <motion.div layout className="mt-3 min-h-[44px]">
+          <motion.p
+            key={revealed ? "answer" : "prompt"}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: EASE }}
+            className={
+              revealed
+                ? "text-[0.86rem] leading-relaxed text-brand-ink/75"
+                : "text-[0.82rem] text-muted-foreground"
+            }
+          >
+            {revealed
+              ? "Cristae increase the surface area for the electron transport chain, so more ATP is produced."
+              : "Tap to reveal the answer"}
+          </motion.p>
+        </motion.div>
         <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-[0.75rem] font-semibold">
           <span className="text-muted-foreground">
             {revealed ? "Self-assessed" : "Active recall"}
@@ -82,6 +100,125 @@ function HeroPreview() {
       <p className="mt-3 text-center text-[0.78rem] text-muted-foreground">
         Built from photos, screen recordings or pasted text
       </p>
+    </div>
+  );
+}
+
+/** A small card that floats around the hero preview. */
+function HeroChip({
+  className,
+  delay = 0,
+  children,
+}: {
+  className?: string;
+  delay?: number;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn("absolute z-20", className)}>
+      <motion.div
+        initial={{ opacity: 0, y: 16, scale: 0.94 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.7, ease: EASE, delay }}
+      >
+        <Floating distance={6} duration={6.5 + delay} delay={delay} rotate={-1.5}>
+          <div className="rounded-2xl border border-white/90 bg-white/95 px-3.5 py-2.5 shadow-[0_18px_34px_-26px_rgba(60,40,120,0.6)] backdrop-blur">
+            {children}
+          </div>
+        </Floating>
+      </motion.div>
+    </div>
+  );
+}
+
+/**
+ * The hero composition: the real interactive preview, a slowly rotating dashed
+ * orbit, and two small cards drifting around it. Each layer moves at its own
+ * speed on scroll, which is what gives the page depth without any 3D assets.
+ */
+function HeroArt() {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ["start end", "end start"],
+  });
+  const lift = useTransform(scrollYProgress, [0, 1], [16, -22]);
+
+  return (
+    <div ref={ref} className="relative mx-auto w-full max-w-[470px] lg:max-w-none">
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="absolute left-1/2 top-1/2 size-[430px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(167,139,250,0.32),transparent_62%)]" />
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <motion.svg
+            viewBox="0 0 200 200"
+            className="size-[390px] text-[#B9A6FF]/60 sm:size-[430px]"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 90, repeat: Infinity, ease: "linear" }}
+          >
+            <circle
+              cx="100"
+              cy="100"
+              r="94"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="0.7"
+              strokeDasharray="2 8"
+            />
+            <circle cx="100" cy="6" r="2.6" fill="#EC4899" />
+            <circle cx="194" cy="100" r="1.8" fill="#6B4BFF" />
+          </motion.svg>
+        </div>
+      </div>
+
+      <motion.div style={{ y: lift }} className="relative">
+        <motion.div
+          initial={{ opacity: 0, y: 26, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.85, ease: EASE, delay: 0.15 }}
+        >
+          <HeroPreview />
+        </motion.div>
+      </motion.div>
+
+      <HeroChip className="-left-8 top-28 hidden lg:block" delay={0.55}>
+        <div className="flex items-center gap-2">
+          <span className="pulse-ring size-2 rounded-full bg-[#22A06B] text-[#22A06B]" />
+          <p className="text-[0.72rem] font-semibold text-brand-ink">10 cards ready</p>
+        </div>
+        <p className="mt-0.5 text-[0.66rem] text-muted-foreground">From one page of notes</p>
+      </HeroChip>
+
+      <HeroChip className="-right-6 bottom-24 hidden sm:block" delay={0.75}>
+        <div className="flex w-[148px] items-center justify-between gap-3">
+          <p className="text-[0.68rem] font-semibold text-brand-ink">Exam marked</p>
+          <p className="text-[0.68rem] font-bold text-[#8A5A12]">7/10</p>
+        </div>
+        <Meter
+          value={70}
+          className="mt-1.5 h-1 w-[148px] bg-[#EFEAE0]"
+          barClassName="bg-[#E8A317]"
+          delay={1.1}
+          label="Sample exam score"
+        />
+      </HeroChip>
+
+      <motion.div
+        aria-hidden
+        className="absolute -bottom-7 left-6 hidden items-center gap-1.5 sm:flex"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.2, duration: 0.6 }}
+      >
+        <span className="text-[0.68rem] font-medium text-brand-ink/40">
+          Built from your own notes
+        </span>
+        <motion.span
+          className="h-px w-10 bg-brand-ink/20"
+          animate={{ scaleX: [0.4, 1, 0.4], opacity: [0.4, 1, 0.4] }}
+          transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          style={{ originX: 0 }}
+        />
+      </motion.div>
     </div>
   );
 }
@@ -101,7 +238,7 @@ function OutputCard({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-full flex-col rounded-3xl border border-border bg-white p-5 sm:p-6">
+    <div className="lift hover-sheen flex h-full flex-col rounded-3xl border border-border bg-white p-5 sm:p-6">
       <p className={cn("mono-label", labelClass)}>{label}</p>
       <h3 className="mt-2 font-display text-[1.15rem] font-semibold text-brand-ink">
         {title}
@@ -116,10 +253,17 @@ export default function Landing() {
   const { isAuthenticated } = useAuth();
   const startHref = isAuthenticated ? "/dashboard" : "/auth?returnTo=%2Fdashboard";
   const startLabel = isAuthenticated ? "Open dashboard" : "Start a study set";
+  // Reading progress drawn along the bottom edge of the sticky header.
+  const { scrollYProgress } = useScroll();
 
   return (
     <div className="min-h-screen bg-background text-brand-ink">
       <header className="sticky top-0 z-50 border-b border-border bg-background">
+        <motion.div
+          aria-hidden
+          className="absolute inset-x-0 bottom-0 h-[2px] origin-left bg-[linear-gradient(90deg,#6B4BFF,#EC4899,#F0A03C)]"
+          style={{ scaleX: scrollYProgress }}
+        />
         <div className="mx-auto flex h-[72px] w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <Brand />
 
@@ -147,10 +291,10 @@ export default function Landing() {
                 Sign in
               </Link>
             )}
-            <Button asChild className="h-10 px-5 text-[0.88rem]">
+            <Button asChild className="group h-10 px-5 text-[0.88rem]">
               <Link to={startHref}>
                 {isAuthenticated ? "Dashboard" : "Get started"}
-                <ArrowRight className="size-4" />
+                <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
             </Button>
           </div>
@@ -166,31 +310,40 @@ export default function Landing() {
 
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
-            <div className="flex flex-wrap gap-2">
-              <span className="sticker bg-white/85 text-[#5B3DF5]">
+            <motion.div className="flex flex-wrap gap-2" {...enter(0.04)}>
+              <span className="sticker bg-white/85 text-[#5B3DF5] transition-transform hover:-rotate-2">
                 <Camera className="size-3" aria-hidden /> Photos and video
               </span>
-              <span className="sticker bg-white/85 text-[#A83458]">
+              <span className="sticker bg-white/85 text-[#A83458] transition-transform hover:rotate-2">
                 <Sparkles className="size-3" aria-hidden /> Pasted notes
               </span>
-            </div>
+            </motion.div>
 
-            <h1 className="mt-5 max-w-[34rem] font-display text-[2.9rem] font-extrabold leading-[0.98] tracking-[-0.045em] sm:text-[3.7rem] lg:text-[4.1rem]">
+            <motion.h1
+              className="mt-5 max-w-[34rem] font-display text-[2.9rem] font-extrabold leading-[0.98] tracking-[-0.045em] sm:text-[3.7rem] lg:text-[4.1rem]"
+              {...enter(0.12, 24)}
+            >
               A page of notes becomes a{" "}
-              <span className="text-gradient">revision session.</span>
-            </h1>
+              <span className="text-gradient-live">revision session.</span>
+            </motion.h1>
 
-            <p className="mt-6 max-w-[33rem] text-[1.02rem] leading-relaxed text-muted-foreground">
+            <motion.p
+              className="mt-6 max-w-[33rem] text-[1.02rem] leading-relaxed text-muted-foreground"
+              {...enter(0.22)}
+            >
               Upload notes, a photo of a textbook page or a short screen recording.
               Bluprint writes a summary, ten flashcards, a multiple-choice quiz and three
               exam-style questions you can answer for marks.
-            </p>
+            </motion.p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Button asChild size="lg" className="h-12 px-6 text-[0.95rem]">
+            <motion.div
+              className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center"
+              {...enter(0.32)}
+            >
+              <Button asChild size="lg" className="group h-12 px-6 text-[0.95rem]">
                 <Link to={startHref}>
                   {startLabel}
-                  <ArrowRight className="size-4" />
+                  <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
                 </Link>
               </Button>
               <Button
@@ -201,31 +354,50 @@ export default function Landing() {
               >
                 <a href="#pipeline">See how it works</a>
               </Button>
-            </div>
+            </motion.div>
 
-            <p className="mt-7 text-[0.82rem] leading-relaxed text-muted-foreground">
+            <motion.p
+              className="mt-7 text-[0.82rem] leading-relaxed text-muted-foreground"
+              {...enter(0.42)}
+            >
               Sign in with an email code, or try a guest session. Your sets, scores and
               progress are stored against your account.
-            </p>
+            </motion.p>
           </div>
 
-          <HeroPreview />
+          <HeroArt />
         </div>
       </section>
 
       <section id="pipeline" className="scroll-mt-24 border-b border-border bg-white">
         <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <h2 className="max-w-xl text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.5rem]">
+            <motion.h2
+              className="max-w-xl text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.5rem]"
+              {...reveal()}
+            >
               From upload to marked answer in three steps.
-            </h2>
-            <p className="max-w-sm text-[0.95rem] leading-relaxed text-muted-foreground">
+            </motion.h2>
+            <motion.p
+              className="max-w-sm text-[0.95rem] leading-relaxed text-muted-foreground"
+              {...reveal(0.08)}
+            >
               One source per set. Everything generated from it stays together, so the
               summary, cards and questions never drift apart.
-            </p>
+            </motion.p>
           </div>
 
-          <ol className="mt-10 border-t border-border">
+          <div className="relative mt-10">
+            {/* The rule above the steps draws itself as the section arrives. */}
+            <motion.div
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px origin-left bg-[linear-gradient(90deg,#6B4BFF,#EC4899,#F0A03C)]"
+              initial={{ scaleX: 0 }}
+              whileInView={{ scaleX: 1 }}
+              viewport={{ once: true, amount: 0.4 }}
+              transition={{ duration: 1.5, ease: EASE }}
+            />
+            <ol className="border-t border-transparent">
             {[
               {
                 title: "Add your material",
@@ -240,12 +412,21 @@ export default function Landing() {
                 copy: "Flip each card and rate your recall, take the quiz, then answer the written questions. Exam answers are marked against the guide, with the missing points named.",
               },
             ].map((step, index) => (
-              <li
+              <motion.li
                 key={step.title}
                 className="grid gap-2 border-b border-border py-6 sm:grid-cols-[72px_minmax(0,0.9fr)_minmax(0,1.3fr)] sm:gap-6 sm:py-7"
+                {...reveal(index * 0.1)}
               >
-                <span className="font-display text-[1.5rem] font-semibold leading-none tabular-nums text-brand-pink">
+                <span className="relative inline-flex h-10 w-10 items-center justify-center justify-self-start rounded-2xl border border-[#E7DCF8] bg-white font-display text-[1.1rem] font-semibold leading-none tabular-nums text-brand-pink">
                   {String(index + 1).padStart(2, "0")}
+                  <motion.span
+                    aria-hidden
+                    className="absolute inset-0 rounded-2xl border border-brand-pink/40"
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    whileInView={{ opacity: 1, scale: 1.12 }}
+                    viewport={{ once: true, amount: 0.6 }}
+                    transition={{ duration: 0.8, ease: EASE, delay: 0.15 + index * 0.1 }}
+                  />
                 </span>
                 <h3 className="font-display text-[1.12rem] font-semibold text-brand-ink">
                   {step.title}
@@ -253,18 +434,19 @@ export default function Landing() {
                 <p className="max-w-xl text-[0.92rem] leading-relaxed text-muted-foreground">
                   {step.copy}
                 </p>
-              </li>
+              </motion.li>
             ))}
-          </ol>
+            </ol>
+          </div>
 
-          <div className="mt-6 flex flex-col gap-3 rounded-2xl bg-brand-panel px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <Reveal className="mt-6 flex flex-col gap-3 rounded-2xl bg-brand-panel px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[0.92rem] font-semibold text-brand-ink">
               Your uploads are private to your account
             </p>
             <p className="text-[0.84rem] text-muted-foreground">
               The NVIDIA key stays on the server. It is never sent to the browser.
             </p>
-          </div>
+          </Reveal>
         </div>
       </section>
 
@@ -280,7 +462,8 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="mt-9 grid gap-4 sm:grid-cols-2">
+          <Stagger className="mt-9 grid gap-4 sm:grid-cols-2" gap={0.08} inView>
+            <StaggerItem className="h-full" scale>
             <OutputCard
               label="Summary"
               labelClass="text-[#3f24b8]"
@@ -310,7 +493,9 @@ export default function Landing() {
                 </div>
               </div>
             </OutputCard>
+            </StaggerItem>
 
+            <StaggerItem className="h-full" scale>
             <OutputCard
               label="Flashcards"
               labelClass="text-[#0e7a66]"
@@ -330,7 +515,9 @@ export default function Landing() {
                 </p>
               </div>
             </OutputCard>
+            </StaggerItem>
 
+            <StaggerItem className="h-full" scale>
             <OutputCard
               label="Quiz"
               labelClass="text-[#1d5f9e]"
@@ -361,7 +548,9 @@ export default function Landing() {
                 </div>
               </div>
             </OutputCard>
+            </StaggerItem>
 
+            <StaggerItem className="h-full" scale>
             <OutputCard
               label="Exam practice"
               labelClass="text-[#8a5a12]"
@@ -375,31 +564,41 @@ export default function Landing() {
                   </span>
                   <span className="text-[0.8rem] font-semibold text-[#8a5a12]">7 / 10</span>
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white">
-                  <div className="h-full w-[70%] rounded-full bg-[#8a5a12]" />
-                </div>
+                <Meter
+                  value={70}
+                  className="mt-2 h-1.5 bg-white"
+                  barClassName="bg-[#8a5a12]"
+                  label="Sample exam score"
+                />
                 <p className="mt-2.5 text-[0.82rem] leading-relaxed text-muted-foreground">
                   Strong structure. Add the proton gradient and ATP synthase to reach the
                   final marks.
                 </p>
               </div>
             </OutputCard>
-          </div>
+            </StaggerItem>
+          </Stagger>
         </div>
       </section>
 
       <section id="workspace" className="scroll-mt-24 border-b border-border bg-white">
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:px-8">
           <div>
-            <h2 className="max-w-lg text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.4rem]">
+            <motion.h2
+              className="max-w-lg text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.4rem]"
+              {...reveal()}
+            >
               Your saved sets, waiting on the dashboard.
-            </h2>
-            <p className="mt-3 max-w-lg text-[1rem] leading-relaxed text-muted-foreground">
+            </motion.h2>
+            <motion.p
+              className="mt-3 max-w-lg text-[1rem] leading-relaxed text-muted-foreground"
+              {...reveal(0.08)}
+            >
               Sign in with your own email. Sets, scores and card progress stay with the
               account that made them, so a shared laptop never mixes two people's revision.
-            </p>
+            </motion.p>
 
-            <dl className="mt-7 border-t border-border">
+            <dl className="rise-stagger mt-7 border-t border-border">
               {[
                 ["Sets", "The newest set sits at the top of the dashboard."],
                 ["Progress", "Known cards, last quiz score and the date you studied."],
@@ -419,7 +618,7 @@ export default function Landing() {
             </dl>
           </div>
 
-          <div className="rounded-3xl border border-border bg-background p-3">
+          <Reveal className="lift rounded-3xl border border-border bg-background p-3" delay={0.1}>
             <div className="flex items-center justify-between px-3 py-2.5">
               <span className="font-display text-[0.98rem] font-semibold text-brand-ink">
                 Study sets
@@ -428,7 +627,7 @@ export default function Landing() {
                 3 saved
               </span>
             </div>
-            <div className="space-y-1.5">
+            <div className="rise-stagger space-y-1.5">
               {[
                 { title: "Cell biology", color: "#6B4BFF", meta: "10 cards, 5 quiz" },
                 { title: "Organic chemistry", color: "#0E7A66", meta: "10 cards, 5 quiz" },
@@ -459,19 +658,25 @@ export default function Landing() {
                 the browser.
               </p>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       <section id="questions" className="scroll-mt-24 border-b border-border">
         <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[0.72fr_1.28fr] lg:px-8">
           <div>
-            <h2 className="text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.3rem]">
+            <motion.h2
+              className="text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.3rem]"
+              {...reveal()}
+            >
               Questions before you start.
-            </h2>
-            <p className="mt-3 max-w-xs text-[0.95rem] leading-relaxed text-muted-foreground">
+            </motion.h2>
+            <motion.p
+              className="mt-3 max-w-xs text-[0.95rem] leading-relaxed text-muted-foreground"
+              {...reveal(0.08)}
+            >
               Built to run for a handful of friends with one shared NVIDIA key.
-            </p>
+            </motion.p>
             <div className="mt-6 flex items-start gap-3 rounded-2xl border border-border bg-white p-4">
               <Mascot size={52} float={false} />
               <p className="text-[0.85rem] leading-relaxed text-muted-foreground">
@@ -480,6 +685,7 @@ export default function Landing() {
             </div>
           </div>
 
+          <Reveal className="w-full" delay={0.1}>
           <Accordion type="single" collapsible className="w-full">
             {[
               {
@@ -517,12 +723,17 @@ export default function Landing() {
               </AccordionItem>
             ))}
           </Accordion>
+          </Reveal>
         </div>
       </section>
 
       <section className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-        <div className="rounded-[2rem] bg-[#ece7ff] px-6 py-9 sm:px-10 sm:py-11">
-          <div className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+        <Reveal className="relative overflow-hidden rounded-[2rem] bg-[#ece7ff] px-6 py-9 sm:px-10 sm:py-11">
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="blob -left-16 -bottom-24 size-64 bg-white/55 blob-float" />
+            <div className="blob -right-20 -top-24 size-72 bg-[#FFD7E6]/55" />
+          </div>
+          <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>
               <h2 className="max-w-xl text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2.4rem]">
                 Start with the notes you already have.
@@ -532,10 +743,10 @@ export default function Landing() {
                 Everything stays saved for the next session.
               </p>
               <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-                <Button asChild size="lg" className="h-12 px-6 text-[0.95rem]">
+                <Button asChild size="lg" className="group h-12 px-6 text-[0.95rem]">
                   <Link to={startHref}>
                     {startLabel}
-                    <ArrowRight className="size-4" />
+                    <ArrowRight className="size-4 transition-transform duration-300 group-hover:translate-x-1" />
                   </Link>
                 </Button>
                 <Button
@@ -548,11 +759,20 @@ export default function Landing() {
                 </Button>
               </div>
             </div>
-            <div className="flex justify-center">
+            <div className="relative flex justify-center">
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                <motion.div
+                  aria-hidden
+                  className="size-[240px] rounded-full border border-dashed border-[#B9A6FF]/70"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
+                  style={{ borderStyle: "dashed" }}
+                />
+              </div>
               <Mascot size={190} />
             </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       <footer className="border-t border-border bg-white">

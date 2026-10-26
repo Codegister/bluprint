@@ -1,7 +1,9 @@
+import { EASE } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { useAction, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { BookOpen, Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -47,7 +49,12 @@ export function CognitoTopicNotes({
   const sections = cached?.sections ?? [];
 
   return (
-    <div className="mt-2 rounded-2xl border border-border bg-white px-4 py-4">
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: EASE }}
+      className="mt-2 rounded-2xl border border-border bg-white px-4 py-4"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.64rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
@@ -74,7 +81,13 @@ export function CognitoTopicNotes({
       )}
 
       {error && (
-        <div className="mt-3 rounded-xl bg-[#FFF6E5] px-3 py-2.5">
+        <motion.div
+          key={error}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: EASE }}
+          className="mt-3 rounded-xl bg-[#FFF6E5] px-3 py-2.5"
+        >
           <p className="text-[0.78rem] leading-relaxed text-[#8A5D00]">{error}</p>
           <button
             type="button"
@@ -85,7 +98,7 @@ export function CognitoTopicNotes({
             <RotateCcw className="size-3" aria-hidden />
             Try again
           </button>
-        </div>
+        </motion.div>
       )}
 
       {!busy && !error && cached && sections.length === 0 && (
@@ -97,7 +110,7 @@ export function CognitoTopicNotes({
       )}
 
       {!busy && !error && sections.length > 0 && (
-        <div className="mt-3 max-h-[26rem] space-y-4 overflow-y-auto pr-1">
+        <div className="rise-stagger mt-3 max-h-[26rem] space-y-4 overflow-y-auto pr-1">
           {sections.map((section, index) => (
             <div key={`${section.heading}-${index}`}>
               <h4 className="font-display text-[0.88rem] font-bold text-brand-ink">
@@ -126,6 +139,6 @@ export function CognitoTopicNotes({
           {new Date(cached.fetchedAt).toLocaleDateString()}
         </p>
       )}
-    </div>
+    </motion.div>
   );
 }

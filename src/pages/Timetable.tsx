@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { EASE, enter, reveal } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { readableError } from "@/lib/errors";
@@ -19,6 +20,7 @@ import {
 } from "@/lib/timetable";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router";
@@ -208,7 +210,7 @@ function WeekTable({
 
       <div>
         <div
-          className="week-columns border-b border-border bg-[#FCFCFD]"
+          className="week-columns rise-stagger border-b border-border bg-[#FCFCFD]"
           style={gridVars}
         >
             {days.map((day) => {
@@ -317,7 +319,7 @@ function WeekTable({
             slots.map((slot) => (
               <div
                 key={slot}
-                className="week-columns border-b border-border/70 last:border-b-0"
+                className="week-columns rise-stagger border-b border-border/70 last:border-b-0"
                 style={gridVars}
               >
                 {days.map((day) => {
@@ -503,16 +505,25 @@ export default function Timetable() {
     return (
       <AppShell>
         <header>
-          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
+          <motion.h1
+            className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+            {...enter(0.02)}
+          >
             Your revision timetable
-          </h1>
-          <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
+          </motion.h1>
+          <motion.p
+            className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground"
+            {...enter(0.08)}
+          >
             Turn your courses into a colour-coded weekly plan, then open a study
             set straight from any session.
-          </p>
+          </motion.p>
         </header>
 
-        <section className="mt-6 rounded-[2rem] border border-dashed border-border bg-white p-7 sm:p-9">
+        <motion.section
+          className="mt-6 rounded-[2rem] border border-dashed border-border bg-white p-7 sm:p-9"
+          {...reveal(0.14)}
+        >
           <h2 className="font-display text-[1.2rem] font-bold text-brand-ink">
             No timetable yet
           </h2>
@@ -527,7 +538,7 @@ export default function Timetable() {
           >
             <Link to="/timetable/new">Build revision timetable</Link>
           </Button>
-        </section>
+        </motion.section>
       </AppShell>
     );
   }
@@ -550,15 +561,18 @@ export default function Timetable() {
     <AppShell>
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
+          <motion.h1
+            className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+            {...enter(0.02)}
+          >
             Your revision timetable
-          </h1>
-          <p className="mt-2 text-[0.9rem] text-muted-foreground">
+          </motion.h1>
+          <motion.p className="mt-2 text-[0.9rem] text-muted-foreground" {...enter(0.08)}>
             First exam {formatLongDate(plan.examDate)} ·{" "}
             {daysLeft > 0
               ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} to go`
               : "Exam date has passed"}
-          </p>
+          </motion.p>
         </div>
         <Button
           asChild
@@ -569,7 +583,10 @@ export default function Timetable() {
         </Button>
       </header>
 
-      <section className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-border bg-white px-4 py-3 text-[0.78rem] text-muted-foreground">
+      <motion.section
+        className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-border bg-white px-4 py-3 text-[0.78rem] text-muted-foreground"
+        {...reveal(0.12)}
+      >
         <span>
           <span className="font-semibold text-brand-ink">{plan.entries.length}</span>{" "}
           sessions
@@ -612,9 +629,12 @@ export default function Timetable() {
             </span>
           </>
         )}
-      </section>
+      </motion.section>
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-white px-4 py-3">
+      <motion.div
+        className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-white px-4 py-3"
+        {...reveal(0.16)}
+      >
         <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Subjects
         </p>
@@ -631,7 +651,7 @@ export default function Timetable() {
             </span>
           );
         })}
-      </div>
+      </motion.div>
 
       {plan.truncated && (
         <p className="mt-3 rounded-2xl bg-[#FFF6E5] px-4 py-3 text-[0.8rem] leading-relaxed text-[#8A5D00]">
@@ -656,23 +676,33 @@ export default function Timetable() {
       )}
 
       {currentWeek && (
-        <WeekTable
-          week={currentWeek}
-          daysPerWeek={plan.daysPerWeek}
-          colorByCourse={colorByCourse}
-          busy={busy}
-          onOpen={(entry) => void handleOpen(entry)}
-          weekIndex={currentWeekIndex}
-          weekCount={weeks.length}
-          onPrevious={() => setWeekIndex(Math.max(0, currentWeekIndex - 1))}
-          onNext={() =>
-            setWeekIndex(Math.min(weeks.length - 1, currentWeekIndex + 1))
-          }
-        />
+        <motion.div
+          key={currentWeekIndex}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: EASE }}
+        >
+          <WeekTable
+            week={currentWeek}
+            daysPerWeek={plan.daysPerWeek}
+            colorByCourse={colorByCourse}
+            busy={busy}
+            onOpen={(entry) => void handleOpen(entry)}
+            weekIndex={currentWeekIndex}
+            weekCount={weeks.length}
+            onPrevious={() => setWeekIndex(Math.max(0, currentWeekIndex - 1))}
+            onNext={() =>
+              setWeekIndex(Math.min(weeks.length - 1, currentWeekIndex + 1))
+            }
+          />
+        </motion.div>
       )}
 
       {visibleHolidays.length > 0 && (
-        <section className="mt-4 rounded-2xl border border-border bg-[#FFFBF2] px-4 py-3">
+        <motion.section
+          className="mt-4 rounded-2xl border border-border bg-[#FFFBF2] px-4 py-3"
+          {...reveal(0.1)}
+        >
           <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8A5D00]">
 Bank holidays
           </p>
@@ -686,7 +716,7 @@ Bank holidays
               </span>
             ))}
           </div>
-        </section>
+        </motion.section>
       )}
 
       <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">

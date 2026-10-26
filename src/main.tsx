@@ -3,7 +3,14 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
-import React, { StrictMode, useEffect, lazy, Suspense } from "react";
+import { MotionConfig, motion } from "framer-motion";
+import React, {
+  StrictMode,
+  useEffect,
+  useLayoutEffect,
+  lazy,
+  Suspense,
+} from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "./index.css";
@@ -95,6 +102,14 @@ const convex = new ConvexReactClient(CONVEX_URL);
 
 function RouteSyncer() {
   const location = useLocation();
+
+  // A new screen starts at the top. Hash links (e.g. /dashboard#courses) keep
+  // their smooth in-page scroll, so they are left alone.
+  useLayoutEffect(() => {
+    if (location.hash) return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname, location.hash]);
+
   useEffect(() => {
     window.parent.postMessage(
       { type: "iframe-route-change", path: location.pathname },
@@ -116,17 +131,39 @@ function RouteSyncer() {
   return null;
 }
 
+/**
+ * Soft fade between screens. Opacity only, deliberately: transforming the
+ * route wrapper would give the fixed sidebar a new containing block and make
+ * it drift. The keyed child restarts the fade on each new path.
+ */
+function RouteFade({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  return (
+    <motion.div
+      key={pathname}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      className="min-h-screen"
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RootErrorBoundary>
       <ToolbarErrorBoundary>
         <VlyToolbar />
       </ToolbarErrorBoundary>
-      <ConvexAuthProvider client={convex}>
-        <BrowserRouter>
-          <RouteSyncer />
-          <Suspense fallback={<RouteLoading />}>
-            <Routes>
+      <MotionConfig reducedMotion="user">
+        <ConvexAuthProvider client={convex}>
+          <BrowserRouter>
+            <RouteSyncer />
+            <RouteFade>
+              <Suspense fallback={<RouteLoading />}>
+                <Routes>
               <Route path="/" element={<Landing />} />
               <Route
                 path="/auth"
@@ -233,12 +270,14 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-        <Toaster />
-      </ConvexAuthProvider>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </RouteFade>
+            <Toaster />
+          </BrowserRouter>
+        </ConvexAuthProvider>
+      </MotionConfig>
     </RootErrorBoundary>
   </StrictMode>,
 );

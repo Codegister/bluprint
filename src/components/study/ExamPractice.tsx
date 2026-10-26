@@ -1,3 +1,4 @@
+import { EASE } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
@@ -26,11 +27,16 @@ export function ExamPractice({
 
   if (exams.length === 0) {
     return (
-      <div className="gizmo-card p-10 text-center">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: EASE }}
+        className="gizmo-card p-10 text-center"
+      >
         <p className="text-sm text-muted-foreground">
           This set has no exam questions yet.
         </p>
-      </div>
+      </motion.div>
     );
   }
 
@@ -59,7 +65,7 @@ export function ExamPractice({
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4">
+    <div className="rise-stagger mx-auto w-full max-w-3xl space-y-4">
       <div className="gizmo-card p-5">
         <div>
           <p className="font-display text-base font-bold text-brand-ink">
@@ -142,15 +148,23 @@ export function ExamPractice({
             </div>
 
             {errors[exam._id] && (
-              <p className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
+              <motion.p
+                key={errors[exam._id]}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+                className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
+              >
                 {errors[exam._id]}
-              </p>
+              </motion.p>
             )}
 
             {graded && (
               <motion.div
-                initial={{ opacity: 0, y: 6 }}
+                key={`${exam._id}-${score}-${exam.awardedMarks !== undefined}`}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.45, ease: EASE }}
                 className="mt-4 rounded-2xl bg-[#F3FBF7] p-4 sm:p-5"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -167,9 +181,11 @@ export function ExamPractice({
                   </span>
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#D7F0E3]">
-                  <div
+                  <motion.div
                     className="h-full rounded-full bg-brand-mint"
-                    style={{ width: `${scorePercent}%` }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${scorePercent}%` }}
+                    transition={{ duration: 0.9, ease: EASE, delay: 0.15 }}
                   />
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-brand-ink/80">

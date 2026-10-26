@@ -1,13 +1,59 @@
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { EASE, SPRING } from "@/components/motion/Motion";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
-import { motion } from "framer-motion";
+import { animate, motion, useReducedMotion } from "framer-motion";
 import { Check, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+/** Score dial that fills from zero when the result appears. */
+function ScoreRing({
+  score,
+  total,
+  percent,
+}: {
+  score: number;
+  total: number;
+  percent: number;
+}) {
+  const reduce = useReducedMotion();
+  const [animated, setAnimated] = useState(0);
+  const shown = reduce ? percent : animated;
+
+  useEffect(() => {
+    if (reduce) return;
+    const controls = animate(0, percent, {
+      duration: 1.1,
+      ease: EASE,
+      onUpdate: (value) => setAnimated(value),
+    });
+    return () => controls.stop();
+  }, [percent, reduce]);
+
+  return (
+    <div
+      className="mx-auto grid size-32 place-items-center rounded-full p-2"
+      style={{
+        background: `conic-gradient(var(--brand-mint) ${shown}%, #EDEDF3 ${shown}% 100%)`,
+      }}
+    >
+      <div className="grid size-full place-items-center rounded-full bg-white">
+        <div>
+          <p className="font-display text-3xl font-bold leading-none tabular-nums text-brand-ink">
+            {score}/{total}
+          </p>
+          <p className="mt-1 text-sm font-semibold tabular-nums text-[#128A5B]">
+            {Math.round(shown)}%
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function QuizRunner({
   quiz,
@@ -45,21 +91,7 @@ export function QuizRunner({
         animate={{ opacity: 1, y: 0 }}
         className="gizmo-card mx-auto w-full max-w-2xl p-6 text-center sm:p-9"
       >
-        <div
-          className="mx-auto grid size-32 place-items-center rounded-full p-2"
-          style={{
-            background: `conic-gradient(var(--brand-mint) ${pct}%, #EDEDF3 ${pct}% 100%)`,
-          }}
-        >
-          <div className="grid size-full place-items-center rounded-full bg-white">
-            <div>
-              <p className="font-display text-3xl font-bold leading-none text-brand-ink">
-                {result.score}/{result.total}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[#128A5B]">{pct}%</p>
-            </div>
-          </div>
-        </div>
+        <ScoreRing score={result.score} total={result.total} percent={pct} />
 
         <h3 className="mt-5 font-display text-2xl font-bold text-brand-ink">
           {pct >= 80 ? "Strong recall." : pct >= 50 ? "Useful baseline." : "Run it again."}
@@ -132,9 +164,10 @@ export function QuizRunner({
         Question {index + 1} of {quiz.length}
       </p>
       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[#E7E7EF]">
-        <div
-          className="h-full rounded-full bg-brand-pink transition-all duration-300"
-          style={{ width: `${Math.max(4, progress)}%` }}
+        <motion.div
+          className="h-full rounded-full bg-brand-pink"
+          animate={{ width: `${Math.max(4, progress)}%` }}
+          transition={{ duration: 0.5, ease: EASE }}
         />
       </div>
 
@@ -142,7 +175,7 @@ export function QuizRunner({
         key={question._id}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
+        transition={{ duration: 0.3, ease: EASE }}
         className="gizmo-card mt-4 p-5 sm:p-7"
       >
         <p className="font-display text-lg font-bold leading-snug text-brand-ink sm:text-xl">
@@ -156,11 +189,14 @@ export function QuizRunner({
             const isWrongChoice = checked && isSelected && !isCorrect;
 
             return (
-              <button
+              <motion.button
                 key={option}
                 type="button"
                 disabled={checked}
                 onClick={() => setSelected(optionIndex)}
+                whileHover={checked ? undefined : { x: 2 }}
+                whileTap={checked ? undefined : { scale: 0.995 }}
+                transition={SPRING}
                 className={cn(
                   "flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left text-sm font-medium transition-colors",
                   !checked &&
@@ -197,7 +233,7 @@ export function QuizRunner({
                   )}
                 </span>
                 <span className="pt-1">{option}</span>
-              </button>
+              </motion.button>
             );
           })}
         </div>
@@ -206,6 +242,7 @@ export function QuizRunner({
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: EASE }}
             className={cn(
               "mt-4 rounded-2xl p-4",
               correct ? "bg-[#E9FBF3]" : "bg-[#FFEEF0]",

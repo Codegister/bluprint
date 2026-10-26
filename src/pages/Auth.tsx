@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { Mascot } from "@/components/Mascot";
+import { EASE, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -8,6 +9,7 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
+import { motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, ArrowRight, Ghost, Loader2, Mail } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
@@ -96,29 +98,58 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[1.02fr_0.98fr]">
       {/* Context panel */}
       <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[#ece7ff] p-10 lg:flex xl:p-14">
-        <div>
-          <Brand />
+        {/* Slow colour behind the copy, so the panel is never a flat block. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="blob -left-24 -top-24 size-72 bg-white/60 blob-float" />
+          <div className="blob -right-24 bottom-10 size-80 bg-[#FFD7E6]/60 blob-float" />
+          <div className="blob left-1/3 top-1/2 size-64 bg-[#C4B5FD]/40" />
         </div>
 
-        <div className="flex flex-col items-start">
-          <Mascot size={196} />
-          <h1 className="mt-6 max-w-md text-[2.5rem] font-extrabold leading-[1.04] tracking-[-0.04em] text-brand-ink xl:text-[2.9rem]">
+        <motion.div className="relative" {...enter(0.05)}>
+          <Brand />
+        </motion.div>
+
+        <div className="relative flex flex-col items-start">
+          <motion.div
+            className="relative"
+            initial={{ opacity: 0, scale: 0.9, y: 18 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: EASE, delay: 0.1 }}
+          >
+            <motion.div
+              aria-hidden
+              className="absolute left-1/2 top-1/2 size-[236px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-[#A78BFA]/60"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
+            />
+            <Mascot size={196} />
+          </motion.div>
+          <motion.h1
+            className="mt-6 max-w-md text-[2.5rem] font-extrabold leading-[1.04] tracking-[-0.04em] text-brand-ink xl:text-[2.9rem]"
+            {...enter(0.2)}
+          >
             Your sets, scores and progress, kept together.
-          </h1>
-          <p className="mt-4 max-w-sm text-[0.95rem] leading-relaxed text-brand-ink/65">
+          </motion.h1>
+          <motion.p
+            className="mt-4 max-w-sm text-[0.95rem] leading-relaxed text-brand-ink/65"
+            {...enter(0.28)}
+          >
             Sign in to build summaries, flashcards, quizzes and exam practice from your
             uploads. Everything stays attached to your account.
-          </p>
+          </motion.p>
 
-          <p className="mt-7 text-[0.85rem] font-medium leading-relaxed text-brand-ink/60">
+          <motion.p
+            className="mt-7 text-[0.85rem] font-medium leading-relaxed text-brand-ink/60"
+            {...enter(0.36)}
+          >
             Private to your account. No password to remember, just a six-digit email
             code.
-          </p>
+          </motion.p>
         </div>
 
-        <p className="text-[0.8rem] text-brand-ink/50">
+        <motion.p className="relative text-[0.8rem] text-brand-ink/50" {...enter(0.44)}>
           Your friends keep their own workspace.
-        </p>
+        </motion.p>
       </aside>
 
       {/* Form panel */}
@@ -134,9 +165,21 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             </Link>
           </div>
 
-          <div className="gizmo-card p-6 sm:p-8">
+          <motion.div
+            className="gizmo-card overflow-hidden p-6 sm:p-8"
+            initial={{ opacity: 0, y: 22, scale: 0.985 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.6, ease: EASE, delay: 0.12 }}
+          >
+            {/* Each step fades in from its side. Swapping in place (rather than
+                waiting for an exit) keeps the card's height honest. */}
             {step === "signIn" ? (
-              <>
+              <motion.div
+                key="sign-in"
+                initial={{ opacity: 0, x: -14 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+              >
                 <h2 className="text-[1.55rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
                   Sign in to your workspace
                 </h2>
@@ -209,9 +252,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     recoverable.
                   </p>
                 </form>
-              </>
+              </motion.div>
             ) : (
-              <>
+              <motion.div
+                key="code"
+                initial={{ opacity: 0, x: 14 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+              >
                 <button
                   type="button"
                   onClick={() => {
@@ -291,9 +339,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     arrived.
                   </p>
                 </form>
-              </>
+              </motion.div>
             )}
-          </div>
+          </motion.div>
 
           <p className="mt-4 text-center text-[0.82rem] text-muted-foreground">
             Every account gets a private workspace ·{" "}

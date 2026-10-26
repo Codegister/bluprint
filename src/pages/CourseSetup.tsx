@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { EASE, SPRING, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
@@ -13,6 +14,7 @@ import {
 } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
   ChevronLeft,
@@ -236,10 +238,13 @@ function SubjectRow({
     : "";
 
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onOpen}
       aria-pressed={selected}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.995 }}
+      transition={SPRING}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
         active
@@ -291,7 +296,7 @@ function SubjectRow({
           <Plus className="size-3.5" aria-hidden />
         )}
       </span>
-    </button>
+    </motion.button>
   );
 }
 
@@ -658,9 +663,12 @@ export default function CourseSetup() {
 
       <div className="mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
-          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
+          <motion.h1
+            className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+            {...enter(0.04)}
+          >
             Your courses
-          </h1>
+          </motion.h1>
         </div>
         <p className="max-w-md text-[0.82rem] leading-relaxed text-muted-foreground">
           Pick what you study. Bluprint maps each course from its published
@@ -670,25 +678,41 @@ export default function CourseSetup() {
         </p>
       </div>
 
+      {/* The two wizard steps cross-fade, so choosing a qualification feels
+          like turning a page rather than the content swapping instantly. */}
+      <AnimatePresence mode="wait" initial={false}>
       {!level ? (
-        <section className="mt-6 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-7">
+        <motion.section
+          key="qualification"
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -16 }}
+          transition={{ duration: 0.3, ease: EASE }}
+          className="mt-6 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-7"
+        >
           <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
             Step 1 of 2
           </p>
-          <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
+          <motion.h2
+            className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink"
+            {...enter(0.04)}
+          >
             Which qualification are you studying?
-          </h2>
+          </motion.h2>
           <p className="mt-1 max-w-xl text-[0.86rem] leading-relaxed text-muted-foreground">
             This decides the exam boards and tiers Bluprint offers for every
             subject, so choose it before picking courses.
           </p>
 
           <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {STUDY_LEVELS.map((option) => (
-              <button
+            {STUDY_LEVELS.map((option, index) => (
+              <motion.button
                 key={option}
                 type="button"
                 onClick={() => chooseQualification(option)}
+                {...enter(0.08 + index * 0.05, 12)}
+                whileHover={{ y: -2, transition: SPRING }}
+                whileTap={{ scale: 0.99, transition: SPRING }}
                 className="group flex items-center justify-between gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-[#7C5CFF]/60 hover:bg-[#FAF8FF]"
               >
                 <span>
@@ -703,7 +727,7 @@ export default function CourseSetup() {
                   className="size-4 text-brand-ink/30 transition-colors group-hover:text-[#5B3DF5]"
                   aria-hidden
                 />
-              </button>
+              </motion.button>
             ))}
           </div>
 
@@ -714,9 +738,15 @@ export default function CourseSetup() {
               resets their board and tier to that qualification's defaults.
             </p>
           )}
-        </section>
+        </motion.section>
       ) : (
-        <>
+        <motion.div
+          key="subjects"
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -16 }}
+          transition={{ duration: 0.3, ease: EASE }}
+        >
           <p className="mt-5 text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#7C5CFF]">
             Step 2 of 2
           </p>
@@ -765,7 +795,12 @@ export default function CourseSetup() {
 
           <div className="mt-2 max-w-2xl pb-16">
             {asking && activeDraft && activeMeta && activeChoices && currentQuestion ? (
-              <section className="rounded-[1.6rem] border border-border bg-white p-5 shadow-[0_16px_40px_-34px_rgba(22,24,31,0.5)] sm:p-6">
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, ease: EASE }}
+                className="rounded-[1.6rem] border border-border bg-white p-5 shadow-[0_16px_40px_-34px_rgba(22,24,31,0.5)] sm:p-6"
+              >
                 <button
                   type="button"
                   onClick={() =>
@@ -818,7 +853,7 @@ export default function CourseSetup() {
                     <p className="mt-1 text-[0.78rem] text-muted-foreground">
                       Choose the board your school enters you for in {active}.
                     </p>
-                    <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                    <div className="rise-stagger mt-3 grid gap-1.5 sm:grid-cols-2">
                       {EXAM_BOARDS.map((option) => {
                         const chosen = activeDraft.examBoard === option;
                         return (
@@ -855,7 +890,7 @@ export default function CourseSetup() {
                     </p>
                     <div
                       className={cn(
-                        "mt-3 grid gap-1.5",
+                        "rise-stagger mt-3 grid gap-1.5",
                         (activeChoices.tiers.length > 0
                           ? activeChoices.tiers
                           : activeChoices.variants
@@ -904,7 +939,7 @@ export default function CourseSetup() {
                           the one your school enters you for. The content and the
                           papers are different.
                         </p>
-                        <div className="grid gap-1.5 sm:grid-cols-2">
+                        <div className="rise-stagger grid gap-1.5 sm:grid-cols-2">
                           {RS_ROUTE_CHOICES.map((option) => {
                             const chosen = activeDraft?.rsRoute === option.value;
                             return (
@@ -955,7 +990,7 @@ export default function CourseSetup() {
                           This is the religion for Paper 1, the study of religion.
                           You will be asked for the second religion next.
                         </p>
-                        <div className="grid gap-1.5 sm:grid-cols-2">
+                        <div className="rise-stagger grid gap-1.5 sm:grid-cols-2">
                           {RS_RELIGIONS.map((religion) => {
                             const chosen = activeDraft?.rsReligion === religion;
                             return (
@@ -993,7 +1028,7 @@ export default function CourseSetup() {
                             : "Paper 2 examines a second religion, worth 25% of the GCSE."}{" "}
                           It must be different from {activeDraft?.rsReligion ?? "your main religion"}.
                         </p>
-                        <div className="grid gap-1.5 sm:grid-cols-2">
+                        <div className="rise-stagger grid gap-1.5 sm:grid-cols-2">
                           {RS_RELIGIONS.filter(
                             (religion) => religion !== activeDraft?.rsReligion,
                           ).map((religion) => {
@@ -1032,7 +1067,7 @@ export default function CourseSetup() {
                           of your religion and Paper 2 is a second religion; the
                           third is either Philosophy and Ethics or Textual Studies.
                         </p>
-                        <div className="grid gap-1.5">
+                        <div className="rise-stagger grid gap-1.5">
                           {RS_A_THIRD_PAPERS.map((paper) => {
                             const chosen = activeDraft?.rsSpec === paper.value;
                             return (
@@ -1079,7 +1114,7 @@ export default function CourseSetup() {
                           Religious Studies B is two Areas of Study, each with its
                           own paper. Pick both so the pathway matches your lessons.
                         </p>
-                        <div className="grid gap-1.5">
+                        <div className="rise-stagger grid gap-1.5">
                           {RS_B_AREAS.filter((area) =>
                             rsStep === "areaOne"
                               ? area.value !== activeDraft?.rsSpec2
@@ -1128,9 +1163,13 @@ export default function CourseSetup() {
                     ) : null}
                   </section>
                 ) : null}
-              </section>
+              </motion.section>
             ) : (
-              <>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, ease: EASE }}
+              >
                 {ordered.length === 0 && !showCustom ? (
                   <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
                     <p className="text-[0.85rem] text-muted-foreground">
@@ -1181,7 +1220,7 @@ export default function CourseSetup() {
                     )}
                   </div>
                 )}
-              </>
+              </motion.div>
             )}
           </div>
 
@@ -1227,8 +1266,9 @@ export default function CourseSetup() {
               </Button>
             </div>
           </div>
-        </>
+        </motion.div>
       )}
+      </AnimatePresence>
     </AppShell>
   );
 }

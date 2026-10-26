@@ -1,12 +1,12 @@
 import { Mascot } from "@/components/Mascot";
 import { PromptInput } from "@/components/ui/ai-chat-input";
-
-type MascotFloat = boolean | undefined;
+import { EASE, TypingDots } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { Check, Globe, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -27,6 +27,7 @@ export type TutorScope =
 
 type Source = { title: string; url: string };
 
+/** Three softly bouncing dots, used while an answer has not started yet. */
 function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -240,7 +241,7 @@ export function TutorChat({
                 Ask about {title}. The tutor can explain an idea, quiz you, or show
                 exactly where marks are usually lost.
               </p>
-              <div className="mt-4 grid w-full gap-2 sm:grid-cols-2">
+              <div className="rise-stagger mt-4 grid w-full gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((suggestion) => (
                   <button
                     key={suggestion}
@@ -261,9 +262,16 @@ export function TutorChat({
             </div>
           ) : (
             <div className="space-y-3">
-              {messages.map((message) => (
-                <div
+              {messages.map((message, index) => (
+                <motion.div
                   key={message._id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.3,
+                    ease: EASE,
+                    delay: Math.min(index * 0.03, 0.18),
+                  }}
                   className={cn(
                     "flex flex-col gap-1",
                     message.role === "user" && "items-end",
@@ -286,7 +294,7 @@ export function TutorChat({
                     )}
                     {message.streaming && message.content.length === 0 && (
                       <span className="inline-flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="size-3.5 animate-spin" />
+                        <TypingDots />
                         {message.sources.length > 0
                           ? "Reading the web…"
                           : useWeb
@@ -300,15 +308,20 @@ export function TutorChat({
                       <SourceList sources={message.sources} />
                     </div>
                   )}
-                </div>
+                </motion.div>
               ))}
 
               {sending && !streaming && pending && (
-                <div className="flex justify-end">
+                <motion.div
+                  className="flex justify-end"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: EASE }}
+                >
                   <div className="max-w-[86%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#191B27] px-4 py-3 text-[0.9rem] leading-relaxed text-white opacity-80">
                     {pending}
                   </div>
-                </div>
+                </motion.div>
               )}
             </div>
           )}
@@ -316,9 +329,15 @@ export function TutorChat({
 
         <div className="border-t border-border px-4 py-4 sm:px-5">
           {error && (
-            <p className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
+            <motion.p
+              key={error}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, ease: EASE }}
+              className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
+            >
               {error}
-            </p>
+            </motion.p>
           )}
 
           <PromptInput

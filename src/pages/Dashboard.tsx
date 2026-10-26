@@ -1,6 +1,13 @@
 import { AppShell } from "@/components/AppShell";
 import { CreateSetDialog } from "@/components/CreateSetDialog";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
+import {
+  Counter,
+  EASE,
+  Meter,
+  enter,
+  reveal,
+} from "@/components/motion/Motion";
 import { TutorChat } from "@/components/study/TutorChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +19,7 @@ import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import { motion } from "framer-motion";
 import {
   ArrowRight,
   CalendarPlus,
@@ -87,12 +95,12 @@ function SetRow({ set }: { set: SetSummary }) {
           </p>
         ) : (
           <div className="mt-2 flex items-center gap-2.5">
-            <div className="h-1.5 w-full max-w-[180px] overflow-hidden rounded-full bg-brand-panel">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${mastery}%`, backgroundColor: accent }}
-              />
-            </div>
+            <Meter
+              value={mastery}
+              className="h-1.5 w-full max-w-[180px]"
+              barStyle={{ backgroundColor: accent }}
+              label={`${set.title} mastery`}
+            />
             <span className="shrink-0 text-[0.7rem] text-muted-foreground">
               {mastery}% known
             </span>
@@ -179,12 +187,12 @@ function CourseRow({ course }: { course: CourseSummary }) {
                 / {course.topicCount} topics
               </span>
             </p>
-            <div className="mt-1.5 h-1.5 w-full max-w-[130px] overflow-hidden rounded-full bg-brand-panel">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${mastery}%`, backgroundColor: meta.color }}
-              />
-            </div>
+            <Meter
+              value={mastery}
+              className="mt-1.5 h-1.5 w-full max-w-[130px]"
+              barStyle={{ backgroundColor: meta.color }}
+              label={`${course.subject} pathway progress`}
+            />
           </>
         )}
       </div>
@@ -313,7 +321,10 @@ export default function Dashboard() {
 
   return (
     <AppShell>
-      <header className="hero-wash animate-rise relative overflow-hidden rounded-[2rem] border border-[#E7DCF8] px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7">
+      <motion.header
+        className="hero-wash relative overflow-hidden rounded-[2rem] border border-[#E7DCF8] px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7"
+        {...enter(0.04, 14)}
+      >
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <div className="blob -right-12 -top-20 size-52 bg-white/70" />
           <div className="blob -bottom-24 left-[26%] size-48 bg-[#FFE6A3]/60" />
@@ -358,41 +369,50 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <Mascot
-            size={132}
+          <motion.div
             className="hidden shrink-0 sm:block"
-          />
+            initial={{ opacity: 0, scale: 0.9, rotate: -4 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={{ duration: 0.8, ease: EASE, delay: 0.25 }}
+            whileHover={{ rotate: 3, scale: 1.03 }}
+          >
+            <Mascot size={132} />
+          </motion.div>
         </div>
 
         <div className="relative mt-5 grid gap-2.5 sm:grid-cols-3">
           {[
             {
               label: "Study sets",
-              value: sets?.length ?? 0,
+              count: sets?.length ?? 0,
+              suffix: "",
               note: "saved to your account",
               icon: Layers3,
               tint: "bg-[#EFEDFF] text-[#5B3DF5]",
             },
             {
               label: "Cards known",
-              value: `${stats.mastery}%`,
+              count: stats.mastery,
+              suffix: "%",
               note: "across every set",
               icon: Target,
               tint: "bg-[#E3F8F0] text-[#128A4C]",
             },
             {
               label: "Due now",
-              value: stats.due,
+              count: stats.due,
+              suffix: "",
               note: study
                 ? `${study.todayCount}/${study.goal} reviewed today`
                 : "cards to revisit",
               icon: Flame,
               tint: "bg-[#FFF0DC] text-[#B4720E]",
             },
-          ].map((tile) => (
-            <div
+          ].map((tile, index) => (
+            <motion.div
               key={tile.label}
-              className="flex items-center gap-3 rounded-2xl border border-white/80 bg-white/75 p-3 backdrop-blur"
+              className="lift flex items-center gap-3 rounded-2xl border border-white/80 bg-white/75 p-3 backdrop-blur"
+              {...enter(0.2 + index * 0.07, 12)}
             >
               <span
                 className={cn(
@@ -407,16 +427,16 @@ export default function Dashboard() {
                   {tile.label}
                 </p>
                 <p className="mt-0.5 flex items-baseline gap-1.5 font-display text-[1.3rem] font-bold leading-none text-brand-ink">
-                  {tile.value}
+                  <Counter value={tile.count} suffix={tile.suffix} />
                   <span className="truncate text-[0.68rem] font-medium text-brand-ink/45">
                     {tile.note}
                   </span>
                 </p>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
-      </header>
+      </motion.header>
 
       {ai && !ai.configured && (
         <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.8rem] font-medium text-[#96650A]">
@@ -426,7 +446,7 @@ export default function Dashboard() {
       )}
 
       <section id="tutor" className="mt-8 scroll-mt-6">
-        <div className="flex items-center gap-2.5">
+        <motion.div className="flex items-center gap-2.5" {...reveal()}>
           <span className="grid size-7 place-items-center rounded-lg bg-[#FFE7F0] text-[#C43F69]">
             <Sparkles className="size-4" aria-hidden />
           </span>
@@ -434,12 +454,15 @@ export default function Dashboard() {
             AI tutor
           </h2>
           <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
-        </div>
-        <p className="mt-1 max-w-2xl text-[0.82rem] leading-relaxed text-muted-foreground">
+        </motion.div>
+        <motion.p
+          className="mt-1 max-w-2xl text-[0.82rem] leading-relaxed text-muted-foreground"
+          {...reveal(0.06)}
+        >
           Explain an idea, quiz yourself, or ask where marks are usually lost.
           Answers come from the course you pick, and web search stays off unless
           you turn it on.
-        </p>
+        </motion.p>
 
         {courseRows === undefined ? (
           <div className="mt-3 flex min-h-[120px] items-center justify-center rounded-3xl border border-border bg-white">
@@ -501,7 +524,7 @@ export default function Dashboard() {
       </section>
 
       <section id="courses" className="mt-8 scroll-mt-6">
-        <div className="flex items-center gap-2.5">
+        <motion.div className="flex items-center gap-2.5" {...reveal()}>
           <span className="grid size-7 place-items-center rounded-lg bg-[#E3F8F0] text-[#128A4C]">
             <GraduationCap className="size-4" aria-hidden />
           </span>
@@ -521,7 +544,7 @@ export default function Dashboard() {
               {courseRows && courseRows.length > 0 ? "Add courses" : "Choose courses"}
             </Link>
           </Button>
-        </div>
+        </motion.div>
 
         <div className="mt-3 overflow-hidden rounded-3xl border border-border bg-white">
           {courseRows === undefined ? (
@@ -541,16 +564,18 @@ export default function Dashboard() {
                 <span>Materials</span>
                 <span />
               </div>
-              {courseRows.map((course) => (
-                <CourseRow key={course._id} course={course} />
-              ))}
+              <div className="rise-stagger">
+                {courseRows.map((course) => (
+                  <CourseRow key={course._id} course={course} />
+                ))}
+              </div>
             </>
           )}
         </div>
       </section>
 
       <section id="sets" className="mt-8 scroll-mt-6">
-        <div className="flex items-center gap-2.5">
+        <motion.div className="flex items-center gap-2.5" {...reveal()}>
           <span className="grid size-7 place-items-center rounded-lg bg-[#FFF0DC] text-[#B4720E]">
             <Layers3 className="size-4" aria-hidden />
           </span>
@@ -561,7 +586,7 @@ export default function Dashboard() {
             {sets?.length ?? 0}
           </span>
           <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
-        </div>
+        </motion.div>
 
         {(sets?.length ?? 0) > 0 && (
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -632,7 +657,11 @@ export default function Dashboard() {
               </button>
             </div>
           ) : (
-            filtered.map((set) => <SetRow key={set._id} set={set} />)
+            <div className="rise-stagger">
+              {filtered.map((set) => (
+                <SetRow key={set._id} set={set} />
+              ))}
+            </div>
           )}
         </div>
       </section>

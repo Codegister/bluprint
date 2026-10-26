@@ -1,3 +1,4 @@
+import { EASE, reveal } from "@/components/motion/Motion";
 import {
   Dialog,
   DialogClose,
@@ -12,6 +13,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { cognitoPaperProxyUrl } from "@/lib/convexSite";
 import { readableError } from "@/lib/errors";
 import { useAction, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { FileText, Loader2, RotateCcw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -70,7 +72,10 @@ export function CognitoRealPapers({
   const years = [...new Set(papers.map((paper) => paper.year))];
 
   return (
-    <section className="mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+    <motion.section
+      className="mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+      {...reveal()}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
@@ -100,7 +105,13 @@ export function CognitoRealPapers({
       )}
 
       {error && (
-        <div className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-3">
+        <motion.div
+          key={error}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: EASE }}
+          className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-3"
+        >
           <p className="text-[0.8rem] leading-relaxed text-[#8A5D00]">{error}</p>
           <button
             type="button"
@@ -111,7 +122,7 @@ export function CognitoRealPapers({
             <RotateCcw className="size-3" aria-hidden />
             Try again
           </button>
-        </div>
+        </motion.div>
       )}
 
       {!busy && !error && cached && papers.length === 0 && (
@@ -129,7 +140,7 @@ export function CognitoRealPapers({
               <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 {year}
               </p>
-              <ul className="mt-1.5 grid gap-2">
+              <ul className="rise-stagger mt-1.5 grid gap-2">
                 {papers
                   .filter((paper) => paper.year === year)
                   .map((paper) => (
@@ -239,6 +250,6 @@ export function CognitoRealPapers({
           </div>
         </DialogContent>
       </Dialog>
-    </section>
+    </motion.section>
   );
 }

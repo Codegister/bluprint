@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { Meter, SPRING } from "@/components/motion/Motion";
 import {
   Sheet,
   SheetContent,
@@ -11,6 +12,7 @@ import { readableError } from "@/lib/errors";
 import { displayName, initialFor } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import {
   CalendarDays,
   Flame,
@@ -122,12 +124,12 @@ function GoalCard() {
           {study ? `${today}/${goal} cards` : "—"}
         </p>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#ECE6FF]">
-        <div
-          className="h-full rounded-full bg-[linear-gradient(90deg,#6B4BFF,#EC4899)] transition-[width] duration-500"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+      <Meter
+        value={progress}
+        className="mt-2 h-1.5 bg-[#ECE6FF]"
+        barClassName="bg-[linear-gradient(90deg,#6B4BFF,#EC4899)]"
+        label="Cards reviewed today"
+      />
       <p className="mt-2 flex items-center gap-1.5 text-[0.72rem] leading-snug text-brand-ink/60">
         {streak > 0 ? (
           <>
@@ -145,7 +147,15 @@ function GoalCard() {
   );
 }
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+function Sidebar({
+  onNavigate,
+  idPrefix,
+}: {
+  onNavigate?: () => void;
+  /** Desktop and mobile mount two copies; the layout animation needs a
+   *  unique id per copy or the pill would fly between them. */
+  idPrefix: string;
+}) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -202,12 +212,23 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               to={item.to}
               onClick={onNavigate}
               className={cn(
-                "flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-[0.95rem] font-medium transition-colors",
+                "relative flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-[0.95rem] font-medium transition-colors",
                 active
                   ? `font-semibold ${item.active}`
                   : "text-brand-ink/75 hover:bg-white/70 hover:text-brand-ink",
               )}
             >
+              {/* One shared bar slides between destinations, so the nav reads
+                  as a single moving object rather than five separate states. */}
+              {active && (
+                <motion.span
+                  layoutId={`${idPrefix}-nav-active`}
+                  aria-hidden
+                  className="absolute left-0 top-1/2 h-5 w-[3px] rounded-full bg-current"
+                  style={{ marginTop: -10 }}
+                  transition={SPRING}
+                />
+              )}
               <span
                 className={cn(
                   "grid size-7 shrink-0 place-items-center rounded-[0.6rem] transition-colors",
@@ -293,7 +314,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[292px] border-r border-[#E9E2F5] lg:block">
-        <Sidebar />
+        <Sidebar idPrefix="desktop" />
       </aside>
 
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border/70 bg-white/80 px-4 py-3 backdrop-blur lg:hidden">
@@ -313,7 +334,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SheetHeader className="sr-only">
             <SheetTitle>Bluprint menu</SheetTitle>
           </SheetHeader>
-          <Sidebar onNavigate={() => setMobileOpen(false)} />
+          <Sidebar idPrefix="mobile" onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 

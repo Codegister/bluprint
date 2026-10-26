@@ -9,6 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { EASE } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
@@ -16,6 +17,7 @@ import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import { compressImage, extractVideoFrames } from "@/lib/media";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
@@ -275,6 +277,11 @@ export function CreateSetDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto rounded-3xl border-border bg-card p-0 shadow-none sm:max-w-2xl">
         <div className="px-6 pb-4 pt-6 sm:px-7">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: EASE }}
+          >
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-bold text-brand-ink">
               Add study material
@@ -284,16 +291,22 @@ export function CreateSetDialog({
               and exam practice.
             </DialogDescription>
           </DialogHeader>
+          </motion.div>
         </div>
 
         <div className="px-6 pb-6 sm:px-7">
           {ai?.configured === false && (
-            <div className="mb-4 rounded-2xl bg-[#FFF6E5] px-3.5 py-3">
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: EASE }}
+              className="mb-4 rounded-2xl bg-[#FFF6E5] px-3.5 py-3"
+            >
               <p className="text-xs leading-relaxed text-[#8A5D00]">
                 NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace
                 owner to add it before compiling a set.
               </p>
-            </div>
+            </motion.div>
           )}
 
           <div>
@@ -322,11 +335,14 @@ export function CreateSetDialog({
               {COURSE_PRESETS.map((preset) => {
                 const selected = !customCourseOpen && course === preset;
                 return (
-                  <button
+                  <motion.button
                     key={preset}
                     type="button"
                     aria-pressed={selected}
                     disabled={isLoading}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.18, ease: EASE }}
                     onClick={() => {
                       setCourse(selected ? "" : preset);
                       setCustomCourseOpen(false);
@@ -339,13 +355,16 @@ export function CreateSetDialog({
                     )}
                   >
                     {preset}
-                  </button>
+                  </motion.button>
                 );
               })}
-              <button
+              <motion.button
                 type="button"
                 aria-pressed={customCourseOpen}
                 disabled={isLoading}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.18, ease: EASE }}
                 onClick={() => {
                   setCustomCourseOpen((open) => !open);
                   setCourse("");
@@ -358,7 +377,7 @@ export function CreateSetDialog({
                 )}
               >
                 Other
-              </button>
+              </motion.button>
             </div>
             {customCourseOpen && (
               <Input
@@ -381,11 +400,14 @@ export function CreateSetDialog({
               {EXAM_BOARDS.map((board) => {
                 const selected = examBoard === board;
                 return (
-                  <button
+                  <motion.button
                     key={board}
                     type="button"
                     aria-pressed={selected}
                     disabled={isLoading}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.18, ease: EASE }}
                     onClick={() => setExamBoard(selected ? "" : board)}
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
@@ -395,7 +417,7 @@ export function CreateSetDialog({
                     )}
                   >
                     {board}
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
@@ -409,11 +431,14 @@ export function CreateSetDialog({
               {STUDY_LEVELS.map((option) => {
                 const selected = level === option;
                 return (
-                  <button
+                  <motion.button
                     key={option}
                     type="button"
                     aria-pressed={selected}
                     disabled={isLoading}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.18, ease: EASE }}
                     onClick={() => setLevel(selected ? "" : option)}
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
@@ -423,7 +448,7 @@ export function CreateSetDialog({
                     )}
                   >
                     {option}
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
@@ -441,7 +466,7 @@ export function CreateSetDialog({
             }}
             className="mt-5 gap-4"
           >
-            <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-full bg-brand-panel p-1">
+            <TabsList className="rise-stagger grid h-auto w-full grid-cols-3 gap-1 rounded-full bg-brand-panel p-1">
               {[
                 { value: "photos", label: "Photos" },
                 { value: "video", label: "Video" },
@@ -635,18 +660,36 @@ export function CreateSetDialog({
             </p>
           </div>
 
-          {error && (
-            <div className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#C93C49]">
-              {error}
-            </div>
-          )}
+          <AnimatePresence initial={false}>
+            {error && (
+              <motion.div
+                key={error}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.25, ease: EASE }}
+                className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#C93C49]"
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {isLoading && step && (
-            <p className="mt-4 flex items-center gap-2 rounded-2xl bg-brand-panel px-3.5 py-2.5 text-xs font-medium text-muted-foreground">
-              <Loader2 className="size-3.5 shrink-0 animate-spin" />
-              {step}
-            </p>
-          )}
+          <AnimatePresence initial={false} mode="wait">
+            {isLoading && step && (
+              <motion.p
+                key={step}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: EASE }}
+                className="mt-4 flex items-center gap-2 rounded-2xl bg-brand-panel px-3.5 py-2.5 text-xs font-medium text-muted-foreground"
+              >
+                <Loader2 className="size-3.5 shrink-0 animate-spin" />
+                {step}
+              </motion.p>
+            )}
+          </AnimatePresence>
 
           <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-relaxed text-muted-foreground">

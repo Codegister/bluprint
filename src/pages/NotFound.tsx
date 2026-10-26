@@ -1,6 +1,8 @@
 import { Brand } from "@/components/Brand";
 import { Mascot } from "@/components/Mascot";
+import { enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 import { Link } from "react-router";
 
 export default function NotFound() {
@@ -10,8 +12,17 @@ export default function NotFound() {
         <Brand />
       </header>
       <main className="flex flex-1 items-center justify-center px-4 pb-20">
-        <div className="w-full max-w-md rounded-[2rem] border border-border bg-card p-8 text-center">
-          <Mascot size={140} className="mx-auto" />
+        <motion.div
+          className="w-full max-w-md rounded-[2rem] border border-border bg-card p-8 text-center"
+          {...enter(0.04, 16)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, rotate: -5 }}
+            animate={{ opacity: 1, scale: 1, rotate: 0 }}
+            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
+          >
+            <Mascot size={140} className="mx-auto" />
+          </motion.div>
           <h1 className="mt-2 font-display text-[1.6rem] font-bold text-brand-ink">
             This page went missing
           </h1>
@@ -22,7 +33,7 @@ export default function NotFound() {
           <Button asChild className="mt-6 h-11 px-6">
             <Link to="/dashboard">Back to home</Link>
           </Button>
-        </div>
+        </motion.div>
       </main>
     </div>
   );

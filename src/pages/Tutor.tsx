@@ -4,9 +4,11 @@ import { PromptInput } from "@/components/ui/ai-chat-input";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { EASE, TypingDots, enter } from "@/components/motion/Motion";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { Check, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -47,6 +49,7 @@ function SourceList({ sources }: { sources: Array<{ title: string; url: string }
   );
 }
 
+/** Three softly bouncing dots, used while an answer has not started yet. */
 function hostOf(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -188,7 +191,10 @@ export default function TutorPage() {
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-4xl">
-        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
+        <motion.header
+          className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-5"
+          {...enter(0.04, 10)}
+        >
           <div className="min-w-0">
             <p className="font-display text-[0.98rem] font-bold text-brand-ink">
               AI tutor
@@ -224,7 +230,7 @@ export default function TutorPage() {
               Close
             </Button>
           </div>
-        </header>
+        </motion.header>
 
         <div
           ref={scrollRef}
@@ -235,8 +241,17 @@ export default function TutorPage() {
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             </div>
           ) : empty ? (
-            <div className="flex flex-col items-center pb-2 text-center">
-              <Mascot size={96} float={false} />
+            <motion.div
+              className="flex flex-col items-center pb-2 text-center"
+              {...enter(0.08, 12)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, rotate: -3 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                transition={{ duration: 0.6, ease: EASE, delay: 0.06 }}
+              >
+                <Mascot size={96} float={false} />
+              </motion.div>
               <p className="font-display text-[1.15rem] font-bold text-brand-ink">
                 Stuck on something?
               </p>
@@ -244,7 +259,7 @@ export default function TutorPage() {
                 Ask about your material. The tutor can explain an idea, quiz you, or show
                 exactly where marks are usually lost.
               </p>
-              <div className="mt-4 grid w-full gap-2 sm:grid-cols-2">
+              <div className="rise-stagger mt-4 grid w-full gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((suggestion) => (
                   <button
                     key={suggestion}
@@ -262,12 +277,19 @@ export default function TutorPage() {
                   </button>
                 ))}
               </div>
-            </div>
+            </motion.div>
           ) : (
             <div className="space-y-3">
-              {messages.map((message) => (
-                <div
+              {messages.map((message, index) => (
+                <motion.div
                   key={message._id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{
+                    duration: 0.3,
+                    ease: EASE,
+                    delay: Math.min(index * 0.03, 0.18),
+                  }}
                   className={cn(
                     "flex flex-col gap-1",
                     message.role === "user" && "items-end",
@@ -290,7 +312,7 @@ export default function TutorPage() {
                     )}
                     {message.streaming && message.content.length === 0 && (
                       <span className="inline-flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="size-3.5 animate-spin" />
+                        <TypingDots />
                         {message.sources.length > 0
                           ? "Reading the web…"
                           : useWeb
@@ -304,25 +326,39 @@ export default function TutorPage() {
                       <SourceList sources={message.sources ?? []} />
                     </div>
                   )}
-                </div>
+                </motion.div>
               ))}
 
               {sending && !streaming && pending && (
-                <div className="flex justify-end">
+                <motion.div
+                  className="flex justify-end"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: EASE }}
+                >
                   <div className="max-w-[86%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-[#191B27] px-4 py-3 text-[0.9rem] leading-relaxed text-white opacity-80">
                     {pending}
                   </div>
-                </div>
+                </motion.div>
               )}
             </div>
           )}
         </div>
 
-        <div className="border-t border-border px-4 py-4 sm:px-5">
+        <motion.div
+          className="border-t border-border px-4 py-4 sm:px-5"
+          {...enter(0.12, 10)}
+        >
           {error && (
-            <p className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
+            <motion.p
+              key={error}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, ease: EASE }}
+              className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
+            >
               {error}
-            </p>
+            </motion.p>
           )}
 
           <PromptInput
@@ -349,7 +385,7 @@ export default function TutorPage() {
             Effort sets how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>
-        </div>
+        </motion.div>
       </div>
     </AppShell>
   );

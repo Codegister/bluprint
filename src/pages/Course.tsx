@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Counter, Meter, enter, reveal } from "@/components/motion/Motion";
 import {
   Tabs,
   TabsContent,
@@ -28,6 +29,7 @@ import { percent, relativeDate } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { BookOpen, ChevronDown, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router";
@@ -146,6 +148,19 @@ function MissingCard() {
   );
 }
 
+/** Indeterminate bar for a pathway that is still being mapped. */
+function BuildingBar() {
+  return (
+    <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
+      <motion.div
+        className="h-full w-1/3 rounded-full bg-[#7C5CFF]"
+        animate={{ x: ["-110%", "310%"] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </div>
+  );
+}
+
 function BuildingPanel({
   course,
   stale,
@@ -167,9 +182,7 @@ function BuildingPanel({
         </p>
       </div>
 
-      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
-        <div className="h-full w-1/3 animate-pulse rounded-full bg-[#7C5CFF]" />
-      </div>
+      <BuildingBar />
 
       <p className="mt-4 text-[0.78rem] leading-relaxed text-muted-foreground">
         This usually takes under a minute. You can leave this page: the pathway
@@ -199,9 +212,7 @@ function RecoveringPanel({ course }: { course: Doc<"courses"> }) {
         Bluprint is completing this map automatically. You can leave this page;
         it will be ready when you come back.
       </p>
-      <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
-        <div className="h-full w-1/3 animate-pulse rounded-full bg-[#7C5CFF]" />
-      </div>
+      <BuildingBar />
     </section>
   );
 }
@@ -424,12 +435,18 @@ export default function Course() {
             Back to home
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
+            <motion.h1
+              className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+              {...enter(0.04)}
+            >
               {course.subject}
-            </h1>
-            <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
+            </motion.h1>
+            <motion.p
+              className="mt-0.5 text-[0.8rem] text-muted-foreground"
+              {...enter(0.1)}
+            >
               {courseSubtitle(course)}
-            </p>
+            </motion.p>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -470,31 +487,34 @@ export default function Course() {
           <BuildingPanel course={course} stale={details.processingStale} />
         ) : (
           <>
-            <section className="mt-6 grid overflow-hidden rounded-3xl border border-border bg-white sm:grid-cols-3">
+            <motion.section
+              className="mt-6 grid overflow-hidden rounded-3xl border border-border bg-white sm:grid-cols-3"
+              {...enter(0.14, 12)}
+            >
               <div className="px-5 py-4">
                 <p className="text-[0.72rem] font-medium text-muted-foreground">
                   Topics revised
                 </p>
                 <p className="mt-0.5 font-display text-[1.5rem] font-bold leading-tight text-brand-ink">
-                  {details.completedCount}
+                  <Counter value={details.completedCount} />
                   <span className="text-[0.95rem] font-semibold text-muted-foreground">
                     {" "}
                     / {details.topicCount}
                   </span>
                 </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-panel">
-                  <div
-                    className="h-full rounded-full bg-[#128A4C] transition-[width] duration-500"
-                    style={{ width: `${mastery}%` }}
-                  />
-                </div>
+                <Meter
+                  value={mastery}
+                  className="mt-2 h-1.5"
+                  barClassName="bg-[#128A4C]"
+                  label="Topics revised"
+                />
               </div>
               <div className="border-t border-border px-5 py-4 sm:border-l sm:border-t-0">
                 <p className="text-[0.72rem] font-medium text-muted-foreground">
                   Study sets built
                 </p>
                 <p className="mt-0.5 font-display text-[1.5rem] font-bold leading-tight text-brand-ink">
-                  {sets.length}
+                  <Counter value={sets.length} />
                 </p>
                 <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
                   {sets.length === 0
@@ -507,13 +527,17 @@ export default function Course() {
                   Cards known
                 </p>
                 <p className="mt-0.5 font-display text-[1.5rem] font-bold leading-tight text-brand-ink">
-                  {cards > 0 ? `${percent(known, cards)}%` : "n/a"}
+                  {cards > 0 ? (
+                    <Counter value={percent(known, cards)} suffix="%" />
+                  ) : (
+                    "n/a"
+                  )}
                 </p>
                 <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
                   {cards > 0 ? `${known} of ${cards} cards` : "Build material to track this"}
                 </p>
               </div>
-            </section>
+            </motion.section>
 
             <Tabs value={activeTab} onValueChange={selectTab} className="mt-5 gap-4">
               <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0">
@@ -543,7 +567,10 @@ export default function Course() {
               </TabsList>
 
               <TabsContent value="pathway" className="mt-1">
-                <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+                <motion.section
+                  className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+                  {...reveal()}
+                >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
@@ -564,7 +591,7 @@ export default function Course() {
                 AI-built from the published specification. Always check your exam
                 board's current specification before relying on a topic list.
               </p>
-                </section>
+                </motion.section>
 
                 {nextTopic && (
               <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-border bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
@@ -592,7 +619,7 @@ export default function Course() {
               </section>
             )}
 
-            <section className="mt-6">
+            <motion.section className="mt-6" {...reveal(0.05)}>
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#6B4EE6]">
@@ -628,7 +655,7 @@ export default function Course() {
                   </Button>
                 </div>
               ) : (
-                <ol className="relative mt-6">
+                <ol className="rise-stagger relative mt-6">
                   <span
                     aria-hidden
                     className="absolute bottom-10 left-[35px] top-6 w-[2px] rounded-full bg-border sm:left-[41px]"
@@ -684,15 +711,12 @@ export default function Course() {
                                     : ""}
                                 </p>
                                 <div className="mt-2 flex items-center gap-2">
-                                  <div className="h-1.5 w-full max-w-[170px] overflow-hidden rounded-full bg-brand-panel">
-                                    <div
-                                      className="h-full rounded-full transition-[width] duration-500"
-                                      style={{
-                                        width: `${unitPercent}%`,
-                                        backgroundColor: color.hex,
-                                      }}
-                                    />
-                                  </div>
+                                  <Meter
+                                    value={unitPercent}
+                                    className="h-1.5 w-full max-w-[170px]"
+                                    barStyle={{ backgroundColor: color.hex }}
+                                    label={`${unit.title} revised`}
+                                  />
                                   <span
                                     className="text-[0.66rem] font-semibold"
                                     style={{ color: color.hex }}
@@ -745,7 +769,7 @@ export default function Course() {
 
                         {expanded && (
                           <div className="mt-2 pl-[86px] sm:pl-[102px]">
-                            <div className="overflow-hidden rounded-2xl border border-border bg-white">
+                            <div className="rise-stagger overflow-hidden rounded-2xl border border-border bg-white">
                               {unit.topics.map((topic) => {
                                 const isDone = done.has(topic.id);
                                 const set = setsByTopic.get(topic.id);
@@ -915,7 +939,7 @@ export default function Course() {
                   })}
                 </ol>
               )}
-            </section>
+            </motion.section>
 
                 <p className="mt-4 text-[0.72rem] text-muted-foreground">
                   Progress updated {relativeDate(course.updatedAt)} · last studied{" "}
@@ -968,7 +992,7 @@ export default function Course() {
                       </span>
                     </div>
 
-                    <ul className="mt-4 grid gap-2.5">
+                    <ul className="rise-stagger mt-4 grid gap-2.5">
                       {topicPapers.map((set) => (
                         <li
                           key={set._id}
@@ -1045,7 +1069,7 @@ export default function Course() {
                       </Button>
                     </div>
                   ) : (
-                    <ul className="mt-4 grid gap-2.5">
+                    <ul className="rise-stagger mt-4 grid gap-2.5">
                       {sets.map((set) => {
                         const mastery = percent(set.knownCount, set.cardCount);
                         return (
@@ -1087,12 +1111,12 @@ export default function Course() {
                               </p>
                               {set.status === "ready" && set.cardCount > 0 && (
                                 <div className="mt-2 flex items-center gap-2">
-                                  <div className="h-1.5 w-full max-w-[190px] overflow-hidden rounded-full bg-brand-panel">
-                                    <div
-                                      className="h-full rounded-full bg-[#128A4C] transition-[width] duration-500"
-                                      style={{ width: `${mastery}%` }}
-                                    />
-                                  </div>
+                                  <Meter
+                                    value={mastery}
+                                    className="h-1.5 w-full max-w-[190px]"
+                                    barClassName="bg-[#128A4C]"
+                                    label={`${set.title} mastery`}
+                                  />
                                   <span className="shrink-0 text-[0.66rem] font-semibold text-muted-foreground">
                                     {mastery}% known
                                   </span>

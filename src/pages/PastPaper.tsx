@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { enter, reveal } from "@/components/motion/Motion";
 import { PastPaperPractice } from "@/components/study/PastPaperPractice";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -8,6 +9,7 @@ import { readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { courseSubtitle } from "@/lib/subjects";
 import { useMutation, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
@@ -111,18 +113,27 @@ export default function PastPaper() {
             <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#8A5A12]">
               Past paper
             </p>
-            <h1 className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
+            <motion.h1
+              className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+              {...enter(0.04)}
+            >
               {paper.title}
-            </h1>
-            <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
+            </motion.h1>
+            <motion.p
+              className="mt-0.5 text-[0.8rem] text-muted-foreground"
+              {...enter(0.1)}
+            >
               {course
                 ? `${course.subject} · ${courseSubtitle(course)}`
                 : "Course removed"}
-            </p>
+            </motion.p>
           </div>
         </div>
 
-        <section className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-[#FFFBF2] px-4 py-3 text-[0.78rem] text-muted-foreground">
+        <motion.section
+          className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-[#FFFBF2] px-4 py-3 text-[0.78rem] text-muted-foreground"
+          {...reveal(0.14, 10)}
+        >
           <span>
             <span className="font-semibold text-brand-ink">
               {paper.questionCount}
@@ -154,7 +165,7 @@ export default function PastPaper() {
               </span>
             </>
           )}
-        </section>
+        </motion.section>
 
         {outdated && (
           <section className="mt-4 rounded-[2rem] border border-border bg-[#FFFBF2] p-5 sm:p-6">
@@ -214,7 +225,11 @@ export default function PastPaper() {
               {paper.progress ?? "Waiting to start"}
             </p>
             <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
-              <div className="h-full w-1/3 animate-pulse rounded-full bg-[#B7791F]" />
+              <motion.div
+                className="h-full w-1/3 rounded-full bg-[#B7791F]"
+                animate={{ x: ["-110%", "310%"] }}
+                transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+              />
             </div>
             <p className="mt-4 text-[0.78rem] leading-relaxed text-muted-foreground">
               This usually takes under a minute. You can leave the page. The paper

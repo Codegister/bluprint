@@ -1,4 +1,5 @@
 import { Mascot } from "@/components/Mascot";
+import { EASE, SPRING } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
@@ -66,7 +67,8 @@ export function FlashcardReview({
   if (queue.length === 0) {
     return (
       <div className="gizmo-card p-10 text-center">
-        <p className="text-sm text-muted-foreground">
+        <Mascot size={92} float={false} className="mx-auto" />
+        <p className="mt-3 text-sm text-muted-foreground">
           This set has no flashcards yet.
         </p>
       </div>
@@ -78,8 +80,9 @@ export function FlashcardReview({
     const recall = sessionTotal ? Math.round((session.known / sessionTotal) * 100) : 0;
     return (
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: 12, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: EASE }}
         className="gizmo-card mx-auto w-full max-w-2xl p-6 text-center sm:p-9"
       >
         <div className="mx-auto flex size-28 items-center justify-center">
@@ -96,7 +99,12 @@ export function FlashcardReview({
           stays in the deck for next time.
         </p>
 
-        <div className="mx-auto mt-6 grid max-w-sm grid-cols-2 gap-3">
+        <motion.div
+          className="mx-auto mt-6 grid max-w-sm grid-cols-2 gap-3"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: EASE, delay: 0.25 }}
+        >
           <div className="rounded-2xl bg-[#E9FBF3] p-4">
             <p className="font-display text-2xl font-bold text-[#128A5B]">
               {session.known}
@@ -109,7 +117,7 @@ export function FlashcardReview({
             </p>
             <p className="mt-0.5 text-xs font-medium text-[#D24350]/80">Again</p>
           </div>
-        </div>
+        </motion.div>
 
         <p className="mt-4 text-xs font-medium text-muted-foreground">
           Overall mastery: {mastered} of {queue.length} cards
@@ -154,9 +162,10 @@ export function FlashcardReview({
         </div>
       </div>
       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[#E7E7EF]">
-        <div
-          className="h-full rounded-full bg-brand-pink transition-all duration-300"
-          style={{ width: `${Math.max(4, ((index + 1) / queue.length) * 100)}%` }}
+        <motion.div
+          className="h-full rounded-full bg-brand-pink"
+          animate={{ width: `${Math.max(4, ((index + 1) / queue.length) * 100)}%` }}
+          transition={{ duration: 0.5, ease: EASE }}
         />
       </div>
 
@@ -164,7 +173,8 @@ export function FlashcardReview({
         key={current._id}
         initial={{ opacity: 0, x: 18 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        whileHover={{ y: -2 }}
+        transition={SPRING}
         className="flip-scene mt-4"
       >
         <button

@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { Mascot } from "@/components/Mascot";
+import { EASE, enter } from "@/components/motion/Motion";
 import { ExamPractice } from "@/components/study/ExamPractice";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { QuizRunner } from "@/components/study/QuizRunner";
@@ -17,6 +18,7 @@ import { readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
 import { useAction, useQuery } from "convex/react";
+import { motion, type MotionProps } from "framer-motion";
 import { Loader2, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -24,6 +26,13 @@ import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
 
 type Tab = "summary" | "cards" | "quiz" | "exam" | "tutor";
+
+/** Shared entrance for a tab panel. */
+const panel: MotionProps = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.3, ease: EASE },
+};
 
 const tabItems: Array<{ value: Tab; label: string }> = [
   { value: "summary", label: "Summary" },
@@ -487,10 +496,16 @@ export default function StudySet() {
           </Button>
         </div>
         <div className="mt-1 min-w-0">
-          <h1 className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
+          <motion.h1
+            className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+            {...enter(0.04)}
+          >
             {set.title}
-          </h1>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground">
+          </motion.h1>
+          <motion.p
+            className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground"
+            {...enter(0.1)}
+          >
             <span>{set.sourceLabel || sourceLabel(set.sourceType)}</span>
             <span className="text-brand-ink/20">•</span>
             <span>{set.cardCount} cards</span>
@@ -500,7 +515,7 @@ export default function StudySet() {
             <span>{set.examCount} exam</span>
             <span className="text-brand-ink/20">•</span>
             <span>Updated {relativeDate(set.updatedAt)}</span>
-          </p>
+          </motion.p>
         </div>
 
         {set.status === "error" ? (
@@ -514,7 +529,10 @@ export default function StudySet() {
           />
         ) : (
           <>
-            <div className="mt-6 flex flex-wrap items-center gap-2.5">
+            <motion.div
+              className="rise-stagger mt-6 flex flex-wrap items-center gap-2.5"
+              {...enter(0.12)}
+            >
               {qualification && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F3ECFF] px-3 py-1.5 text-[0.75rem] font-semibold text-[#5B3DF5]">
                   {qualification}
@@ -533,7 +551,7 @@ export default function StudySet() {
                   Last quiz {set.lastQuizScore}/{set.lastQuizTotal}
                 </span>
               ) : null}
-            </div>
+            </motion.div>
 
             {(set.generationNote || shortfall.length > 0) && (
               <div className="mt-3 rounded-2xl border border-border bg-[#FFFBEC] px-4 py-3 text-[0.82rem] leading-relaxed text-[#7A5306]">
@@ -586,24 +604,34 @@ export default function StudySet() {
                 })}
               </TabsList>
 
+              {/* Each panel fades up as it mounts, so switching tabs feels like
+                  a change of page rather than a block of content appearing. */}
               <TabsContent value="summary" className="mt-1">
-                <SummaryTab set={set} sourceImages={details.sourceImages} />
+                <motion.div {...panel}>
+                  <SummaryTab set={set} sourceImages={details.sourceImages} />
+                </motion.div>
               </TabsContent>
               <TabsContent value="cards" className="mt-1">
-                <FlashcardReview cards={details.cards} onTakeQuiz={() => setTab("quiz")} />
+                <motion.div {...panel}>
+                  <FlashcardReview cards={details.cards} onTakeQuiz={() => setTab("quiz")} />
+                </motion.div>
               </TabsContent>
               <TabsContent value="quiz" className="mt-1">
-                <QuizRunner
-                  quiz={details.quiz}
-                  setId={set._id}
-                  onReviewCards={() => setTab("cards")}
-                />
+                <motion.div {...panel}>
+                  <QuizRunner
+                    quiz={details.quiz}
+                    setId={set._id}
+                    onReviewCards={() => setTab("cards")}
+                  />
+                </motion.div>
               </TabsContent>
               <TabsContent value="exam" className="mt-1">
-                <ExamPractice exams={details.exams} qualification={qualification} />
+                <motion.div {...panel}>
+                  <ExamPractice exams={details.exams} qualification={qualification} />
+                </motion.div>
               </TabsContent>
               <TabsContent value="tutor" className="mt-1">
-                <div className="flex flex-col items-start gap-3">
+                <motion.div {...panel} className="flex flex-col items-start gap-3">
                   <p className="text-[0.82rem] font-medium text-brand-ink/80">
                     Ask the tutor about this set.
                   </p>
@@ -615,7 +643,7 @@ export default function StudySet() {
                     <Sparkles className="size-3.5" aria-hidden />
                     Open tutor in full screen
                   </Button>
-                </div>
+                </motion.div>
               </TabsContent>
             </Tabs>
           </>

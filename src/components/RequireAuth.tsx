@@ -1,7 +1,9 @@
 import { Brand } from "@/components/Brand";
 import { Mascot } from "@/components/Mascot";
+import { enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { motion } from "framer-motion";
 import { ArrowRight, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
@@ -59,10 +61,18 @@ export function RequireAuth({
         </header>
 
         <main className="flex items-center justify-center px-4 pb-20 pt-10">
-          <div className="gizmo-card w-full max-w-md p-7 text-center sm:p-9">
-            <div className="flex justify-center">
+          <motion.div
+            className="gizmo-card w-full max-w-md p-7 text-center sm:p-9"
+            {...enter(0.04, 16)}
+          >
+            <motion.div
+              className="flex justify-center"
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
+            >
               <Mascot size={150} />
-            </div>
+            </motion.div>
 
             <h1 className="mt-3 text-[1.6rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
               {title}
@@ -90,7 +100,7 @@ export function RequireAuth({
                 Back to home
               </Button>
             </div>
-          </div>
+          </motion.div>
         </main>
       </div>
     );

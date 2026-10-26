@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { EASE, enter, reveal, SPRING } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
@@ -9,6 +10,7 @@ import { courseSubtitle } from "@/lib/subjects";
 import { formatLongDate, formatTime, SUBJECT_COLORS } from "@/lib/timetable";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -266,14 +268,20 @@ export default function TimetableBuilder() {
       </Link>
 
       <header className="mt-4">
-        <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
+        <motion.h1
+          className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
+          {...enter(0.02)}
+        >
           Build a plan you can actually follow
-        </h1>
-        <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
+        </motion.h1>
+        <motion.p
+          className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground"
+          {...enter(0.08)}
+        >
           Four short steps. You choose the time you have, and when revision
           starts, on school days and on days off. Bluprint fills that time with
           evenly spaced sessions, and every session links to its study set.
-        </p>
+        </motion.p>
       </header>
 
       <ol className="mt-5 flex flex-wrap items-stretch gap-2">
@@ -309,7 +317,18 @@ export default function TimetableBuilder() {
                   )}
                   style={{ backgroundColor: active || done ? entry.color : undefined }}
                 >
-                  {done ? <Check className="size-3" aria-hidden /> : value}
+                  {done ? (
+                    <motion.span
+                      initial={{ opacity: 0, scale: 0.4 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={SPRING}
+                      className="grid place-items-center"
+                    >
+                      <Check className="size-3" aria-hidden />
+                    </motion.span>
+                  ) : (
+                    value
+                  )}
                 </span>
                 <span
                   className={cn(
@@ -325,8 +344,25 @@ export default function TimetableBuilder() {
         })}
       </ol>
 
+      {/* The step track fills as each of the four pages is completed. */}
+      <div
+        className="mt-2 h-1 overflow-hidden rounded-full bg-brand-panel"
+        aria-hidden
+      >
+        <motion.div
+          key={step}
+          initial={{ width: `${((step - 1) / STEPS.length) * 100}%` }}
+          animate={{ width: `${(step / STEPS.length) * 100}%` }}
+          transition={{ duration: 0.5, ease: EASE }}
+          className="h-full rounded-full bg-[linear-gradient(90deg,#128A4C,#6B4DBE,#2B7FB8,#B7791F)]"
+        />
+      </div>
+
       {ready.length === 0 ? (
-        <section className="mt-6 rounded-[2rem] border border-dashed border-border bg-white p-6 sm:p-8">
+        <motion.section
+          className="mt-6 rounded-[2rem] border border-dashed border-border bg-white p-6 sm:p-8"
+          {...reveal(0.12)}
+        >
           <h2 className="font-display text-[1.15rem] font-bold text-brand-ink">
             No ready course pathways yet
           </h2>
@@ -341,9 +377,15 @@ export default function TimetableBuilder() {
           >
             <Link to="/courses/new">Choose courses</Link>
           </Button>
-        </section>
+        </motion.section>
       ) : (
-        <div className="mt-6 space-y-4 pb-10">
+        <motion.div
+          key={step}
+          className="mt-6 space-y-4 pb-10"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: EASE }}
+        >
           <section
             hidden={step !== 1}
             className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
@@ -365,7 +407,7 @@ export default function TimetableBuilder() {
               </span>
             </div>
 
-            <div className="mt-4 grid items-start gap-2 sm:grid-cols-2">
+            <div className="rise-stagger mt-4 grid items-start gap-2 sm:grid-cols-2">
               {ready.map((course, index) => {
                 const selectedIndex = settings.findIndex(
                   (setting) => setting.courseId === course._id,
@@ -376,10 +418,11 @@ export default function TimetableBuilder() {
                     (active ? selectedIndex : index) % SUBJECT_COLORS.length
                   ];
                 return (
-                  <button
+                  <motion.button
                     key={course._id}
                     type="button"
                     aria-pressed={active}
+                    whileTap={{ scale: 0.985 }}
                     onClick={() => toggle(course._id)}
                     className={cn(
                       "flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-colors",
@@ -410,7 +453,7 @@ export default function TimetableBuilder() {
                     >
                       {active ? "Selected" : "Add"}
                     </span>
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
@@ -436,14 +479,15 @@ export default function TimetableBuilder() {
               <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Study method
               </p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <div className="rise-stagger mt-2 grid gap-2 sm:grid-cols-3">
                 {STUDY_METHODS.map((option) => {
                   const active = studyMethod === option.value;
                   return (
-                    <button
+                    <motion.button
                       key={option.value}
                       type="button"
                       aria-pressed={active}
+                      whileTap={{ scale: 0.985 }}
                       onClick={() => chooseStudyMethod(option.value)}
                       className={cn(
                         "rounded-2xl border px-3.5 py-3 text-left transition-colors",
@@ -466,7 +510,7 @@ export default function TimetableBuilder() {
                       <span className="mt-1 block text-[0.7rem] leading-relaxed text-muted-foreground">
                         {option.description}
                       </span>
-                    </button>
+                    </motion.button>
                   );
                 })}
               </div>
@@ -800,9 +844,14 @@ export default function TimetableBuilder() {
             </p>
           )}
           {error && (
-            <p className="rounded-2xl bg-[#FFEEF0] px-4 py-3 text-[0.8rem] leading-relaxed text-[#C23B49]">
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: EASE }}
+              className="rounded-2xl bg-[#FFEEF0] px-4 py-3 text-[0.8rem] leading-relaxed text-[#C23B49]"
+            >
               {error}
-            </p>
+            </motion.p>
           )}
 
           <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
@@ -864,7 +913,7 @@ export default function TimetableBuilder() {
               )}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
     </AppShell>
   );

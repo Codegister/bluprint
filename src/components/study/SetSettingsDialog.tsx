@@ -17,12 +17,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { EASE } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { EXAM_BOARDS, STUDY_LEVELS, qualificationLabel } from "@/lib/examBoards";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
@@ -151,6 +153,11 @@ export function SetSettingsDialog({
     >
       <DialogContent className="max-h-[92vh] gap-0 overflow-y-auto rounded-3xl border-border bg-card p-0 shadow-none sm:max-w-xl">
         <div className="px-6 pb-4 pt-6 sm:px-7">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: EASE }}
+          >
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-bold text-brand-ink">
               Set details
@@ -160,6 +167,7 @@ export function SetSettingsDialog({
               for, so exam questions and marking match that paper.
             </DialogDescription>
           </DialogHeader>
+          </motion.div>
         </div>
 
         <div className="px-6 pb-6 sm:px-7">
@@ -200,11 +208,14 @@ export function SetSettingsDialog({
               {EXAM_BOARDS.map((board) => {
                 const selected = examBoard === board;
                 return (
-                  <button
+                  <motion.button
                     key={board}
                     type="button"
                     aria-pressed={selected}
                     disabled={saving !== null}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.18, ease: EASE }}
                     onClick={() => setExamBoard(selected ? "" : board)}
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
@@ -214,7 +225,7 @@ export function SetSettingsDialog({
                     )}
                   >
                     {board}
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
@@ -228,11 +239,14 @@ export function SetSettingsDialog({
               {STUDY_LEVELS.map((option) => {
                 const selected = level === option;
                 return (
-                  <button
+                  <motion.button
                     key={option}
                     type="button"
                     aria-pressed={selected}
                     disabled={saving !== null}
+                    whileHover={{ y: -2 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.18, ease: EASE }}
                     onClick={() => setLevel(selected ? "" : option)}
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
@@ -242,7 +256,7 @@ export function SetSettingsDialog({
                     )}
                   >
                     {option}
-                  </button>
+                  </motion.button>
                 );
               })}
             </div>
@@ -254,7 +268,7 @@ export function SetSettingsDialog({
               1–100 of each. A rebuild uses these counts, and Bluprint stops at the
               most the notes can support.
             </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <div className="rise-stagger mt-3 grid gap-3 sm:grid-cols-3">
               {[
                 { label: "Flashcards", value: cardCount, onChange: setCardCount },
                 { label: "Quiz questions", value: quizCount, onChange: setQuizCount },
@@ -293,11 +307,20 @@ export function SetSettingsDialog({
             </p>
           )}
 
-          {error && (
-            <p className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
-              {error}
-            </p>
-          )}
+          <AnimatePresence initial={false}>
+            {error && (
+              <motion.p
+                key={error}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.25, ease: EASE }}
+                className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
+              >
+                {error}
+              </motion.p>
+            )}
+          </AnimatePresence>
 
           <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
             Rebuilding replaces the summary, flashcards, quiz and exam questions with

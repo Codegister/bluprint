@@ -218,6 +218,103 @@
     color: transparent;
   }
 
+  /* The same gradient with a very slow light sweep across it. Used once, on
+     the landing headline, so the page has one living focal point. */
+  .text-gradient-live {
+    background-image: linear-gradient(
+      100deg,
+      #6b4bff 0%,
+      #ec4899 28%,
+      #f0a03c 46%,
+      #ec4899 64%,
+      #6b4bff 100%
+    );
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: gradient-drift 14s ease-in-out infinite;
+  }
+
+  /* Stagger children as they appear, without adding wrapper elements. Useful
+     for table rows and grids where an extra div would change the layout. */
+  .rise-stagger > * {
+    animation: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .rise-stagger > *:nth-child(1) {
+    animation-delay: 0.02s;
+  }
+  .rise-stagger > *:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .rise-stagger > *:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+  .rise-stagger > *:nth-child(4) {
+    animation-delay: 0.14s;
+  }
+  .rise-stagger > *:nth-child(5) {
+    animation-delay: 0.18s;
+  }
+  .rise-stagger > *:nth-child(6) {
+    animation-delay: 0.22s;
+  }
+  .rise-stagger > *:nth-child(7) {
+    animation-delay: 0.26s;
+  }
+  .rise-stagger > *:nth-child(8) {
+    animation-delay: 0.3s;
+  }
+  .rise-stagger > *:nth-child(n + 9) {
+    animation-delay: 0.34s;
+  }
+
+  /* A soft lilac light that crosses a card on hover. The card needs
+     `relative overflow-hidden`, which every card here already has. */
+  .hover-sheen {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .hover-sheen::after {
+    content: "";
+    position: absolute;
+    inset: -60%;
+    /* Behind the copy, in front of the card's own background. */
+    z-index: -1;
+    background: linear-gradient(
+      100deg,
+      transparent 38%,
+      rgba(167, 139, 250, 0.18) 50%,
+      transparent 62%
+    );
+    transform: translateX(-75%) rotate(6deg);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 0.45s ease;
+  }
+  .hover-sheen:hover::after {
+    transform: translateX(75%) rotate(6deg);
+    opacity: 1;
+  }
+
+  /* Expanding halo around a live dot. */
+  .pulse-ring {
+    position: relative;
+  }
+  .pulse-ring::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.5;
+    animation: pulse-ring 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    pointer-events: none;
+  }
+
   /* Small rotated label that reads like a sticker on a notebook. */
   .sticker {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.7rem] font-semibold;
@@ -358,6 +455,31 @@
   }
 }
 
+@keyframes gradient-drift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.45;
+  }
+  70% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -448,10 +570,16 @@
   .animate-soft-pop,
   .progress-live,
   .animate-rise,
-  .blob-float {
+  .blob-float,
+  .text-gradient-live,
+  .pulse-ring::after,
+  .rise-stagger > * {
     animation: none;
   }
   .lift:hover {
     transform: none;
+  }
+  .hover-sheen::after {
+    display: none;
   }
 }

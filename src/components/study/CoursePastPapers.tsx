@@ -1,3 +1,4 @@
+import { EASE, Meter, reveal } from "@/components/motion/Motion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +15,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import { FileText, Loader2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
@@ -112,7 +114,10 @@ export function CoursePastPapers({
   };
 
   return (
-    <section className="mt-4 rounded-[2rem] border border-border bg-white p-5 sm:p-6">
+    <motion.section
+      className="mt-4 rounded-[2rem] border border-border bg-white p-5 sm:p-6"
+      {...reveal()}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#8A5A12]">
@@ -195,7 +200,12 @@ export function CoursePastPapers({
           <Loader2 className="size-4 animate-spin text-muted-foreground" />
         </div>
       ) : list.length === 0 ? (
-        <div className="mt-5 rounded-2xl border border-dashed border-border bg-background px-4 py-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: EASE }}
+          className="mt-5 rounded-2xl border border-dashed border-border bg-background px-4 py-6 text-center"
+        >
           <FileText
             className="mx-auto size-6 text-[#B7791F]"
             aria-hidden
@@ -208,9 +218,9 @@ export function CoursePastPapers({
             answer them under exam conditions, and get each marked against the
             guide.
           </p>
-        </div>
+        </motion.div>
       ) : (
-        <ul className="mt-5 grid gap-2.5">
+        <ul className="rise-stagger mt-5 grid gap-2.5">
           {list.map((paper) => {
             const ready = paper.status === "ready";
             // Papers saved before the subject's format changed keep the marks
@@ -273,12 +283,12 @@ export function CoursePastPapers({
                   </p>
                   {ready && paper.questionCount > 0 && (
                     <div className="mt-2 flex items-center gap-2">
-                      <div className="h-1.5 w-full max-w-[190px] overflow-hidden rounded-full bg-brand-panel">
-                        <div
-                          className="h-full rounded-full bg-[#128A4C] transition-[width] duration-500"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
+                      <Meter
+                        value={progress}
+                        className="h-1.5 w-full max-w-[190px]"
+                        barClassName="bg-[#128A4C]"
+                        label={`${paper.title} answered`}
+                      />
                       <span className="shrink-0 text-[0.66rem] font-semibold text-muted-foreground">
                         {paper.answeredCount}/{paper.questionCount} answered ·{" "}
                         {paper.earnedMarks}/{paper.totalMarks} marks
@@ -368,6 +378,6 @@ export function CoursePastPapers({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </section>
+    </motion.section>
   );
 }
