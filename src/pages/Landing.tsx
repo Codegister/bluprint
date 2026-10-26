@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Camera, Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -157,11 +157,27 @@ export default function Landing() {
         </div>
       </header>
 
-      <section className="border-b border-border">
-        <div className="mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
+      <section className="hero-wash relative overflow-hidden border-b border-[#EBE1F7]">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="blob -left-24 top-16 size-72 bg-[#FFD7E6]/60 blob-float" />
+          <div className="blob -right-20 -top-24 size-80 bg-[#C4B5FD]/55" />
+          <div className="blob -bottom-28 left-1/3 size-64 bg-[#FFE6A3]/55" />
+        </div>
+
+        <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
-            <h1 className="max-w-[34rem] font-display text-[2.9rem] font-extrabold leading-[0.98] tracking-[-0.045em] sm:text-[3.7rem] lg:text-[4.1rem]">
-              A page of notes becomes a revision session.
+            <div className="flex flex-wrap gap-2">
+              <span className="sticker bg-white/85 text-[#5B3DF5]">
+                <Camera className="size-3" aria-hidden /> Photos and video
+              </span>
+              <span className="sticker bg-white/85 text-[#A83458]">
+                <Sparkles className="size-3" aria-hidden /> Pasted notes
+              </span>
+            </div>
+
+            <h1 className="mt-5 max-w-[34rem] font-display text-[2.9rem] font-extrabold leading-[0.98] tracking-[-0.045em] sm:text-[3.7rem] lg:text-[4.1rem]">
+              A page of notes becomes a{" "}
+              <span className="text-gradient">revision session.</span>
             </h1>
 
             <p className="mt-6 max-w-[33rem] text-[1.02rem] leading-relaxed text-muted-foreground">

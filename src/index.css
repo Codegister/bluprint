@@ -59,6 +59,8 @@
   --color-brand-pink2: var(--brand-pink2);
   --color-brand-orange: var(--brand-orange);
   --color-brand-violet: var(--brand-violet);
+  --color-brand-butter: var(--brand-butter);
+  --color-brand-blush: var(--brand-blush);
 }
 
 /* Light surfaces, ink text, one accent. Change values here to retheme the app. */
@@ -81,6 +83,8 @@
   --brand-pink2: #f472b6;
   --brand-orange: #fb923c;
   --brand-violet: #a78bfa;
+  --brand-butter: #ffe6a3;
+  --brand-blush: #ffd7e6;
 
   --background: #f7f6f2;
   --foreground: #191a1e;
@@ -126,8 +130,26 @@
   }
   body {
     @apply bg-background font-sans text-foreground antialiased;
-    /* One flat paper tone. No colour wash, so type contrast never depends
-       on where a section happens to sit on the page. */
+    /* A very soft three-corner wash of lilac, blush and mint. It is painted
+       behind everything and never sits under body copy, so text contrast is
+       unaffected while the workspace still feels warm rather than flat. */
+    background-image:
+      radial-gradient(
+        55rem 55rem at 108% -8%,
+        rgba(167, 139, 250, 0.22),
+        transparent 62%
+      ),
+      radial-gradient(
+        42rem 42rem at -12% 4%,
+        rgba(244, 114, 182, 0.16),
+        transparent 58%
+      ),
+      radial-gradient(
+        48rem 48rem at 52% 112%,
+        rgba(18, 184, 166, 0.12),
+        transparent 60%
+      );
+    background-attachment: fixed;
   }
   h1,
   h2,
@@ -157,7 +179,65 @@
      only lifts the card a few pixels off the paper background. */
   .gizmo-card {
     @apply rounded-3xl border border-border bg-card;
-    box-shadow: 0 1px 0 rgba(25, 26, 30, 0.04);
+    box-shadow:
+      0 1px 0 rgba(25, 26, 30, 0.04),
+      0 22px 40px -38px rgba(60, 40, 120, 0.35);
+  }
+
+  /* Cards that should feel pressable. The lift is small on purpose: enough to
+     invite a click, never enough to jog the page around. */
+  .lift {
+    transition:
+      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.28s ease,
+      background-color 0.28s ease;
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 36px -28px rgba(60, 40, 120, 0.45);
+  }
+
+  /* Blurred colour spots used behind hero panels and the workspace canvas. */
+  .blob {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(46px);
+    pointer-events: none;
+  }
+
+  .text-gradient {
+    background-image: linear-gradient(
+      100deg,
+      #6b4bff 0%,
+      #ec4899 52%,
+      #f0a03c 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Small rotated label that reads like a sticker on a notebook. */
+  .sticker {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.7rem] font-semibold;
+    box-shadow: 0 2px 0 rgba(25, 26, 30, 0.06);
+  }
+
+  .animate-rise {
+    animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .delay-1 {
+    animation-delay: 0.06s;
+  }
+  .delay-2 {
+    animation-delay: 0.12s;
+  }
+  .delay-3 {
+    animation-delay: 0.18s;
+  }
+  .delay-4 {
+    animation-delay: 0.24s;
   }
 
   .soft-shadow {
@@ -233,6 +313,17 @@
     background-size: 22px 22px;
   }
 
+  /* Hero wash used by the dashboard and landing page. Warm paper at the right
+     edge keeps the lilac from looking like a generic gradient. */
+  .hero-wash {
+    background-image: linear-gradient(
+      118deg,
+      #f0e8ff 0%,
+      #fdf1f6 48%,
+      #fff6e4 100%
+    );
+  }
+
   .flip-scene {
     perspective: 1400px;
   }
@@ -265,6 +356,32 @@
   50% {
     transform: translateY(-8px);
   }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slow drift for the background colour spots. */
+@keyframes blob-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(14px, -18px, 0) scale(1.06);
+  }
+}
+
+.blob-float {
+  animation: blob-drift 16s ease-in-out infinite;
 }
 
 /* Build progress uses a single accent and a pulse, not a moving gradient. */
@@ -329,7 +446,12 @@
   .mascot-float,
   .animate-caret,
   .animate-soft-pop,
-  .progress-live {
+  .progress-live,
+  .animate-rise,
+  .blob-float {
     animation: none;
+  }
+  .lift:hover {
+    transform: none;
   }
 }

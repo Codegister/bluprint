@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { CreateSetDialog } from "@/components/CreateSetDialog";
+import { DeckGlyph, Mascot } from "@/components/Mascot";
 import { TutorChat } from "@/components/study/TutorChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,17 @@ import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { ChevronRight, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarPlus,
+  ChevronRight,
+  Flame,
+  GraduationCap,
+  Layers3,
+  Loader2,
+  Sparkles,
+  Target,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 
@@ -47,8 +58,9 @@ function SetRow({ set }: { set: SetSummary }) {
   return (
     <Link
       to={`/sets/${set._id}`}
-      className="group flex items-center gap-4 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel/40 sm:px-5"
+      className="group flex items-center gap-3.5 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-[#FBF7FF] sm:gap-4 sm:px-5"
     >
+      <DeckGlyph className="size-9 shrink-0" color={accent} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <h3 className="truncate font-display text-[0.98rem] font-bold text-brand-ink">
@@ -122,7 +134,7 @@ function CourseRow({ course }: { course: CourseSummary }) {
   return (
     <Link
       to={`/courses/${course._id}`}
-      className="group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel/40 sm:grid-cols-[minmax(0,1fr)_170px_160px_16px] sm:items-center sm:px-5"
+      className="group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-[#F7FCFA] sm:grid-cols-[minmax(0,1fr)_170px_160px_16px] sm:items-center sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3">
         <span
@@ -301,63 +313,110 @@ export default function Dashboard() {
 
   return (
     <AppShell>
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
-            Home
-          </h1>
-          <p className="mt-1 text-[0.9rem] text-muted-foreground">
-            Welcome back, {displayName(user?.name, user?.email)}.
-          </p>
+      <header className="hero-wash animate-rise relative overflow-hidden rounded-[2rem] border border-[#E7DCF8] px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7">
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="blob -right-12 -top-20 size-52 bg-white/70" />
+          <div className="blob -bottom-24 left-[26%] size-48 bg-[#FFE6A3]/60" />
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            asChild
-            variant="outline"
-            className="h-11 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-          >
-            <Link to="/timetable/new">Build revision timetable</Link>
-          </Button>
-          <Button
-            onClick={() => setDialogOpen(true)}
-            className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E]"
-          >
-            New study set
-          </Button>
+
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <span className="sticker bg-white/85 text-[#5B3DF5]">
+              <Sparkles className="size-3" aria-hidden />
+              Today's revision
+            </span>
+            <h1 className="mt-3 font-display text-[1.75rem] font-extrabold leading-[1.05] tracking-[-0.035em] text-brand-ink sm:text-[2.2rem]">
+              Welcome back,{" "}
+              <span className="text-gradient">
+                {displayName(user?.name, user?.email)}
+              </span>
+            </h1>
+            <p className="mt-2 max-w-md text-[0.9rem] leading-relaxed text-brand-ink/65">
+              {stats.due > 0
+                ? `${stats.due} ${stats.due === 1 ? "card is" : "cards are"} ready for review. A short session now keeps the streak alive.`
+                : "Nothing is due right now. Start a new set from your notes or revisit an old one."}
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => setDialogOpen(true)}
+                className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white shadow-[0_14px_24px_-18px_rgba(25,27,39,0.9)] transition-transform hover:-translate-y-0.5 hover:bg-[#2A2D3E]"
+              >
+                New study set
+                <ArrowRight className="size-4" />
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="h-11 rounded-full border-white/90 bg-white/75 px-4 text-sm font-semibold text-brand-ink shadow-none backdrop-blur hover:bg-white"
+              >
+                <Link to="/timetable/new">
+                  <CalendarPlus className="size-4 text-[#2B7FB8]" />
+                  Build revision timetable
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          <Mascot
+            size={132}
+            className="hidden shrink-0 sm:block"
+          />
+        </div>
+
+        <div className="relative mt-5 grid gap-2.5 sm:grid-cols-3">
+          {[
+            {
+              label: "Study sets",
+              value: sets?.length ?? 0,
+              note: "saved to your account",
+              icon: Layers3,
+              tint: "bg-[#EFEDFF] text-[#5B3DF5]",
+            },
+            {
+              label: "Cards known",
+              value: `${stats.mastery}%`,
+              note: "across every set",
+              icon: Target,
+              tint: "bg-[#E3F8F0] text-[#128A4C]",
+            },
+            {
+              label: "Due now",
+              value: stats.due,
+              note: study
+                ? `${study.todayCount}/${study.goal} reviewed today`
+                : "cards to revisit",
+              icon: Flame,
+              tint: "bg-[#FFF0DC] text-[#B4720E]",
+            },
+          ].map((tile) => (
+            <div
+              key={tile.label}
+              className="flex items-center gap-3 rounded-2xl border border-white/80 bg-white/75 p-3 backdrop-blur"
+            >
+              <span
+                className={cn(
+                  "grid size-9 shrink-0 place-items-center rounded-xl",
+                  tile.tint,
+                )}
+              >
+                <tile.icon className="size-4" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[0.64rem] font-semibold uppercase tracking-[0.08em] text-brand-ink/45">
+                  {tile.label}
+                </p>
+                <p className="mt-0.5 flex items-baseline gap-1.5 font-display text-[1.3rem] font-bold leading-none text-brand-ink">
+                  {tile.value}
+                  <span className="truncate text-[0.68rem] font-medium text-brand-ink/45">
+                    {tile.note}
+                  </span>
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
       </header>
-
-      <div className="mt-5 grid overflow-hidden rounded-2xl border border-border bg-white sm:grid-cols-3">
-        <div className="px-4 py-3.5 sm:px-5">
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Study sets
-          </p>
-          <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
-            {sets?.length ?? 0}
-          </p>
-        </div>
-        <div className="border-t border-border px-4 py-3.5 sm:border-l sm:border-t-0 sm:px-5">
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Cards known
-          </p>
-          <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
-            {stats.mastery}%
-          </p>
-        </div>
-        <div className="border-t border-border px-4 py-3.5 sm:border-l sm:border-t-0 sm:px-5">
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Due now
-          </p>
-          <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
-            {stats.due}
-            {study && (
-              <span className="ml-2 text-[0.68rem] font-medium text-muted-foreground">
-                {study.todayCount}/{study.goal} reviewed today
-              </span>
-            )}
-          </p>
-        </div>
-      </div>
 
       {ai && !ai.configured && (
         <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.8rem] font-medium text-[#96650A]">
@@ -367,7 +426,10 @@ export default function Dashboard() {
       )}
 
       <section id="tutor" className="mt-8 scroll-mt-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-7 place-items-center rounded-lg bg-[#FFE7F0] text-[#C43F69]">
+            <Sparkles className="size-4" aria-hidden />
+          </span>
           <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
             AI tutor
           </h2>
@@ -439,7 +501,10 @@ export default function Dashboard() {
       </section>
 
       <section id="courses" className="mt-8 scroll-mt-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-7 place-items-center rounded-lg bg-[#E3F8F0] text-[#128A4C]">
+            <GraduationCap className="size-4" aria-hidden />
+          </span>
           <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
             Courses
           </h2>
@@ -485,7 +550,10 @@ export default function Dashboard() {
       </section>
 
       <section id="sets" className="mt-8 scroll-mt-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-7 place-items-center rounded-lg bg-[#FFF0DC] text-[#B4720E]">
+            <Layers3 className="size-4" aria-hidden />
+          </span>
           <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
             Study sets
           </h2>
@@ -528,10 +596,25 @@ export default function Dashboard() {
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             </div>
           ) : sets.length === 0 ? (
-            <p className="px-5 py-6 text-[0.82rem] leading-relaxed text-muted-foreground">
-              No study sets yet. Upload notes or open a topic in one of your courses
-              to build your first set.
-            </p>
+            <div className="flex flex-col items-center gap-3 px-5 py-7 text-center sm:flex-row sm:text-left">
+              <Mascot size={92} float={false} className="shrink-0" />
+              <div>
+                <p className="font-display text-[1rem] font-bold text-brand-ink">
+                  Your first set starts with a page of notes
+                </p>
+                <p className="mt-1 text-[0.82rem] leading-relaxed text-muted-foreground">
+                  Upload photos or paste text, and Bluprint writes the summary,
+                  flashcards, quiz and exam questions.
+                </p>
+                <Button
+                  onClick={() => setDialogOpen(true)}
+                  className="mt-3 h-9 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
+                >
+                  Add your notes
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              </div>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-6">
               <p className="text-[0.82rem] text-muted-foreground">
