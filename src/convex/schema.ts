@@ -138,6 +138,24 @@ const schema = defineSchema(
         v.object({
           overview: v.string(),
           examFormat: v.string(),
+          // The published notes page the pathway was read from. Topic notes and
+          // the real past-paper list are read from the same course on Cognito,
+          // so the address is kept instead of being guessed at read time.
+          sourceUrl: v.optional(v.string()),
+          // When the topic-notes address and paper split were last read from
+          // Cognito. Courses built before those fields existed are filled in
+          // once on first visit; a timestamp keeps that from repeating.
+          cognitoSyncedAt: v.optional(v.number()),
+          // Papers the qualification is split into, with the topics each one
+          // examines. Absent when the specification does not publish a split.
+          papers: v.optional(
+            v.array(
+              v.object({
+                label: v.string(),
+                topicIds: v.array(v.string()),
+              }),
+            ),
+          ),
           units: v.array(
             v.object({
               title: v.string(),
@@ -176,6 +194,10 @@ const schema = defineSchema(
       // the course uses now, so a paper saved before the format changed is
       // offered a rebuild instead of silently staying wrong.
       formatId: v.optional(v.string()),
+      // The qualification paper this practice paper covers ("Paper 1", …).
+      // Missing means the whole qualification is examinable, which is how
+      // papers built before a course was split into papers behave.
+      paper: v.optional(v.string()),
       // Every paper is one hour long. The timetable assumes 60 minutes per
       // paper, so the duration is stored rather than guessed at render time.
       durationMinutes: v.number(),
@@ -243,6 +265,37 @@ const schema = defineSchema(
       feedback: v.optional(v.string()),
       gradedAt: v.optional(v.number()),
     }).index("by_paper", ["paperId"]),
+
+    // One course topic's published notes, read from Cognito and stored so the
+    // text is shown inside Bluprint (never linked out) and only scraped once.
+    cognitoTopicNotes: defineTable({
+      courseId: v.id("courses"),
+      topicId: v.string(),
+      sections: v.array(
+        v.object({
+          heading: v.string(),
+          blocks: v.array(v.string()),
+        }),
+      ),
+      sources: v.array(v.object({ title: v.string(), url: v.string() })),
+      fetchedAt: v.number(),
+    }).index("by_course_topic", ["courseId", "topicId"]),
+
+    // The real past papers Cognito lists for a course, cached so the course
+    // page can show them without asking the student to visit the site.
+    cognitoPastPapers: defineTable({
+      courseId: v.id("courses"),
+      sourceUrl: v.string(),
+      papers: v.array(
+        v.object({
+          year: v.string(),
+          label: v.string(),
+          questionUrl: v.string(),
+          markSchemeUrl: v.optional(v.string()),
+        }),
+      ),
+      fetchedAt: v.number(),
+    }).index("by_course", ["courseId"]),
 
     // One saved revision timetable per account. Dates are UTC calendar keys
     // (YYYY-MM-DD) so a plan renders the same day regardless of server timezone.

@@ -1,4 +1,6 @@
 import { AppShell } from "@/components/AppShell";
+import { CognitoRealPapers } from "@/components/study/CognitoRealPapers";
+import { CognitoTopicNotes } from "@/components/study/CognitoTopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
 import {
   AlertDialog,
@@ -19,7 +21,7 @@ import { percent, relativeDate } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { ChevronDown, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { BookOpen, ChevronDown, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -202,6 +204,20 @@ export default function Course() {
   const removeCourse = useMutation(api.courses.remove);
   const recoverCourses = useMutation(api.courses.recoverMine);
   const rebuild = useAction(api.ai.rebuildCoursePathway);
+  const syncCognitoLinks = useAction(api.ai.syncCognitoLinks);
+
+  // Pathways saved before topic notes and paper splits existed are filled in
+  // once, so an existing course gains them without a rebuild.
+  const linksRequested = useRef(false);
+  useEffect(() => {
+    if (!details || details.course.status !== "ready") return;
+    const pathway = details.course.pathway;
+    if (!pathway || pathway.cognitoSyncedAt || linksRequested.current) return;
+    linksRequested.current = true;
+    void syncCognitoLinks({ courseId: details.course._id }).catch(() => {
+      linksRequested.current = false;
+    });
+  }, [details, syncCognitoLinks]);
 
   const recoveryRequested = useRef(false);
   useEffect(() => {
@@ -224,6 +240,8 @@ export default function Course() {
   const [deleting, setDeleting] = useState(false);
   // null means "follow the next unfinished unit"; -1 means every unit closed.
   const [openUnit, setOpenUnit] = useState<number | null>(null);
+  // The one topic whose published notes are open, so only one is read at once.
+  const [notesTopic, setNotesTopic] = useState<string | null>(null);
   const openTutor = (unitTitle?: string) => {
     if (!validId) return;
     const params = new URLSearchParams([["course", courseId as string]]);
@@ -486,6 +504,12 @@ export default function Course() {
               courseId={course._id}
               formatId={buildPaperBlueprint(course).id}
               formatSummary={buildPaperBlueprint(course).summary}
+              papers={pathway.papers}
+            />
+
+            <CognitoRealPapers
+              courseId={course._id}
+              enabled={Boolean(pathway.sourceUrl)}
             />
 
             {nextTopic && (
@@ -674,8 +698,9 @@ export default function Course() {
                                 return (
                                   <div
                                     key={topic.id}
-                                    className="flex flex-col gap-3 border-b border-border/70 px-4 py-4 last:border-b-0 sm:flex-row sm:items-start"
+                                    className="border-b border-border/70 last:border-b-0"
                                   >
+                                    <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start">
                                     <button
                                       type="button"
                                       aria-pressed={isDone}
@@ -776,6 +801,28 @@ export default function Course() {
                                         ) : null}
                                         {set ? "Open set" : "Study this topic"}
                                       </Button>
+                                      {pathway.sourceUrl && (
+                                        <button
+                                          type="button"
+                                          aria-expanded={notesTopic === topic.id}
+                                          onClick={() =>
+                                            setNotesTopic(
+                                              notesTopic === topic.id
+                                                ? null
+                                                : topic.id,
+                                            )
+                                          }
+                                          className={cn(
+                                            "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.74rem] font-semibold transition-colors",
+                                            notesTopic === topic.id
+                                              ? "bg-[#F3F0FF] text-[#5130D8]"
+                                              : "text-[#6B4EE6] hover:bg-[#F3F0FF]",
+                                          )}
+                                        >
+                                          <BookOpen className="size-3.5" aria-hidden />
+                                          Notes
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         aria-label={`Remove ${topic.title}`}
@@ -792,6 +839,17 @@ export default function Course() {
                                         <Trash2 className="size-3.5" aria-hidden />
                                       </button>
                                     </div>
+                                    </div>
+
+                                    {notesTopic === topic.id && (
+                                      <div className="px-4 pb-4">
+                                        <CognitoTopicNotes
+                                          courseId={course._id}
+                                          topicId={topic.id}
+                                          onClose={() => setNotesTopic(null)}
+                                        />
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}

@@ -82,6 +82,7 @@ export const listForCourse = query({
       .map((paper) => ({
         _id: paper._id,
         title: paper.title,
+        paper: paper.paper,
         formatId: paper.formatId,
         status: paper.status,
         progress: paper.progress,
@@ -130,8 +131,13 @@ export const getDetails = query({
  * is returned instead of starting a second paid generation.
  */
 export const create = mutation({
-  args: { courseId: v.id("courses") },
-  handler: async (ctx, { courseId }) => {
+  args: {
+    courseId: v.id("courses"),
+    // Which paper of the qualification to write, when the course is split.
+    // Missing means the whole qualification is examinable.
+    paper: v.optional(v.string()),
+  },
+  handler: async (ctx, { courseId, paper }) => {
     const userId = await requireUserId(ctx);
     const course = await requireOwner(
       await ctx.db.get(courseId),
@@ -153,24 +159,38 @@ export const create = mutation({
     if (building) return { paperId: building._id, created: false };
 
     // Never leave a stalled paper blocking the course's paper allowance.
-    const usable = mine.filter((paper) => !stale(paper));
+    const usable = mine.filter((row) => !stale(row));
     if (usable.length >= MAX_PAPERS_PER_COURSE) {
       throw new Error(
         `This course already has ${MAX_PAPERS_PER_COURSE} saved papers. Remove one to build another.`,
       );
     }
 
+    // A paper choice must be one the specification publishes, so a paper is
+    // never labelled with a "Paper 9" the course does not have.
+    const groups = course.pathway.papers ?? [];
+    const chosen = paper?.trim();
+    if (chosen && !groups.some((group) => group.label === chosen)) {
+      throw new Error("Choose one of the papers this course is examined in.");
+    }
+
     // Keep numbering stable when an older paper has been removed.
-    const highest = mine.reduce((max, paper) => {
-      const match = /practice paper (\d+)/i.exec(paper.title);
+    const highest = mine.reduce((max, row) => {
+      const match = /practice paper (\d+)/i.exec(row.title);
       return Math.max(max, match ? Number(match[1]) : 0);
     }, 0);
+    const samePaper = chosen
+      ? mine.filter((row) => row.paper === chosen).length
+      : 0;
 
     const now = Date.now();
     const paperId = await ctx.db.insert("pastPapers", {
       userId,
       courseId,
-      title: `Practice paper ${highest + 1}`,
+      title: chosen
+        ? `${chosen} practice paper ${samePaper + 1}`
+        : `Practice paper ${highest + 1}`,
+      paper: chosen,
       durationMinutes: PAPER_MINUTES,
       totalMarks: 0,
       questionCount: 0,

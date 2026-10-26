@@ -509,6 +509,42 @@ function buildTopicNotes(
 }
 
 /**
+ * Stores the Cognito links read for an older course. It only fills fields the
+ * pathway is missing, so a backfill can never rewrite the topic map itself.
+ */
+export const attachCognitoLinks = internalMutation({
+  args: {
+    courseId: v.id("courses"),
+    sourceUrl: v.optional(v.string()),
+    syncedAt: v.number(),
+    papers: v.optional(
+      v.array(
+        v.object({
+          label: v.string(),
+          topicIds: v.array(v.string()),
+        }),
+      ),
+    ),
+  },
+  handler: async (ctx, { courseId, sourceUrl, papers, syncedAt }) => {
+    const course = await ctx.db.get(courseId);
+    if (!course?.pathway) return;
+    await ctx.db.patch(courseId, {
+      pathway: {
+        ...course.pathway,
+        ...(course.pathway.sourceUrl
+          ? {}
+          : sourceUrl
+            ? { sourceUrl }
+            : {}),
+        ...(course.pathway.papers ? {} : papers ? { papers } : {}),
+        cognitoSyncedAt: syncedAt,
+      },
+    });
+  },
+});
+
+/**
  * Deletes the pathway, not the student's work. Study sets built from its topics
  * stay in the library and simply lose their course link.
  */
@@ -580,6 +616,16 @@ export const completeBuild = internalMutation({
     pathway: v.object({
       overview: v.string(),
       examFormat: v.string(),
+      sourceUrl: v.optional(v.string()),
+      cognitoSyncedAt: v.optional(v.number()),
+      papers: v.optional(
+        v.array(
+          v.object({
+            label: v.string(),
+            topicIds: v.array(v.string()),
+          }),
+        ),
+      ),
       units: v.array(
         v.object({
           title: v.string(),
@@ -615,6 +661,19 @@ export const completeBuild = internalMutation({
       .flatMap((unit) => unit.topics)
       .filter((topic) => completedTitles.has(topic.title.trim().toLowerCase()))
       .map((topic) => topic.id);
+
+    // Topic ids are assigned by the rebuild, so cached Cognito text for the old
+    // ids is dropped rather than shown against the wrong topic.
+    const cachedNotes = await ctx.db
+      .query("cognitoTopicNotes")
+      .withIndex("by_course_topic", (q) => q.eq("courseId", courseId))
+      .collect();
+    for (const row of cachedNotes) await ctx.db.delete(row._id);
+    const cachedPapers = await ctx.db
+      .query("cognitoPastPapers")
+      .withIndex("by_course", (q) => q.eq("courseId", courseId))
+      .collect();
+    for (const row of cachedPapers) await ctx.db.delete(row._id);
 
     await ctx.db.patch(courseId, {
       pathway,

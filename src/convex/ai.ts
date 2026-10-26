@@ -14,7 +14,12 @@ import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, internalAction } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
-import { fetchCognitoOutline, type CognitoOutline } from "./lib/cognito";
+import {
+  fetchCognitoOutline,
+  fetchCognitoPaperMap,
+  type CognitoOutline,
+} from "./lib/cognito";
+import { derivePaperGroups } from "./lib/papers";
 import {
   completeAnthology,
   type PathwayLike,
@@ -1020,7 +1025,7 @@ type PaperCourse = {
   pathway?: {
     units: Array<{
       title: string;
-      topics: Array<{ title: string; specReference?: string }>;
+      topics: Array<{ id?: string; title: string; specReference?: string }>;
     }>;
   };
 };
@@ -1030,11 +1035,20 @@ type PaperCourse = {
  * paper inside the qualification the student is actually studying, and the cap
  * keeps the prompt within the model's comfortable context.
  */
-function specificationDigest(course: PaperCourse): string {
+function specificationDigest(
+  course: PaperCourse,
+  // When one paper is chosen, only the topics that paper examines are sent, so
+  // the model cannot pull a question from the other papers.
+  topicIds?: Set<string>,
+): string {
   const lines: string[] = [];
   for (const unit of course.pathway?.units ?? []) {
+    const topics = unit.topics.filter(
+      (topic) => !topicIds || (topic.id !== undefined && topicIds.has(topic.id)),
+    );
+    if (topics.length === 0) continue;
     lines.push(`## ${unit.title}`);
-    for (const topic of unit.topics) {
+    for (const topic of topics) {
       lines.push(
         `- ${topic.title}${topic.specReference ? ` [${topic.specReference}]` : ""}`,
       );
@@ -1120,6 +1134,10 @@ async function generatePaperQuestions(
   apiKeys: string[],
   course: PaperCourse,
   paperTitle: string,
+  // The qualification paper this practice paper covers, when the course is
+  // split into papers. The format is the same across papers; only the topics
+  // change, so the grouping is applied to the specification digest.
+  chosenPaper?: { label: string; topicIds: string[] },
 ): Promise<GeneratedExam[]> {
   const blueprint = buildPaperBlueprint(course);
   const slots = flattenPaperBlueprint(blueprint);
@@ -1140,7 +1158,8 @@ async function generatePaperQuestions(
   ]
     .filter((part): part is string => Boolean(part))
     .join(" · ");
-  const digest = specificationDigest(course);
+  const chosenTopicIds = chosenPaper ? new Set(chosenPaper.topicIds) : undefined;
+  const digest = specificationDigest(course, chosenTopicIds);
   const hasPoints = slots.some((slot) => slot.marking === "points");
   const hasLevels = slots.some((slot) => slot.marking === "levels");
   const schemeNotes = [
@@ -1154,9 +1173,13 @@ async function generatePaperQuestions(
     .filter(Boolean)
     .join(" ");
 
+  const paperScope = chosenPaper
+    ? `\n<paper>This is ${chosenPaper.label} of the qualification. Every question must come from the topics listed for that paper above, and no question may test a topic from another paper.</paper>\n`
+    : "";
+
   const basePrompt =
     `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
-    `<specification>\n${digest}\n</specification>\n\n` +
+    `<specification>\n${digest}\n</specification>\n${paperScope}\n` +
     `${blueprintBrief(blueprint)}\n\n` +
     `Write one complete practice paper titled "${paperTitle}" for this qualification, using only the specification above. ` +
     `Write exactly ${slots.length} original exam-style question${slots.length === 1 ? "" : "s"} totalling ${blueprint.totalMarks} marks. ` +
@@ -1223,10 +1246,16 @@ export const buildPastPaper = internalAction({
       if (!course) throw new Error("The course for this paper no longer exists.");
 
       const apiKeys = resolveNvidiaKeys();
+      // Papers built before the course had paper groupings, and courses whose
+      // specification publishes none, are written from the whole pathway.
+      const chosenPaper = paper.paper
+        ? course.pathway?.papers?.find((group) => group.label === paper.paper)
+        : undefined;
       const questions = await generatePaperQuestions(
         apiKeys,
         course,
         paper.title,
+        chosenPaper,
       );
       // The cover is built from the marks the paper actually carries, so the
       // total it prints is the total the student can score.
@@ -1246,7 +1275,7 @@ export const buildPastPaper = internalAction({
           rsReligion: course.rsReligion,
           rsReligion2: course.rsReligion2,
         },
-        paper.title,
+        paper.paper ? `${paper.paper} · ${paper.title}` : paper.title,
         totalMarks,
         paper.durationMinutes,
       );
@@ -1401,7 +1430,17 @@ type PathwayTopic = {
   examSkill: string;
 };
 type PathwayUnit = { title: string; summary: string; topics: PathwayTopic[] };
-type CoursePathway = { overview: string; examFormat: string; units: PathwayUnit[] };
+type CoursePathway = {
+  overview: string;
+  examFormat: string;
+  units: PathwayUnit[];
+  /** The notes page this map was read from, when it came from Cognito. */
+  sourceUrl?: string;
+  /** The qualification's papers, when the specification publishes a split. */
+  papers?: Array<{ label: string; topicIds: string[] }>;
+  /** Set once the Cognito links above have been read for this pathway. */
+  cognitoSyncedAt?: number;
+};
 
 // ---------------------------------------------------------------------------
 // Turning a scraped outline into a pathway
@@ -1578,7 +1617,11 @@ function buildPathwayFromOutline(
 async function scrapePathway(course: PathwayCourse): Promise<CoursePathway | null> {
   const page = await fetchCognitoOutline(course);
   if (!page || page.sections.length === 0) return null;
-  return buildPathwayFromOutline(course, outlineFromPage(page));
+  const pathway = buildPathwayFromOutline(course, outlineFromPage(page));
+  // Topic notes are read from this course's own notes pages, so the address is
+  // stored with the pathway instead of being rebuilt later.
+  if (/\/notes$/i.test(page.sourceUrl)) pathway.sourceUrl = page.sourceUrl;
+  return pathway;
 }
 
 /**
@@ -1743,7 +1786,10 @@ async function generateCoursePathway(
   // talked about mark schemes instead of the religion itself, so RS is never
   // scraped and never generated.
   const religiousStudies = buildRsPathway(course);
-  if (religiousStudies) return religiousStudies;
+  if (religiousStudies) {
+    // RS is saved content, so there is no notes page or paper split to read.
+    return { ...religiousStudies, cognitoSyncedAt: Date.now() };
+  }
 
   let pathway: CoursePathway | null = null;
   try {
@@ -1763,8 +1809,74 @@ async function generateCoursePathway(
 
   // English Literature always ends up with the full published poetry cluster,
   // exactly once, whatever the scrape happened to list.
-  return completeAnthology(pathway as PathwayLike, course) as CoursePathway;
+  const completed = completeAnthology(pathway as PathwayLike, course) as CoursePathway;
+
+  // Papers are grouped only after the pathway is final, so the groups point at
+  // the topics the student can actually see. Religious Studies supplies its own
+  // groups from the saved Pearson content, and a subject whose specification
+  // does not publish a paper split keeps the plain whole-course paper.
+  if (!completed.papers) {
+    const paperMap = await fetchCognitoPaperMap(course).catch(() => null);
+    const papers = derivePaperGroups(completed.units, paperMap);
+    if (papers) completed.papers = papers;
+  }
+  completed.cognitoSyncedAt = Date.now();
+  return completed;
 }
+
+/**
+ * Fills in the Cognito links on a pathway built before they existed.
+ *
+ * A course is only read once: the notes address and paper split are stored, and
+ * `cognitoSyncedAt` stops the next visit from scraping again. Courses that
+ * genuinely have no Cognito page or no paper split are marked as checked too.
+ */
+export const syncCognitoLinks = action({
+  args: { courseId: v.id("courses") },
+  handler: async (ctx, { courseId }): Promise<{ updated: boolean }> => {
+    const userId = await requireUserId(ctx);
+    const course = await ctx.runQuery(internal.courses.getForBuild, { courseId });
+    if (!course || course.userId !== userId) return { updated: false };
+    if (course.status !== "ready" || !course.pathway) return { updated: false };
+    if (course.pathway.cognitoSyncedAt) return { updated: false };
+
+    // Religious Studies is saved Pearson content, not a scraped course, so it
+    // has no Cognito notes or papers to attach.
+    if (/religious studies/i.test(course.subject)) {
+      await ctx.runMutation(internal.courses.attachCognitoLinks, {
+        courseId,
+        syncedAt: Date.now(),
+      });
+      return { updated: true };
+    }
+
+    let sourceUrl = course.pathway.sourceUrl;
+    let papers = course.pathway.papers;
+    try {
+      if (!sourceUrl) {
+        const outline = await fetchCognitoOutline(course);
+        if (outline && /\/notes$/i.test(outline.sourceUrl)) {
+          sourceUrl = outline.sourceUrl;
+        }
+      }
+      if (!papers && sourceUrl) {
+        const map = await fetchCognitoPaperMap(course).catch(() => null);
+        papers = derivePaperGroups(course.pathway.units, map);
+      }
+    } catch {
+      // A course always stays usable: the links are simply retried next visit.
+      return { updated: false };
+    }
+
+    await ctx.runMutation(internal.courses.attachCognitoLinks, {
+      courseId,
+      ...(sourceUrl ? { sourceUrl } : {}),
+      ...(papers ? { papers } : {}),
+      syncedAt: Date.now(),
+    });
+    return { updated: true };
+  },
+});
 
 /**
  * Builds one course map. Scheduled by `courses.createMany`, so the browser can

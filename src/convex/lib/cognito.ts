@@ -664,3 +664,315 @@ export async function fetchCognitoOutline(
 
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// Topic notes, paper maps and real past papers
+// ---------------------------------------------------------------------------
+
+/** One printed note card from a Cognito topic page. */
+export type CognitoNoteSection = { heading: string; blocks: string[] };
+
+/** A leaf notes page (one subtopic) linked from a course's notes index. */
+export type CognitoTopicPageLink = {
+  title: string;
+  url: string;
+  reference?: string;
+};
+
+/** A real past paper listed by Cognito, with its mark scheme. */
+export type CognitoPastPaper = {
+  year: string;
+  label: string;
+  questionUrl: string;
+  markSchemeUrl?: string;
+};
+
+/**
+ * How many subtopic pages one pathway topic will read. A long unit such as
+ * Biology's Cell Biology has fourteen subtopics; the cap keeps a first load
+ * quick without silently ignoring a normal-size unit.
+ */
+export const MAX_TOPIC_PAGES = 16;
+
+/** Reads one Cognito page for a caller outside this module. */
+export function fetchCognitoPage(url: string) {
+  return fetchPage(url);
+}
+
+/**
+ * Text runs from a fragment of Cognito's HTML. Block tags become line breaks
+ * and inline tags are dropped without adding a space, so "two <strong>types"
+ * reads as "two types" rather than "two  types".
+ */
+function fragmentLines(html: string): string[] {
+  const prepared = html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|li|h[1-6]|ul|ol|div|blockquote|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+  return decodeEntities(prepared)
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean);
+}
+
+/**
+ * The notes themselves, one entry per printed note card. Cognito renders each
+ * card with its own heading and then the prose the student reads, so the page
+ * is split on the card frame rather than on a fixed heading level.
+ */
+export function parseCognitoTopicPage(html: string): CognitoNoteSection[] {
+  const sections: CognitoNoteSection[] = [];
+  const cards = html.split("notes-section-frame").slice(1);
+  for (const card of cards) {
+    // The card footer (the "test yourself" strip) is not part of the notes.
+    const body = card.split('class="flex items-center pb-5"')[0] ?? card;
+    const blocks = [
+      ...body.matchAll(/<div class="markdown-renderer[^"]*"[^>]*>([\s\S]*?)<\/div>/g),
+    ]
+      .map((match) => fragmentLines(match[1] ?? ""))
+      .filter((lines) => lines.length > 0);
+    const heading = blocks[0]?.[0]?.trim();
+    if (!heading) continue;
+    const rest = [...blocks[0]!.slice(1), ...blocks.slice(1).flat()].slice(0, 80);
+    if (rest.length === 0) continue;
+    sections.push({
+      heading: heading.slice(0, 200),
+      blocks: rest.map((line) => line.slice(0, 400)),
+    });
+  }
+  return sections;
+}
+
+/** The leaf notes pages linked from a course's notes index. */
+export function parseCognitoTopicLinks(html: string): CognitoTopicPageLink[] {
+  const found = new Map<string, CognitoTopicPageLink>();
+  for (const match of html.matchAll(/href="([^"]+\/notes\/[^"/?#]+\/[^"/?#]+)"/g)) {
+    const raw = match[1]!;
+    // Links are root-relative, so they join the site origin rather than the
+    // page's own route (Cognito drops the tier segment from leaf links).
+    const absolute = raw.startsWith("http") ? raw : `${SITE}${raw}`;
+    if (found.has(absolute)) continue;
+    const slug = decodeURIComponent(absolute.split("/").pop() ?? "");
+    const reference = /^(\d+(?:\.\d+)*)[-_]/.exec(slug)?.[1];
+    const title = slug
+      .replace(/^\d+(?:\.\d+)*[-_]/, "")
+      .replace(/[-_]+/g, " ")
+      .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+    found.set(absolute, { url: absolute, title, ...(reference ? { reference } : {}) });
+  }
+  return [...found.values()];
+}
+
+/** Title words used to match a topic to a notes page when it has no number. */
+function titleKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * The notes pages that belong to one pathway topic. Pathways number their
+ * topics the way the specification does ("1", "2"), while Cognito's notes
+ * pages are per subtopic ("1.1", "1.2"), so a topic number matches every
+ * subtopic under it. Anthology courses name their topics instead, which falls
+ * back to matching the title.
+ */
+export function topicNotesPages(
+  pages: CognitoTopicPageLink[],
+  topic: { title: string; reference?: string },
+): CognitoTopicPageLink[] {
+  // Some courses restart their numbering for every text or section (English
+  // Literature lists 1.1 once per set text), so a matching number there points
+  // at every text at once. Notes are only matched by number when each number
+  // belongs to exactly one page; otherwise the text would be the wrong one.
+  const referenceCounts = new Map<string, number>();
+  for (const page of pages) {
+    if (!page.reference) continue;
+    referenceCounts.set(
+      page.reference,
+      (referenceCounts.get(page.reference) ?? 0) + 1,
+    );
+  }
+  const referencesUnique = [...referenceCounts.values()].every(
+    (count) => count === 1,
+  );
+
+  const reference = topic.reference?.trim();
+  if (reference && referencesUnique) {
+    const under = pages.filter(
+      (page) =>
+        page.reference !== undefined &&
+        (page.reference === reference ||
+          page.reference.startsWith(`${reference}.`)),
+    );
+    if (under.length > 0) return under.slice(0, MAX_TOPIC_PAGES);
+  }
+
+  const wanted = titleKey(topic.title);
+  if (wanted.length < 4) return [];
+  // An exact title match is only trusted when one page carries that name, so a
+  // poem or set text can still be opened without guessing between namesakes.
+  const exact = pages.filter((page) => titleKey(page.title) === wanted);
+  if (exact.length === 1) return exact;
+  if (!referencesUnique) return [];
+  const byName = pages.filter((page) => {
+    const have = titleKey(page.title);
+    return have.length >= 4 && (have.includes(wanted) || wanted.includes(have));
+  });
+  return byName.slice(0, MAX_TOPIC_PAGES);
+}
+
+/**
+ * Which papers examine each specification topic, read from Cognito's
+ * specification page. Papers are the only place a student can find this: the
+ * notes page groups by topic, not by paper.
+ */
+export type CognitoPaperMap = {
+  /** "Paper 1", "Paper 2", … in paper order. */
+  labels: string[];
+  /** Specification topic reference → the papers that examine it. */
+  byTopicRef: Record<string, string[]>;
+  sourceUrl: string;
+};
+
+/** Subject names that Cognito files under a different specification slug. */
+const SPEC_SUBJECT_ALIASES: Record<string, string[]> = {
+  mathematics: ["maths"],
+  "further mathematics": ["further-maths"],
+  "english language": ["english-language"],
+  "english literature": ["english-literature"],
+};
+
+function specSubjectSlugs(subjectSlug: string, subject: string): string[] {
+  const slugs = new Set<string>([subjectSlug]);
+  // A Separate Science notes slug ("biology-triple") keeps one specification
+  // page under the base subject ("biology").
+  slugs.add(
+    subjectSlug.replace(
+      /-(?:triple|combined|separate|synergy|higher|foundation)$/i,
+      "",
+    ),
+  );
+  for (const alias of SPEC_SUBJECT_ALIASES[subject.trim().toLowerCase()] ?? []) {
+    slugs.add(alias);
+  }
+  slugs.add(
+    subject
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, ""),
+  );
+  return [...slugs].filter(Boolean);
+}
+
+/**
+ * Reads the paper each topic is examined in for a course, or null when the
+ * board's specification page is not published. No model is involved: a paper
+ * groups only the topics the specification itself assigns to it.
+ */
+export async function fetchCognitoPaperMap(
+  course: CognitoCourse,
+): Promise<CognitoPaperMap | null> {
+  const levelSlug = LEVEL_SLUGS[course.level.trim()];
+  const boardSlug = boardSlugFor(course.examBoard);
+  if (!levelSlug || !boardSlug) return null;
+  const subjectSlug = await findSubjectSlug(levelSlug, course.subject);
+  if (!subjectSlug) return null;
+
+  for (const slug of specSubjectSlugs(subjectSlug, course.subject)) {
+    const page = await fetchPage(
+      `${SITE}/specifications/${levelSlug}/${slug}/${boardSlug}`,
+    );
+    if (!page) continue;
+    const outline = parseSpecificationPage(page.html, page.url);
+    if (!outline) continue;
+
+    const labels = new Set<string>();
+    const exact: Record<string, string[]> = {};
+    // Content every paper examines is printed as "All papers", which the
+    // parser labels with the course name instead of a paper number.
+    const allRefs: string[] = [];
+    for (const section of outline.sections) {
+      const paperNumbers = /^paper/i.test(section.title)
+        ? [...section.title.matchAll(/\d+/g)].map((match) => match[0])
+        : [];
+      const sectionLabels = paperNumbers.map((number) => `Paper ${number}`);
+      for (const label of sectionLabels) labels.add(label);
+      for (const topic of section.topics) {
+        if (!topic.reference) continue;
+        const reference = topic.reference.trim();
+        if (sectionLabels.length === 0) {
+          allRefs.push(reference);
+          continue;
+        }
+        exact[reference] = [
+          ...new Set([...(exact[reference] ?? []), ...sectionLabels]),
+        ];
+      }
+    }
+    if (labels.size < 2) continue;
+
+    const ordered = [...labels].sort(
+      (a, b) => Number(a.replace(/\D+/g, "")) - Number(b.replace(/\D+/g, "")),
+    );
+    for (const reference of allRefs) exact[reference] = ordered;
+    // A pathway topic is numbered at specification-topic level ("2"), while
+    // the specification lists its sections ("2.1"), so both keys are kept.
+    const byTopicRef: Record<string, string[]> = { ...exact };
+    for (const [reference, mapped] of Object.entries(exact)) {
+      const base = reference.split(".")[0]!;
+      byTopicRef[base] = [...new Set([...(byTopicRef[base] ?? []), ...mapped])];
+    }
+    return { labels: ordered, byTopicRef, sourceUrl: page.url };
+  }
+  return null;
+}
+
+/** The real past papers Cognito lists for a course, newest year first. */
+export function parseCognitoPastPaperIndex(html: string): CognitoPastPaper[] {
+  const papers: CognitoPastPaper[] = [];
+  const seen = new Set<string>();
+  const years = [
+    ...html.matchAll(
+      /aria-label="(\d{4}|[A-Za-z]{3}\s\d{2})" class="flex w-full cursor-pointer/g,
+    ),
+  ];
+  for (const [index, yearMatch] of years.entries()) {
+    const year = yearMatch[1]!.replace(/\s+/g, " ");
+    const start = yearMatch.index ?? 0;
+    const stop = years[index + 1]?.index ?? html.length;
+    const chunk = html.slice(start, stop);
+    const rows = [...chunk.matchAll(/aria-label="(Paper [0-9A-Z]+)[^"]*"/g)];
+    for (const [rowIndex, row] of rows.entries()) {
+      const rowStart = row.index ?? 0;
+      const rowStop = rows[rowIndex + 1]?.index ?? chunk.length;
+      const segment = chunk.slice(rowStart, rowStop);
+      let questionUrl: string | undefined;
+      let markSchemeUrl: string | undefined;
+      for (const anchor of segment.matchAll(
+        /<a href="(https:\/\/files\.cognitoedu\.org\/[^"]+\.pdf)"[^>]*>([\s\S]{0,600}?)<\/a>/gi,
+      )) {
+        const url = anchor[1]!;
+        const label = fragmentLines(anchor[2] ?? "").join(" ").toLowerCase();
+        if (!markSchemeUrl && /mark scheme|\bms\b/.test(label)) markSchemeUrl = url;
+        else if (!questionUrl) questionUrl = url;
+      }
+      if (!questionUrl) continue;
+      const key = `${year}|${row[1]}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      papers.push({
+        year,
+        label: row[1]!,
+        questionUrl,
+        ...(markSchemeUrl ? { markSchemeUrl } : {}),
+      });
+    }
+  }
+  return papers.slice(0, 60);
+}

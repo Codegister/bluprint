@@ -31,18 +31,24 @@ export function CoursePastPapers({
   courseId,
   formatSummary,
   formatId,
+  papers: qualificationPapers,
 }: {
   courseId: Id<"courses">;
   /** The subject's real question structure, e.g. "8 questions · 3, 4, 5 and 12 marks". */
   formatSummary?: string;
   /** The blueprint the course uses now, so an older paper can be flagged. */
   formatId?: string;
+  /** The papers this qualification is split into, if it publishes a split. */
+  papers?: Array<{ label: string; topicIds: string[] }>;
 }) {
   const navigate = useNavigate();
   const papers = useQuery(api.pastPapers.listForCourse, { courseId });
   const createPaper = useMutation(api.pastPapers.create);
   const removePaper = useMutation(api.pastPapers.remove);
   const rebuildPaper = useMutation(api.pastPapers.rebuild);
+  // Which paper of the qualification the next practice paper covers. No choice
+  // means every topic is examinable, which is how a single-paper course works.
+  const [chosenPaper, setChosenPaper] = useState<string | undefined>(undefined);
   const [building, setBuilding] = useState(false);
   const [rebuildingId, setRebuildingId] = useState<Id<"pastPapers"> | null>(
     null,
@@ -60,9 +66,16 @@ export function CoursePastPapers({
   const handleBuild = async () => {
     setBuilding(true);
     try {
-      const result = await createPaper({ courseId });
+      const result = await createPaper({
+        courseId,
+        ...(chosenPaper ? { paper: chosenPaper } : {}),
+      });
       if (result.created) {
-        toast.success("Writing a practice paper from your specification.");
+        toast.success(
+          chosenPaper
+            ? `Writing a ${chosenPaper} paper from that paper's topics.`
+            : "Writing a practice paper from your specification.",
+        );
       }
       navigate(`/papers/${result.paperId}`);
     } catch (error) {
@@ -117,6 +130,49 @@ export function CoursePastPapers({
             <p className="mt-2 inline-flex rounded-full bg-[#F1F0FB] px-3 py-1 text-[0.7rem] font-semibold text-[#5B3DF5]">
               {formatSummary}
             </p>
+          )}
+          {qualificationPapers && qualificationPapers.length > 1 && (
+            <div className="mt-3">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-[#8A5A12]">
+                Which paper?
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  aria-pressed={chosenPaper === undefined}
+                  onClick={() => setChosenPaper(undefined)}
+                  className={cn(
+                    "h-8 rounded-full border px-3 text-[0.74rem] font-semibold transition-colors",
+                    chosenPaper === undefined
+                      ? "border-[#191B27] bg-[#191B27] text-white"
+                      : "border-[#EBD6AB] bg-white text-[#8A5A12] hover:bg-[#FFF3DC]",
+                  )}
+                >
+                  Whole course
+                </button>
+                {qualificationPapers.map((group) => (
+                  <button
+                    key={group.label}
+                    type="button"
+                    aria-pressed={chosenPaper === group.label}
+                    onClick={() => setChosenPaper(group.label)}
+                    className={cn(
+                      "h-8 rounded-full border px-3 text-[0.74rem] font-semibold transition-colors",
+                      chosenPaper === group.label
+                        ? "border-[#191B27] bg-[#191B27] text-white"
+                        : "border-[#EBD6AB] bg-white text-[#8A5A12] hover:bg-[#FFF3DC]",
+                    )}
+                  >
+                    {group.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[0.72rem] leading-relaxed text-muted-foreground">
+                {chosenPaper
+                  ? `Only the topics ${chosenPaper} examines are used, so the paper stays inside that exam.`
+                  : "One paper covering the whole specification."}
+              </p>
+            </div>
           )}
         </div>
         <Button
@@ -178,6 +234,11 @@ export function CoursePastPapers({
                     <h3 className="text-[0.9rem] font-semibold text-brand-ink">
                       {paper.title}
                     </h3>
+                    {paper.paper && !paper.title.startsWith(paper.paper) && (
+                      <span className="rounded-full bg-[#F1F0FB] px-2 py-0.5 text-[0.62rem] font-semibold text-[#5B3DF5]">
+                        {paper.paper}
+                      </span>
+                    )}
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[0.62rem] font-semibold",

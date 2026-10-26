@@ -39,7 +39,23 @@ export type RsPathway = {
   overview: string;
   examFormat: string;
   units: RsPathwayUnit[];
+  /**
+   * The Pearson paper split, with the topics each paper examines. RS is saved
+   * content rather than a scrape, so the split is written here next to the
+   * units instead of being inferred from Cognito.
+   */
+  papers?: Array<{ label: string; topicIds: string[] }>;
 };
+
+/** Topic ids for a contiguous run of units, used to build RS paper groups. */
+function paperGroup(units: RsPathwayUnit[], label: string, ...indexes: number[]) {
+  return {
+    label,
+    topicIds: indexes.flatMap((index) =>
+      (units[index]?.topics ?? []).map((topic) => topic.id),
+    ),
+  };
+}
 
 type TopicSeed = { title: string; points: string[] };
 
@@ -1519,6 +1535,12 @@ export function buildRsPathway(course: RsCourseInput): RsPathway | null {
       examFormat:
         "Two written papers, one for each Area of Study, each taken with a different religion. Every paper covers beliefs, the ethical issue and living the religious life for its religion.",
       units,
+      // Paper 1 is the first Area of Study and its religion; Paper 2 is the
+      // second. Living the religious life is examined in both papers.
+      papers: [
+        paperGroup(units, "Paper 1", 0, 1, 4),
+        paperGroup(units, "Paper 2", 2, 3, 4),
+      ],
     };
   }
 
@@ -1614,5 +1636,17 @@ export function buildRsPathway(course: RsCourseInput): RsPathway | null {
     examFormat:
       "Three written papers: Paper 1 on the main religion (50%), Paper 2 on the second religion (25%), and Paper 3 Philosophy and Ethics or Paper 4 Textual Studies (25%).",
     units: allUnits,
+    // The third paper is whichever one the student's school enters them for:
+    // every unit after Paper 2's second-religion unit belongs to it.
+    papers: [
+      paperGroup(allUnits, "Paper 1", 0, 1, 2, 3),
+      paperGroup(allUnits, "Paper 2", 4),
+      {
+        label: thirdPaper === "Philosophy and Ethics" ? "Paper 3" : "Paper 4",
+        topicIds: allUnits
+          .slice(5)
+          .flatMap((entry) => entry.topics.map((topic) => topic.id)),
+      },
+    ].filter((group) => group.topicIds.length >= 3),
   };
 }
