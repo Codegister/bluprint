@@ -110,11 +110,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
-      <div className="relative overflow-hidden px-5 pb-5 pt-6">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 -top-20 h-40 bg-[radial-gradient(circle_at_35%_65%,rgba(124,92,255,0.20),transparent_70%)]"
-        />
+      <div className="px-5 pb-5 pt-6">
         <Brand onNavigate={onNavigate} />
       </div>
 
@@ -217,7 +213,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Sidebar />
       </aside>
 
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background px-4 py-3 lg:hidden">
         <Brand to="/dashboard" />
         <button
           type="button"
@@ -239,7 +235,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Sheet>
 
       <main className="lg:pl-[292px]">
-        <div className="mx-auto w-full max-w-[1080px] px-4 py-7 sm:px-8 lg:px-12 lg:py-12">
+        <div className="mx-auto w-full max-w-[1080px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
           {children}
         </div>
       </main>

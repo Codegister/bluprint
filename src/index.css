@@ -40,9 +40,9 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Bluprint palette — a light, friendly study workspace. */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Bluprint palette: a warm paper workspace with one lilac accent. */
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --color-brand-ink: var(--brand-ink);
   --color-brand-cream: var(--brand-cream);
@@ -65,14 +65,14 @@
 :root {
   --radius: 1rem;
 
-  --brand-ink: #16181f;
-  --brand-cream: #f6f6f8;
-  --brand-panel: #f1f1f5;
+  --brand-ink: #191a1e;
+  --brand-cream: #f7f6f2;
+  --brand-panel: #efece5;
   --brand-panel-2: #ffffff;
   --brand-void: #ffffff;
 
-  --brand-pink: #7c5cff;
-  --brand-pink-deep: #6847f2;
+  --brand-pink: #6b4bff;
+  --brand-pink-deep: #5636e0;
   --brand-mint: #22a06b;
   --brand-lime: #e8a317;
   --brand-sky: #3b82f6;
@@ -82,37 +82,37 @@
   --brand-orange: #fb923c;
   --brand-violet: #a78bfa;
 
-  --background: #f6f6f8;
-  --foreground: #16181f;
+  --background: #f7f6f2;
+  --foreground: #191a1e;
   --card: #ffffff;
-  --card-foreground: #16181f;
+  --card-foreground: #191a1e;
   --popover: #ffffff;
-  --popover-foreground: #16181f;
-  --primary: #191b27;
+  --popover-foreground: #191a1e;
+  --primary: #191a1e;
   --primary-foreground: #ffffff;
-  --secondary: #f1f1f5;
-  --secondary-foreground: #16181f;
-  --muted: #f1f1f5;
-  --muted-foreground: #6f7284;
-  --accent: #efedff;
-  --accent-foreground: #4a32c9;
-  --destructive: #e2495a;
-  --border: #e8e8ef;
-  --input: #e3e3ec;
-  --ring: #7c5cff;
+  --secondary: #efece5;
+  --secondary-foreground: #191a1e;
+  --muted: #efece5;
+  --muted-foreground: #5d6070;
+  --accent: #ece7ff;
+  --accent-foreground: #3f24b8;
+  --destructive: #c33444;
+  --border: #e2ded4;
+  --input: #d9d4c8;
+  --ring: #6b4bff;
   --chart-1: #7c5cff;
   --chart-2: #22a06b;
   --chart-3: #e8a317;
   --chart-4: #3b82f6;
   --chart-5: #ef5f6b;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #16181f;
-  --sidebar-primary: #191b27;
+  --sidebar: #fbfaf7;
+  --sidebar-foreground: #191a1e;
+  --sidebar-primary: #191a1e;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f1f1f5;
-  --sidebar-accent-foreground: #16181f;
-  --sidebar-border: #ececf2;
-  --sidebar-ring: #7c5cff;
+  --sidebar-accent: #efece5;
+  --sidebar-accent-foreground: #191a1e;
+  --sidebar-border: #e7e3da;
+  --sidebar-ring: #6b4bff;
 
   color-scheme: light;
 }
@@ -126,12 +126,8 @@
   }
   body {
     @apply bg-background font-sans text-foreground antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    /* Faint colour wash so large white surfaces never read as a blank page. */
-    background-image:
-      radial-gradient(900px 520px at 105% -10%, rgba(124, 92, 255, 0.1), transparent 62%),
-      radial-gradient(760px 420px at -10% 8%, rgba(18, 184, 166, 0.09), transparent 60%);
-    background-attachment: fixed;
+    /* One flat paper tone. No colour wash, so type contrast never depends
+       on where a section happens to sit on the page. */
   }
   h1,
   h2,
@@ -139,15 +135,15 @@
   h4 {
     font-family: var(--font-display);
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.025em;
   }
   button:not([disabled]),
   [role="button"]:not([disabled]) {
     cursor: pointer;
   }
   ::selection {
-    background: rgba(124, 92, 255, 0.22);
-    color: #16181f;
+    background: #ded5ff;
+    color: #191a1e;
   }
   code,
   kbd,
@@ -157,21 +153,19 @@
 }
 
 @layer utilities {
-  /* Soft white surface used by every card in the app. */
+  /* White surface used by every card. A crisp edge does the work; the shadow
+     only lifts the card a few pixels off the paper background. */
   .gizmo-card {
     @apply rounded-3xl border border-border bg-card;
-    box-shadow: 0 1px 2px rgba(22, 24, 31, 0.04),
-      0 12px 28px -20px rgba(22, 24, 31, 0.28);
+    box-shadow: 0 1px 0 rgba(25, 26, 30, 0.04);
   }
 
   .soft-shadow {
-    box-shadow: 0 1px 2px rgba(22, 24, 31, 0.05),
-      0 10px 24px -18px rgba(22, 24, 31, 0.3);
+    box-shadow: 0 1px 0 rgba(25, 26, 30, 0.05);
   }
 
   .ring-shadow {
-    box-shadow: 0 0 0 1px rgba(22, 24, 31, 0.04),
-      0 18px 40px -26px rgba(22, 24, 31, 0.45);
+    box-shadow: 0 0 0 1px rgba(25, 26, 30, 0.05);
   }
 
   /* Sidebar / settings rows. */
@@ -185,7 +179,7 @@
     @apply bg-brand-panel font-semibold text-brand-ink;
   }
 
-  /* Tiny all-caps label, kept for metadata but softened to match the theme. */
+  /* Tiny all-caps label used for column headers and metadata. */
   .mono-label {
     font-family: var(--font-sans);
     font-size: 0.68rem;
@@ -212,20 +206,20 @@
 
   .gizmo-scroll {
     scrollbar-width: thin;
-    scrollbar-color: #d6d6e0 transparent;
+    scrollbar-color: #d4cfc3 transparent;
   }
   .gizmo-scroll::-webkit-scrollbar {
     width: 8px;
   }
   .gizmo-scroll::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: #d6d6e0;
+    background: #d4cfc3;
   }
   .gizmo-scroll::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  /* Kept so existing screens still render paper-ish backgrounds. */
+  /* Kept so existing screens still render a ruled-paper texture. */
   .blueprint-grid,
   .dot-grid,
   .paper-grid,
@@ -233,7 +227,7 @@
   .paper-dots {
     background-image: radial-gradient(
       circle,
-      rgba(22, 24, 31, 0.06) 1px,
+      rgba(25, 26, 30, 0.07) 1px,
       transparent 1px
     );
     background-size: 22px 22px;
@@ -273,20 +267,20 @@
   }
 }
 
-/* Moving sheen on the study-set build bar, so a slow batch still looks alive. */
-@keyframes progress-sheen {
-  0% {
-    background-position: 0% 50%;
-  }
-  100% {
-    background-position: 200% 50%;
-  }
+/* Build progress uses a single accent and a pulse, not a moving gradient. */
+.progress-live {
+  background-color: var(--brand-pink);
+  animation: progress-pulse 1.8s ease-in-out infinite;
 }
 
-.progress-live {
-  background-image: linear-gradient(90deg, #7c5cff, #12b8a6, #7c5cff);
-  background-size: 200% 100%;
-  animation: progress-sheen 2.4s linear infinite;
+@keyframes progress-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes soft-pop {

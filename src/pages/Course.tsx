@@ -172,14 +172,14 @@ function BuildingPanel({
       </div>
 
       <p className="mt-4 text-[0.78rem] leading-relaxed text-muted-foreground">
-        This usually takes under a minute. You can leave this page — the pathway
+        This usually takes under a minute. You can leave this page: the pathway
         keeps building in the background.
       </p>
 
       {stale && (
         <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-3 text-[0.8rem] leading-relaxed text-[#8A5D00]">
           This is taking longer than usual. Bluprint will restart it
-          automatically — no action is needed.
+          automatically. No action is needed.
         </p>
       )}
     </section>
@@ -196,7 +196,7 @@ function RecoveringPanel({ course }: { course: Doc<"courses"> }) {
         Putting the finishing touches on {course.subject}
       </h2>
       <p className="mt-2 max-w-2xl text-[0.86rem] leading-relaxed text-muted-foreground">
-        Bluprint is completing this map automatically. You can leave this page —
+        Bluprint is completing this map automatically. You can leave this page;
         it will be ready when you come back.
       </p>
       <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
@@ -424,7 +424,7 @@ export default function Course() {
             Back to home
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[1.55rem] font-bold leading-tight text-brand-ink sm:text-[1.9rem]">
+            <h1 className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
               {course.subject}
             </h1>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
@@ -470,8 +470,8 @@ export default function Course() {
           <BuildingPanel course={course} stale={details.processingStale} />
         ) : (
           <>
-            <section className="mt-6 grid gap-3 sm:grid-cols-3">
-              <div className="rounded-3xl border border-[#CFEBDD] bg-[#F1FBF6] px-4 py-4">
+            <section className="mt-6 grid overflow-hidden rounded-3xl border border-border bg-white sm:grid-cols-3">
+              <div className="px-5 py-4">
                 <p className="text-[0.72rem] font-medium text-muted-foreground">
                   Topics revised
                 </p>
@@ -482,34 +482,34 @@ export default function Course() {
                     / {details.topicCount}
                   </span>
                 </p>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#D7EFE2]">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-panel">
                   <div
                     className="h-full rounded-full bg-[#128A4C] transition-[width] duration-500"
                     style={{ width: `${mastery}%` }}
                   />
                 </div>
               </div>
-              <div className="rounded-3xl border border-[#DDD4FB] bg-[#F3F0FF] px-4 py-4">
+              <div className="border-t border-border px-5 py-4 sm:border-l sm:border-t-0">
                 <p className="text-[0.72rem] font-medium text-muted-foreground">
                   Study sets built
                 </p>
                 <p className="mt-0.5 font-display text-[1.5rem] font-bold leading-tight text-brand-ink">
                   {sets.length}
                 </p>
-                <p className="mt-1 text-[0.72rem] text-muted-foreground">
+                <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
                   {sets.length === 0
                     ? "Open a topic to make the first one"
                     : `${cards} cards across this course`}
                 </p>
               </div>
-              <div className="rounded-3xl border border-[#F5E2C4] bg-[#FFF7EC] px-4 py-4">
+              <div className="border-t border-border px-5 py-4 sm:border-l sm:border-t-0">
                 <p className="text-[0.72rem] font-medium text-muted-foreground">
                   Cards known
                 </p>
                 <p className="mt-0.5 font-display text-[1.5rem] font-bold leading-tight text-brand-ink">
-                  {cards > 0 ? `${percent(known, cards)}%` : "—"}
+                  {cards > 0 ? `${percent(known, cards)}%` : "n/a"}
                 </p>
-                <p className="mt-1 text-[0.72rem] text-muted-foreground">
+                <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
                   {cards > 0 ? `${known} of ${cards} cards` : "Build material to track this"}
                 </p>
               </div>
@@ -567,7 +567,7 @@ export default function Course() {
                 </section>
 
                 {nextTopic && (
-              <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-[#D8CCFF] bg-[#FAF8FF] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-border bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div className="min-w-0">
                   <p className="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
                     Next up · {nextTopic.unit.title}
@@ -603,7 +603,7 @@ export default function Course() {
                   </h2>
                   <p className="mt-0.5 text-[0.78rem] text-muted-foreground">
                     Tap a part to open its topics. Remove anything your school does
-                    not teach — the rest of the pathway stays as it is.
+                    not teach. The rest of the pathway stays as it is.
                   </p>
                 </div>
               </div>
@@ -631,7 +631,7 @@ export default function Course() {
                 <ol className="relative mt-6">
                   <span
                     aria-hidden
-                    className="absolute bottom-10 left-[35px] top-6 w-[3px] rounded-full bg-gradient-to-b from-[#DCD6F8] via-[#CFE7E2] to-[#F0F1F6] sm:left-[41px]"
+                    className="absolute bottom-10 left-[35px] top-6 w-[2px] rounded-full bg-border sm:left-[41px]"
                   />
                   {pathway.units.map((unit, unitIndex) => {
                     const completedInUnit = unit.topics.filter((topic) =>

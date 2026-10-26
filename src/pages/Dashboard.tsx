@@ -126,11 +126,8 @@ function CourseRow({ course }: { course: CourseSummary }) {
     >
       <div className="flex min-w-0 items-center gap-3">
         <span
-          className={cn(
-            "grid size-11 shrink-0 place-items-center rounded-2xl border",
-            meta.tint,
-          )}
-          style={{ color: meta.color, borderColor: `${meta.color}33` }}
+          className={cn("grid size-11 shrink-0 place-items-center rounded-2xl", meta.tint)}
+          style={{ color: meta.color }}
         >
           <Icon className="size-5" />
         </span>
@@ -306,7 +303,7 @@ export default function Dashboard() {
     <AppShell>
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-[1.75rem] font-bold leading-tight text-brand-ink sm:text-[2rem]">
+          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
             Home
           </h1>
           <p className="mt-1 text-[0.9rem] text-muted-foreground">
@@ -330,30 +327,25 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <p className="mt-1 text-[0.78rem] text-muted-foreground">
-        Religious Studies is supported as Edexcel Religious Studies A and B, with the
-        religions and units you study.
-      </p>
-
-      <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
-        <div className="rounded-2xl border border-[#DDD4FB] bg-[#F3F0FF] px-4 py-3">
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[#6B4EE6]">
+      <div className="mt-5 grid overflow-hidden rounded-2xl border border-border bg-white sm:grid-cols-3">
+        <div className="px-4 py-3.5 sm:px-5">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Study sets
           </p>
           <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
             {sets?.length ?? 0}
           </p>
         </div>
-        <div className="rounded-2xl border border-[#CFEBDD] bg-[#F1FBF6] px-4 py-3">
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[#0C6B4C]">
+        <div className="border-t border-border px-4 py-3.5 sm:border-l sm:border-t-0 sm:px-5">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Cards known
           </p>
           <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
             {stats.mastery}%
           </p>
         </div>
-        <div className="rounded-2xl border border-[#F5E2C4] bg-[#FFF7EC] px-4 py-3">
-          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[#96560C]">
+        <div className="border-t border-border px-4 py-3.5 sm:border-l sm:border-t-0 sm:px-5">
+          <p className="text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Due now
           </p>
           <p className="mt-1 font-display text-[1.4rem] font-bold leading-none text-brand-ink">
@@ -379,9 +371,6 @@ export default function Dashboard() {
           <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
             AI tutor
           </h2>
-          <span className="rounded-full bg-[#F1F0FB] px-2 py-0.5 text-[0.64rem] font-bold text-[#5B3DF5]">
-            Ask anything
-          </span>
           <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
         </div>
         <p className="mt-1 max-w-2xl text-[0.82rem] leading-relaxed text-muted-foreground">
@@ -454,7 +443,7 @@ export default function Dashboard() {
           <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
             Courses
           </h2>
-          <span className="rounded-full bg-[#EAFBF4] px-2 py-0.5 text-[0.64rem] font-bold tabular-nums text-[#0C6B4C]">
+          <span className="text-[0.74rem] font-semibold tabular-nums text-muted-foreground">
             {courseRows?.length ?? 0}
           </span>
           <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
@@ -481,7 +470,7 @@ export default function Dashboard() {
             </p>
           ) : (
             <>
-              <div className="hidden grid-cols-[minmax(0,1fr)_170px_160px_16px] gap-3 border-b border-border/70 bg-[#FCFCFD] px-5 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:grid">
+              <div className="hidden grid-cols-[minmax(0,1fr)_170px_160px_16px] gap-3 border-b border-border bg-background px-5 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:grid">
                 <span>Subject</span>
                 <span>Pathway</span>
                 <span>Materials</span>
@@ -500,7 +489,7 @@ export default function Dashboard() {
           <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
             Study sets
           </h2>
-          <span className="rounded-full bg-[#FFF4E8] px-2 py-0.5 text-[0.64rem] font-bold tabular-nums text-[#96560C]">
+          <span className="text-[0.74rem] font-semibold tabular-nums text-muted-foreground">
             {sets?.length ?? 0}
           </span>
           <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />

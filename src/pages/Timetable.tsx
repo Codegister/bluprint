@@ -503,10 +503,7 @@ export default function Timetable() {
     return (
       <AppShell>
         <header>
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#7C5CFF]">
-            Revision timetable
-          </p>
-          <h1 className="mt-1 font-display text-[1.6rem] font-bold leading-tight text-brand-ink sm:text-[2rem]">
+          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
             Your revision timetable
           </h1>
           <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
@@ -553,10 +550,7 @@ export default function Timetable() {
     <AppShell>
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#7C5CFF]">
-            Revision timetable
-          </p>
-          <h1 className="mt-1 font-display text-[1.6rem] font-bold leading-tight text-brand-ink sm:text-[2rem]">
+          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
             Your revision timetable
           </h1>
           <p className="mt-2 text-[0.9rem] text-muted-foreground">
@@ -678,7 +672,7 @@ export default function Timetable() {
       )}
 
       {visibleHolidays.length > 0 && (
-        <section className="mt-4 rounded-2xl border border-[#EBD6AB] bg-[#FFFBF2] px-4 py-3">
+        <section className="mt-4 rounded-2xl border border-border bg-[#FFFBF2] px-4 py-3">
           <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8A5D00]">
 Bank holidays
           </p>
@@ -686,7 +680,7 @@ Bank holidays
             {visibleHolidays.map((holiday) => (
               <span
                 key={holiday.date}
-                className="rounded-full border border-[#EBD6AB] bg-white/70 px-2 py-1 text-[0.66rem] font-medium text-[#8A5D00]"
+                className="rounded-full border border-border bg-white px-2 py-1 text-[0.66rem] font-medium text-[#8A5D00]"
               >
                 {formatDayLabel(holiday.date)} · {holiday.name}
               </span>

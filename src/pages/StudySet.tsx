@@ -190,7 +190,7 @@ function BuildingPanel({
           </h2>
           <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
             {set.progress || "Starting the pipeline…"} This usually takes 30–90
-            seconds. You can leave this page — the run continues on the server.
+            seconds. You can leave this page. The run continues on the server.
           </p>
 
           <div className="mt-4 flex items-baseline justify-between gap-3">
@@ -487,7 +487,7 @@ export default function StudySet() {
           </Button>
         </div>
         <div className="mt-1 min-w-0">
-          <h1 className="truncate font-display text-[1.5rem] font-bold leading-tight text-brand-ink sm:text-[1.8rem]">
+          <h1 className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
             {set.title}
           </h1>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground">
@@ -536,7 +536,7 @@ export default function StudySet() {
             </div>
 
             {(set.generationNote || shortfall.length > 0) && (
-              <div className="mt-3 rounded-2xl border border-[#EBD6AB] bg-[#FFFBEC] px-4 py-3 text-[0.82rem] leading-relaxed text-[#7A5306]">
+              <div className="mt-3 rounded-2xl border border-border bg-[#FFFBEC] px-4 py-3 text-[0.82rem] leading-relaxed text-[#7A5306]">
                 {shortfall.length > 0 && (
                   <p>
                     You asked for{" "}

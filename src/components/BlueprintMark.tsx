@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Bluprint's mark: a wireframe isometric block on a drafting grid. It is
- * deliberately geometric — no mascot, no rounded character shapes.
+ * deliberately geometric: no mascot, no rounded character shapes.
  */
 export function BlueprintMark({
   size = 32,

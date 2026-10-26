@@ -131,7 +131,7 @@ export function PastPaperPractice({
       {sections.map((section, sectionIndex) => (
         <div key={section.title ?? `section-${sectionIndex}`} className="space-y-4">
           {section.title && (
-            <div className="rounded-[1.4rem] border border-[#E3E4EC] bg-brand-panel px-5 py-4">
+            <div className="rounded-[1.4rem] border border-border bg-brand-panel px-5 py-4">
               <p className="font-display text-[0.95rem] font-bold uppercase tracking-[0.08em] text-brand-ink">
                 {section.title}
               </p>
@@ -384,8 +384,8 @@ function PaperCoverPage({ cover }: { cover: PaperCover }) {
   ].filter((block) => block.items.length > 0);
 
   return (
-    <section className="overflow-hidden rounded-[1.6rem] border border-[#E3E4EC] bg-[#FCFCFD]">
-      <div className="border-b border-[#E3E4EC] bg-white px-5 py-6 text-center sm:px-8 sm:py-8">
+    <section className="overflow-hidden rounded-[1.6rem] border border-border bg-white">
+      <div className="border-b border-border bg-white px-5 py-6 text-center sm:px-8 sm:py-8">
         <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-[#5B3DF5]">
           {cover.qualification}
         </p>
@@ -426,7 +426,7 @@ function PaperCoverPage({ cover }: { cover: PaperCover }) {
         ))}
 
         <p className="rounded-2xl bg-[#FFFBF2] px-3.5 py-2.5 text-[0.75rem] leading-relaxed text-[#8A5A12]">
-          Practice mock — not an official examination paper. Written from your
+          Practice mock, not an official examination paper. Written from your
           course specification in this board's paper format.
         </p>
       </div>

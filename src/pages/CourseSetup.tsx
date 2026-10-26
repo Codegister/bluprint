@@ -50,10 +50,10 @@ type Question = "board" | "tier" | "rs";
  * Edexcel GCSE Religious Studies is two separate specifications, so the route
  * is the first thing the RS step asks:
  *
- *   A (Faith and Practice in the 21st Century) — beliefs, practices, sources
+ *   A (Faith and Practice in the 21st Century): beliefs, practices, sources
  *   of wisdom, forms of expression, then Philosophy and Ethics or Textual
  *   Studies.
- *   B (Beliefs in Action) — two of three Areas of Study.
+ *   B (Beliefs in Action): two of three Areas of Study.
  */
 const RS_ROUTE_A = "Edexcel Religious Studies A";
 const RS_ROUTE_B = "Edexcel Religious Studies B";
@@ -172,7 +172,7 @@ function defaultTierFor(level: string, subject: string): string | undefined {
  *
  * Only qualifications that actually have a choice are asked about: GCSE asks for
  * a board and a tier, A-Level asks for a board, IB asks for HL or SL, and KS3,
- * AP and university modules have nothing to ask — tapping one just adds it.
+ * AP and university modules have nothing to ask; tapping one just adds it.
  *
  * Religious Studies GCSE is handled by the RS picker lower in the file, which
  * can ask for a route, a second religion and the chosen spec titles on top of
@@ -459,7 +459,7 @@ export default function CourseSetup() {
     setSelected((current) => ({ ...current, [active]: next }));
     setError(null);
     // The RS card exists only to collect these answers, so the last one sends
-    // the student straight back to the subject list — no Done button.
+    // the student straight back to the subject list. No Done button.
     if (!rsStepFor(next)) finishQuestions();
   };
 
@@ -658,10 +658,7 @@ export default function CourseSetup() {
 
       <div className="mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[#7C5CFF]">
-            Course pathways
-          </p>
-          <h1 className="font-display text-[1.5rem] font-bold leading-tight text-brand-ink sm:text-[1.8rem]">
+          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
             Your courses
           </h1>
         </div>
@@ -904,7 +901,7 @@ export default function CourseSetup() {
                         </h2>
                         <p className="text-[0.78rem] text-muted-foreground">
                           Edexcel publishes two separate GCSE specifications. Pick
-                          the one your school enters you for — the content and the
+                          the one your school enters you for. The content and the
                           papers are different.
                         </p>
                         <div className="grid gap-1.5 sm:grid-cols-2">
@@ -955,7 +952,7 @@ export default function CourseSetup() {
                           Which is your main religion?
                         </h2>
                         <p className="text-[0.78rem] text-muted-foreground">
-                          This is the religion for Paper 1 — the study of religion.
+                          This is the religion for Paper 1, the study of religion.
                           You will be asked for the second religion next.
                         </p>
                         <div className="grid gap-1.5 sm:grid-cols-2">
@@ -1195,7 +1192,7 @@ export default function CourseSetup() {
           )}
 
           <div className="sticky bottom-3 z-20 mt-6">
-            <div className="flex items-center gap-3 rounded-2xl border border-border bg-white/95 px-3.5 py-2.5 shadow-[0_14px_40px_-24px_rgba(22,24,31,0.45)] backdrop-blur">
+            <div className="flex items-center gap-3 rounded-2xl border border-border bg-white px-4 py-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[0.82rem] font-semibold text-brand-ink">
                   {selectedCount} course{selectedCount === 1 ? "" : "s"}

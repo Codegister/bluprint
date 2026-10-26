@@ -1594,7 +1594,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                 ? dictationError
                 : isTranscribing
                   ? "Transcribing your recording…"
-                  : `Listening — tap stop when you're done (${recordSeconds}/${MAX_DICTATION_SECONDS}s)`}
+                  : `Listening. Tap stop when you're done (${recordSeconds}/${MAX_DICTATION_SECONDS}s)`}
             </p>
           )}
         </div>

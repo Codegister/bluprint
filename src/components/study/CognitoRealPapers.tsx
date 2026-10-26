@@ -152,7 +152,7 @@ export function CognitoRealPapers({
                           variant="outline"
                           onClick={() =>
                             setViewing({
-                              title: `${year} ${paper.label} — question paper`,
+                              title: `${year} ${paper.label} question paper`,
                               url: paper.questionUrl,
                             })
                           }
@@ -166,11 +166,11 @@ export function CognitoRealPapers({
                             variant="outline"
                             onClick={() =>
                               setViewing({
-                                title: `${year} ${paper.label} — mark scheme`,
+                                title: `${year} ${paper.label} mark scheme`,
                                 url: paper.markSchemeUrl!,
                               })
                             }
-                            className="h-8 rounded-full border-[#CFEBDD] bg-[#F1FBF6] px-3 text-[0.74rem] font-semibold text-[#128A4C] shadow-none hover:bg-[#E6F9F6]"
+                            className="h-8 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-[#128A4C] shadow-none hover:bg-brand-panel"
                           >
                             Mark scheme
                           </Button>

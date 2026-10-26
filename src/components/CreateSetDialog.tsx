@@ -53,7 +53,7 @@ function titleFromFile(name: string): string {
 }
 
 const dropzoneClass =
-  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-[#D8CCFF] bg-[#FAF8FF] px-5 py-9 text-center transition-colors hover:border-[#B9A6FF] hover:bg-[#F5F1FF]";
+  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-border bg-background px-5 py-9 text-center transition-colors hover:border-brand-pink/50 hover:bg-white";
 
 export function CreateSetDialog({
   open,
@@ -307,7 +307,7 @@ export function CreateSetDialog({
               id="set-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="e.g. Cell biology — Unit 2"
+              placeholder="e.g. Cell biology, Unit 2"
               maxLength={80}
               className="mt-2 h-11 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-[#B9A6FF] focus-visible:ring-[#7C5CFF]/15"
               disabled={isLoading}
@@ -496,7 +496,7 @@ export function CreateSetDialog({
                         type="button"
                         aria-label={`Remove ${image.file.name}`}
                         onClick={() => removePhoto(image.preview)}
-                        className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-white/95 text-muted-foreground shadow-sm transition hover:text-[#C93C49]"
+                        className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-white text-muted-foreground transition-colors hover:text-[#C93C49]"
                       >
                         <X className="size-3" />
                       </button>

@@ -70,7 +70,7 @@ export function ExamPractice({
               ? `Written and marked using ${qualification} conventions. `
               : ""}
             Write a full answer. Bluprint marks it against the guide and saves the
-            result — model answers unlock after grading.
+            result. Model answers unlock after grading.
           </p>
         </div>
       </div>

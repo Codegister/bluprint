@@ -89,7 +89,7 @@ export function FlashcardReview({
           Session complete
         </p>
         <h3 className="mt-3 font-display text-2xl font-bold text-brand-ink">
-          Nice work — {sessionTotal} cards reviewed
+          Nice work. {sessionTotal} cards reviewed
         </h3>
         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
           You marked {recall}% of this round as known. Anything you flagged “Again”
@@ -201,7 +201,7 @@ export function FlashcardReview({
               </div>
             </div>
 
-            <div className="flip-face flip-back soft-shadow absolute inset-0 flex flex-col justify-between overflow-hidden rounded-3xl border border-[#C9EFDC] bg-[#F3FBF7] p-7 sm:p-9">
+            <div className="flip-face flip-back soft-shadow absolute inset-0 flex flex-col justify-between overflow-hidden rounded-3xl border border-border bg-white p-7 sm:p-9">
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-[#DCF5E8] px-3 py-1 text-xs font-semibold text-[#128A5B]">
                   Answer
@@ -213,7 +213,7 @@ export function FlashcardReview({
               <p className="overflow-y-auto py-4 text-[1.05rem] leading-relaxed text-brand-ink sm:text-[1.15rem]">
                 {current.back}
               </p>
-              <div className="border-t border-[#D7F0E3] pt-4 text-xs font-medium text-[#128A5B]">
+              <div className="border-t border-border pt-4 text-xs font-medium text-[#128A5B]">
                 Compare with your own wording
               </div>
             </div>

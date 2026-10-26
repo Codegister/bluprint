@@ -65,7 +65,7 @@ export function QuizRunner({
           {pct >= 80 ? "Strong recall." : pct >= 50 ? "Useful baseline." : "Run it again."}
         </h3>
         <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-          Your score is saved to this set. Read the explanations you missed — they're the
+          Your score is saved to this set. Read the explanations you missed. They're the
           shortest path to closing the gap.
         </p>
 
@@ -219,7 +219,7 @@ export function QuizRunner({
             >
               {correct
                 ? "Correct"
-                : `Not quite — the answer is ${String.fromCharCode(
+                : `Not quite. The answer is ${String.fromCharCode(
                     65 + question.correctIndex,
                   )}`}
             </p>

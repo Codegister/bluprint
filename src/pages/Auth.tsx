@@ -8,16 +8,7 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
-import {
-  AlertCircle,
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Ghost,
-  Loader2,
-  Lock,
-  Mail,
-} from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Ghost, Loader2, Mail } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -104,38 +95,29 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   return (
     <div className="min-h-screen bg-background lg:grid lg:grid-cols-[1.02fr_0.98fr]">
       {/* Context panel */}
-      <aside className="relative hidden flex-col justify-between overflow-hidden bg-[#F3ECFF] p-10 lg:flex xl:p-14">
-        <div className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-white/60 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 -left-16 size-72 rounded-full bg-[#FFE9F2] blur-3xl" />
-
-        <div className="relative">
+      <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-border bg-[#ece7ff] p-10 lg:flex xl:p-14">
+        <div>
           <Brand />
         </div>
 
-        <div className="relative flex flex-col items-start">
+        <div className="flex flex-col items-start">
           <Mascot size={196} />
-          <h1 className="mt-6 max-w-md text-[2.6rem] font-extrabold leading-[1.03] tracking-[-0.04em] text-brand-ink xl:text-[3rem]">
-            Your notes are the hard part.
-            <br />
-            <span className="text-[#5B3DF5]">We make them easy to revise.</span>
+          <h1 className="mt-6 max-w-md text-[2.5rem] font-extrabold leading-[1.04] tracking-[-0.04em] text-brand-ink xl:text-[2.9rem]">
+            Your sets, scores and progress, kept together.
           </h1>
-          <p className="mt-4 max-w-sm text-[0.95rem] leading-relaxed text-brand-ink/60">
+          <p className="mt-4 max-w-sm text-[0.95rem] leading-relaxed text-brand-ink/65">
             Sign in to build summaries, flashcards, quizzes and exam practice from your
-            uploads. Your sets, scores and progress stay attached to your account.
+            uploads. Everything stays attached to your account.
           </p>
 
-          <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-[0.83rem] font-medium text-brand-ink/65">
-            <span className="flex items-center gap-1.5">
-              <Lock className="size-3.5 text-[#5B3DF5]" /> Private per account
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Check className="size-3.5 text-[#5B3DF5]" /> No passwords to remember
-            </span>
-          </div>
+          <p className="mt-7 text-[0.85rem] font-medium leading-relaxed text-brand-ink/60">
+            Private to your account. No password to remember, just a six-digit email
+            code.
+          </p>
         </div>
 
-        <p className="relative text-[0.8rem] text-brand-ink/45">
-          One email code and you're in. Your friends keep their own workspace.
+        <p className="text-[0.8rem] text-brand-ink/50">
+          Your friends keep their own workspace.
         </p>
       </aside>
 
@@ -155,20 +137,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           <div className="gizmo-card p-6 sm:p-8">
             {step === "signIn" ? (
               <>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
-                      Sign in to your workspace
-                    </h2>
-                    <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
-                      Enter your email and we'll send a six-digit code. New here? The same
-                      form creates your account.
-                    </p>
-                  </div>
-                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#F3ECFF] text-[#7C5CFF]">
-                    <Mail className="size-5" />
-                  </span>
-                </div>
+                <h2 className="text-[1.55rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
+                  Sign in to your workspace
+                </h2>
+                <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
+                  Enter your email and we'll send a six-digit code. New here? The same
+                  form creates your account.
+                </p>
 
                 <form onSubmit={handleEmailSubmit} className="mt-6">
                   <label
@@ -249,20 +224,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <ArrowLeft className="size-3.5" /> Change email
                 </button>
 
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-[1.6rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
-                      Check your inbox
-                    </h2>
-                    <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
-                      A six-digit code was sent to{" "}
-                      <span className="font-semibold text-brand-ink">{step.email}</span>.
-                    </p>
-                  </div>
-                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-[#E9FBF3] text-[#12B8A6]">
-                    <Mail className="size-5" />
-                  </span>
-                </div>
+                <h2 className="text-[1.55rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
+                  Check your inbox
+                </h2>
+                <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
+                  A six-digit code was sent to{" "}
+                  <span className="font-semibold text-brand-ink">{step.email}</span>.
+                </p>
 
                 <form onSubmit={handleOtpSubmit} className="mt-6">
                   <input type="hidden" name="email" value={step.email} />

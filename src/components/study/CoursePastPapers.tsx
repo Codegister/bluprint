@@ -112,7 +112,7 @@ export function CoursePastPapers({
   };
 
   return (
-    <section className="mt-4 rounded-[2rem] border border-[#EBD6AB] bg-[#FFFBF2] p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+    <section className="mt-4 rounded-[2rem] border border-border bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#8A5A12]">
@@ -145,7 +145,7 @@ export function CoursePastPapers({
                     "h-8 rounded-full border px-3 text-[0.74rem] font-semibold transition-colors",
                     chosenPaper === undefined
                       ? "border-[#191B27] bg-[#191B27] text-white"
-                      : "border-[#EBD6AB] bg-white text-[#8A5A12] hover:bg-[#FFF3DC]",
+                      : "border-border bg-white text-[#8A5A12] hover:bg-brand-panel",
                   )}
                 >
                   Whole course
@@ -160,7 +160,7 @@ export function CoursePastPapers({
                       "h-8 rounded-full border px-3 text-[0.74rem] font-semibold transition-colors",
                       chosenPaper === group.label
                         ? "border-[#191B27] bg-[#191B27] text-white"
-                        : "border-[#EBD6AB] bg-white text-[#8A5A12] hover:bg-[#FFF3DC]",
+                        : "border-border bg-white text-[#8A5A12] hover:bg-brand-panel",
                     )}
                   >
                     {group.label}
@@ -191,11 +191,11 @@ export function CoursePastPapers({
       </div>
 
       {papers === undefined ? (
-        <div className="mt-5 flex items-center justify-center rounded-2xl border border-dashed border-[#EBD6AB] bg-white/70 px-4 py-8">
+        <div className="mt-5 flex items-center justify-center rounded-2xl border border-dashed border-border bg-background px-4 py-8">
           <Loader2 className="size-4 animate-spin text-muted-foreground" />
         </div>
       ) : list.length === 0 ? (
-        <div className="mt-5 rounded-2xl border border-dashed border-[#EBD6AB] bg-white/70 px-4 py-6 text-center">
+        <div className="mt-5 rounded-2xl border border-dashed border-border bg-background px-4 py-6 text-center">
           <FileText
             className="mx-auto size-6 text-[#B7791F]"
             aria-hidden
@@ -295,7 +295,7 @@ export function CoursePastPapers({
                       onClick={() => void handleRebuild(paper._id)}
                       disabled={rebuildingId === paper._id}
                       title="Writes this paper again with the current question types and marks. Your old answers are cleared."
-                      className="h-8 rounded-full border-[#EBD6AB] bg-[#FFFBF2] px-3 text-[0.76rem] font-semibold text-[#8A5A12] shadow-none hover:bg-[#FFF3DC]"
+                      className="h-8 rounded-full border-border bg-white px-3 text-[0.76rem] font-semibold text-[#8A5A12] shadow-none hover:bg-brand-panel"
                     >
                       {rebuildingId === paper._id ? (
                         <Loader2 className="size-3.5 animate-spin" />
@@ -329,7 +329,7 @@ export function CoursePastPapers({
       )}
 
       <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
-        Original questions written for this specification — not reproduced board
+        Original questions written for this specification, not reproduced board
         papers. Marks and question types follow this subject's current paper
         format; always check the structure with your teacher.
       </p>

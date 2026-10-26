@@ -266,10 +266,7 @@ export default function TimetableBuilder() {
       </Link>
 
       <header className="mt-4">
-        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-[#7C5CFF]">
-          Revision timetable
-        </p>
-        <h1 className="mt-1 font-display text-[1.6rem] font-bold leading-tight text-brand-ink sm:text-[2rem]">
+        <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
           Build a plan you can actually follow
         </h1>
         <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
@@ -294,7 +291,7 @@ export default function TimetableBuilder() {
                   "flex w-full items-center gap-2 rounded-2xl border px-3 py-2 text-left transition-colors",
                   active
                     ? "bg-white shadow-[0_10px_24px_-22px_rgba(22,24,31,0.5)]"
-                    : "border-border bg-white/60 hover:bg-white",
+                    : "border-border bg-white hover:border-brand-pink/40",
                 )}
                 style={
                   active
@@ -349,7 +346,7 @@ export default function TimetableBuilder() {
         <div className="mt-6 space-y-4 pb-10">
           <section
             hidden={step !== 1}
-            className="rounded-[2rem] border border-[#CFEBDD] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+            className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -421,7 +418,7 @@ export default function TimetableBuilder() {
 
           <section
             hidden={step !== 2}
-            className="rounded-[2rem] border border-[#DDD4FB] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+            className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
             <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#6B4EE6]">
               Step 2 of 4
@@ -565,7 +562,7 @@ export default function TimetableBuilder() {
 
           <section
             hidden={step !== 3}
-            className="rounded-[2rem] border border-[#BFDDEF] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+            className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
             <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#1B5C8A]">
               Step 3 of 4
@@ -705,7 +702,7 @@ export default function TimetableBuilder() {
                       >
                         {formatTime(hour * 60)}
                         {hour * 60 + longestSessionMinutes > LATEST_END
-                          ? " — too late for your sessions"
+                          ? ". Too late for your sessions"
                           : ""}
                       </option>
                     ))}
@@ -728,7 +725,7 @@ export default function TimetableBuilder() {
                       >
                         {formatTime(hour * 60)}
                         {hour * 60 + longestSessionMinutes > LATEST_END
-                          ? " — too late for your sessions"
+                          ? ". Too late for your sessions"
                           : ""}
                       </option>
                     ))}
@@ -745,7 +742,7 @@ export default function TimetableBuilder() {
 
           <section
             hidden={step !== 4}
-            className="rounded-[2rem] border border-[#EBD6AB] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+            className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
             <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12]">
               Step 4 of 4
@@ -757,7 +754,7 @@ export default function TimetableBuilder() {
               The plan runs up to the day before your first exam. Bank holidays,
               weekends and school holidays use the day-off time you chose, and
               England's usual school breaks are recognised. If every topic will not
-              fit, revision starts earlier than the date below — Bluprint never
+              fit, revision starts earlier than the date below. Bluprint never
               leaves topics unscheduled.
             </p>
 

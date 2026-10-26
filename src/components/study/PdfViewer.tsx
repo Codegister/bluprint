@@ -19,7 +19,7 @@ GlobalWorkerOptions.workerSrc = workerUrl;
  * becomes a canvas, all of them stacked in one scroll area. Every page of the
  * file is therefore reachable, whatever browser the student uses.
  *
- * Pages are only drawn when they come near the viewport — a 30-page paper
+ * Pages are only drawn when they come near the viewport. A 30-page paper
  * would otherwise allocate tens of megabytes of canvas up front.
  */
 export function PdfViewer({ url, title }: { url: string; title: string }) {
@@ -190,7 +190,7 @@ function PdfPage({
     <figure className="mx-auto w-fit max-w-full">
       <div
         ref={holderRef}
-        className="relative flex min-h-[160px] justify-center overflow-hidden rounded-xl border border-[#E3E4EC] bg-white shadow-[0_10px_30px_-24px_rgba(22,24,31,0.5)]"
+        className="relative flex min-h-[160px] justify-center overflow-hidden rounded-xl border border-border bg-white"
       >
         <canvas
           ref={canvasRef}

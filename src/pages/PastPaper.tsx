@@ -111,7 +111,7 @@ export default function PastPaper() {
             <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#8A5A12]">
               Past paper
             </p>
-            <h1 className="truncate font-display text-[1.55rem] font-bold leading-tight text-brand-ink sm:text-[1.9rem]">
+            <h1 className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
               {paper.title}
             </h1>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
@@ -122,7 +122,7 @@ export default function PastPaper() {
           </div>
         </div>
 
-        <section className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-[#EBD6AB] bg-[#FFFBF2] px-4 py-3 text-[0.78rem] text-muted-foreground">
+        <section className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-[#FFFBF2] px-4 py-3 text-[0.78rem] text-muted-foreground">
           <span>
             <span className="font-semibold text-brand-ink">
               {paper.questionCount}
@@ -157,7 +157,7 @@ export default function PastPaper() {
         </section>
 
         {outdated && (
-          <section className="mt-4 rounded-[2rem] border border-[#EBD6AB] bg-[#FFFBF2] p-5 sm:p-6">
+          <section className="mt-4 rounded-[2rem] border border-border bg-[#FFFBF2] p-5 sm:p-6">
             <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12]">
               Older paper format
             </p>
@@ -166,7 +166,7 @@ export default function PastPaper() {
               was updated
             </h2>
             <p className="mt-2 text-[0.85rem] leading-relaxed text-muted-foreground">
-              Rebuild it to get this subject's current question types and marks —
+              Rebuild it to get this subject's current question types and marks.
               for example 3, 4, 5 and 12-mark Religious Studies questions, or two
               long English Literature essays. Rebuilding replaces this paper's
               questions and clears any answers on it.
@@ -184,7 +184,7 @@ export default function PastPaper() {
         )}
 
         {paper.status === "error" ? (
-          <section className="mt-4 rounded-[2rem] border border-[#F3C9CF] bg-[#FFF7F9] p-6">
+          <section className="mt-4 rounded-[2rem] border border-border bg-[#FFF7F9] p-6">
             <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
               This paper could not be built
             </h2>
@@ -217,7 +217,7 @@ export default function PastPaper() {
               <div className="h-full w-1/3 animate-pulse rounded-full bg-[#B7791F]" />
             </div>
             <p className="mt-4 text-[0.78rem] leading-relaxed text-muted-foreground">
-              This usually takes under a minute. You can leave the page — the paper
+              This usually takes under a minute. You can leave the page. The paper
               keeps building and will be here when you come back.
             </p>
             {details.processingStale && (
@@ -245,7 +245,7 @@ export default function PastPaper() {
 
         <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
           Written from the saved specification for this course and laid out in this
-          subject's paper format — same question types and marks, cover rubric,
+          subject's paper format, with the same question types and marks, cover rubric,
           numbering, mark notation and command words. Published board papers and
           mark schemes are copyrighted, so the questions are original and never
           reproduced from a real paper.
