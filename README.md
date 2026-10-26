@@ -42,7 +42,7 @@ assets.
 
 ### 1. Choose your courses (course pathway)
 
-Open **Choose courses** from the dashboard and choose your qualification first — GCSE, KS3,
+Open **Choose courses** from the course library and choose your qualification first — GCSE, KS3,
 A-Level, IB, AP or Undergraduate. That decides which exam boards and tiers the picker
 offers. Subjects then appear as a single-line list with the common ones at the top and the
 rest alphabetically below, plus a search box for anything further down. Clicking a subject
@@ -69,7 +69,7 @@ starts from the published outline for that exact level, subject and board, so ev
 topic and subtopic in the specification reaches the map,
 then writes a summary, key points and an exam skill for each topic.
 
-Each course gets its own workspace on the dashboard, with topic-level progress. Open any
+Each course gets its own workspace in the course library, with topic-level progress. Open any
 topic and **Study this topic** asks how many sections of the pathway the set should cover
 (one topic, or a run of up to twelve), then creates a normal study set from those topics'
 summaries, key points, and exam skills — a long summary, 20 detail-heavy cards, a
@@ -181,15 +181,18 @@ earned. Four practice papers per course is the cap; remove one to build another.
     English essays, maths calculations, and so on) and marked question by question against
     their own mark schemes. Progress and marks per paper are kept alongside the course.
 
-After signing in, the main screen is the **Home** dashboard. It keeps one primary action,
-**New study set**, for uploading notes, a **Build revision timetable** action for planning
-course topics, and one course action, **Add courses**, for building revision pathways from
-published specifications.
-Below those sit a course table with topic progress and material counts, and a saved-sets
-table with status, due counts, card mastery and last quiz score. The sidebar also links to
-the saved **Revision timetable**. Opening a set gives you five tabs — Summary, Flashcards,
-Quiz, Exam, and Tutor — plus a **Set settings** button for renaming, rebuilding, or deleting
-it. Sets built from a course topic link back to that course.
+After signing in, the main screen is **My sets**, and nothing else. It keeps one primary
+action, **New study set**, a search box, and the saved-set list with status, due counts,
+card mastery and last quiz score. **My courses** is a separate screen with topic progress,
+material counts and **Add courses**; the saved **Revision timetable** and the **AI tutor**
+each have their own sidebar destination. The tutor's first screen asks which course or set
+to discuss, so it never sits in the middle of the set library.
+
+Each course opens on its **Pathway**, and **Past papers**, **Topic papers** and **Study
+sets** are separate screens rather than tabs sharing one page. A study set opens on its
+**Summary**, with three clear ways onward — **Flashcards**, **Quiz** and **Exam practice** —
+each at its own URL, plus **Set settings** for renaming, rebuilding, or deleting the set.
+Sets built from a course topic link back to that course.
 
 ## Assumptions
 
@@ -625,13 +628,15 @@ src/
   pages/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
-    Dashboard.tsx        primary actions, course table, and saved study sets
+    Dashboard.tsx        saved study sets, search, and the new-set action
+    Courses.tsx          course library with pathway progress
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
-    Course.tsx           one course workspace: units, topics, progress, topic sets,
-                         and saved practice papers
+    Course.tsx           course pathway, past papers, topic papers, and study sets,
+                         each at its own URL
     PastPaper.tsx        one saved practice paper: its cover, build progress, and
                          AI-marked questions
-    StudySet.tsx         set detail, compile progress, and the five study tabs
+    StudySet.tsx         set overview and summary, plus flashcards, quiz and exam
+                         practice as separate screens
     TimetableBuilder.tsx subjects, session length, one paper answer, budgets, exam dates
     Timetable.tsx        one day at a time: blocked periods, done ticks, catch-up
   components/

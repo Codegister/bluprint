@@ -1,47 +1,42 @@
 import { AppShell } from "@/components/AppShell";
 import { Mascot } from "@/components/Mascot";
 import { SkeletonStudySetPage } from "@/components/Skeletons";
-import { EASE, enter } from "@/components/motion/Motion";
+import { enter } from "@/components/motion/Motion";
 import { ExamPractice } from "@/components/study/ExamPractice";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { QuizRunner } from "@/components/study/QuizRunner";
 import { SetSettingsDialog } from "@/components/study/SetSettingsDialog";
 import { Button } from "@/components/ui/button";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
 import { useAction, useQuery } from "convex/react";
-import { motion, type MotionProps } from "framer-motion";
-import { Loader2, RotateCcw } from "lucide-react";
+import { motion } from "framer-motion";
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Layers3,
+  Loader2,
+  PenLine,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { Sparkles } from "lucide-react";
 
-type Tab = "summary" | "cards" | "quiz" | "exam" | "tutor";
+/** One screen per study mode. The overview is the set's summary. */
+type SetSection = "summary" | "cards" | "quiz" | "exam";
 
-/** Shared entrance for a tab panel. */
-const panel: MotionProps = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.3, ease: EASE },
+const SECTION_LABEL: Record<SetSection, string> = {
+  summary: "Summary",
+  cards: "Flashcards",
+  quiz: "Quiz",
+  exam: "Exam practice",
 };
-
-const tabItems: Array<{ value: Tab; label: string }> = [
-  { value: "summary", label: "Summary" },
-  { value: "cards", label: "Flashcards" },
-  { value: "quiz", label: "Quiz" },
-  { value: "exam", label: "Exam" },
-  { value: "tutor", label: "Tutor" },
-];
 
 function MissingCard() {
   return (
@@ -60,7 +55,7 @@ function MissingCard() {
         asChild
         className="mt-5 h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
       >
-        <Link to="/dashboard">Back to home</Link>
+        <Link to="/dashboard">Back to my sets</Link>
       </Button>
     </div>
   );
@@ -258,42 +253,41 @@ function ErrorPanel({
   return (
     <div className="mt-6 rounded-[2rem] border border-border bg-card p-6 sm:p-7">
       <div>
-        <div>
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[#C23B49]">
-            Build failed
-          </p>
-          <h2 className="mt-1.5 font-display text-[1.4rem] font-bold text-brand-ink">
-            That run stopped early
-          </h2>
-          <p className="mt-2 whitespace-pre-wrap text-[0.9rem] leading-relaxed text-muted-foreground">
-            {set.errorMessage ??
-              "NVIDIA could not finish this set. Your source is still saved, so you can rebuild it whenever you like."}
-          </p>
+        <p className="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-[#C23B49]">
+          Build failed
+        </p>
+        <h2 className="mt-1.5 font-display text-[1.4rem] font-bold text-brand-ink">
+          That run stopped early
+        </h2>
+        <p className="mt-2 whitespace-pre-wrap text-[0.9rem] leading-relaxed text-muted-foreground">
+          {set.errorMessage ??
+            "NVIDIA could not finish this set. Your source is still saved, so you can rebuild it whenever you like."}
+        </p>
 
-          <Button
-            onClick={onRetry}
-            disabled={retrying}
-            className="mt-4 h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
-          >
-            {retrying ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <RotateCcw className="size-4" />
-            )}
-            Rebuild set
-          </Button>
+        <Button
+          onClick={onRetry}
+          disabled={retrying}
+          className="mt-4 h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
+        >
+          {retrying ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <RotateCcw className="size-4" />
+          )}
+          Rebuild set
+        </Button>
 
-          <p className="mt-3 text-[0.78rem] text-muted-foreground">
-            If NVIDIA is rate-limiting, wait a minute before rebuilding. Your upload
-            is saved.
-          </p>
-        </div>
+        <p className="mt-3 text-[0.78rem] text-muted-foreground">
+          If NVIDIA is rate-limiting, wait a minute before rebuilding. Your upload
+          is saved.
+        </p>
       </div>
     </div>
   );
 }
 
-function SummaryTab({
+/** The summary and its source material, which is the set overview's focus. */
+function SummaryView({
   set,
   sourceImages,
 }: {
@@ -400,8 +394,71 @@ function SummaryTab({
   );
 }
 
+/** Three destinations, each a whole screen of its own. */
+function StudyActions({ setId, set }: { setId: string; set: Doc<"studySets"> }) {
+  const mastery = percent(set.knownCount, set.cardCount);
+  const items = [
+    {
+      to: `/sets/${setId}/cards`,
+      label: "Flashcards",
+      count: set.cardCount,
+      note: `${mastery}% known · spaced review`,
+      icon: Layers3,
+      tint: "bg-[#EDE8FF] text-[#6B4BFF]",
+    },
+    {
+      to: `/sets/${setId}/quiz`,
+      label: "Quiz",
+      count: set.quizCount,
+      note: set.lastQuizTotal
+        ? `Last score ${set.lastQuizScore}/${set.lastQuizTotal}`
+        : "Multiple choice, with explanations",
+      icon: CheckCircle2,
+      tint: "bg-[#E6F7EF] text-[#128A4C]",
+    },
+    {
+      to: `/sets/${setId}/exam`,
+      label: "Exam practice",
+      count: set.examCount,
+      note: "Written answers, marked with feedback",
+      icon: PenLine,
+      tint: "bg-[#FFF1DE] text-[#B4720E]",
+    },
+  ] as const;
+
+  return (
+    <section className="grid gap-2.5 sm:grid-cols-3">
+      {items.map((item) => (
+        <Link
+          key={item.label}
+          to={item.to}
+          className="group flex items-center gap-3 rounded-2xl border border-border bg-white p-4 transition-colors hover:border-[#D8CCFF] hover:bg-[#FBF9FF]"
+        >
+          <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.tint}`}>
+            <item.icon className="size-[18px]" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-baseline gap-1.5">
+              <span className="font-display text-[0.95rem] font-bold text-brand-ink">
+                {item.label}
+              </span>
+              <span className="text-[0.72rem] font-semibold tabular-nums text-muted-foreground">
+                {item.count}
+              </span>
+            </span>
+            <span className="mt-0.5 block truncate text-[0.72rem] text-muted-foreground">
+              {item.note}
+            </span>
+          </span>
+          <ArrowRight className="size-4 shrink-0 text-brand-ink/30 transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      ))}
+    </section>
+  );
+}
+
 export default function StudySet() {
-  const { setId } = useParams<{ setId: string }>();
+  const { setId, section } = useParams<{ setId: string; section?: string }>();
   const navigate = useNavigate();
   const validId = Boolean(setId && /^[a-z0-9]{20,40}$/i.test(setId));
   const details = useQuery(
@@ -409,25 +466,19 @@ export default function StudySet() {
     validId ? { setId: setId as Id<"studySets"> } : "skip",
   );
   const processSet = useAction(api.ai.processStudySet);
-  // `?tab=exam` lets a course's topic paper open straight on its questions.
+  // Older links used `?tab=exam`; keep them working while every new link points
+  // at the mode's own screen.
   const [searchParams] = useSearchParams();
-  const requestedTab = searchParams.get("tab");
-  const [tab, setTab] = useState<Tab>(
-    requestedTab === "cards" ||
-      requestedTab === "quiz" ||
-      requestedTab === "exam" ||
-      requestedTab === "tutor"
-      ? requestedTab
-      : "summary",
-  );
+  const legacyTab = searchParams.get("tab");
+  const activeSection: SetSection =
+    section === "cards" || section === "quiz" || section === "exam"
+      ? section
+      : legacyTab === "cards" || legacyTab === "quiz" || legacyTab === "exam"
+        ? legacyTab
+        : "summary";
   const [retrying, setRetrying] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const triggered = useRef<string | null>(null);
-
-  const openTutor = () => {
-    if (!validId) return;
-    navigate(`/tutor?set=${setId}`);
-  };
 
   useEffect(() => {
     if (!details || details.set.status !== "queued") return;
@@ -451,13 +502,17 @@ export default function StudySet() {
     }
   };
 
+  const openTutor = () => {
+    if (!validId) return;
+    navigate(`/tutor?set=${setId}`);
+  };
+
   const body = (() => {
     if (!validId) return <MissingCard />;
     if (details === undefined) return <SkeletonStudySetPage />;
     if (details === null) return <MissingCard />;
 
     const set = details.set;
-    const mastery = percent(set.knownCount, set.cardCount);
     const qualification = qualificationLabel(set);
     // A build can stop at the material's practical ceiling; say so rather than
     // leaving a shorter deck looking like the requested one.
@@ -468,26 +523,49 @@ export default function StudySet() {
         ["exam-style questions", set.targetExamCount, set.examCount],
       ] as Array<[string, number | undefined, number]>
     ).filter(([, asked, built]) => asked !== undefined && asked > built);
+    const backTo = set.courseId ? `/courses/${set.courseId}` : "/dashboard";
+    const backLabel = set.courseId ? "Back to course" : "Back to my sets";
+    const isMode = activeSection !== "summary";
 
     return (
       <>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            to={set.courseId ? `/courses/${set.courseId}` : "/dashboard"}
-            className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
+            to={isMode ? `/sets/${set._id}` : backTo}
+            className="inline-flex items-center gap-1.5 text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
           >
-            {set.courseId ? "Back to course" : "Back to home"}
+            <ArrowLeft className="size-3.5" aria-hidden />
+            {isMode ? "Back to set" : backLabel}
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSettingsOpen(true)}
-            className="ml-auto h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-          >
-            Set settings
-          </Button>
+          {!isMode && (
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openTutor}
+                className="h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+              >
+                <Sparkles className="size-3.5 text-[#C43F69]" aria-hidden />
+                Ask the tutor
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSettingsOpen(true)}
+                className="h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+              >
+                Set settings
+              </Button>
+            </div>
+          )}
         </div>
+
         <div className="chrome-plate mt-2 min-w-0 rounded-[1.6rem] px-4 py-4">
+          {isMode && (
+            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-[#6B4EE6]">
+              {SECTION_LABEL[activeSection]}
+            </p>
+          )}
           <motion.h1
             className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
             {...enter(0.04)}
@@ -519,10 +597,34 @@ export default function StudySet() {
             onRetry={retry}
             retrying={retrying}
           />
+        ) : isMode ? (
+          <div className="mt-6">
+            {activeSection === "cards" && (
+              <FlashcardReview
+                cards={details.cards}
+                onTakeQuiz={() => navigate(`/sets/${set._id}/quiz`)}
+              />
+            )}
+            {activeSection === "quiz" && (
+              <QuizRunner
+                quiz={details.quiz}
+                setId={set._id}
+                qualification={qualification}
+                onReviewCards={() => navigate(`/sets/${set._id}/cards`)}
+              />
+            )}
+            {activeSection === "exam" && (
+              <ExamPractice
+                exams={details.exams}
+                setId={set._id}
+                qualification={qualification}
+              />
+            )}
+          </div>
         ) : (
           <>
             <motion.div
-              className="rise-stagger mt-6 flex flex-wrap items-center gap-2.5"
+              className="mt-5 flex flex-wrap items-center gap-2"
               {...enter(0.12)}
             >
               {qualification && (
@@ -531,18 +633,13 @@ export default function StudySet() {
                 </span>
               )}
               <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
-                {mastery}% of cards known
+                {percent(set.knownCount, set.cardCount)}% of cards known
               </span>
               {set.lastStudiedAt && (
                 <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
                   Studied {relativeDate(set.lastStudiedAt)}
                 </span>
               )}
-              {set.lastQuizTotal ? (
-                <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
-                  Last quiz {set.lastQuizScore}/{set.lastQuizTotal}
-                </span>
-              ) : null}
             </motion.div>
 
             {(set.generationNote || shortfall.length > 0) && (
@@ -564,85 +661,13 @@ export default function StudySet() {
               </div>
             )}
 
-            <Tabs
-              value={tab}
-              onValueChange={(value) => setTab(value as Tab)}
-              className="mt-5 gap-4"
-            >
-              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0 sm:w-auto">
-                {tabItems.map((item) => {
-                  const count =
-                    item.value === "cards"
-                      ? set.cardCount
-                      : item.value === "quiz"
-                        ? set.quizCount
-                        : item.value === "exam"
-                          ? set.examCount
-                          : null;
-                  return (
-                    <TabsTrigger
-                      key={item.value}
-                      value={item.value}
-                      className="h-10 gap-2 rounded-full border border-border bg-white px-4 text-[0.85rem] font-semibold text-brand-ink/70 shadow-none transition-colors data-[state=active]:border-brand-ink data-[state=active]:bg-brand-ink data-[state=active]:text-brand-cream data-[state=active]:shadow-none"
-                    >
-                      {item.label}
-                      {count !== null && (
-                        <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
-                          {count}
-                        </span>
-                      )}
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
+            <div className="mt-5">
+              <StudyActions setId={set._id} set={set} />
+            </div>
 
-              {/* Each panel fades up as it mounts, so switching tabs feels like
-                  a change of page rather than a block of content appearing. */}
-              <TabsContent value="summary" className="mt-1">
-                <motion.div {...panel}>
-                  <SummaryTab set={set} sourceImages={details.sourceImages} />
-                </motion.div>
-              </TabsContent>
-              <TabsContent value="cards" className="mt-1">
-                <motion.div {...panel}>
-                  <FlashcardReview cards={details.cards} onTakeQuiz={() => setTab("quiz")} />
-                </motion.div>
-              </TabsContent>
-              <TabsContent value="quiz" className="mt-1">
-                <motion.div {...panel}>
-                  <QuizRunner
-                    quiz={details.quiz}
-                    setId={set._id}
-                    qualification={qualification}
-                    onReviewCards={() => setTab("cards")}
-                  />
-                </motion.div>
-              </TabsContent>
-              <TabsContent value="exam" className="mt-1">
-                <motion.div {...panel}>
-                  <ExamPractice
-                    exams={details.exams}
-                    setId={set._id}
-                    qualification={qualification}
-                  />
-                </motion.div>
-              </TabsContent>
-              <TabsContent value="tutor" className="mt-1">
-                <motion.div {...panel} className="flex flex-col items-start gap-3">
-                  <p className="text-[0.82rem] font-medium text-brand-ink/80">
-                    Ask the tutor about this set.
-                  </p>
-                  <Button
-                    type="button"
-                    onClick={openTutor}
-                    className="h-9 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
-                  >
-                    <Sparkles className="size-3.5" aria-hidden />
-                    Open tutor in full screen
-                  </Button>
-                </motion.div>
-              </TabsContent>
-            </Tabs>
+            <div className="mt-6">
+              <SummaryView set={set} sourceImages={details.sourceImages} />
+            </div>
           </>
         )}
 

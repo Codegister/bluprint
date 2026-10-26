@@ -22,6 +22,7 @@ const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const CourseSetup = lazy(() => import("./pages/CourseSetup.tsx"));
+const CoursesPage = lazy(() => import("./pages/Courses.tsx"));
 const CoursePage = lazy(() => import("./pages/Course.tsx"));
 const PastPaperPage = lazy(() => import("./pages/PastPaper.tsx"));
 const StudySet = lazy(() => import("./pages/StudySet.tsx"));
@@ -226,7 +227,20 @@ createRoot(document.getElementById("root")!).render(
                 }
               />
               <Route
-                path="/courses/:courseId"
+                path="/courses"
+                element={
+                  <RequireAuth
+                    title="Sign in to see your courses"
+                    description="Course pathways are private to the account that created them."
+                  >
+                    <CoursesPage />
+                  </RequireAuth>
+                }
+              />
+              {/* Pathway, past papers, topic papers and study sets are separate
+                  screens, so each one opens with a single job in view. */}
+              <Route
+                path="/courses/:courseId/:section?"
                 element={
                   <RequireAuth
                     title="Sign in to open this course"
@@ -247,8 +261,9 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
+              {/* The set overview and each study mode are separate screens. */}
               <Route
-                path="/sets/:setId"
+                path="/sets/:setId/:section?"
                 element={
                   <RequireAuth
                     title="Sign in to open this study set"

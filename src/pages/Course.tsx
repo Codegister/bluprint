@@ -7,7 +7,6 @@ import {
   PathwaySectionsDialog,
   type SectionOption,
 } from "@/components/study/PathwaySectionsDialog";
-import { TutorChat } from "@/components/study/TutorChat";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,12 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Counter, Meter, enter, reveal } from "@/components/motion/Motion";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
@@ -54,13 +48,18 @@ const PATH_COLORS = [
   { hex: "#2B7FB8", soft: "#EAF5FB", ring: "#BFDDEF" },
 ];
 
-/** The course page is split by what the student is doing, not by data type. */
-type CourseTab = "pathway" | "tutor" | "papers" | "topic-papers" | "sets";
+/** Each course destination is its own screen, so no screen carries the others. */
+type CourseSection = "pathway" | "papers" | "topic-papers" | "sets";
 
-const COURSE_TABS: CourseTab[] = ["pathway", "tutor", "papers", "topic-papers", "sets"];
+const COURSE_SECTIONS: Array<{ value: CourseSection; label: string }> = [
+  { value: "pathway", label: "Pathway" },
+  { value: "papers", label: "Past papers" },
+  { value: "topic-papers", label: "Topic papers" },
+  { value: "sets", label: "Study sets" },
+];
 
-const TAB_TRIGGER_CLASS =
-  "h-10 gap-2 rounded-full border border-border bg-white px-4 text-[0.85rem] font-semibold text-brand-ink/70 shadow-none transition-colors data-[state=active]:border-brand-ink data-[state=active]:bg-brand-ink data-[state=active]:text-brand-cream data-[state=active]:shadow-none";
+const SECTION_LINK_CLASS =
+  "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[0.8rem] font-semibold transition-colors";
 
 /** Octagon, so each node reads as a cut gem rather than a plain circle. */
 const NODE_SHAPE =
@@ -140,7 +139,7 @@ function MissingCard() {
         asChild
         className="mt-5 h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
       >
-        <Link to="/dashboard">Back to home</Link>
+        <Link to="/courses">Back to my courses</Link>
       </Button>
     </div>
   );
@@ -216,19 +215,22 @@ function RecoveringPanel({ course }: { course: Doc<"courses"> }) {
 }
 
 export default function Course() {
-  const { courseId } = useParams<{ courseId: string }>();
+  const { courseId, section } = useParams<{ courseId: string; section?: string }>();
   const navigate = useNavigate();
   const validId = Boolean(courseId && /^[a-z0-9]{20,40}$/i.test(courseId));
-  // The open tab lives in the URL, so a link from the dashboard or a topic
-  // paper opens the right section and a reload keeps it.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedTab = searchParams.get("tab");
-  const tab: CourseTab = COURSE_TABS.includes(requestedTab as CourseTab)
-    ? (requestedTab as CourseTab)
-    : "pathway";
-  const selectTab = (value: string) => {
-    setSearchParams(value === "pathway" ? {} : { tab: value }, { replace: true });
-  };
+  // Every course destination has its own URL. Older `?tab=` links still open
+  // the matching screen, but all new navigation uses the path.
+  const [searchParams] = useSearchParams();
+  const legacyTab = searchParams.get("tab");
+  const isSection = (value: string | null | undefined): value is CourseSection =>
+    value === "papers" || value === "topic-papers" || value === "sets";
+  const activeSection: CourseSection = isSection(section)
+    ? section
+    : isSection(legacyTab)
+      ? legacyTab
+      : "pathway";
+  const sectionPath = (value: CourseSection) =>
+    value === "pathway" ? `/courses/${courseId}` : `/courses/${courseId}/${value}`;
   const details = useQuery(
     api.courses.getDetails,
     validId ? { courseId: courseId as Id<"courses"> } : "skip",
@@ -429,7 +431,7 @@ export default function Course() {
     try {
       await removeCourse({ courseId: courseId as Id<"courses"> });
       toast.success("Course removed. Your study sets are still in the library.");
-      navigate("/dashboard");
+      navigate("/courses");
     } catch (error) {
       toast.error(readableError(error, "Could not remove that course."));
     } finally {
@@ -460,17 +462,20 @@ export default function Course() {
     // A topic paper is a topic's own exam-style questions, saved with its study
     // set. The tab only exists when the course has at least one.
     const topicPapers = sets.filter((set) => set.examCount > 0);
-    const activeTab: CourseTab =
-      tab === "topic-papers" && topicPapers.length === 0 ? "pathway" : tab;
+    // A course with no exam-style topic questions has no topic-papers screen.
+    const currentSection: CourseSection =
+      activeSection === "topic-papers" && topicPapers.length === 0
+        ? "pathway"
+        : activeSection;
 
     return (
       <>
         <div className="chrome-plate flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4">
           <Link
-            to="/dashboard"
+            to="/courses"
             className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
           >
-            Back to home
+            All courses
           </Link>
           <div className="min-w-0 flex-1">
             <motion.h1
@@ -491,14 +496,14 @@ export default function Course() {
             {pathway && (
               <Button
                 type="button"
-                onClick={() => selectTab("tutor")}
+                onClick={() => openTutor()}
                 className="h-9 rounded-full bg-[#EDE8FF] px-4 text-[0.8rem] font-semibold text-[#5130D8] hover:bg-[#E2DBFF]"
               >
                 <Sparkles className="size-3.5" aria-hidden />
                 Ask the tutor
               </Button>
             )}
-            {course.status === "ready" && (
+            {currentSection === "pathway" && course.status === "ready" && (
               <Button
                 variant="outline"
                 onClick={() => void handleRetry()}
@@ -509,13 +514,15 @@ export default function Course() {
                 Rebuild pathway
               </Button>
             )}
-            <button
-              type="button"
-              onClick={() => setConfirmingDelete(true)}
-              className="px-2 text-[0.78rem] font-semibold text-destructive underline-offset-2 hover:underline"
-            >
-              Remove
-            </button>
+            {currentSection === "pathway" && (
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(true)}
+                className="px-2 text-[0.78rem] font-semibold text-destructive underline-offset-2 hover:underline"
+              >
+                Remove
+              </button>
+            )}
           </div>
         </div>
 
@@ -525,6 +532,7 @@ export default function Course() {
           <BuildingPanel course={course} stale={details.processingStale} />
         ) : (
           <>
+            {currentSection === "pathway" && (
             <motion.section
               className="mt-6 grid overflow-hidden rounded-3xl border border-border bg-white sm:grid-cols-3"
               {...enter(0.14, 12)}
@@ -576,37 +584,47 @@ export default function Course() {
                 </p>
               </div>
             </motion.section>
+            )}
 
-            <Tabs value={activeTab} onValueChange={selectTab} className="mt-5 gap-4">
-              <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0">
-                <TabsTrigger value="pathway" className={TAB_TRIGGER_CLASS}>
-                  Pathway
-                </TabsTrigger>
-                <TabsTrigger value="tutor" className={TAB_TRIGGER_CLASS}>
-                  AI tutor
-                </TabsTrigger>
-                <TabsTrigger value="papers" className={TAB_TRIGGER_CLASS}>
-                  Past papers
-                </TabsTrigger>
-                {topicPapers.length > 0 && (
-                  <TabsTrigger value="topic-papers" className={TAB_TRIGGER_CLASS}>
-                    Topic papers
-                    <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
-                      {topicPapers.length}
-                    </span>
-                  </TabsTrigger>
-                )}
-                <TabsTrigger value="sets" className={TAB_TRIGGER_CLASS}>
-                  Study sets
-                  <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
-                    {sets.length}
-                  </span>
-                </TabsTrigger>
-              </TabsList>
+            <nav
+              aria-label="Course sections"
+              className="mt-5 flex flex-wrap gap-1.5"
+            >
+              {COURSE_SECTIONS.filter(
+                (item) => item.value !== "topic-papers" || topicPapers.length > 0,
+              ).map((item) => {
+                const active = currentSection === item.value;
+                return (
+                  <Link
+                    key={item.value}
+                    to={sectionPath(item.value)}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      SECTION_LINK_CLASS,
+                      active
+                        ? "border-brand-ink bg-brand-ink text-brand-cream"
+                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                    )}
+                  >
+                    {item.label}
+                    {item.value === "topic-papers" && (
+                      <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
+                        {topicPapers.length}
+                      </span>
+                    )}
+                    {item.value === "sets" && (
+                      <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
+                        {sets.length}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
 
-              <TabsContent value="pathway" className="mt-1">
+            {currentSection === "pathway" && (<>
                 <motion.section
-                  className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+                  className="mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
                   {...reveal()}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -985,17 +1003,9 @@ export default function Course() {
                   Progress updated {relativeDate(course.updatedAt)} · last studied{" "}
                   {course.lastStudiedAt ? relativeDate(course.lastStudiedAt) : "not yet"}
                 </p>
-              </TabsContent>
+            </>)}
 
-              <TabsContent value="tutor" className="mt-1">
-                <TutorChat
-                  scope={{ kind: "course", courseId: course._id }}
-                  title={course.subject}
-                  qualification={courseSubtitle(course)}
-                />
-              </TabsContent>
-
-              <TabsContent value="papers" className="mt-1">
+            {currentSection === "papers" && (<>
                 <CoursePastPapers
                   courseId={course._id}
                   formatId={buildPaperBlueprint(course).id}
@@ -1007,10 +1017,9 @@ export default function Course() {
                   courseId={course._id}
                   enabled={Boolean(pathway.sourceUrl)}
                 />
-              </TabsContent>
+            </>)}
 
-              {topicPapers.length > 0 && (
-                <TabsContent value="topic-papers" className="mt-1">
+            {currentSection === "topic-papers" && topicPapers.length > 0 && (<>
                   <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1054,7 +1063,7 @@ export default function Course() {
                             variant="outline"
                             className="h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.76rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                           >
-                            <Link to={`/sets/${set._id}?tab=exam`}>
+                            <Link to={`/sets/${set._id}/exam`}>
                               Open topic paper
                             </Link>
                           </Button>
@@ -1067,10 +1076,9 @@ export default function Course() {
                       the set, so a paper reads the same every time.
                     </p>
                   </section>
-                </TabsContent>
-              )}
+            </>)}
 
-              <TabsContent value="sets" className="mt-1">
+            {currentSection === "sets" && (<>
                 <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -1101,12 +1109,11 @@ export default function Course() {
                         to build the first set for this course.
                       </p>
                       <Button
-                        type="button"
+                        asChild
                         variant="outline"
-                        onClick={() => selectTab("pathway")}
                         className="mt-3 h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                       >
-                        Go to pathway
+                        <Link to={`/courses/${course._id}`}>Go to pathway</Link>
                       </Button>
                     </div>
                   ) : (
@@ -1179,8 +1186,7 @@ export default function Course() {
                     </ul>
                   )}
                 </section>
-              </TabsContent>
-            </Tabs>
+            </>)}
           </>
         )}
 

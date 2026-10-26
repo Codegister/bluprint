@@ -675,7 +675,7 @@ export default function Timetable() {
       navigate(
         session.paperId
           ? `/papers/${session.paperId}`
-          : `/courses/${session.courseId}`,
+          : `/courses/${session.courseId}/papers`,
       );
       return;
     }

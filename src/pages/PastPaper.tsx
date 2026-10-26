@@ -92,10 +92,10 @@ export default function PastPaper() {
       <>
         <div className="chrome-plate flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4">
           <Link
-            to={course ? `/courses/${course._id}` : "/dashboard"}
+            to={course ? `/courses/${course._id}/papers` : "/dashboard"}
             className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
           >
-            {course ? `Back to ${course.subject}` : "Back to home"}
+            {course ? `Back to ${course.subject} papers` : "Back to my sets"}
           </Link>
           <div className="min-w-0 flex-1">
             <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#8A5A12]">

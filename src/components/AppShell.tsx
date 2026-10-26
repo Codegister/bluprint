@@ -20,7 +20,6 @@ import {
   CalendarDays,
   Flame,
   GraduationCap,
-  Home,
   Layers3,
   Menu,
   Sparkles,
@@ -37,22 +36,14 @@ import { toast } from "sonner";
 const navItems = [
   {
     to: "/dashboard",
-    label: "Home",
-    icon: Home,
-    active: "bg-[#F1ECFF] text-[#4B2BD6]",
-    tile: "bg-[#7C5CFF] text-white",
-    soft: "bg-[#EDE8FF] text-[#6B4BFF]",
+    label: "My sets",
+    icon: Layers3,
+    active: "bg-[#FFF3E3] text-[#96560C]",
+    tile: "bg-[#F0A03C] text-white",
+    soft: "bg-[#FFF1DE] text-[#B4720E]",
   },
   {
-    to: "/dashboard#tutor",
-    label: "AI tutor",
-    icon: Sparkles,
-    active: "bg-[#FDEFF4] text-[#A83458]",
-    tile: "bg-[#D9577E] text-white",
-    soft: "bg-[#FFE7F0] text-[#C43F69]",
-  },
-  {
-    to: "/dashboard#courses",
+    to: "/courses",
     label: "My courses",
     icon: GraduationCap,
     active: "bg-[#E6F9F1] text-[#0C6B4C]",
@@ -60,12 +51,12 @@ const navItems = [
     soft: "bg-[#E6F7EF] text-[#128A4C]",
   },
   {
-    to: "/dashboard#sets",
-    label: "My sets",
-    icon: Layers3,
-    active: "bg-[#FFF3E3] text-[#96560C]",
-    tile: "bg-[#F0A03C] text-white",
-    soft: "bg-[#FFF1DE] text-[#B4720E]",
+    to: "/tutor",
+    label: "AI tutor",
+    icon: Sparkles,
+    active: "bg-[#FDEFF4] text-[#A83458]",
+    tile: "bg-[#D9577E] text-white",
+    soft: "bg-[#FFE7F0] text-[#C43F69]",
   },
   {
     to: "/timetable",
@@ -192,14 +183,9 @@ function Sidebar({
         {navItems.map((item) => {
           const active =
             item.to === "/dashboard"
-              ? location.pathname === "/dashboard" && !location.hash
-              : item.to === "/dashboard#tutor"
-                ? location.pathname === "/dashboard" && location.hash === "#tutor"
-                : item.to === "/dashboard#courses"
-                  ? location.pathname.startsWith("/courses")
-                  : item.to === "/dashboard#sets"
-                    ? location.pathname.startsWith("/sets/")
-                    : location.pathname.startsWith("/timetable");
+              ? location.pathname === "/dashboard" ||
+                location.pathname.startsWith("/sets/")
+              : location.pathname.startsWith(item.to);
           const Icon = item.icon;
           return (
             <Link
@@ -276,7 +262,7 @@ function Sidebar({
               to={`/sets/${deck._id}`}
               title={deck.title}
               due={deck.dueCount}
-              active={location.pathname === `/sets/${deck._id}`}
+              active={location.pathname.startsWith(`/sets/${deck._id}`)}
               onNavigate={onNavigate}
             />
           ))

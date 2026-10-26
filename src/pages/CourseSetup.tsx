@@ -628,13 +628,13 @@ export default function CourseSetup() {
       });
 
       if (result.queued === 0) {
-        toast.info("Those courses are already on your dashboard.");
+        toast.info("Those courses are already in your course list.");
       } else {
         toast.success(
           `${result.queued} pathway${result.queued === 1 ? "" : "s"} queued. Bluprint is mapping each specification in the background.`,
         );
       }
-      navigate("/dashboard");
+      navigate("/courses");
     } catch (buildError) {
       const message = readableError(
         buildError,
@@ -654,11 +654,11 @@ export default function CourseSetup() {
   return (
     <AppShell>
       <Link
-        to="/dashboard"
+        to="/courses"
         className="inline-flex items-center gap-1 text-[0.78rem] font-semibold text-muted-foreground transition-colors hover:text-brand-ink"
       >
         <X className="size-3.5 rotate-45" aria-hidden />
-        Back to home
+        All courses
       </Link>
 
       <div className="chrome-plate mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2 rounded-[1.6rem] px-5 py-5">
