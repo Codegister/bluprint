@@ -6,8 +6,8 @@
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#dfe5ec" />
-  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#eef2f6" />
+  <meta name="color-scheme" content="light dark" />
   <meta
     name="description"
     content="Bluprint turns your notes into summaries, flashcards, quizzes and AI-marked exam questions."
@@ -20,10 +20,25 @@
   />
   <title>Bluprint: notes in, revision out</title>
   <!--
-    Bluprint ships one fixed theme (chrome metal). No theme class is applied
-    here, and nothing reads an OS dark-mode preference, so the first paint and
-    every later paint are the same high-contrast palette.
+    Apply the stored theme before React mounts so the first paint is already
+    light or dark. Until the student picks a side, the OS preference wins.
+    ThemeProvider in src/components/ThemeProvider.tsx owns every later change.
   -->
+  <script>
+    (function () {
+      try {
+        var stored = window.localStorage.getItem("bluprint.theme");
+        var dark =
+          stored === "dark" ||
+          (stored !== "light" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      } catch (error) {
+        /* Storage can be blocked; the light sheet is the safe default. */
+      }
+    })();
+  </script>
   <script type="module" src="/src/vly-runtime.ts"></script>
 </head>
 

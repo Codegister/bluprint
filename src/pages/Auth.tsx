@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Mascot } from "@/components/Mascot";
 import { EASE, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
@@ -103,6 +104,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       <aside className="chrome-rail relative hidden flex-col justify-between overflow-hidden border-r border-border p-10 lg:flex xl:p-14">
         <motion.div className="relative flex items-center justify-between gap-3" {...enter(0.05)}>
           <Brand />
+          <ThemeToggle />
         </motion.div>
 
         <div className="relative flex flex-col items-start">
@@ -161,6 +163,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               >
                 ← Home
               </Link>
+              <ThemeToggle />
             </div>
           </div>
 

@@ -72,6 +72,10 @@ export default function TutorPage() {
   const setId = searchParams.get("set");
   const courseId = searchParams.get("course");
   const unitTitle = searchParams.get("unit");
+  // The dashboard's tutor panel hands its question over in the URL. It is put
+  // into the composer once a scope is chosen, so the student can edit it before
+  // sending rather than firing a question at the wrong material.
+  const questionParam = (searchParams.get("q") ?? "").trim();
 
   const validSetId = Boolean(setId && /^[a-z0-9]{20,40}$/i.test(setId));
   const validCourseId = Boolean(courseId && /^[a-z0-9]{20,40}$/i.test(courseId));
@@ -115,7 +119,7 @@ export default function TutorPage() {
   );
   const effortLabels = aiStatus?.tutorEfforts ?? ["Low", "Medium", "Max Effort"];
 
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(questionParam);
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +199,8 @@ export default function TutorPage() {
 
   // No scope chosen yet: this screen has one job, choosing what to ask about.
   if (!scoped) {
+    // Keep the dashboard's question attached to whichever scope is chosen next.
+    const qSuffix = questionParam ? `&q=${encodeURIComponent(questionParam)}` : "";
     const readyCourses = (myCourses ?? []).filter(
       (course) => course.status === "ready",
     );
@@ -221,6 +227,12 @@ export default function TutorPage() {
               to ask about one piece of material. Answers stay grounded in what
               you choose.
             </p>
+            {questionParam && (
+              <p className="mx-auto mt-3 max-w-md rounded-2xl border border-border bg-brand-panel px-3 py-2 text-[0.78rem] leading-relaxed text-brand-ink/75">
+                “{questionParam}” is ready — choose a course or set below and it
+                will be waiting in the prompt.
+              </p>
+            )}
           </motion.header>
 
           <section className="mt-6">
@@ -253,7 +265,7 @@ export default function TutorPage() {
                 readyCourses.map((course) => (
                   <Link
                     key={course._id}
-                    to={`/tutor?course=${course._id}`}
+                    to={`/tutor?course=${course._id}${qSuffix}`}
                     className="group flex items-center gap-3 border-b border-border/70 px-4 py-4 last:border-b-0 transition-colors hover:bg-[#F7FCFA] sm:px-5"
                   >
                     <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#E6F7EF] text-[#128A4C]">
@@ -303,7 +315,7 @@ export default function TutorPage() {
                 readySets.slice(0, 6).map((set) => (
                   <Link
                     key={set._id}
-                    to={`/tutor?set=${set._id}`}
+                    to={`/tutor?set=${set._id}${qSuffix}`}
                     className="group flex items-center gap-3 border-b border-border/70 px-4 py-4 last:border-b-0 transition-colors hover:bg-brand-panel sm:px-5"
                   >
                     <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#FFF1DE] text-[#B4720E]">

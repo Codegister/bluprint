@@ -2,6 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { useAuth } from "@/hooks/use-auth";
 import { installResizeObserverGuard } from "@/lib/resizeGuard";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
@@ -15,7 +16,13 @@ import React, {
   Suspense,
 } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router";
 import "./index.css";
 
 // Installed before React mounts so every observer in the app (including the
@@ -26,7 +33,6 @@ installResizeObserverGuard();
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
-const ActionsPage = lazy(() => import("./pages/Actions.tsx"));
 const Today = lazy(() => import("./pages/Today.tsx"));
 const CourseSetup = lazy(() => import("./pages/CourseSetup.tsx"));
 const CoursesPage = lazy(() => import("./pages/Courses.tsx"));
@@ -138,6 +144,17 @@ const convex = new ConvexReactClient(CONVEX_URL);
 // "/" locally and the deploy base in the Pages build.
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
 
+/**
+ * The root is the dashboard for anyone signed in, so opening the app lands
+ * directly on the saved library. Signed-out visitors still get the landing
+ * page, which is the only place the product is introduced.
+ */
+function HomeRoute() {
+  const { isLoading, isAuthenticated } = useAuth();
+  if (isLoading) return <RouteLoading />;
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <Landing />;
+}
+
 function RouteSyncer() {
   const location = useLocation();
 
@@ -211,7 +228,7 @@ createRoot(document.getElementById("root")!).render(
             <RouteFade>
               <Suspense fallback={<RouteLoading />}>
                 <Routes>
-              <Route path="/" element={<Landing />} />
+              <Route path="/" element={<HomeRoute />} />
               <Route
                 path="/auth"
                 element={<AuthPage redirectAfterAuth="/dashboard" />}
@@ -227,17 +244,9 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
-              <Route
-                path="/actions"
-                element={
-                  <RequireAuth
-                    title="Sign in to see your actions"
-                    description="Every action runs against your own courses and study sets."
-                  >
-                    <ActionsPage />
-                  </RequireAuth>
-                }
-              />
+              {/* The old action hub now lives on the dashboard itself. This
+                  redirect keeps any saved link from dead-ending. */}
+              <Route path="/actions" element={<Navigate to="/dashboard" replace />} />
               <Route
                 path="/today"
                 element={

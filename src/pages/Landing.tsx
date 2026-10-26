@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { InkInWater } from "@/components/InkInWater";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import {
@@ -293,6 +294,7 @@ export default function Landing() {
           </nav>
 
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {!isAuthenticated && (
               <Link
                 to="/auth?returnTo=/dashboard"

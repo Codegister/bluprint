@@ -30,25 +30,28 @@ their own dashboard containing only their courses and study sets.
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
 actions.
 
-The visual direction is **chrome metal, one fixed theme, high contrast**. The page is a
-brushed steel sheet (`--chrome-1`), cards are bright white with a hard 1px edge and a
-crisp 2px offset shadow, and body copy is graphite ink (`--chrome-8`). Nothing is
-left translucent enough to blur into what is behind it: card edges sit at roughly 3:1
-against the page, secondary copy at 7:1 on a card, and ink at 19:1. The only colour is a
-chrome-blue action accent (`--brand-pink`, `--brand-pink-deep`) plus five anodised metal
-tints used for subject tags and active navigation. Headings are Space Grotesk and body
-copy is Inter. The backdrop is a fine engineering grid under three broad specular
-ribbons that travel across the screen at different speeds, with soft white and steel-blue
-reflections behind them. The landing hero adds an **ink-in-water** canvas: pigment plumes
-drift through a curl field, rendered from pre-built sprites so the effect stays on the
-compositor budget. Both motion layers pause when off-screen or when the tab is hidden,
-and fall back to a still frame under `prefers-reduced-motion`. The little mascot is drawn
-in SVG, so the app still needs no image assets.
+The visual direction is **chrome metal in light and dark, high contrast**. In light mode
+the page is a brushed steel sheet (`--chrome-1`), cards are bright white with a hard 1px
+edge and a crisp 2px offset shadow, and body copy is graphite ink (`--chrome-8`). In dark
+mode the same system is read as gunmetal: near-black steel page, raised graphite cards,
+off-white type and a lit top edge on every plate. Nothing is left translucent enough to
+blur into what is behind it. The only colour is a chrome-blue action accent
+(`--brand-pink`, `--brand-pink-deep`) plus five anodised metal tints used for subject
+tags and active navigation. Headings are Space Grotesk and body copy is Inter. The
+backdrop is a fine engineering grid under three broad specular ribbons that travel across
+the screen at different speeds, with soft white and steel-blue reflections behind them.
+The landing hero adds an **ink-in-water** canvas: pigment plumes drift through a curl
+field, rendered from pre-built sprites so the effect stays on the compositor budget. Both
+motion layers pause when off-screen or when the tab is hidden, and fall back to a still
+frame under `prefers-reduced-motion`. The little mascot is drawn in SVG, so the app still
+needs no image assets.
 
-**There is no light/dark switch.** The old Gizmo cream-and-lime palette and the theme
-toggle that went with it have been removed; a half-working dark mode was the main source
-of the low-contrast text this app used to show. `ThemeProvider` still exists because the
-toaster reads the active theme, but it always reports the single chrome-metal palette.
+**Light / dark switch.** The first visit follows the operating system. The switch in the
+sidebar, mobile header, landing header and sign-in screen stores the choice in
+`localStorage` under `bluprint.theme`; an inline script in `index.html` applies it before
+React mounts so there is no light flash. Both modes use the same token names, so screens
+do not need `dark:` variants. `ThemeProvider` owns the state and the toaster and WebGPU
+shader follow it.
 
 The metal shades live in `src/index.css` as `--chrome-0` to `--chrome-8` and are exposed
 to Tailwind as `bg-chrome-*`, `text-chrome-*`, and `border-chrome-*`:
@@ -64,6 +67,9 @@ to Tailwind as `bg-chrome-*`, `text-chrome-*`, and `border-chrome-*`:
 | `--chrome-6` | `#4b5866` | secondary copy |
 | `--chrome-7` | `#2c3641` | strong secondary copy |
 | `--chrome-8` | `#0a0f15` | graphite ink / primary |
+
+The `.dark` block re-points the same ramp for gunmetal (0 is the raised highlight, 8 is
+off-white ink) instead of introducing a second set of class names.
 
 `--border` is `#7e8c9b` and `--input` is `#5c6a7a`, deliberately dark enough that a card
 or a field can be seen against the steel page. The old Gizmo accent class names are kept
@@ -190,11 +196,11 @@ earned. Four practice papers per course is the cap; remove one to build another.
    goal is **derived from your nearest exam date**: Bluprint divides the material still to
    cover by the days left (clamped to 10–80 questions), so it tightens as a real paper
    approaches. Without an exam date it falls back to 20.
-7. **Today, but second** — **My sets** is still the home screen. A compact Today strip on
-   it shows the goal and streak, with one-tap **quick sprints** of 5, 10, 15 or 25 cards.
-   The full **Today** screen (sidebar) holds the cross-set due queue and the sets with weak
-   spots. A sprint takes the most useful cards first: everything overdue, then the shakiest
-   memories.
+7. **Today, but second** — the **dashboard** is the home screen: tutor panel, course rail,
+   saved sets, then a **quick sprint** card with today's goal, streak and one-tap sprints of
+   5, 10, 15 or 25 cards. The full **Today** screen (sidebar) holds the cross-set due queue
+   and the sets with weak spots. A sprint takes the most useful cards first: everything
+   overdue, then the shakiest memories.
 8. **Mastery is exam readiness** — the percentage on each set is no longer "cards known".
    It weighs **card recall** (from FSRS) at 60%, **last quiz accuracy** at 25% and **written
    exam marks** at 15%, dropping any part the set does not have. It also projects readiness
@@ -246,19 +252,16 @@ earned. Four practice papers per course is the cap; remove one to build another.
     written from its specification in that subject's real question format (RS 3/4/5/12,
     English essays, maths calculations, and so on) and marked question by question against
     their own mark schemes. Progress and marks per paper are kept alongside the course.
-15. **See every action in one place** — **All actions** (`/actions`) is the index of the
-    app: add material, practise, understand, and plan. A course rail at the top scopes the
-    practice actions (topic sets, past papers, exam-style questions, course tutor) to the
-    chosen course; without a course those tiles stay visible and explain how to unlock them.
+15. **Start on the dashboard** — signing in, and opening `/`, both land on `/dashboard`.
+    The dashboard is ordered as one study loop: the **AI tutor panel** at the top (its
+    question is carried into the tutor screen), the **course selection** next, the saved
+    **study sets** below it, and a **quick sprint** picker at the bottom. Choosing a course
+    scopes the tutor question and filters the set list; **Add course** opens the pathway.
 
-After signing in, the main screen is **My sets**, and nothing else. It keeps one primary
-action, **New study set**, a search box, and the saved-set list with status, due counts, exam readiness and
-pace or last quiz score. The Today strip sits below the hero and above the list, so the
-library stays the focus. **My courses** is a separate screen with topic progress,
-material counts and **Add courses**; **All actions** is the hub for every workflow; the
-saved **Revision timetable** and the **AI tutor** each have their own sidebar destination.
-The tutor's first screen asks which course or set to discuss, so it never sits in the
-middle of the set library.
+**My courses** is a separate screen with topic progress, material counts and **Add
+courses**. The saved **Revision timetable**, **Today** queue and the full **AI tutor** each
+have their own sidebar destination. The tutor's own first screen asks which course or set
+to discuss when it is opened without a scope.
 
 Each course opens on its **Pathway**, and **Past papers**, **Topic papers** and **Study
 sets** are separate screens rather than tabs sharing one page. A study set opens on its
@@ -770,8 +773,7 @@ src/
   pages/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
-    Dashboard.tsx        saved study sets, search, and the new-set action
-    Actions.tsx          every app action in one place, with a course rail at the top
+    Dashboard.tsx        tutor panel, course rail, saved study sets, quick sprint
     Today.tsx            due queue, quick sprint picker, streak and daily goal
     Courses.tsx          course library with pathway progress
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
@@ -785,14 +787,16 @@ src/
     Timetable.tsx        one day at a time: blocked periods, done ticks, catch-up
   components/
     AppShell.tsx         sidebar / mobile navigation for signed-in pages
+    ThemeProvider.tsx    persisted light / dark theme, following the OS until chosen
+    ThemeToggle.tsx      the light / dark switch used in the shell and public pages
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
     ChromeBackdrop.tsx   steel sheet, dot grid, moving specular ribbons and reflections
     InkInWater.tsx       canvas ink-in-water plumes for the landing hero
     study/               flashcard review (dictation + FSRS), quiz runner, exam practice,
-                         practice papers, readiness/pacing panel, weak spots, today strip,
-                         tutor chat, set settings
+                         practice papers, readiness/pacing panel, weak spots, dashboard
+                         tutor / course / sprint panels, tutor chat, set settings
   convex/
     schema.ts            users, courses, studySets, cards, quiz, exam, practice papers,
                          tutor, study days, plans

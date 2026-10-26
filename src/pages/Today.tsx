@@ -52,11 +52,11 @@ function FirstRunOptions() {
       action: "Choose courses",
     },
     {
-      to: "/actions",
+      to: "/dashboard",
       icon: LayoutGrid,
-      title: "See everything in one place",
-      body: "All actions on one screen: add material, practise a paper, ask the tutor, or plan a timetable.",
-      action: "Open all actions",
+      title: "Your dashboard",
+      body: "Ask the tutor, pick a course, open a saved set or start a quick sprint — all on one screen.",
+      action: "Open dashboard",
     },
   ] as const;
 
@@ -312,12 +312,12 @@ export default function Today() {
                 : "A little every day beats a panic the night before"}
             </h1>
             <p className="mt-2 max-w-lg text-[0.9rem] leading-relaxed text-brand-ink/65">
-              Your library is still on{" "}
+              Your tutor, courses and sets are on the{" "}
               <Link
                 to="/dashboard"
                 className="font-semibold underline underline-offset-2"
               >
-                My sets
+                dashboard
               </Link>
               . This page is the short answer to “what now?”.
             </p>

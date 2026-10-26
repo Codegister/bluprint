@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Meter, SPRING } from "@/components/motion/Motion";
 import {
   Sheet,
@@ -19,8 +20,7 @@ import {
   CalendarDays,
   Flame,
   GraduationCap,
-  Layers3,
-  LayoutGrid,
+  LayoutDashboard,
   Menu,
   Sparkles,
   Target,
@@ -39,20 +39,10 @@ import { toast } from "sonner";
 const navItems = [
   {
     to: "/dashboard",
-    label: "My sets",
-    icon: Layers3,
+    label: "Dashboard",
+    icon: LayoutDashboard,
     active: "bg-gizmo-lime text-brand-ink ring-1 ring-chrome-8/30",
     tile: "bg-brand-ink text-gizmo-lime",
-    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
-  },
-  {
-    to: "/actions",
-    label: "All actions",
-    icon: LayoutGrid,
-    // The hub is deliberately neutral: every other row owns a pastel, so ink
-    // and paper make this one read as the index rather than a sixth subject.
-    active: "bg-gizmo-cream text-brand-ink ring-1 ring-chrome-8/30",
-    tile: "bg-brand-ink text-gizmo-cream",
     soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
@@ -249,7 +239,11 @@ function Sidebar({
         })}
       </nav>
 
-      <div className="relative mt-5">
+      <div className="relative mt-2 px-3">
+        <ThemeToggle withLabel />
+      </div>
+
+      <div className="relative mt-4">
         <GoalCard />
       </div>
 
@@ -343,6 +337,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="chrome-bar sticky top-0 z-30 flex items-center justify-between border-b px-4 py-3 lg:hidden">
         <Brand to="/dashboard" />
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <button
             type="button"
             aria-label="Open menu"

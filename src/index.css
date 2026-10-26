@@ -1,8 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-/* Kept so leftover `dark:` utilities in older screens never activate from the
-   operating system's colour scheme. Bluprint now ships one fixed theme, so no
-   `.dark` class is ever added to <html> and those variants stay inert. */
+/* Bluprint has a light and a dark chrome-metal theme. The `.dark` class is put
+   on <html> by ThemeProvider (and by the inline script in index.html before
+   React mounts), so `dark:` utilities and the token block below both follow
+   the student's choice. */
 @custom-variant dark (&:is(.dark *));
 
 /* Exposes the variables below as Tailwind utilities: font-sans, bg-card, etc. */
@@ -91,7 +92,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Chrome metal, one theme, high contrast.
+   Chrome metal, two modes, high contrast.
 
    Everything on screen is polished stainless steel: a brushed silver page, a
    white card sitting clearly on top of it, and graphite ink for type. Contrast
@@ -238,12 +239,147 @@
   color-scheme: light;
 }
 
+/* ---------------------------------------------------------------------------
+   Dark chrome (gunmetal).
+
+   The same nine-step metal ramp, read from the other end: the page is near-black
+   steel, cards are raised gunmetal plates and type is a cool off-white. The
+   contrast ratios stay in the same range as the light sheet:
+
+     ink on a card            ~15:1
+     secondary copy on card    ~7:1
+     muted labels on card      ~5:1
+     card edge on the page     2.6:1  (plus the card's lit top edge)
+     ink button + white label  12:1
+
+   The pastel subject tints become deep anodised versions of themselves, so a
+   tile still reads as its subject family without glowing out of the page.
+   ------------------------------------------------------------------------- */
+.dark {
+  --chrome-0: #26313f; /* raised highlight */
+  --chrome-1: #0b1016; /* page base */
+  --chrome-2: #18212b; /* raised panel */
+  --chrome-3: #2b3846; /* soft rule */
+  --chrome-4: #566779; /* strong rule */
+  --chrome-5: #8b9bad; /* quiet icons / hint text */
+  --chrome-6: #b7c4d4; /* secondary copy */
+  --chrome-7: #d8e2ee; /* strong secondary copy */
+  --chrome-8: #f4f8fc; /* off-white ink */
+
+  --brand-ink: #eef3f9;
+  --brand-cream: #0b1016;
+  --brand-panel: #202b38;
+  --brand-panel-2: #121a23;
+  --brand-void: #05080c;
+
+  /* Deep anodised tints; light type still reads on every one. */
+  --gizmo-lime: #1f3d59;
+  --gizmo-lilac: #333b4c;
+  --gizmo-sky: #19384c;
+  --gizmo-peach: #41382b;
+  --gizmo-mint: #193b31;
+  --gizmo-cream: #242f3b;
+
+  --brand-pink: #6da8ff;
+  --brand-pink-deep: #8fbdff;
+  --brand-mint: #7fe0b7;
+  --brand-lime: #b8e08a;
+  --brand-sky: #86c8f0;
+  --brand-peach: #f2b080;
+  --brand-teal: #74d8d0;
+  --brand-pink2: #b8a3ff;
+  --brand-orange: #f3b077;
+  --brand-violet: #b8a3ff;
+  --brand-butter: #ffd66b;
+  --brand-blush: #ffc9d6;
+
+  --background: #0b1016;
+  --foreground: #eef3f9;
+  --card: #151d26;
+  --card-foreground: #eef3f9;
+  --popover: #18212b;
+  --popover-foreground: #eef3f9;
+  --primary: #dbe7f4;
+  --primary-foreground: #0b1016;
+  --secondary: #202c39;
+  --secondary-foreground: #eef3f9;
+  --muted: #1a2430;
+  --muted-foreground: #a7b5c6;
+  --accent: #243349;
+  --accent-foreground: #eef3f9;
+  --destructive: #ff9aa3;
+  --border: #3b4a5c;
+  --input: #5d6d80;
+  --ring: #7db4ff;
+  --chart-1: #7db4ff;
+  --chart-2: #7fe0b7;
+  --chart-3: #86c8f0;
+  --chart-4: #f2b080;
+  --chart-5: #eef3f9;
+  --sidebar: #0e151d;
+  --sidebar-foreground: #eef3f9;
+  --sidebar-primary: #7db4ff;
+  --sidebar-primary-foreground: #071019;
+  --sidebar-accent: #1d2834;
+  --sidebar-accent-foreground: #eef3f9;
+  --sidebar-border: #3b4a5c;
+  --sidebar-ring: #7db4ff;
+
+  --chrome-hi: #2c3948;
+  --chrome-steel: #596b7e;
+  --chrome-line: rgba(226, 238, 250, 0.34);
+  --chrome-sheen: rgba(255, 255, 255, 0.09);
+  --chrome-shadow: rgba(0, 0, 0, 0.8);
+  --chrome-edge: #415166;
+
+  /* A dark steel sheet: a soft top light over graduated gunmetal bands. */
+  --chrome-page:
+    radial-gradient(120% 78% at 50% -22%, #1b2633 0%, rgba(20, 30, 41, 0) 60%),
+    linear-gradient(
+      112deg,
+      #0d141c 0%,
+      #101923 13%,
+      #0a1017 29%,
+      #101a24 45%,
+      #0c141d 61%,
+      #121c27 79%,
+      #0b1118 100%
+    );
+
+  --chrome-panel:
+    linear-gradient(157deg, #1b2531 0%, #151e28 46%, #111922 100%);
+
+  --chrome-surface:
+    linear-gradient(160deg, #1a232e 0%, #161e28 56%, #121a23 100%);
+
+  /* Buttons and ink tiles are lighter than the card, so they still read as a
+     raised machined key instead of disappearing into the page. */
+  --chrome-ink:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0) 44%),
+    linear-gradient(165deg, #3b4959 0%, #222d3a 52%, #151e28 100%);
+
+  --chrome-metal: linear-gradient(
+    104deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.32) 18%,
+    rgba(125, 164, 201, 0.24) 38%,
+    rgba(255, 255, 255, 0.38) 55%,
+    rgba(120, 148, 174, 0.18) 74%,
+    rgba(255, 255, 255, 0) 100%
+  );
+
+  --chrome-type: linear-gradient(180deg, #eef3f9 0%, #eef3f9 100%);
+  --chrome-brush: rgba(226, 238, 250, 0.055);
+
+  color-scheme: dark;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   html {
-    background-color: #dfe5ec;
+    background-color: var(--chrome-1);
     background-image: var(--chrome-page);
   }
   body {
@@ -314,7 +450,7 @@
   .chrome-backdrop-base {
     position: absolute;
     inset: 0;
-    background-color: #dfe5ec;
+    background-color: var(--chrome-1);
     background-image: var(--chrome-page);
     opacity: calc(var(--chrome-intensity, 1) * 0.95);
   }
@@ -944,6 +1080,452 @@
   ) {
     outline: 1px solid rgba(10, 15, 21, 0.22);
     outline-offset: 0;
+  }
+
+  /* -------------------------------------------------------------------------
+     Dark chrome overrides.
+
+     Most screens spell their surfaces with literal colours (`bg-white`,
+     `bg-[#FFF6E5]`). Re-pointing those surfaces here keeps the whole app in one
+     palette without rewriting every screen. The whites become raised gunmetal,
+     the pale semantic banners become deep tinted plates, and every hand-written
+     ink step is lifted so it still reads on a dark card.
+     ------------------------------------------------------------------------- */
+
+  .dark .chrome-bar {
+    background-color: #111922;
+    background-image: none;
+    border-color: var(--chrome-edge);
+  }
+  .dark .chrome-rail {
+    background-color: var(--sidebar);
+    background-image: linear-gradient(
+      100deg,
+      #0a1017 0%,
+      #121b24 32%,
+      #0d151d 56%,
+      #141e28 76%,
+      #0a1118 100%
+    );
+  }
+  .dark .chrome-hero,
+  .dark .chrome-plate {
+    box-shadow:
+      inset 0 1px 0 var(--chrome-sheen),
+      0 2px 0 rgba(0, 0, 0, 0.5),
+      0 26px 44px -34px rgba(0, 0, 0, 0.95);
+  }
+  .dark .gizmo-card {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      0 2px 0 rgba(0, 0, 0, 0.55),
+      0 22px 40px -30px rgba(0, 0, 0, 0.9);
+  }
+  .dark .chrome-button {
+    background-color: #26313f;
+    background-image: var(--chrome-ink);
+    color: #ffffff;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      0 2px 0 rgba(0, 0, 0, 0.55),
+      0 12px 22px -16px rgba(0, 0, 0, 0.9);
+  }
+  .dark .chrome-button:hover {
+    background-color: #31404f;
+    background-image:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 44%),
+      linear-gradient(165deg, #4a5a6c 0%, #2b3846 52%, #1b2530 100%);
+  }
+  .dark .sticker {
+    border-color: var(--chrome-edge);
+    /* A translucent gloss, not an opaque fill, so a sticker that also carries
+       bg-gizmo-lime / sky / lilac keeps its accent tint in dark mode. */
+    background-image: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.12) 0%,
+      rgba(0, 0, 0, 0.18) 100%
+    );
+    color: var(--brand-ink);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  }
+  .dark .highlighter {
+    background-image: linear-gradient(
+      transparent 50%,
+      rgba(96, 160, 235, 0.38) 50%,
+      rgba(96, 160, 235, 0.38) 96%,
+      transparent 96%
+    );
+  }
+  .dark .gizmo-dots,
+  .dark .blueprint-grid,
+  .dark .dot-grid,
+  .dark .paper-grid,
+  .dark .blueprint-grid-fine,
+  .dark .paper-dots {
+    background-image: radial-gradient(
+      circle,
+      rgba(226, 238, 250, 0.13) 1px,
+      transparent 1px
+    );
+  }
+  .dark .paper-panel {
+    background-image:
+      radial-gradient(circle, rgba(226, 238, 250, 0.07) 1px, transparent 1px),
+      var(--chrome-panel);
+  }
+  .dark .gizmo-flow {
+    opacity: calc(var(--chrome-intensity, 1) * 0.45);
+  }
+  .dark .gizmo-blob-lime {
+    background-color: rgba(108, 158, 206, 0.34);
+  }
+  .dark .gizmo-blob-lilac {
+    background-color: rgba(72, 108, 152, 0.3);
+  }
+  .dark .gizmo-blob-peach {
+    background-color: rgba(110, 92, 156, 0.24);
+  }
+  .dark .ink-water canvas {
+    mix-blend-mode: screen;
+    opacity: 0.62;
+  }
+  .dark .subject-tile {
+    background-image:
+      radial-gradient(
+        125% 95% at 6% -18%,
+        rgba(255, 255, 255, 0.16) 0%,
+        transparent 62%
+      ),
+      linear-gradient(
+        152deg,
+        rgba(255, 255, 255, 0.1) 0%,
+        rgba(255, 255, 255, 0.03) 46%,
+        rgba(0, 0, 0, 0.22) 100%
+      );
+  }
+  .dark .chrome-shine::after,
+  .dark .hover-sheen::after {
+    background-image: linear-gradient(
+      100deg,
+      transparent 38%,
+      rgba(255, 255, 255, 0.22) 50%,
+      transparent 62%
+    );
+  }
+
+  /* White cards and paper-white panels become raised gunmetal plates. */
+  .dark :is(
+    [class~="bg-white"],
+    [class~="bg-[#FCFCFD]"],
+    [class~="bg-[#FCFCFA]"],
+    [class~="bg-[#FAFAF7]"],
+    [class~="bg-[#FCFBF8]"],
+    [class~="bg-[#F7F5EF]"],
+    [class~="bg-[#FCFAF4]"],
+    [class~="bg-[#F4F4F7]"],
+    [class~="bg-[#EDE9DF]"],
+    [class~="bg-[#EFEAE0]"],
+    [class~="bg-[#E7E7EF]"],
+    [class~="bg-[#E7E7EE]"]
+  ) {
+    background-color: var(--card);
+  }
+  .dark :is(
+    [class~="bg-white/80"],
+    [class~="bg-white/85"],
+    [class~="bg-white/70"],
+    [class~="bg-white/60"]
+  ) {
+    background-color: color-mix(in srgb, var(--card) 86%, transparent);
+  }
+
+  /* Ink tiles and primary buttons keep a graphite fill; white and pastel
+     labels on them stay readable. */
+  .dark :is(
+    [class~="bg-[#191B27]"],
+    [class~="bg-[#2A2D3E]"],
+    [class~="bg-[#32333b]"],
+    [class~="bg-brand-ink"]
+  ) {
+    background-color: #26313f;
+    background-image: var(--chrome-ink);
+  }
+  .dark [class~="text-brand-cream"] {
+    color: #f2f7fc;
+  }
+  .dark :is([class~="text-gizmo-lime"]) {
+    color: #cbe6ff;
+  }
+  .dark :is([class~="text-gizmo-lilac"]) {
+    color: #e0e7f1;
+  }
+  .dark :is([class~="text-gizmo-sky"]) {
+    color: #bfe3fb;
+  }
+  .dark :is([class~="text-gizmo-peach"]) {
+    color: #f1ddb9;
+  }
+  .dark :is([class~="text-gizmo-mint"]) {
+    color: #c0ecdb;
+  }
+  .dark :is([class~="text-gizmo-cream"]) {
+    color: #e7eef7;
+  }
+
+  /* Deep anodised semantic surfaces. */
+  .dark :is(
+    [class~="bg-[#FFEEF0]"],
+    [class~="bg-[#FFF1F3]"],
+    [class~="bg-[#FFE3E6]"],
+    [class~="bg-[#FFF7F8]"],
+    [class~="bg-[#FFF7F9]"],
+    [class~="bg-[#FBDDE0]"],
+    [class~="bg-[#FDE8ED]"],
+    [class~="bg-[#f7dfe2]"]
+  ) {
+    background-color: #3a1d23;
+  }
+  .dark :is(
+    [class~="bg-[#FFF6E5]"],
+    [class~="bg-[#FFF1DE]"],
+    [class~="bg-[#FFF0DC]"],
+    [class~="bg-[#FFF1D8]"],
+    [class~="bg-[#FFF3E8]"],
+    [class~="bg-[#FFFBF2]"],
+    [class~="bg-[#FFFBEC]"],
+    [class~="bg-[#FFF9EC]"],
+    [class~="bg-[#FFF7E8]"],
+    [class~="bg-[#f4e3bd]"]
+  ) {
+    background-color: #332a19;
+  }
+  .dark :is(
+    [class~="bg-[#E9FBF3]"],
+    [class~="bg-[#EAFBF0]"],
+    [class~="bg-[#EAF8F0]"],
+    [class~="bg-[#E6F7EF]"],
+    [class~="bg-[#F3FBF7]"],
+    [class~="bg-[#F1FAF6]"],
+    [class~="bg-[#F7FCFA]"],
+    [class~="bg-[#DDF7EB]"],
+    [class~="bg-[#D7F0E3]"],
+    [class~="bg-[#CFF3E2]"],
+    [class~="bg-[#E3F8F0]"],
+    [class~="bg-[#E5F6EE]"],
+    [class~="bg-[#E4F6F2]"],
+    [class~="bg-[#d2e7de]"]
+  ) {
+    background-color: #153229;
+  }
+  .dark :is(
+    [class~="bg-[#E7F2FC]"],
+    [class~="bg-[#E8F3FD]"],
+    [class~="bg-[#E3EFFD]"],
+    [class~="bg-[#EFF6FF]"]
+  ) {
+    background-color: #172b3d;
+  }
+  .dark :is(
+    [class~="bg-[#F3F0FF]"],
+    [class~="bg-[#EFEDFF]"],
+    [class~="bg-[#F1F0FB]"],
+    [class~="bg-[#F4F2FF]"],
+    [class~="bg-[#FBF9FF]"]
+  ) {
+    background-color: #2a2440;
+  }
+  .dark [class~="bg-[#128A4C]"] {
+    background-color: #1f6b4a;
+  }
+  .dark :is([class~="bg-[#D24350]"], [class~="bg-[#a32a38]"]):hover {
+    background-color: #c04a56;
+  }
+
+  /* White and paper hovers would flash light in dark mode. */
+  .dark :is(
+    [class~="hover:bg-white"],
+    [class~="hover:bg-white/80"],
+    [class~="hover:bg-white/60"],
+    [class~="hover:bg-[#F7FCFA]"],
+    [class~="hover:bg-[#E7E7EE]"],
+    [class~="hover:bg-[#E5F6EE]"],
+    [class~="hover:bg-[#E3EFFD]"],
+    [class~="hover:bg-[#FBF9FF]"],
+    [class~="hover:bg-[#FFFBF2]"],
+    [class~="hover:bg-[#FFF1D8]"]
+  ):hover {
+    background-color: #24303d;
+  }
+  .dark :is([class~="hover:bg-[#FFEEF0]"], [class~="hover:bg-[#FFE3E6]"], [class~="hover:bg-[#FBDDE0]"]):hover {
+    background-color: #47242b;
+  }
+  .dark :is([class~="hover:bg-[#2A2D3E]"], [class~="hover:bg-[#32333b]"]):hover {
+    background-color: #31404f;
+  }
+
+  /* Semantic type: lifted to the light end of each family. */
+  .dark :is(
+    [class~="text-[#C93C49]"],
+    [class~="text-[#C23B49]"],
+    [class~="text-[#D24350]"],
+    [class~="text-[#B23A55]"],
+    [class~="text-[#8f1d26]"],
+    [class~="text-[#7a131c]"]
+  ) {
+    color: #ffadb5;
+  }
+  .dark :is(
+    [class~="text-[#96650A]"],
+    [class~="text-[#8A5D00]"],
+    [class~="text-[#8A5A12]"],
+    [class~="text-[#B7791F]"],
+    [class~="text-[#B4720E]"],
+    [class~="text-[#7A5306]"],
+    [class~="text-[#A66A0A]"],
+    [class~="text-[#7A5410]"],
+    [class~="text-[#C2660F]"],
+    [class~="text-[#D08A00]"],
+    [class~="text-[#5b3d00]"]
+  ) {
+    color: #f0c674;
+  }
+  .dark :is(
+    [class~="text-[#128A5B]"],
+    [class~="text-[#128A4C]"],
+    [class~="text-[#0F7A50]"],
+    [class~="text-[#0A655C]"],
+    [class~="text-[#0d4a2e]"],
+    [class~="text-[#14866D]"]
+  ) {
+    color: #8fe3bb;
+  }
+  .dark [class~="text-[#1D5FA8]"] {
+    color: #a8d2f4;
+  }
+  .dark [class~="text-[#8A4BC6]"] {
+    color: #c9b8ff;
+  }
+  .dark [class~="text-[#D2542A]"] {
+    color: #f5a97e;
+  }
+  .dark [class~="text-[#1C1A14]"] {
+    color: #eaf0f8;
+  }
+  .dark [class~="text-[#1C1A14]/65"] {
+    color: rgba(234, 240, 248, 0.72);
+  }
+  .dark [class~="text-[#C93C49]/80"] {
+    color: #ffb0b8;
+  }
+  .dark [class~="text-[#96650A]/80"] {
+    color: #f0c674;
+  }
+  .dark :is([class~="bg-[#191B27]/30"], [class~="bg-[#191B27]/25"]) {
+    background-color: rgba(238, 243, 249, 0.22);
+  }
+
+  /* Pastel hairlines become dark tinted rules. */
+  .dark :is(
+    [class~="border-[#A6D9B9]"],
+    [class~="border-[#BDEBD3]"],
+    [class~="border-[#CBE7D8]"],
+    [class~="border-[#CFE7DC]"],
+    [class~="border-[#B6E4DB]"],
+    [class~="border-[#22A06B]"],
+    [class~="border-[#1d6b45]"]
+  ) {
+    border-color: #2f5c4a;
+  }
+  .dark :is(
+    [class~="border-[#EBD6AB]"],
+    [class~="border-[#EBD9B4]"],
+    [class~="border-[#F0DCB8]"],
+    [class~="border-[#F3E2C8]"],
+    [class~="border-[#8a6b2a]"]
+  ) {
+    border-color: #6b5734;
+  }
+  .dark :is([class~="border-[#F6D2D6]"], [class~="border-[#a0525b]"]) {
+    border-color: #6e3a41;
+  }
+  .dark [class~="border-[#C9DDF6]"] {
+    border-color: #33516d;
+  }
+  .dark [class~="border-[#CFC7E8]"] {
+    border-color: #4a4266;
+  }
+  .dark [class~="border-[#191B27]"] {
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  /* The light-theme contrast lifts need dark equivalents. */
+  .dark :is(
+    [class~="text-brand-ink/20"],
+    [class~="text-brand-ink/30"],
+    [class~="text-brand-ink/35"],
+    [class~="text-brand-ink/40"]
+  ) {
+    color: #8494a7;
+  }
+  .dark :is(
+    [class~="text-brand-ink/45"],
+    [class~="text-brand-ink/50"],
+    [class~="text-brand-ink/55"],
+    [class~="text-brand-ink/60"],
+    [class~="text-brand-ink/65"]
+  ) {
+    color: #b3c1d0;
+  }
+  .dark :is(
+    [class~="text-brand-ink/70"],
+    [class~="text-brand-ink/75"],
+    [class~="text-brand-ink/80"],
+    [class~="text-brand-ink/85"]
+  ) {
+    color: #dde7f1;
+  }
+  .dark [class~="text-muted-foreground/60"] {
+    color: #98a8ba;
+  }
+  .dark [class~="text-muted-foreground/80"] {
+    color: #c6d2df;
+  }
+  .dark :is([class~="text-white/60"], [class~="text-white/70"]) {
+    color: rgba(255, 255, 255, 0.88);
+  }
+  .dark :is(
+    [class~="border-border/60"],
+    [class~="border-border/70"],
+    [class~="border-border/80"],
+    [class~="border-brand-ink/10"],
+    [class~="border-brand-ink/15"],
+    [class~="border-brand-ink/20"]
+  ) {
+    border-color: #3f4f62;
+  }
+  .dark :is(
+    [class~="bg-[#FFF6E5]"],
+    [class~="bg-[#FFF1DE]"],
+    [class~="bg-[#FFF0DC]"],
+    [class~="bg-[#FFF3E8]"],
+    [class~="bg-[#FFFBF2]"],
+    [class~="bg-[#FFFBEC]"],
+    [class~="bg-[#FFF9EC]"],
+    [class~="bg-[#FFF7F8]"],
+    [class~="bg-[#FFF7F9]"],
+    [class~="bg-[#FFEEF0]"],
+    [class~="bg-[#FFF1F3]"],
+    [class~="bg-[#E9FBF3]"],
+    [class~="bg-[#EAFBF0]"],
+    [class~="bg-[#EAF8F0]"],
+    [class~="bg-[#E6F9F1]"],
+    [class~="bg-[#E7F2FC]"],
+    [class~="bg-[#E8F3FD]"],
+    [class~="bg-[#F3F0FF]"],
+    [class~="bg-[#EFEDFF]"],
+    [class~="bg-[#F1F0FB]"]
+  ) {
+    outline-color: rgba(255, 255, 255, 0.14);
   }
 }
 
