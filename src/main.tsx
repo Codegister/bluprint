@@ -2,6 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { installResizeObserverGuard } from "@/lib/resizeGuard";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
@@ -16,6 +17,10 @@ import React, {
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import "./index.css";
+
+// Installed before React mounts so every observer in the app (including the
+// ones created by framer-motion and Radix) is covered. See lib/resizeGuard.ts.
+installResizeObserverGuard();
 
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
@@ -128,6 +133,11 @@ class RootErrorBoundary extends React.Component<
 const CONVEX_URL = "https://honorable-lyrebird-974.convex.cloud";
 const convex = new ConvexReactClient(CONVEX_URL);
 
+// GitHub Pages serves a project site from /<repo>/, so the router must treat
+// that prefix as its root or every client-side route 404s. Vite's BASE_URL is
+// "/" locally and the deploy base in the Pages build.
+const BASE_PATH = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
+
 function RouteSyncer() {
   const location = useLocation();
 
@@ -196,7 +206,7 @@ createRoot(document.getElementById("root")!).render(
             shares one light / high-contrast-dark state. */}
         <ThemeProvider>
           <ConvexAuthProvider client={convex}>
-          <BrowserRouter>
+          <BrowserRouter basename={BASE_PATH}>
             <RouteSyncer />
             <RouteFade>
               <Suspense fallback={<RouteLoading />}>

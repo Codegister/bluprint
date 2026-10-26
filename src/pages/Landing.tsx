@@ -1,7 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { InkInWater } from "@/components/InkInWater";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import {
   Accordion,
@@ -173,8 +172,8 @@ function HeroArt() {
       </div>
 
       <motion.div style={{ y: lift }} className="relative">
-        {/* A lilac sheet peeking out behind the real preview: the stacked-card
-            look the Gizmo reels use, made from a single offset div. */}
+        {/* A steel sheet peeking out behind the real preview: a stacked-card
+            look made from a single offset div. */}
         <div
           aria-hidden
           className="absolute inset-x-5 -top-3 bottom-3 -z-10 rotate-[-2.5deg] rounded-[2rem] border border-brand-ink/10 bg-gizmo-lilac/45"
@@ -266,8 +265,8 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen text-brand-ink">
-      {/* One fixed paper wash behind the whole page, so hero, gaps and
-          transparent sections all share the same cream desk. */}
+      {/* One fixed metal wash behind the whole page, so hero, gaps and
+          transparent sections all share the same steel sheet. */}
       <ChromeBackdrop intensity={0.85} />
       <header className="chrome-bar sticky top-0 z-50 border-b">
         <motion.div
@@ -294,7 +293,6 @@ export default function Landing() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <ThemeToggle />
             {!isAuthenticated && (
               <Link
                 to="/auth?returnTo=/dashboard"

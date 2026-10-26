@@ -2,7 +2,6 @@ import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { Mascot } from "@/components/Mascot";
 import { SkeletonText } from "@/components/Skeletons";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { Skeleton } from "@/components/ui/skeleton";
 import { enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
@@ -73,7 +72,6 @@ export function RequireAuth({
         <header className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
           <Brand />
           <div className="flex items-center gap-2">
-            <ThemeToggle />
             <button
               type="button"
               onClick={() => navigate("/")}

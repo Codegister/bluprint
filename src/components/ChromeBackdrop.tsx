@@ -2,17 +2,17 @@ import { cn } from "@/lib/utils";
 import type { CSSProperties } from "react";
 
 /**
- * The app's paper backdrop.
+ * The app's chrome backdrop.
  *
- * The Gizmo look is stationery rather than metal: a cream page, a faint dot
- * grid, and two blurred highlighter smudges (lime and lilac) drifting slowly
- * behind the content. The blobs animate transform only, so they stay on the
- * compositor and never repaint the page. Nothing here is interactive or read
- * by a screen reader.
+ * A brushed steel sheet, a fine engineering dot grid, three broad specular
+ * ribbons and three soft reflections drifting slowly behind the content. The
+ * moving layers animate transform only, so they stay on the compositor and
+ * never repaint the page. Nothing here is interactive or read by a screen
+ * reader.
  *
  * `variant="page"` pins the backdrop behind the whole screen; the panel
  * variant fills whatever positioned, rounded container it is dropped into.
- * The tokens live in `index.css` and switch automatically with the dark theme.
+ * The tokens live in `index.css` and are part of the one chrome-metal theme.
  */
 export function ChromeBackdrop({
   variant = "page",
@@ -35,9 +35,9 @@ export function ChromeBackdrop({
       style={{ "--chrome-intensity": intensity } as CSSProperties}
     >
       <span className="chrome-backdrop-base" />
-      {/* Three gradient ribbons crossing the page at different speeds. This is
-          what makes the backdrop read as moving light rather than a static
-          wash; the smudges and dot grid sit on top of it. */}
+      {/* Three specular ribbons crossing the page at different speeds. This is
+          what makes the backdrop read as moving metal rather than a static
+          grey wash; the reflections and dot grid sit on top of it. */}
       <span className="gizmo-flow">
         <span className="gizmo-ribbon gizmo-ribbon-lime" />
         <span className="gizmo-ribbon gizmo-ribbon-lilac" />

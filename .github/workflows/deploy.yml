@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages
+
+# The frontend is static; Convex hosts the database, auth and AI actions.
+# NVIDIA_API_KEY stays on the Convex deployment and is never needed here.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc -b
+
+      - name: Build
+        # A project site lives at /<repo>/, a user site at /. Deriving the base
+        # here keeps vite.config.ts unchanged for local development.
+        run: |
+          REPO="${GITHUB_REPOSITORY#*/}"
+          if [[ "$REPO" == *.github.io ]]; then
+            BASE="/"
+          else
+            BASE="/$REPO/"
+          fi
+          echo "Building with base $BASE"
+          bunx vite build --base="$BASE"
+
+      - name: SPA fallback
+        # GitHub Pages has no rewrite rules. A copy of the shell at 404.html
+        # lets a deep link such as /today load the app, which then routes it.
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

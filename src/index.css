@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* Kept so leftover `dark:` utilities in older screens never activate from the
+   operating system's colour scheme. Bluprint now ships one fixed theme, so no
+   `.dark` class is ever added to <html> and those variants stay inert. */
 @custom-variant dark (&:is(.dark *));
 
 /* Exposes the variables below as Tailwind utilities: font-sans, bg-card, etc. */
@@ -40,13 +43,14 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Bluprint palette: a warm Gizmo-style study desk in nine neutral steps. */
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  /* Chrome metal: an industrial grotesque for headings, a neutral UI face for
+     body copy and a mono face for figures, times and mark schemes. */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* The nine paper shades, exposed as utilities (bg-chrome-5, text-chrome-8).
-     0 is paper white and 8 is ink. */
+  /* The nine metal shades, exposed as utilities (bg-chrome-5, text-chrome-8).
+     0 is a polished highlight and 8 is graphite ink. */
   --color-chrome-0: var(--chrome-0);
   --color-chrome-1: var(--chrome-1);
   --color-chrome-2: var(--chrome-2);
@@ -74,7 +78,10 @@
   --color-brand-butter: var(--brand-butter);
   --color-brand-blush: var(--brand-blush);
 
-  /* Gizmo-style accent set: one acid highlight plus four soft pastels. */
+  /* The five accent slots keep their old class names so every existing screen
+     picks up the new palette without being rewritten. They are now anodised
+     metal tints (ice, pearl, steel-blue, bronze, verdigris) rather than the
+     Gizmo pastels. */
   --color-gizmo-lime: var(--gizmo-lime);
   --color-gizmo-lilac: var(--gizmo-lilac);
   --color-gizmo-sky: var(--gizmo-sky);
@@ -83,252 +90,152 @@
   --color-gizmo-cream: var(--gizmo-cream);
 }
 
-/* Cream paper, ink text, lime highlighter. Change values here to retheme. */
+/* ---------------------------------------------------------------------------
+   Chrome metal, one theme, high contrast.
+
+   Everything on screen is polished stainless steel: a brushed silver page, a
+   white card sitting clearly on top of it, and graphite ink for type. Contrast
+   is the point of this theme, so the values are deliberately far apart rather
+   than a gradient of similar greys:
+
+     ink on a card            ~19:1
+     secondary copy on card    ~7.5:1
+     muted labels on card      ~5.5:1
+     card edge on the page     3.4:1  (so the card's outline is visible)
+     ink button + white label  18:1
+
+   The only colour is a chrome-blue action accent plus the anodised tints used
+   for subject tags. Nothing is translucent enough to become unreadable.
+   ------------------------------------------------------------------------- */
 :root {
-  --radius: 1rem;
+  --radius: 0.85rem;
 
-  /* -------------------------------------------------------------------------
-     The neutral ramp: warm paper rather than cold steel. Nine steps take the
-     interface from white through cream and sand to an ink-black foreground, so
-     a screen never needs a second grey family. Token names stay `chrome-*` for
-     compatibility; the values are now the warm study desk the app lives on.
-     ------------------------------------------------------------------------- */
-  --chrome-0: #ffffff; /* paper highlight */
-  --chrome-1: #faf6ec; /* cream page */
-  --chrome-2: #f2ecdd; /* soft sand */
-  --chrome-3: #e4dccb; /* hairlines and chips */
-  --chrome-4: #cabfa8; /* muted rules */
-  --chrome-5: #a89c83; /* quiet icons */
-  --chrome-6: #7e735c; /* secondary copy */
-  --chrome-7: #4d4637; /* strong secondary copy */
-  --chrome-8: #1c1a14; /* ink */
+  /* The metal ramp: highlight, page, raised plate, two rules, three inks. */
+  --chrome-0: #ffffff; /* polished highlight */
+  --chrome-1: #eef2f6; /* page base */
+  --chrome-2: #e0e6ed; /* raised panel */
+  --chrome-3: #c8d1db; /* soft rule */
+  --chrome-4: #8d9aa9; /* strong rule */
+  --chrome-5: #6f7d8c; /* quiet icons / hint text */
+  --chrome-6: #4b5866; /* secondary copy */
+  --chrome-7: #2c3641; /* strong secondary copy */
+  --chrome-8: #0a0f15; /* graphite ink */
 
-  --brand-ink: #1c1a14;
-  --brand-cream: #fdfaf2;
-  --brand-panel: #f3edde;
-  --brand-panel-2: #fffdf8;
-  --brand-void: #fffdf8;
+  --brand-ink: #0a0f15;
+  --brand-cream: #ffffff;
+  --brand-panel: #d7e0ea;
+  --brand-panel-2: #f8fafc;
+  --brand-void: #0a0f15;
 
-  /* Gizmo-style accents: acid lime does the highlighting, and the four pastels
-     tag subjects and outputs without competing with it. */
-  --gizmo-lime: #d9f45b;
-  --gizmo-lilac: #c9b8ff;
-  --gizmo-sky: #a9d2ff;
-  --gizmo-peach: #ffc39a;
-  --gizmo-mint: #b9efc9;
-  --gizmo-cream: #faf6ec;
+  /* Anodised tints. Light enough for graphite type, dark enough to read as a
+     separate surface from the white card they sit on. */
+  --gizmo-lime: #cfe4ff; /* ice */
+  --gizmo-lilac: #dde2ea; /* pearl */
+  --gizmo-sky: #cfe8f7; /* steel blue */
+  --gizmo-peach: #e9dfcc; /* bronze */
+  --gizmo-mint: #d2e7de; /* verdigris */
+  --gizmo-cream: #f1f4f8; /* light steel */
 
-  /* "pink" is the app's single accent slot (progress, hovers, highlights). */
-  --brand-pink: #b7d92f;
-  /* Deep enough for small labels on cream; still reads as highlighter ink. */
-  --brand-pink-deep: #55650d;
-  --brand-mint: #3f8f5f;
-  --brand-lime: #8fae18;
-  --brand-sky: #2f6fa8;
-  --brand-peach: #a8572a;
-  --brand-teal: #2f7a6c;
-  --brand-pink2: #7d5bd6;
-  --brand-orange: #a85a1f;
-  --brand-violet: #7d5bd6;
-  --brand-butter: #ffe9a6;
-  --brand-blush: #ffd2e0;
+  /* "pink" is the app's single action accent slot. */
+  --brand-pink: #0b57d0;
+  --brand-pink-deep: #0842a0;
+  --brand-mint: #14633f;
+  --brand-lime: #35610c;
+  --brand-sky: #0f5387;
+  --brand-peach: #8f3f18;
+  --brand-teal: #12605a;
+  --brand-pink2: #5132c4;
+  --brand-orange: #8a4412;
+  --brand-violet: #5132c4;
+  --brand-butter: #ffd66b;
+  --brand-blush: #ffc9d6;
 
-  --background: #faf6ec;
-  --foreground: #1c1a14;
-  --card: #fffdf8;
-  --card-foreground: #1c1a14;
-  --popover: #fffdf8;
-  --popover-foreground: #1c1a14;
-  --primary: #1c1a14;
-  --primary-foreground: #fdfaf2;
-  --secondary: #f2ecdd;
-  --secondary-foreground: #1c1a14;
-  --muted: #f2ecdd;
-  --muted-foreground: #6f6553;
-  --accent: #d9f45b;
-  --accent-foreground: #1c1a14;
-  --destructive: #b93a3a;
-  --border: #e4dccb;
-  --input: #d8cfbc;
-  --ring: #6d8410;
-  --chart-1: #b7d92f;
-  --chart-2: #9b7bff;
-  --chart-3: #5aa9f0;
-  --chart-4: #ff9d5c;
-  --chart-5: #1c1a14;
-  --sidebar: #fffdf8;
-  --sidebar-foreground: #1c1a14;
-  --sidebar-primary: #d9f45b;
-  --sidebar-primary-foreground: #1c1a14;
-  --sidebar-accent: #f3edde;
-  --sidebar-accent-foreground: #1c1a14;
-  --sidebar-border: #e9e2d3;
-  --sidebar-ring: #6d8410;
+  --background: #eef2f6;
+  --foreground: #0a0f15;
+  --card: #ffffff;
+  --card-foreground: #0a0f15;
+  --popover: #ffffff;
+  --popover-foreground: #0a0f15;
+  --primary: #0a0f15;
+  --primary-foreground: #ffffff;
+  --secondary: #e0e6ed;
+  --secondary-foreground: #0a0f15;
+  --muted: #e4e9ef;
+  --muted-foreground: #4b5866;
+  --accent: #d7e7f8;
+  --accent-foreground: #0a0f15;
+  --destructive: #b3261e;
+  --border: #7e8c9b;
+  --input: #5c6a7a;
+  --ring: #0b57d0;
+  --chart-1: #0b57d0;
+  --chart-2: #12605a;
+  --chart-3: #0f5387;
+  --chart-4: #8a4412;
+  --chart-5: #0a0f15;
+  --sidebar: #f2f5f9;
+  --sidebar-foreground: #0a0f15;
+  --sidebar-primary: #0b57d0;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #dfe7f0;
+  --sidebar-accent-foreground: #0a0f15;
+  --sidebar-border: #7e8c9b;
+  --sidebar-ring: #0b57d0;
 
-  /* -------------------------------------------------------------------------
-     The Gizmo-style surface system.
+  /* Surface system. The page is brushed steel; cards are bright white with a
+     hard 1px edge and a crisp offset shadow, so nothing melts into anything. */
+  --chrome-hi: #ffffff;
+  --chrome-steel: #a3b0be;
+  --chrome-line: rgba(10, 15, 21, 0.28);
+  --chrome-sheen: rgba(255, 255, 255, 0.95);
+  --chrome-shadow: rgba(9, 16, 24, 0.55);
+  --chrome-edge: #7e8c9b;
 
-     Flat paper, ink type and one highlighter. Surfaces are warm white cards on
-     a cream desk, lifted with a crisp hairline and a short offset shadow rather
-     than a metallic gradient. The lime highlight is reserved for things you
-     act on or that are active, so screens stay calm around it.
-     ------------------------------------------------------------------------- */
-  --chrome-hi: var(--chrome-0);
-  --chrome-steel: var(--chrome-4);
-  --chrome-line: rgba(28, 26, 20, 0.12);
-  --chrome-sheen: rgba(255, 255, 255, 0.9);
-  --chrome-shadow: rgba(60, 50, 20, 0.18);
-
-  /* Desk wash: cream lit by a lime glow top-left and a lilac glow top-right. */
+  /* A steel sheet: a broad white specular sweep across graduated grey bands. */
   --chrome-page:
-    radial-gradient(78% 58% at 10% -12%, rgba(217, 244, 91, 0.32) 0%, transparent 62%),
-    radial-gradient(66% 54% at 98% 0%, rgba(201, 184, 255, 0.26) 0%, transparent 64%),
-    radial-gradient(60% 50% at 88% 96%, rgba(255, 195, 154, 0.2) 0%, transparent 66%),
-    linear-gradient(180deg, #fcf8ef 0%, #f8f2e5 58%, #f5eedf 100%);
+    radial-gradient(120% 78% at 50% -22%, #ffffff 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(
+      112deg,
+      #e3e9ef 0%,
+      #d6dee6 13%,
+      #f3f6f9 29%,
+      #dae2ea 45%,
+      #edf1f5 61%,
+      #d2dae3 79%,
+      #e9eef3 100%
+    );
 
-  /* Panels are warm white with the faintest top-down tint. */
+  /* Panels carry a soft top-down light, like a brushed plate. */
   --chrome-panel:
-    linear-gradient(160deg, #fffdf8 0%, #fdf9f0 54%, #faf4e7 100%);
+    linear-gradient(157deg, #ffffff 0%, #f6f9fb 46%, #e7edf3 100%);
 
-  /* Card wash. Nearly opaque, so body copy stays crisp on the cream page. */
+  /* Card wash: near-white with a cool reflection at the top edge. */
   --chrome-surface:
-    linear-gradient(160deg, #ffffff 0%, #fffdf8 52%, #fdf9f0 100%);
+    linear-gradient(160deg, #ffffff 0%, #fcfdfe 56%, #f1f5f9 100%);
 
-  /* Kept for compatibility with the old backdrop; the Gizmo theme has no
-     metal ribbon, so it paints nothing. */
-  --chrome-metal: none;
-
-  /* Ink fills: flat near-black with a hair of warmth at the top edge. */
+  /* Ink fills: graphite with a lit top edge, like a machined button. */
   --chrome-ink:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 42%),
-    linear-gradient(160deg, #262319 0%, #1c1a14 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 44%),
+    linear-gradient(165deg, #313d4a 0%, #131b23 52%, #080d12 100%);
 
-  /* Headings are solid ink. The token stays so the class keeps working. */
-  --chrome-type: linear-gradient(180deg, #1c1a14 0%, #1c1a14 100%);
+  /* Metal ribbon used by the hero plate: a single sweeping reflection. */
+  --chrome-metal: linear-gradient(
+    104deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.85) 18%,
+    rgba(183, 208, 228, 0.45) 38%,
+    rgba(255, 255, 255, 0.9) 55%,
+    rgba(158, 178, 197, 0.35) 74%,
+    rgba(255, 255, 255, 0) 100%
+  );
 
-  /* A very quiet paper grain layered over panels. */
-  --chrome-brush: rgba(28, 26, 20, 0.035);
+  /* Headings are solid graphite: a gradient inside type would cost contrast. */
+  --chrome-type: linear-gradient(180deg, #0a0f15 0%, #0a0f15 100%);
+
+  /* A very quiet brushed grain layered over panels. */
+  --chrome-brush: rgba(10, 15, 21, 0.05);
 
   color-scheme: light;
-}
-
-/* ---------------------------------------------------------------------------
-   High-contrast dark theme.
-
-   The header button adds/removes `.dark` on <html> (see ThemeProvider). Every
-   token below is the dark counterpart of the light one above, so components
-   that paint with semantic colours (bg-card, text-brand-ink, border-border,
-   text-muted-foreground...) switch without knowing about the theme.
-
-   Contrast is deliberate and generous: body copy on a card sits above 16:1,
-   muted copy stays above 8:1, borders are visible rather than a faint hint,
-   and accent text is lifted rather than dimmed. That is what makes it "high
-   contrast" rather than merely dark.
-   --------------------------------------------------------------------------- */
-.dark {
-  color-scheme: dark;
-
-  /* The same warm ramp, remapped for a dark desk: 1-6 are the deep surfaces,
-     7-8 are the lit ink steps and 0 stays the paper highlight. */
-  --chrome-0: #fffdf5;
-  --chrome-1: #14130f;
-  --chrome-2: #201e18;
-  --chrome-3: #2b2820;
-  --chrome-4: #3a362c;
-  --chrome-5: #5c5545;
-  --chrome-6: #948a75;
-  --chrome-7: #c9c0ad;
-  --chrome-8: #f5f1e6;
-
-  --brand-ink: #f7f3e8;
-  --brand-cream: #0f0e0a;
-  --brand-panel: #201e18;
-  --brand-panel-2: #24211a;
-  --brand-void: #0f0e0a;
-
-  /* Accents stay saturated in the dark theme: the lime highlight is the
-     brand, not a tint, so it should still look like a highlighter. */
-  --gizmo-lime: #d9f45b;
-  --gizmo-lilac: #c9b8ff;
-  --gizmo-sky: #a9d2ff;
-  --gizmo-peach: #ffc39a;
-  --gizmo-mint: #b9efc9;
-  --gizmo-cream: #f7f2e6;
-
-  --brand-pink: #d9f45b;
-  --brand-pink-deep: #efff9c;
-  --brand-mint: #8fc3a5;
-  --brand-lime: #d9f45b;
-  --brand-sky: #a9d2ff;
-  --brand-peach: #ffc39a;
-  --brand-teal: #9dbfbd;
-  --brand-pink2: #c9b8ff;
-  --brand-orange: #ffab6b;
-  --brand-violet: #b9a4ff;
-  --brand-butter: #4a4122;
-  --brand-blush: #4a2f3a;
-
-  --background: #14130f;
-  --foreground: #f7f3e8;
-  --card: #201e18;
-  --card-foreground: #f7f3e8;
-  --popover: #24211a;
-  --popover-foreground: #f7f3e8;
-  --primary: #f2ecdd;
-  --primary-foreground: #1c1a14;
-  --secondary: #2b2820;
-  --secondary-foreground: #f7f3e8;
-  --muted: #2b2820;
-  --muted-foreground: #bdb3a0;
-  --accent: #39421c;
-  --accent-foreground: #f7f3e8;
-  --destructive: #ff8b7e;
-  --border: #3a362c;
-  --input: #4a4538;
-  --ring: #d9f45b;
-  --chart-1: #d9f45b;
-  --chart-2: #c9b8ff;
-  --chart-3: #a9d2ff;
-  --chart-4: #ffc39a;
-  --chart-5: #f7f3e8;
-  --sidebar: #17150f;
-  --sidebar-foreground: #f7f3e8;
-  --sidebar-primary: #d9f45b;
-  --sidebar-primary-foreground: #1c1a14;
-  --sidebar-accent: #24211a;
-  --sidebar-accent-foreground: #f7f3e8;
-  --sidebar-border: #2f2b22;
-  --sidebar-ring: #d9f45b;
-
-  --chrome-hi: #fffdf5;
-  --chrome-steel: #948a75;
-  --chrome-line: rgba(247, 243, 232, 0.16);
-  --chrome-sheen: rgba(255, 255, 255, 0.14);
-  --chrome-shadow: rgba(0, 0, 0, 0.8);
-
-  /* One lime glow in the top left, everything else warm charcoal. */
-  --chrome-page:
-    radial-gradient(78% 58% at 8% -12%, rgba(217, 244, 91, 0.12) 0%, transparent 62%),
-    radial-gradient(64% 52% at 100% 0%, rgba(201, 184, 255, 0.1) 0%, transparent 64%),
-    radial-gradient(60% 50% at 88% 94%, rgba(255, 195, 154, 0.07) 0%, transparent 66%),
-    linear-gradient(180deg, #191710 0%, #14130f 58%, #100f0b 100%);
-
-  --chrome-panel:
-    linear-gradient(160deg, #262319 0%, #211f18 54%, #1b1913 100%);
-
-  --chrome-surface:
-    linear-gradient(160deg, #24211a 0%, #201e18 52%, #1c1a14 100%);
-
-  --chrome-metal: none;
-
-  --chrome-ink:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 42%),
-    linear-gradient(160deg, #2b2820 0%, #1c1a14 100%);
-
-  --chrome-type:
-    linear-gradient(180deg, #f7f3e8 0%, #f7f3e8 100%);
-
-  --chrome-brush: rgba(247, 243, 232, 0.04);
 }
 
 @layer base {
@@ -336,13 +243,12 @@
     @apply border-border outline-ring/50;
   }
   html {
-    background-color: var(--chrome-1);
+    background-color: #dfe5ec;
     background-image: var(--chrome-page);
   }
   body {
     @apply font-sans text-foreground antialiased;
-    /* The metal wash is a fixed layer so it costs nothing to scroll. Screens
-       that want more reflection mount <ChromeBackdrop /> on top of it. */
+    /* The steel sheet is a fixed layer, so scrolling never repaints it. */
     background-color: transparent;
   }
   body::before {
@@ -367,31 +273,31 @@
     cursor: pointer;
   }
   ::selection {
-    background: var(--gizmo-lime);
-    color: var(--brand-ink);
-  }
-  /* In the dark theme the lime highlight still does the work. */
-  .dark ::selection {
-    background: #4a5416;
-    color: var(--chrome-0);
+    background: #0b57d0;
+    color: #ffffff;
   }
   code,
   kbd,
   pre {
     font-family: var(--font-mono);
   }
+  /* Focus is always a solid blue ring with an offset gap, so a keyboard user
+     never has to hunt for it on a metallic surface. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
 }
 
 @layer utilities {
   /* -------------------------------------------------------------------------
-     Gizmo-style stationery utilities.
+     Backdrop.
 
-     Every animation here moves a transform only. That keeps the work on the
-     compositor thread, so the highlighter smudges drift smoothly even on a
-     modest laptop and never trigger layout or a full-page repaint.
+     The chrome sheet is built from four layers: a brushed base, three moving
+     specular ribbons, three soft reflections and a fine dot grid. Every
+     animation moves a transform only, so it stays on the compositor.
      ------------------------------------------------------------------------- */
 
-  /* The fixed paper layer. `variant` is set by <ChromeBackdrop />. */
   .chrome-backdrop {
     position: absolute;
     inset: 0;
@@ -408,118 +314,112 @@
   .chrome-backdrop-base {
     position: absolute;
     inset: 0;
-    background-color: var(--chrome-1);
+    background-color: #dfe5ec;
     background-image: var(--chrome-page);
-    opacity: calc(var(--chrome-intensity, 1) * 0.92);
+    opacity: calc(var(--chrome-intensity, 1) * 0.95);
   }
 
-  /* Two soft highlighter smudges, one lime and one lilac. They are blurred
-     circles rather than gradients with hard stops, because the Gizmo look is
-     stationery: marker ink bleeding into paper, not a metallic sheen. */
+  /* Specular reflections: white at the centre with a cool halo, like light
+     caught on a curved steel surface. */
   .gizmo-blob {
     position: absolute;
     border-radius: 9999px;
-    filter: blur(64px);
-    opacity: calc(var(--chrome-intensity, 1) * 0.4);
-    animation: gizmo-blob 24s ease-in-out infinite alternate;
+    filter: blur(72px);
+    opacity: calc(var(--chrome-intensity, 1) * 0.62);
+    animation: gizmo-blob 26s ease-in-out infinite alternate;
     will-change: transform;
   }
   .gizmo-blob-lime {
-    top: -14%;
+    top: -16%;
     left: -8%;
-    width: 46%;
-    height: 44%;
-    background-color: rgba(217, 244, 91, 0.75);
+    width: 48%;
+    height: 46%;
+    background-color: rgba(255, 255, 255, 0.95);
   }
   .gizmo-blob-lilac {
-    top: -6%;
+    top: -8%;
     right: -10%;
-    width: 40%;
-    height: 38%;
-    background-color: rgba(201, 184, 255, 0.62);
-    animation-delay: -8s;
+    width: 42%;
+    height: 40%;
+    background-color: rgba(176, 205, 228, 0.8);
+    animation-delay: -9s;
   }
   .gizmo-blob-peach {
-    bottom: -18%;
-    right: 6%;
-    width: 34%;
-    height: 32%;
-    background-color: rgba(255, 195, 154, 0.5);
-    animation-delay: -15s;
+    bottom: -20%;
+    right: 4%;
+    width: 38%;
+    height: 34%;
+    background-color: rgba(199, 191, 210, 0.65);
+    animation-delay: -17s;
   }
 
-  /* -------------------------------------------------------------------------
-     Moving gradient wash.
-
-     Three wide, soft colour ribbons cross the page on loops of different
-     lengths. Each one is a single element with `filter: blur()` and a
-     transform animation, so the compositor moves a cached layer instead of
-     repainting a gradient every frame. The fade in/out at the ends of the
-     loop keeps the restart invisible.
-     ------------------------------------------------------------------------- */
+  /* Two wide reflections travel across the page on different loops, which is
+     what makes the backdrop read as moving chrome rather than a grey box. */
   .gizmo-flow {
     position: absolute;
     inset: -12%;
     overflow: hidden;
-    opacity: calc(var(--chrome-intensity, 1) * 0.62);
+    opacity: calc(var(--chrome-intensity, 1) * 0.85);
     pointer-events: none;
   }
   .gizmo-ribbon {
     position: absolute;
     left: -70%;
     width: 150%;
-    height: 30%;
+    height: 32%;
     border-radius: 9999px;
-    filter: blur(68px);
+    filter: blur(58px);
     will-change: transform, opacity;
     animation: ribbon-cross 38s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
   .gizmo-ribbon-lime {
-    top: 2%;
+    top: 0%;
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(217, 244, 91, 0.7) 28%,
-      rgba(169, 210, 255, 0.42) 62%,
+      rgba(255, 255, 255, 0.95) 24%,
+      rgba(188, 214, 235, 0.7) 55%,
       transparent 100%
     );
     animation-duration: 41s;
   }
   .gizmo-ribbon-lilac {
-    top: 38%;
-    height: 26%;
+    top: 36%;
+    height: 28%;
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(201, 184, 255, 0.62) 30%,
-      rgba(255, 195, 154, 0.4) 64%,
+      rgba(255, 255, 255, 0.9) 28%,
+      rgba(206, 198, 219, 0.55) 60%,
       transparent 100%
     );
     animation-duration: 55s;
     animation-delay: -19s;
   }
   .gizmo-ribbon-sky {
-    top: 72%;
-    height: 24%;
+    top: 70%;
+    height: 26%;
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(185, 239, 201, 0.55) 30%,
-      rgba(217, 244, 91, 0.42) 68%,
+      rgba(255, 255, 255, 0.85) 30%,
+      rgba(167, 199, 222, 0.6) 66%,
       transparent 100%
     );
     animation-duration: 47s;
     animation-delay: -32s;
   }
-  /* The dark theme keeps the same ribbons but they read as light rather than
-     pigment, so they need a touch less weight. */
-  .dark .gizmo-flow {
-    opacity: calc(var(--chrome-intensity, 1) * 0.4);
+
+  /* The metal sheet behind the hero: a bright reflection band. */
+  .chrome-metal-sheen {
+    position: absolute;
+    inset: 0;
+    background-image: var(--chrome-metal);
+    opacity: 0.55;
+    pointer-events: none;
   }
 
-  /* Ink in water: a canvas of pigment plumes. Multiply makes the ink behave
-     like dye on the cream page; the dark theme switches to screen so the same
-     plumes glow instead of disappearing. */
+  /* Ink in water: the landing hero's pigment plumes, at metal strength. */
   .ink-water {
     position: absolute;
     inset: 0;
@@ -538,50 +438,38 @@
     height: 100%;
     mix-blend-mode: multiply;
   }
-  .dark .ink-water canvas {
-    mix-blend-mode: screen;
-    opacity: 0.75;
-  }
 
-  /* The desk texture: a faint dot grid, like a bullet-journal page. */
+  /* A fine engineering grid: reads as the surface of a machined plate. */
   .gizmo-dots {
     position: absolute;
     inset: 0;
     background-image: radial-gradient(
       circle,
-      rgba(28, 26, 20, 0.12) 1px,
+      rgba(10, 15, 21, 0.14) 1px,
       transparent 1px
     );
     background-size: 22px 22px;
-    opacity: 0.32;
-  }
-  .dark .gizmo-dots {
-    background-image: radial-gradient(
-      circle,
-      rgba(247, 243, 232, 0.1) 1px,
-      transparent 1px
-    );
     opacity: 0.4;
   }
-  .dark .gizmo-blob {
-    opacity: calc(var(--chrome-intensity, 1) * 0.26);
-  }
 
-  /* A paper card: warm white, a crisp hairline and a short offset shadow.
-     Header plates and body cards share it so a screen reads as one stationery
-     set. */
+  /* -------------------------------------------------------------------------
+     Surfaces.
+     ------------------------------------------------------------------------- */
+
+  /* Header plates and body cards share one stationery set: a bright plate, a
+     hard 1px edge and a short offset shadow. */
   .chrome-hero,
   .chrome-plate {
     position: relative;
     isolation: isolate;
     overflow: hidden;
-    border: 1px solid var(--chrome-line);
+    border: 1px solid var(--chrome-edge);
     background-color: var(--card);
     background-image: var(--chrome-panel);
     box-shadow:
       inset 0 1px 0 var(--chrome-sheen),
-      0 2px 0 rgba(28, 26, 20, 0.05),
-      0 26px 44px -40px var(--chrome-shadow);
+      0 2px 0 rgba(10, 15, 21, 0.16),
+      0 26px 44px -36px var(--chrome-shadow);
   }
   .chrome-hero::before,
   .chrome-plate::before {
@@ -598,44 +486,42 @@
     pointer-events: none;
   }
 
-  /* Reading progress along the top of the app: a highlighter stroke. */
+  /* The reading-progress rule: a polished chrome highlight. */
   .chrome-progress {
-    background-color: var(--gizmo-lime);
+    background-color: #0b57d0;
+    background-image: linear-gradient(
+      90deg,
+      #6d8299 0%,
+      #ffffff 34%,
+      #9fc0dc 62%,
+      #0b57d0 100%
+    );
   }
 
-  /* Sticky bars: cream paper with a soft blur, so content slides under it. */
+  /* Sticky bars: frosted steel, so content slides under it. */
   .chrome-bar {
-    background-color: var(--chrome-1);
-    background-color: color-mix(in srgb, var(--chrome-1) 88%, transparent);
+    background-color: #f4f7fa;
+    background-color: color-mix(in srgb, #f6f9fb 88%, transparent);
     background-image: none;
     backdrop-filter: blur(14px);
-    border-color: var(--chrome-line);
-  }
-  .dark .chrome-bar {
-    background-color: var(--chrome-1);
-    background-color: color-mix(in srgb, var(--chrome-1) 86%, transparent);
+    border-color: var(--chrome-edge);
   }
 
-  /* Sidebar / rail: the same warm paper as the page, one step lighter. */
+  /* Sidebar / rail: a vertical brushed plate, clearly separated from content. */
   .chrome-rail {
     background-color: var(--sidebar);
     background-image: linear-gradient(
-      180deg,
-      rgba(255, 253, 248, 0.98) 0%,
-      rgba(252, 247, 237, 0.98) 100%
+      100deg,
+      #dde4eb 0%,
+      #f6f9fb 32%,
+      #e5ebf2 56%,
+      #f4f8fb 76%,
+      #d9e2ea 100%
     );
-    box-shadow: inset -1px 0 0 var(--chrome-line);
-  }
-  .dark .chrome-rail {
-    background-image: linear-gradient(
-      180deg,
-      rgba(29, 27, 21, 0.98) 0%,
-      rgba(20, 19, 15, 0.98) 100%
-    );
+    box-shadow: inset -1px 0 0 var(--chrome-edge);
   }
 
-  /* Page titles are solid ink in the Gizmo look. Nested accent spans keep
-     their own colour, so a lime highlight inside a heading still reads. */
+  /* Page titles are solid graphite. */
   .chrome-title {
     background-image: none;
     color: var(--brand-ink);
@@ -646,68 +532,41 @@
     }
   }
 
-  /* A chosen subject in the timetable builder: one pale tint per subject,
-     lit from the top left so the tile reads as a coloured surface rather than
-     a flat swatch. The tint itself comes from SUBJECT_COLORS. */
+  /* A chosen subject in the timetable builder: a light chrome gloss over the
+     subject's tint, so the tile reads as a machined nameplate. */
   .subject-tile {
     background-image:
       radial-gradient(
         125% 95% at 6% -18%,
-        rgba(255, 255, 255, 0.9) 0%,
+        rgba(255, 255, 255, 0.95) 0%,
         transparent 62%
       ),
       linear-gradient(
         152deg,
-        rgba(255, 255, 255, 0.42) 0%,
-        rgba(255, 255, 255, 0.06) 46%,
-        rgba(25, 26, 30, 0.07) 100%
-      );
-  }
-  /* The dark theme paints the tile on a deep tint, so the same highlight has
-     to be much quieter and the shadow deeper. */
-  .dark .subject-tile {
-    background-image:
-      radial-gradient(
-        125% 95% at 6% -18%,
-        rgba(255, 255, 255, 0.14) 0%,
-        transparent 64%
-      ),
-      linear-gradient(
-        152deg,
-        rgba(255, 255, 255, 0.05) 0%,
-        rgba(0, 0, 0, 0.16) 52%,
-        rgba(0, 0, 0, 0.32) 100%
+        rgba(255, 255, 255, 0.55) 0%,
+        rgba(255, 255, 255, 0.1) 46%,
+        rgba(10, 15, 21, 0.09) 100%
       );
   }
 
-  /* White surface used by every card. A crisp edge and a 2px offset shadow do
-     the work, so the card looks pressed onto the page rather than floating. */
+  /* Every card. A crisp edge and a 2px offset shadow do the work, so the card
+     looks pressed onto the plate rather than floating in a haze. */
   .gizmo-card {
     @apply rounded-3xl border border-border bg-card;
     background-image: var(--chrome-surface);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      0 2px 0 rgba(28, 26, 20, 0.05),
-      0 22px 40px -36px rgba(60, 50, 20, 0.35);
-  }
-  .dark .gizmo-card {
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      0 2px 0 rgba(0, 0, 0, 0.55),
-      0 22px 40px -36px rgba(0, 0, 0, 0.9);
+      inset 0 1px 0 #ffffff,
+      0 2px 0 rgba(10, 15, 21, 0.14),
+      0 22px 40px -32px rgba(9, 16, 24, 0.6);
   }
 
-  /* Every existing panel picks up the warm paper wash. background-image only,
-     so app backgrounds, hover colours and the dark-mode remap keep working. */
-  :is(
-    [class~="bg-white"],
-    [class~="bg-card"],
-    [class~="bg-popover"]
-  ) {
+  /* Every existing panel picks up the metal wash. background-image only, so
+     background colours and hover states keep working. */
+  :is([class~="bg-white"], [class~="bg-card"], [class~="bg-popover"]) {
     background-image: var(--chrome-surface);
   }
 
-  /* Ink buttons and tiles carry a subtle lit top edge. */
+  /* Ink buttons and tiles carry a lit top edge, like a machined key. */
   :is(
     [class~="bg-primary"],
     [class~="bg-[#191B27]"],
@@ -717,56 +576,24 @@
     background-image: var(--chrome-ink);
   }
 
-  /* The primary control is a chunky ink pill with a highlighter edge. The
-     dark theme flips it to lime, which keeps its label contrast without
-     inventing a second accent. */
+  /* The primary control is a graphite pill with a polished top edge. */
   .chrome-button {
     background-color: var(--brand-ink);
-    background-image: linear-gradient(
-      160deg,
-      #2b2820 0%,
-      #1c1a14 62%,
-      #17150f 100%
-    );
+    background-image: var(--chrome-ink);
+    color: #ffffff;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.16),
-      0 2px 0 rgba(28, 26, 20, 0.35),
-      0 10px 20px -16px rgba(40, 32, 10, 0.7);
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 2px 0 rgba(10, 15, 21, 0.55),
+      0 12px 22px -16px rgba(9, 16, 24, 0.85);
   }
   .chrome-button:hover {
-    background-color: #2b2820;
-    background-image: linear-gradient(
-      160deg,
-      #3a362b 0%,
-      #2a261d 62%,
-      #221f18 100%
-    );
-  }
-  .dark .chrome-button {
-    background-color: var(--gizmo-lime);
-    background-image: linear-gradient(
-      160deg,
-      #e7fa8a 0%,
-      #d9f45b 58%,
-      #c2dd45 100%
-    );
-    color: #1c1a14;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.55),
-      0 2px 0 rgba(0, 0, 0, 0.5),
-      0 10px 20px -16px rgba(0, 0, 0, 0.8);
-  }
-  .dark .chrome-button:hover {
-    background-color: #e7fa8a;
-    background-image: linear-gradient(
-      160deg,
-      #f0ffb0 0%,
-      #e2fb72 58%,
-      #cee857 100%
-    );
+    background-color: #1d2833;
+    background-image:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 44%),
+      linear-gradient(165deg, #3c4a58 0%, #1b252f 52%, #0d141b 100%);
   }
 
-  /* A slow shine across a chrome plate on hover. Transform only. */
+  /* A slow specular pass across a plate on hover. Transform only. */
   .chrome-shine {
     position: relative;
     overflow: hidden;
@@ -780,7 +607,7 @@
     background-image: linear-gradient(
       100deg,
       transparent 38%,
-      rgba(217, 244, 91, 0.32) 50%,
+      rgba(255, 255, 255, 0.9) 50%,
       transparent 62%
     );
     transform: translate3d(-120%, 0, 0) skewX(-10deg);
@@ -795,8 +622,7 @@
     opacity: 1;
   }
 
-  /* Cards that should feel pressable. The lift is small on purpose: enough to
-     invite a click, never enough to jog the page around. */
+  /* Cards that should feel pressable. */
   .lift {
     transition:
       transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
@@ -806,11 +632,10 @@
   }
   .lift:hover {
     transform: translateY(-2px);
-    box-shadow: 0 18px 32px -26px rgba(60, 50, 20, 0.4);
+    box-shadow: 0 18px 30px -24px rgba(9, 16, 24, 0.65);
   }
 
-  /* Stagger children as they appear, without adding wrapper elements. Useful
-     for table rows and grids where an extra div would change the layout. */
+  /* Stagger children as they appear, without adding wrapper elements. */
   .rise-stagger > * {
     animation: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
@@ -842,8 +667,7 @@
     animation-delay: 0.34s;
   }
 
-  /* A soft specular highlight that crosses a card on hover. The card needs
-     `relative overflow-hidden`, which every card here already has. */
+  /* A specular highlight that crosses a card on hover. */
   .hover-sheen {
     position: relative;
     overflow: hidden;
@@ -853,12 +677,11 @@
     content: "";
     position: absolute;
     inset: -60%;
-    /* Behind the copy, in front of the card's own background. */
     z-index: -1;
     background: linear-gradient(
       100deg,
       transparent 38%,
-      rgba(217, 244, 91, 0.4) 50%,
+      rgba(255, 255, 255, 0.95) 50%,
       transparent 62%
     );
     transform: translate3d(-75%, 0, 0) rotate(6deg);
@@ -888,10 +711,13 @@
     pointer-events: none;
   }
 
-  /* Small rotated label that reads like a sticker on a notebook. */
+  /* Small label that reads like a machined tag. */
   .sticker {
-    @apply inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[0.7rem] font-semibold;
-    box-shadow: 0 2px 0 rgba(28, 26, 20, 0.06);
+    @apply inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[0.7rem] font-semibold;
+    border-color: var(--chrome-edge);
+    background-image: linear-gradient(180deg, #ffffff 0%, #e7edf3 100%);
+    color: var(--brand-ink);
+    box-shadow: 0 2px 0 rgba(10, 15, 21, 0.14);
   }
 
   .animate-rise {
@@ -911,11 +737,11 @@
   }
 
   .soft-shadow {
-    box-shadow: 0 1px 0 rgba(25, 26, 30, 0.05);
+    box-shadow: 0 1px 0 rgba(9, 16, 24, 0.12);
   }
 
   .ring-shadow {
-    box-shadow: 0 0 0 1px rgba(25, 26, 30, 0.05);
+    box-shadow: 0 0 0 1px rgba(9, 16, 24, 0.16);
   }
 
   /* Sidebar / settings rows. */
@@ -933,8 +759,8 @@
   .mono-label {
     font-family: var(--font-sans);
     font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
@@ -969,7 +795,7 @@
     background: transparent;
   }
 
-  /* Kept so existing screens still render a ruled-paper texture. */
+  /* Ruled / dotted textures kept for the older screens. */
   .blueprint-grid,
   .dot-grid,
   .paper-grid,
@@ -977,18 +803,16 @@
   .paper-dots {
     background-image: radial-gradient(
       circle,
-      rgba(25, 26, 30, 0.07) 1px,
+      rgba(10, 15, 21, 0.13) 1px,
       transparent 1px
     );
     background-size: 22px 22px;
   }
 
-  /* Paper panel kept for the older screens: the same metal wash, with the dot
-     grid laid over it at a very low contrast. */
   .paper-panel {
     background-color: var(--chrome-1);
     background-image:
-      radial-gradient(circle, rgba(25, 26, 30, 0.05) 1px, transparent 1px),
+      radial-gradient(circle, rgba(10, 15, 21, 0.07) 1px, transparent 1px),
       var(--chrome-panel);
     background-size: 20px 20px, 100% 100%;
   }
@@ -1008,26 +832,18 @@
     transform: rotateY(180deg);
   }
 
-  /* A highlighter stroke behind a run of text. The transparent top keeps the
-     letters crisp while the lime band sits low, like a marker pass. */
+  /* A polish band behind a run of text: the chrome version of the old
+     highlighter. Ink type stays fully readable on the pale ice fill. */
   .highlighter {
     background-image: linear-gradient(
-      transparent 52%,
-      var(--gizmo-lime) 52%,
-      var(--gizmo-lime) 94%,
-      transparent 94%
+      transparent 50%,
+      #bfe3ff 50%,
+      #bfe3ff 96%,
+      transparent 96%
     );
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
-    padding-inline: 0.08em;
-  }
-  .dark .highlighter {
-    background-image: linear-gradient(
-      transparent 52%,
-      rgba(217, 244, 91, 0.3) 52%,
-      rgba(217, 244, 91, 0.3) 94%,
-      transparent 94%
-    );
+    padding-inline: 0.1em;
   }
 
   .text-balance {
@@ -1036,6 +852,98 @@
 
   .mascot-float {
     animation: mascot-float 6s ease-in-out infinite;
+  }
+
+  /* -------------------------------------------------------------------------
+     Contrast guarantees.
+
+     Several screens spell colour out by hand (text-brand-ink/55, bg-[#FFF1DE]).
+     On a metal page those opacity steps would fade into grey and pale tints
+     would merge with the white card behind them. These rules lift the text
+     steps and give every pale tint a visible hairline. New components should
+     use the semantic tokens instead and need none of this.
+     ------------------------------------------------------------------------- */
+
+  :is(
+    [class~="text-brand-ink/20"],
+    [class~="text-brand-ink/30"],
+    [class~="text-brand-ink/35"],
+    [class~="text-brand-ink/40"]
+  ) {
+    color: #6f7d8c;
+  }
+
+  :is(
+    [class~="text-brand-ink/45"],
+    [class~="text-brand-ink/50"],
+    [class~="text-brand-ink/55"],
+    [class~="text-brand-ink/60"],
+    [class~="text-brand-ink/65"]
+  ) {
+    color: #46525f;
+  }
+
+  :is(
+    [class~="text-brand-ink/70"],
+    [class~="text-brand-ink/75"],
+    [class~="text-brand-ink/80"],
+    [class~="text-brand-ink/85"]
+  ) {
+    color: #222c37;
+  }
+
+  [class~="text-muted-foreground/60"] {
+    color: #4b5866;
+  }
+
+  [class~="text-muted-foreground/80"] {
+    color: #2c3641;
+  }
+
+  /* White labels on a graphite tile: 60% white is only ~4:1 on ink, so the
+     quiet label is lifted rather than left at the edge of legibility. */
+  :is([class~="text-white/60"], [class~="text-white/70"]) {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  :is(
+    [class~="border-border/60"],
+    [class~="border-border/70"],
+    [class~="border-border/80"],
+    [class~="border-brand-ink/10"],
+    [class~="border-brand-ink/15"],
+    [class~="border-brand-ink/20"]
+  ) {
+    border-color: #93a1b0;
+  }
+
+  /* Pale tinted chips and banners get a hairline so they never blend into the
+     white card underneath them. `outline` costs no layout, unlike a border. */
+  :is(
+    [class~="bg-[#FFF6E5]"],
+    [class~="bg-[#FFF1DE]"],
+    [class~="bg-[#FFF0DC]"],
+    [class~="bg-[#FFF3E3]"],
+    [class~="bg-[#FFF3E8]"],
+    [class~="bg-[#FFFBF2]"],
+    [class~="bg-[#FFFBEC]"],
+    [class~="bg-[#FFF9EC]"],
+    [class~="bg-[#FFF7F8]"],
+    [class~="bg-[#FFF7F9]"],
+    [class~="bg-[#FFEEF0]"],
+    [class~="bg-[#FFF1F3]"],
+    [class~="bg-[#E9FBF3]"],
+    [class~="bg-[#EAFBF0]"],
+    [class~="bg-[#EAF8F0]"],
+    [class~="bg-[#E6F9F1]"],
+    [class~="bg-[#E7F2FC]"],
+    [class~="bg-[#E8F3FD]"],
+    [class~="bg-[#F3F0FF]"],
+    [class~="bg-[#EFEDFF]"],
+    [class~="bg-[#F1F0FB]"]
+  ) {
+    outline: 1px solid rgba(10, 15, 21, 0.22);
+    outline-offset: 0;
   }
 }
 
@@ -1081,8 +989,8 @@
   animation: progress-pulse 1.8s ease-in-out infinite;
 }
 
-/* One ribbon crossing the screen. It travels in from the left, holds its
-   brightness through the middle, then dissolves before looping. */
+/* One reflection crossing the screen: in from the left, bright through the
+   middle, then dissolving before it loops. */
 @keyframes ribbon-cross {
   0% {
     transform: translate3d(-18%, 0, 0) rotate(-7deg) scale(1);
@@ -1103,8 +1011,8 @@
   }
 }
 
-/* The two backdrop smudges drift in opposite directions. Transform-only, so
-   the layer stays on the compositor and never repaints the page. */
+/* The reflections drift in opposite directions. Transform-only, so the layer
+   stays on the compositor. */
 @keyframes gizmo-blob {
   0% {
     transform: translate3d(0, 0, 0) scale(1);
@@ -1160,488 +1068,10 @@
   animation: caret-blink 1.2s steps(1) infinite;
 }
 
-/* The revision timetable fits its container at every width. Rows follow the
-   order of each day's sessions rather than a shared clock, so there is no time
-   gutter: all seven day columns share the full width and nothing needs
-   sideways scrolling. */
+/* The revision timetable fits its container at every width. */
 .week-columns {
   display: grid;
   grid-template-columns: repeat(var(--week-days, 5), minmax(0, 1fr));
-}
-
-/* ---------------------------------------------------------------------------
-   Dark-mode compatibility layer for literal colours.
-
-   Several screens still spell colours out by hand (bg-[#FFF6E5], text-[#128A4C])
-   instead of using a token. Rewriting ~25 screens would be a large, risky change
-   for one theme, so the dark theme remaps the literals this codebase actually
-   uses onto the dark palette below. Each group is a colour family: a light tint
-   becomes a deep tint, its ink becomes a lifted accent.
-
-   New components should paint with semantic tokens (bg-card, text-brand-ink,
-   text-muted-foreground, border-border, bg-brand-panel) or the `dark:` variant,
-   and then they need nothing from this block.
-   --------------------------------------------------------------------------- */
-
-/* Neutral light surfaces -> card / raised surface. */
-.dark
-  :is(
-    [class~="bg-white"],
-    [class~="bg-white/60"],
-    [class~="bg-white/70"],
-    [class~="bg-white/75"],
-    [class~="bg-white/80"],
-    [class~="bg-white/85"],
-    [class~="bg-white/90"],
-    [class~="bg-white/95"],
-    [class~="bg-[#FCFCFD]"],
-    [class~="bg-[#FCFCFA]"],
-    [class~="bg-[#FBFAF6]"],
-    [class~="bg-[#FAFAF7]"],
-    [class~="bg-[#FCFAF4]"],
-    [class~="bg-[#F7F5EF]"],
-    [class~="bg-[#F4F4F7]"]
-  ) {
-  background-color: var(--card);
-}
-
-.dark
-  :is(
-    [class~="bg-[#EFEAE0]"],
-    [class~="bg-[#EDE9DF]"],
-    [class~="bg-[#E7E7EF]"],
-    [class~="bg-[#E7E7EE]"],
-    [class~="bg-[#E3DED2]"]
-  ) {
-  background-color: #2b2820;
-}
-
-/* Ink fills (primary buttons, avatar chips, logo tile) invert: the light theme
-   paints ink on paper, the dark theme paints paper on ink. Setting `color` here
-   beats the utility's own `text-white`, so labels inside stay readable. */
-.dark
-  :is(
-    [class~="bg-[#191B27]"],
-    [class~="bg-[#191a1e]"],
-    [class~="bg-[#2A2D3E]"],
-    [class~="bg-[#32333b]"]
-  ) {
-  background-color: var(--primary);
-  color: var(--primary-foreground);
-}
-
-/* A disabled ink button keeps a 25-30% ink fill in the light theme, which is
-   invisible on a dark page. Give it a muted raised fill and label instead. */
-.dark :is([class~="bg-[#191B27]"], [class~="bg-[#2A2D3E]"]):disabled {
-  background-color: #2b2820;
-  color: #9a907c;
-}
-
-/* White hairlines and muted white labels used on tinted panels. */
-.dark
-  :is(
-    [class~="border-white/70"],
-    [class~="border-white/80"],
-    [class~="border-white/90"]
-  ) {
-  border-color: var(--border);
-}
-
-.dark :is([class~="text-white/60"], [class~="text-white/70"]) {
-  color: #c2cad8;
-}
-
-/* Accent tints: pale family -> deep family. */
-.dark
-  :is(
-    [class~="bg-[#FAF8FF]"],
-    [class~="bg-[#FBF7FF]"],
-    [class~="bg-[#FBFAFF]"],
-    [class~="bg-[#F6F2FF]"],
-    [class~="bg-[#F5F1FF]"],
-    [class~="bg-[#F4F2FF]"],
-    [class~="bg-[#F3F0FF]"],
-    [class~="bg-[#F3ECFF]"],
-    [class~="bg-[#F1F0FB]"],
-    [class~="bg-[#F1ECFF]"],
-    [class~="bg-[#EFEDFF]"],
-    [class~="bg-[#EFEBFF]"],
-    [class~="bg-[#EDE8FF]"],
-    [class~="bg-[#ECE6FF]"],
-    [class~="bg-[#E4DBFF]"],
-    [class~="bg-[#E2DBFF]"]
-  ) {
-  background-color: #1d2228;
-}
-
-.dark
-  :is(
-    [class~="bg-[#E9FBF3]"],
-    [class~="bg-[#EAFBF0]"],
-    [class~="bg-[#EAF8F0]"],
-    [class~="bg-[#E6F9F1]"],
-    [class~="bg-[#E6F7EF]"],
-    [class~="bg-[#E3F8F0]"],
-    [class~="bg-[#DDF7EB]"],
-    [class~="bg-[#DCF5E8]"],
-    [class~="bg-[#D7F0E3]"],
-    [class~="bg-[#CFF3E2]"],
-    [class~="bg-[#F3FBF7]"],
-    [class~="bg-[#F7FCFA]"],
-    [class~="bg-[#e7f7ef]"]
-  ) {
-  background-color: #0f2a1f;
-}
-
-.dark
-  :is([class~="bg-[#E6F9F6]"], [class~="bg-[#E4F6F2]"]) {
-  background-color: #082a2a;
-}
-
-.dark
-  :is(
-    [class~="bg-[#E8F3FD]"],
-    [class~="bg-[#E7F2FC]"],
-    [class~="bg-[#EEF3FF]"],
-    [class~="bg-[#E3ECFF]"]
-  ) {
-  background-color: #0f2136;
-}
-
-.dark
-  :is(
-    [class~="bg-[#FFEEF0]"],
-    [class~="bg-[#FFF1F3]"],
-    [class~="bg-[#FFF7F9]"],
-    [class~="bg-[#FDEFF4]"],
-    [class~="bg-[#FDE8ED]"],
-    [class~="bg-[#FBDDE0]"],
-    [class~="bg-[#FFE3E6]"],
-    [class~="bg-[#FFE7F0]"]
-  ) {
-  background-color: #3a1119;
-}
-
-.dark
-  :is(
-    [class~="bg-[#FFF6E5]"],
-    [class~="bg-[#FFF0DC]"],
-    [class~="bg-[#FFF3E3]"],
-    [class~="bg-[#FFF1DE]"],
-    [class~="bg-[#FFFBF2]"],
-    [class~="bg-[#FFFBEC]"],
-    [class~="bg-[#FFF9EC]"],
-    [class~="bg-[#FFF3E8]"]
-  ) {
-  background-color: #33230a;
-}
-
-/* Subject tints from SUBJECT_COLORS (src/lib/timetable.ts). The builder paints
-   the chosen subject on its pale tint; without these the dark theme showed a
-   near-white card title on a near-white card. Each family gets the deep
-   version of its own tint, a deeper hairline and a lifted label. */
-.dark [class~="bg-[#EAECFB]"] { background-color: #161c38; }
-.dark [class~="bg-[#FAF1DF]"] { background-color: #2b2210; }
-.dark [class~="bg-[#FAE9EF]"] { background-color: #2c1420; }
-.dark [class~="bg-[#F0EBFA]"] { background-color: #211a3a; }
-.dark [class~="bg-[#E6F2F9]"] { background-color: #102534; }
-.dark [class~="bg-[#F0F4E3]"] { background-color: #1f2411; }
-.dark [class~="bg-[#FBEDE4]"] { background-color: #2c1a10; }
-.dark [class~="bg-[#F7ECF6]"] { background-color: #271426; }
-.dark [class~="bg-[#EEF1F4]"] { background-color: #1b2129; }
-.dark [class~="bg-[#EAF4EE]"] { background-color: #12251b; }
-.dark [class~="bg-[#F7F2E1]"] { background-color: #262112; }
-
-.dark [class~="border-[#C6CCF3]"] { border-color: #38447a; }
-.dark [class~="border-[#EDC4D2]"] { border-color: #6c3446; }
-.dark [class~="border-[#D6C8F0]"] { border-color: #4a3d75; }
-.dark [class~="border-[#BFDDEF]"] { border-color: #2c5372; }
-.dark [class~="border-[#D3DEB2]"] { border-color: #46542c; }
-.dark [class~="border-[#EECDBA]"] { border-color: #6b452c; }
-.dark [class~="border-[#E4C6E1]"] { border-color: #5e3359; }
-.dark [class~="border-[#CDD6DE]"] { border-color: #3b4756; }
-.dark [class~="border-[#C3DFCF]"] { border-color: #2f5a41; }
-.dark [class~="border-[#E2D5AC]"] { border-color: #5e5330; }
-
-.dark [class~="text-[#98304F]"] { color: #ff9db4; }
-.dark [class~="text-[#513897]"] { color: #c3b2ff; }
-.dark [class~="text-[#206390]"] { color: #8fc2ff; }
-.dark [class~="text-[#4A6016]"] { color: #c2e07a; }
-.dark [class~="text-[#97491E]"] { color: #ffb184; }
-.dark [class~="text-[#6D3768]"] { color: #e5a9de; }.dark [class~="text-[#445361]"] {
-  color: #c9c0ad;
-}
-.dark [class~="text-[#2E5D42]"] { color: #7fd6a4; }
-.dark [class~="text-[#6A5315]"] { color: #ffc163; }
-
-/* Accent ink -> lifted accent, one group per family. */
-.dark
-  :is(
-    [class~="text-[#5B3DF5]"],
-    [class~="text-[#6B4BFF]"],
-    [class~="text-[#6B4EE6]"],
-    [class~="text-[#7C5CFF]"],
-    [class~="text-[#5130D8]"],
-    [class~="text-[#4B2BD6]"],
-    [class~="text-[#3f24b8]"],
-    [class~="text-[#8A4BC6]"],
-    [class~="text-[#B9A6FF]"]
-  ) {
-  color: #c9b8ff;
-}
-
-.dark
-  :is(
-    [class~="text-[#128A4C]"],
-    [class~="text-[#128A5B]"],
-    [class~="text-[#0F7A50]"],
-    [class~="text-[#0e7a50]"],
-    [class~="text-[#0C6B4C]"],
-    [class~="text-[#22A06B]"]
-  ) {
-  color: #6fe3a6;
-}
-
-.dark
-  :is(
-    [class~="text-[#0e7a66]"],
-    [class~="text-[#0E8C7F]"],
-    [class~="text-[#0A655C]"],
-    [class~="text-[#14866D]"]
-  ) {
-  color: #63e3d0;
-}
-
-.dark
-  :is(
-    [class~="text-[#C93C49]"],
-    [class~="text-[#C23B49]"],
-    [class~="text-[#D24350]"],
-    [class~="text-[#A83458]"],
-    [class~="text-[#B23A55]"],
-    [class~="text-[#C43F69]"],
-    [class~="text-[#D2542A]"]
-  ) {
-  color: #ff9da8;
-}
-
-.dark
-  :is(
-    [class~="text-[#96650A]"],
-    [class~="text-[#96560C]"],
-    [class~="text-[#8A5D00]"],
-    [class~="text-[#8A5A12]"],
-    [class~="text-[#8a5a12]"],
-    [class~="text-[#7A5306]"],
-    [class~="text-[#7A5410]"],
-    [class~="text-[#B4720E]"],
-    [class~="text-[#B7791F]"],
-    [class~="text-[#C2660F]"],
-    [class~="text-[#D08A00]"],
-    [class~="text-[#F0871F]"]
-  ) {
-  color: #ffc163;
-}
-
-.dark
-  :is(
-    [class~="text-[#4C5FD5]"],
-    [class~="text-[#3153C9]"],
-    [class~="text-[#3846A8]"],
-    [class~="text-[#2B7FB8]"],
-    [class~="text-[#1B5C8A]"],
-    [class~="text-[#1d5f9e]"]
-  ) {
-  color: #8fc2ff;
-}
-
-/* Light hairlines -> dark hairlines, thick enough to actually show. */
-.dark
-  :is(
-    [class~="border-[#E9E2F5]"],
-    [class~="border-[#E7DCF8]"],
-    [class~="border-[#D8CCFF]"],
-    [class~="border-[#CFC7E8]"],
-    [class~="border-[#CFC4FF]"],
-    [class~="border-[#B9B0E8]"]
-  ) {
-  border-color: #453b6b;
-}
-
-.dark
-  :is([class~="border-[#E4DFD3]"], [class~="border-[#E7E7EF]"]) {
-  border-color: var(--border);
-}
-
-.dark [class~="border-[#191B27]"] {
-  border-color: #6b7285;
-}
-
-.dark
-  :is(
-    [class~="border-[#BDEBD3]"],
-    [class~="border-[#CBE7D8]"],
-    [class~="border-[#A6D9B9]"],
-    [class~="border-[#12B8A6]"]
-  ) {
-  border-color: #2f7a68;
-}
-
-.dark [class~="border-[#F6D2D6]"] {
-  border-color: #6e2a34;
-}
-
-.dark
-  :is(
-    [class~="border-[#F0DCB8]"],
-    [class~="border-[#EBD9B4]"],
-    [class~="border-[#EBD6AB]"]
-  ) {
-  border-color: #6b4e1c;
-}
-
-.dark :is([class~="border-[#C8D8FF]"], [class~="border-[#AAC1FF]"]) {
-  border-color: #2c4b78;
-}
-
-/*
-   Opacity modifiers on ink text are the one place a "high contrast" theme can
-   quietly fail: 45% of near-white on a near-black card is a grey that reads as
-   disabled. Each group is lifted to the nearest accessible step, so hierarchy
-   is kept without sacrificing legibility. Applies to the .dark theme only.
-*/
-.dark
-  :is(
-    [class~="text-brand-ink/20"],
-    [class~="text-brand-ink/30"],
-    [class~="text-brand-ink/35"],
-    [class~="text-brand-ink/40"]
-  ) {
-  color: #a89c83;
-}
-
-.dark
-  :is(
-    [class~="text-brand-ink/45"],
-    [class~="text-brand-ink/50"],
-    [class~="text-brand-ink/55"],
-    [class~="text-brand-ink/60"],
-    [class~="text-brand-ink/65"]
-  ) {
-  color: #c9c0ad;
-}
-
-.dark
-  :is(
-    [class~="text-brand-ink/70"],
-    [class~="text-brand-ink/75"],
-    [class~="text-brand-ink/80"],
-    [class~="text-brand-ink/85"]
-  ) {
-  color: #ece6d8;
-}
-
-.dark [class~="text-muted-foreground/60"] {
-  color: #b3a893;
-}
-
-.dark [class~="text-muted-foreground/80"] {
-  color: #ddd5c4;
-}
-
-/* Hairlines at 60-70% opacity are the default dividers; on the dark page they
-   need a little more weight to be seen at all. */
-.dark
-  :is(
-    [class~="border-border/60"],
-    [class~="border-border/70"],
-    [class~="border-border/80"]
-  ) {
-  border-color: #3f3a2f;
-}
-
-/* Focus rings keep their hue but gain brightness. */
-.dark [class~="ring-[#7C5CFF]"] {
-  --tw-ring-color: #d9f45b;
-}
-
-/* Hover states that would otherwise flash a light or near-black fill. */
-.dark [class~="hover:bg-white"]:hover {
-  background-color: #262319;
-}
-
-.dark [class~="hover:bg-[#2A2D3E]"]:hover,
-.dark [class~="hover:bg-[#32333b]"]:hover {
-  background-color: #dbe3f0;
-}
-
-.dark [class~="hover:bg-[#e3ded2]"]:hover {
-  background-color: #262319;
-}
-
-.dark [class~="hover:bg-[#a32a38]"]:hover {
-  background-color: #ff8b97;
-}
-
-/* Destructive buttons carry dark ink in both themes, because the fill is now a
-   bright red rather than a deep one. */
-.dark [data-variant="destructive"] {
-  color: #24070b;
-}
-
-/* Component paper that is drawn rather than tokenised. */
-.dark .lift:hover {
-  box-shadow: 0 18px 32px -26px rgba(0, 0, 0, 0.9);
-}
-
-.dark .gizmo-row {
-  color: color-mix(in srgb, var(--brand-ink) 82%, transparent);
-}
-
-.dark .gizmo-scroll {
-  scrollbar-color: #4a4538 transparent;
-}
-
-.dark .gizmo-scroll::-webkit-scrollbar-thumb {
-  background: #4a4538;
-}
-
-.dark .paper-panel {
-  background-color: var(--chrome-1);
-  background-image:
-    radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
-    var(--chrome-panel);
-  background-size: 20px 20px, 100% 100%;
-}
-
-.dark .blueprint-grid,
-.dark .dot-grid,
-.dark .paper-grid,
-.dark .blueprint-grid-fine,
-.dark .paper-dots {
-  background-image: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.09) 1px,
-    transparent 1px
-  );
-}
-
-.dark .hover-sheen::after {
-  background: linear-gradient(
-    100deg,
-    transparent 38%,
-    rgba(217, 244, 91, 0.14) 50%,
-    transparent 62%
-  );
-}
-
-.dark .sticker {
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
-}
-
-.dark .soft-shadow,
-.dark .ring-shadow {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 @media (prefers-reduced-motion: reduce) {

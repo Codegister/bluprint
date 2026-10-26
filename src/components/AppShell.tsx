@@ -1,6 +1,5 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { Meter, SPRING } from "@/components/motion/Motion";
 import {
   Sheet,
@@ -42,9 +41,9 @@ const navItems = [
     to: "/dashboard",
     label: "My sets",
     icon: Layers3,
-    active: "bg-gizmo-lime text-[#1C1A14]",
-    tile: "bg-[#1C1A14] text-gizmo-lime",
-    soft: "bg-gizmo-lime/45 text-[#1C1A14] dark:bg-gizmo-lime/20 dark:text-brand-ink",
+    active: "bg-gizmo-lime text-brand-ink ring-1 ring-chrome-8/30",
+    tile: "bg-brand-ink text-gizmo-lime",
+    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
     to: "/actions",
@@ -52,41 +51,41 @@ const navItems = [
     icon: LayoutGrid,
     // The hub is deliberately neutral: every other row owns a pastel, so ink
     // and paper make this one read as the index rather than a sixth subject.
-    active: "bg-brand-panel text-brand-ink ring-1 ring-brand-ink/10",
+    active: "bg-gizmo-cream text-brand-ink ring-1 ring-chrome-8/30",
     tile: "bg-brand-ink text-gizmo-cream",
-    soft: "bg-brand-panel text-brand-ink/80",
+    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
     to: "/courses",
     label: "My courses",
     icon: GraduationCap,
-    active: "bg-gizmo-lilac/65 text-[#1C1A14]",
-    tile: "bg-[#1C1A14] text-gizmo-lilac",
-    soft: "bg-gizmo-lilac/40 text-[#1C1A14] dark:bg-gizmo-lilac/20 dark:text-brand-ink",
+    active: "bg-gizmo-lilac text-brand-ink ring-1 ring-chrome-8/30",
+    tile: "bg-brand-ink text-gizmo-lilac",
+    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
     to: "/tutor",
     label: "AI tutor",
     icon: Sparkles,
-    active: "bg-gizmo-sky/65 text-[#1C1A14]",
-    tile: "bg-[#1C1A14] text-gizmo-sky",
-    soft: "bg-gizmo-sky/40 text-[#1C1A14] dark:bg-gizmo-sky/20 dark:text-brand-ink",
+    active: "bg-gizmo-sky text-brand-ink ring-1 ring-chrome-8/30",
+    tile: "bg-brand-ink text-gizmo-sky",
+    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
     to: "/timetable",
     label: "Revision timetable",
     icon: CalendarDays,
-    active: "bg-gizmo-peach/70 text-[#1C1A14]",
-    tile: "bg-[#1C1A14] text-gizmo-peach",
-    soft: "bg-gizmo-peach/40 text-[#1C1A14] dark:bg-gizmo-peach/20 dark:text-brand-ink",
+    active: "bg-gizmo-peach text-brand-ink ring-1 ring-chrome-8/30",
+    tile: "bg-brand-ink text-gizmo-peach",
+    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
     to: "/today",
     label: "Today",
     icon: Target,
-    active: "bg-gizmo-mint/75 text-[#1C1A14]",
-    tile: "bg-[#1C1A14] text-gizmo-mint",
-    soft: "bg-gizmo-mint/40 text-[#1C1A14] dark:bg-gizmo-mint/20 dark:text-brand-ink",
+    active: "bg-gizmo-mint text-brand-ink ring-1 ring-chrome-8/30",
+    tile: "bg-brand-ink text-gizmo-mint",
+    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
 ] as const;
 
@@ -110,8 +109,8 @@ function DeckRow({
       className={cn(
         "flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[0.92rem] transition-colors",
         active
-          ? "bg-gizmo-lime/45 font-semibold text-brand-ink dark:bg-gizmo-lime/20"
-          : "text-brand-ink/75 hover:bg-white/70",
+          ? "bg-gizmo-lime font-semibold text-brand-ink ring-1 ring-chrome-8/25"
+          : "text-brand-ink hover:bg-white/80",
       )}
     >
       <span className="truncate">{title}</span>
@@ -222,7 +221,7 @@ function Sidebar({
                 "relative flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-[0.95rem] font-medium transition-colors",
                 active
                   ? `font-semibold ${item.active}`
-                  : "text-brand-ink/75 hover:bg-white/70 hover:text-brand-ink",
+                  : "text-brand-ink hover:bg-white/80",
               )}
             >
               {/* One shared bar slides between destinations, so the nav reads
@@ -262,7 +261,7 @@ function Sidebar({
           to="/dashboard?new=1"
           onClick={onNavigate}
           aria-label="New study set"
-          className="grid size-6 place-items-center rounded-full border border-brand-ink/40 bg-gizmo-lime text-[0.9rem] font-bold text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.18)] transition-transform hover:-rotate-6"
+          className="grid size-6 place-items-center rounded-full border border-chrome-8 bg-brand-ink text-[0.9rem] font-bold text-white shadow-[0_2px_0_rgba(10,15,21,0.4)] transition-transform hover:-rotate-6"
         >
           +
         </Link>
@@ -295,9 +294,9 @@ function Sidebar({
         )}
       </div>
 
-      <div className="relative border-t border-white/70 px-4 py-4">
+      <div className="relative border-t border-border px-4 py-4">
         <div className="flex items-center gap-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-brand-ink/50 bg-gizmo-lime text-[0.85rem] font-bold text-brand-ink">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-chrome-8 bg-brand-ink text-[0.85rem] font-bold text-white">
             {initialFor(user?.name, user?.email)}
           </span>
           <div className="min-w-0 flex-1">
@@ -308,7 +307,6 @@ function Sidebar({
               {user?.email ?? "Private account"}
             </p>
           </div>
-          <ThemeToggle className="-mr-1.5" />
         </div>
         <button
           type="button"
@@ -345,12 +343,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="chrome-bar sticky top-0 z-30 flex items-center justify-between border-b px-4 py-3 lg:hidden">
         <Brand to="/dashboard" />
         <div className="flex items-center gap-2">
-          <ThemeToggle />
           <button
             type="button"
             aria-label="Open menu"
             onClick={() => setMobileOpen(true)}
-            className="grid size-9 place-items-center rounded-full bg-white text-brand-ink/70 ring-1 ring-border transition-colors hover:text-brand-ink"
+            className="grid size-9 place-items-center rounded-full bg-white text-brand-ink ring-1 ring-border transition-colors hover:bg-brand-panel"
           >
             <Menu className="size-5" />
           </button>

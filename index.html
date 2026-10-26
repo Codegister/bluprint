@@ -5,8 +5,9 @@
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />    <meta name="theme-color" content="#faf6ec" />
-  <meta name="color-scheme" content="light dark" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#dfe5ec" />
+  <meta name="color-scheme" content="light" />
   <meta
     name="description"
     content="Bluprint turns your notes into summaries, flashcards, quizzes and AI-marked exam questions."
@@ -14,30 +15,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=DM+Sans:opsz,wght@9..40,400..700&family=JetBrains+Mono:wght@400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
   <title>Bluprint: notes in, revision out</title>
   <!--
-    Applies the saved theme before the first paint. Without this, a reload in
-    dark mode would flash a warm-paper white page until React mounted.
-    Keep the storage key in sync with src/components/ThemeProvider.tsx.
+    Bluprint ships one fixed theme (chrome metal). No theme class is applied
+    here, and nothing reads an OS dark-mode preference, so the first paint and
+    every later paint are the same high-contrast palette.
   -->
-  <script>
-    (function () {
-      try {
-        var saved = localStorage.getItem("bluprint.theme");
-        var dark =
-          saved === "dark" ||
-          (saved !== "light" &&
-            window.matchMedia("(prefers-color-scheme: dark)").matches);
-        document.documentElement.classList.toggle("dark", dark);
-        document.documentElement.style.colorScheme = dark ? "dark" : "light";
-      } catch (error) {
-        /* Storage unavailable: the light theme still renders fine. */
-      }
-    })();
-  </script>
   <script type="module" src="/src/vly-runtime.ts"></script>
 </head>
 

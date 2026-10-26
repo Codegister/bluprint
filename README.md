@@ -30,40 +30,51 @@ their own dashboard containing only their courses and study sets.
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
 actions.
 
-The visual direction is Gizmo-style stationery. The page is warm cream (`--chrome-1`),
-body copy is ink (`--chrome-8`), cards are warm white with a crisp hairline and a short
-2px offset shadow, and one acid-lime highlighter (`--gizmo-lime`) marks actions, active
-navigation and key phrases. Lilac, sky, peach and mint are the only secondary accents, so
-subject tags stay playful without turning the screen into a rainbow. Corners are large,
-headings are Bricolage Grotesque, and the backdrop is a faint dot grid under three soft
-gradient ribbons that travel across the screen at different speeds, with two slowly
-drifting highlighter smudges instead of a metal ribbon. The landing hero adds an
-**ink-in-water** canvas: pigment plumes drift through a curl field, rendered from
-pre-built sprites so the effect stays on the compositor budget. Both motion layers pause
-when off-screen or when the tab is hidden, and fall back to a still frame under
-`prefers-reduced-motion`. The little lime blob mascot is drawn in SVG with a thick ink
-outline, so the app still needs no image assets.
+The visual direction is **chrome metal, one fixed theme, high contrast**. The page is a
+brushed steel sheet (`--chrome-1`), cards are bright white with a hard 1px edge and a
+crisp 2px offset shadow, and body copy is graphite ink (`--chrome-8`). Nothing is
+left translucent enough to blur into what is behind it: card edges sit at roughly 3:1
+against the page, secondary copy at 7:1 on a card, and ink at 19:1. The only colour is a
+chrome-blue action accent (`--brand-pink`, `--brand-pink-deep`) plus five anodised metal
+tints used for subject tags and active navigation. Headings are Space Grotesk and body
+copy is Inter. The backdrop is a fine engineering grid under three broad specular
+ribbons that travel across the screen at different speeds, with soft white and steel-blue
+reflections behind them. The landing hero adds an **ink-in-water** canvas: pigment plumes
+drift through a curl field, rendered from pre-built sprites so the effect stays on the
+compositor budget. Both motion layers pause when off-screen or when the tab is hidden,
+and fall back to a still frame under `prefers-reduced-motion`. The little mascot is drawn
+in SVG, so the app still needs no image assets.
 
-The neutral shades live in `src/index.css` as `--chrome-0` to `--chrome-8` and are exposed
-to Tailwind as `bg-chrome-*`, `text-chrome-*`, and `border-chrome-*`. The token names are
-kept for compatibility with the existing screens; their values are now warm paper:
+**There is no light/dark switch.** The old Gizmo cream-and-lime palette and the theme
+toggle that went with it have been removed; a half-working dark mode was the main source
+of the low-contrast text this app used to show. `ThemeProvider` still exists because the
+toaster reads the active theme, but it always reports the single chrome-metal palette.
 
-| Token | Light | Role |
+The metal shades live in `src/index.css` as `--chrome-0` to `--chrome-8` and are exposed
+to Tailwind as `bg-chrome-*`, `text-chrome-*`, and `border-chrome-*`:
+
+| Token | Value | Role |
 | --- | --- | --- |
-| `--chrome-0` | `#ffffff` | paper highlight |
-| `--chrome-1` | `#faf6ec` | cream page |
-| `--chrome-2` | `#f2ecdd` | soft sand / secondary surfaces |
-| `--chrome-3` | `#e4dccb` | chips and hairlines |
-| `--chrome-4` | `#cabfa8` | muted rules |
-| `--chrome-5` | `#a89c83` | quiet icons |
-| `--chrome-6` | `#7e735c` | secondary copy |
-| `--chrome-7` | `#4d4637` | strong secondary copy |
-| `--chrome-8` | `#1c1a14` | ink / primary |
+| `--chrome-0` | `#ffffff` | polished highlight |
+| `--chrome-1` | `#eef2f6` | page base |
+| `--chrome-2` | `#e0e6ed` | raised panel |
+| `--chrome-3` | `#c8d1db` | soft rule |
+| `--chrome-4` | `#a3b0be` | strong rule |
+| `--chrome-5` | `#6f7d8c` | quiet icons |
+| `--chrome-6` | `#4b5866` | secondary copy |
+| `--chrome-7` | `#2c3641` | strong secondary copy |
+| `--chrome-8` | `#0a0f15` | graphite ink / primary |
 
-The Gizmo-style accents are exposed as `bg-gizmo-lime`, `bg-gizmo-lilac`,
+`--border` is `#7e8c9b` and `--input` is `#5c6a7a`, deliberately dark enough that a card
+or a field can be seen against the steel page. The old Gizmo accent class names are kept
+so existing screens did not need rewriting, but their values are now anodised metal tints
+(ice, pearl, steel blue, bronze, verdigris) exposed as `bg-gizmo-lime`, `bg-gizmo-lilac`,
 `bg-gizmo-sky`, `bg-gizmo-peach`, `bg-gizmo-mint` and `bg-gizmo-cream`. Semantic red,
-green and amber are kept only for errors, correct answers and warnings; decorative
-accents use the lime plus the four pastels.
+green and amber are kept only for errors, correct answers and warnings.
+
+The stylesheet also lifts hand-written opacity steps such as `text-brand-ink/55` to fixed
+accessible greys and gives pale literal tints (`bg-[#FFF6E5]`, `bg-[#E9FBF3]`) a hairline,
+so older screens cannot fade into grey or melt into the white card behind them.
 
 ## Two ways to start
 
@@ -358,6 +369,40 @@ bunx convex dev --once  # push functions and regenerate types
 bun tsc -b --noEmit     # frontend + Convex types
 bun run lint            # ESLint (the template's UI primitives have pre-existing findings)
 ```
+
+### Deploy to GitHub Pages
+
+The frontend is static, so GitHub Pages can host it. Convex keeps running the backend,
+file storage, auth and NVIDIA calls — Pages only serves the built files, and
+`NVIDIA_API_KEY` stays on the Convex deployment (never in a Pages secret or the bundle).
+
+1. Push this repository to GitHub with the default branch named `main`.
+2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
+3. Push to `main` (or run **Deploy to GitHub Pages** from the Actions tab).
+   `.github/workflows/deploy.yml` typechecks, builds with the correct base path,
+   copies `index.html` to `404.html` for client-side routes, and deploys `dist/`.
+4. Set the site URL on the Convex deployment so auth links and redirects point at Pages:
+
+   ```bash
+   bunx convex env set SITE_URL "https://<user>.github.io/<repo>"
+   ```
+
+5. Sign in once from the deployed URL. Accounts, sets and NVIDIA usage are the same
+   Convex data you see locally.
+
+Notes:
+
+- Project sites are served from `/<repo>/`; the workflow derives that base automatically and
+  `BrowserRouter` reads `import.meta.env.BASE_URL` as its basename. A user site named
+  `<user>.github.io` is detected and served from `/`.
+- Deep links work through the copied `404.html`; no server rewrite is needed.
+- GitHub's own Pages build cannot run Convex functions. The app needs the Convex deployment
+  to be up, which is true for the pinned URL in `src/main.tsx`.
+- To build the Pages bundle locally:
+
+  ```bash
+  bunx tsc -b && bunx vite build --base="/<repo>/"
+  ```
 
 ## Supply the API keys
 
@@ -743,7 +788,7 @@ src/
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
-    ChromeBackdrop.tsx   cream desk, dot grid, moving gradient ribbons and drifting smudges
+    ChromeBackdrop.tsx   steel sheet, dot grid, moving specular ribbons and reflections
     InkInWater.tsx       canvas ink-in-water plumes for the landing hero
     study/               flashcard review (dictation + FSRS), quiz runner, exam practice,
                          practice papers, readiness/pacing panel, weak spots, today strip,
