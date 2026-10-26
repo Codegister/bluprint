@@ -182,6 +182,9 @@ const schema = defineSchema(
       dayOffMinutes: v.optional(v.number()),
       // Minutes from midnight, e.g. 16 * 60 for a 16:00 start.
       startMinutes: v.optional(v.number()),
+      // Start time used on weekends, bank holidays and school holidays, so a
+      // day off can begin later than a school evening.
+      dayOffStartMinutes: v.optional(v.number()),
       daysPerWeek: v.number(),
       courseSettings: v.optional(
         v.array(
@@ -207,8 +210,9 @@ const schema = defineSchema(
           minutes: v.number(),
           paper: v.optional(v.string()),
           startMinutes: v.optional(v.number()),
-          // Gap after this session, equal to the session itself. Absent on the
-          // last session of a day, because there is nothing to break before.
+          // Legacy: plans built when a break as long as the session followed
+          // it stored that gap here. New plans space sessions with one equal
+          // gap instead and do not write this field.
           breakMinutes: v.optional(v.number()),
         }),
       ),

@@ -80,6 +80,9 @@ export default function TimetableBuilder() {
   // One uninterrupted study block, shared by every subject.
   const [sessionMinutes, setSessionMinutes] = useState(45);
   const [startMinutes, setStartMinutes] = useState(17 * 60);
+  // A day off has its own start time: half-term mornings are not a school
+  // evening after clubs.
+  const [dayOffStartMinutes, setDayOffStartMinutes] = useState(10 * 60);
   const [daysPerWeek, setDaysPerWeek] = useState(5);
   // One paper answer for the whole timetable instead of a choice per subject.
   const [paper, setPaper] = useState("Paper 1");
@@ -176,6 +179,7 @@ export default function TimetableBuilder() {
         dailyMinutes,
         dayOffMinutes,
         startMinutes,
+        dayOffStartMinutes,
         sessionMinutes,
         courseSettings: settings.map((setting) => ({
           courseId: setting.courseId,
@@ -229,9 +233,9 @@ export default function TimetableBuilder() {
           Build a plan you can actually follow
         </h1>
         <p className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground">
-          Four short steps. You choose the time you have on school days and on
-          days off, and Bluprint adds a break as long as the session before the
-          next subject. Every session links to its study set.
+          Four short steps. You choose the time you have, and when revision
+          starts, on school days and on days off. Bluprint fills that time with
+          evenly spaced sessions, and every session links to its study set.
         </p>
       </header>
 
@@ -387,8 +391,8 @@ export default function TimetableBuilder() {
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
               One uninterrupted study block, used for every subject. Each day is
-              filled with as many whole sessions as your time allows, with a break
-              of the same length after each one.
+              filled with whole sessions until your time is used up, with an even
+              gap between one session and the next.
             </p>
 
             <div className="mt-4">
@@ -471,8 +475,8 @@ export default function TimetableBuilder() {
               How much time do you have each day?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              Pick the study time you realistically have. Breaks are added on top,
-              and every break lasts as long as the session before it.
+              Pick the study time you realistically have and when you can start.
+              That time is filled with sessions, spaced equally apart.
             </p>
 
             <div className="mt-4">
@@ -498,11 +502,10 @@ export default function TimetableBuilder() {
                 ))}
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-                Bluprint fills the budget with whole {sessionMinutes}-minute
-                sessions, so a day can finish early when the next one does not fit.
-                Breaks sit outside this budget: your session is followed by a break
-                of the same length. Choosing a day shorter than the session shortens
-                the session to the longest block that still fits.
+                Bluprint fills this time with {sessionMinutes}-minute sessions, plus
+                a shorter final block when your time does not divide exactly, so the
+                whole budget is used. Choosing a day shorter than the session
+                shortens the session to the longest block that still fits.
               </p>
             </div>
 
@@ -578,31 +581,59 @@ export default function TimetableBuilder() {
                 </p>
               </div>
 
-              <label className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Sessions start at
-                <select
-                  value={startMinutes}
-                  onChange={(event) => setStartMinutes(Number(event.target.value))}
-                  className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9A6FF]"
-                >
-                  {START_HOURS.map((hour) => (
-                    <option
-                      key={hour}
-                      value={hour * 60}
-                      disabled={hour * 60 + longestSessionMinutes > LATEST_END}
-                    >
-                      {formatTime(hour * 60)}
-                      {hour * 60 + longestSessionMinutes > LATEST_END
-                        ? " — too late for your sessions"
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-                <span className="mt-2 block text-[0.7rem] font-normal normal-case tracking-normal text-muted-foreground">
-                  Nothing is scheduled to run past {"8:00 pm"}. A session that would
-                  cross it moves to the next revision day.
+              <div className="space-y-3">
+                <label className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  School days start at
+                  <select
+                    value={startMinutes}
+                    onChange={(event) =>
+                      setStartMinutes(Number(event.target.value))
+                    }
+                    className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#B9A6FF]"
+                  >
+                    {START_HOURS.map((hour) => (
+                      <option
+                        key={hour}
+                        value={hour * 60}
+                        disabled={hour * 60 + longestSessionMinutes > LATEST_END}
+                      >
+                        {formatTime(hour * 60)}
+                        {hour * 60 + longestSessionMinutes > LATEST_END
+                          ? " — too late for your sessions"
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Days off start at
+                  <select
+                    value={dayOffStartMinutes}
+                    onChange={(event) =>
+                      setDayOffStartMinutes(Number(event.target.value))
+                    }
+                    className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-[0.82rem] font-medium normal-case tracking-normal text-brand-ink outline-none focus:border-[#A6D9B9]"
+                  >
+                    {START_HOURS.map((hour) => (
+                      <option
+                        key={hour}
+                        value={hour * 60}
+                        disabled={hour * 60 + longestSessionMinutes > LATEST_END}
+                      >
+                        {formatTime(hour * 60)}
+                        {hour * 60 + longestSessionMinutes > LATEST_END
+                          ? " — too late for your sessions"
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="block text-[0.7rem] font-normal normal-case tracking-normal text-muted-foreground">
+                  Nothing is scheduled to run past {"8:00 pm"}, so starting late
+                  can leave part of the day's time unplanned. Sessions are spaced
+                  equally with a short gap between them.
                 </span>
-              </label>
+              </div>
             </div>
           </section>
 

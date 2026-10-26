@@ -92,11 +92,6 @@ function SessionBlock({
         >
           {entry.paper ?? "All papers"}
         </span>
-        {entry.breakMinutes ? (
-          <span className="w-fit rounded-full bg-[#F3F0FF] px-1.5 py-0.5 text-[0.5rem] font-semibold text-[#5130D8]">
-            {entry.breakMinutes}m break
-          </span>
-        ) : null}
       </span>
     </button>
   );
@@ -584,7 +579,16 @@ export default function Timetable() {
           {courseSettings.length === 1 ? "" : "s"}
         </span>
         <span aria-hidden>·</span>
-        <span>breaks between subjects</span>
+        <span>
+          sessions from {formatTime24(plan.startMinutes ?? 17 * 60)} on school
+          days
+        </span>
+        {typeof plan.dayOffStartMinutes === "number" && (
+          <>
+            <span aria-hidden>·</span>
+            <span>{formatTime24(plan.dayOffStartMinutes)} on days off</span>
+          </>
+        )}
         {plan.scheduledTopics < plan.topicTotal && (
           <>
             <span aria-hidden>·</span>
@@ -655,7 +659,7 @@ export default function Timetable() {
       {visibleHolidays.length > 0 && (
         <section className="mt-4 rounded-2xl border border-[#EBD6AB] bg-[#FFFBF2] px-4 py-3">
           <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8A5D00]">
-Bank holidays · double time
+Bank holidays
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {visibleHolidays.map((holiday) => (
@@ -673,9 +677,9 @@ Bank holidays · double time
       <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
         Each session opens the study set for that topic. If one does not exist yet,
         Bluprint builds it from the course pathway and takes you straight there.
-        School days use the school-day budget you chose; bank holidays, weekends and
-        school holidays use the day-off budget. Every session is followed by a break
-        as long as the session itself.
+        School days use the school-day time and start time you chose; bank holidays,
+        weekends and school holidays use the day-off time and start time. Sessions
+        are spaced evenly, with one short gap between them.
       </p>
     </AppShell>
   );

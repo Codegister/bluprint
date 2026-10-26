@@ -376,9 +376,11 @@ export default function CourseSetup() {
     Math.min(questionIndex, Math.max(0, questions.length - 1));
   const currentQuestion: (Question | "rs") | null =
     questions[currentQuestionIndex] ?? null;
+  // A course that was already set up reopens at the route question rather than
+  // a dead card with nothing left to ask, so its answers can still be changed.
   const rsStep =
     active && level === "GCSE" && active === "Religious Studies"
-      ? rsStepFor(activeDraft)
+      ? (rsStepFor(activeDraft) ?? "route")
       : null;
 
   const chooseQualification = (next: string) => {
@@ -435,29 +437,30 @@ export default function CourseSetup() {
     value: string,
   ) => {
     if (!active) return;
-    setSelected((current) => {
-      const course = current[active];
-      if (!course) return current;
-      const next: CourseDraft = { ...course, [key]: value };
-      // Route A and route B are different specifications, so switching route
-      // clears the choices that only make sense on the other one.
-      if (key === "rsRoute" && course.rsRoute !== value) {
-        next.rsReligion = undefined;
-        next.rsReligion2 = undefined;
-        next.rsSpec = undefined;
-        next.rsSpec2 = undefined;
-      }
-      // The two religions must differ, so picking the same one twice clears
-      // the other slot instead of storing a duplicate.
-      if (key === "rsReligion") {
-        next.rsReligion2 = undefined;
-      }
-      if (key === "rsSpec") {
-        next.rsSpec2 = undefined;
-      }
-      return { ...current, [active]: next };
-    });
+    const course = selected[active];
+    if (!course) return;
+    const next: CourseDraft = { ...course, [key]: value };
+    // Route A and route B are different specifications, so switching route
+    // clears the choices that only make sense on the other one.
+    if (key === "rsRoute" && course.rsRoute !== value) {
+      next.rsReligion = undefined;
+      next.rsReligion2 = undefined;
+      next.rsSpec = undefined;
+      next.rsSpec2 = undefined;
+    }
+    // The two religions must differ, so picking the same one twice clears
+    // the other slot instead of storing a duplicate.
+    if (key === "rsReligion") {
+      next.rsReligion2 = undefined;
+    }
+    if (key === "rsSpec") {
+      next.rsSpec2 = undefined;
+    }
+    setSelected((current) => ({ ...current, [active]: next }));
     setError(null);
+    // The RS card exists only to collect these answers, so the last one sends
+    // the student straight back to the subject list — no Done button.
+    if (!rsStepFor(next)) finishQuestions();
   };
 
   const openSubject = (name: string) => {
@@ -1125,26 +1128,6 @@ export default function CourseSetup() {
                           })}
                         </div>
                       </>
-                    ) : null}
-
-                    {rsStep === null ? (
-                      <div className="space-y-2">
-                        <h2 className="font-display text-[1.06rem] font-bold text-brand-ink">
-                          Religious Studies is set up
-                        </h2>
-                        <p className="text-[0.78rem] text-muted-foreground">
-                          {activeDraft?.rsRoute === RS_ROUTE_B
-                            ? `${activeDraft?.rsSpec ?? ""} through ${activeDraft?.rsReligion ?? ""} · ${activeDraft?.rsSpec2 ?? ""} through ${activeDraft?.rsReligion2 ?? ""}`
-                            : `Paper 1: ${activeDraft?.rsReligion ?? ""} · Paper 2: ${activeDraft?.rsReligion2 ?? ""} · ${activeDraft?.rsSpec ?? ""}`}
-                        </p>
-                        <Button
-                          type="button"
-                          onClick={finishQuestions}
-                          className="h-9 rounded-full bg-[#191B27] px-4 text-[0.78rem] font-semibold text-white hover:bg-[#2A2D3E]"
-                        >
-                          Done
-                        </Button>
-                      </div>
                     ) : null}
                   </section>
                 ) : null}

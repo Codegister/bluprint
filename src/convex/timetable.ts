@@ -6,19 +6,19 @@ import { requireUserId } from "./lib/requireUser";
 /**
  * Revision timetables.
  *
- * The planner fills each revision day with several subject sessions, using the
- * duration chosen for that subject, until the day's time budget is used. A
- * school day gets the chosen budget; bank holidays, weekends and school
- * holidays get double, because there is no school day to work around. Sessions
- * are stored with start times so the frontend can render a real week grid
- * rather than a long list.
+ * The planner fills each revision day with whole sessions plus a short final
+ * block until the day's study budget is actually spent. A school day uses the
+ * chosen school-day budget, and bank holidays, weekends and school holidays use
+ * the day-off budget and start time the student chose. Sessions are stored with
+ * start times so the frontend can render a real week grid rather than a long
+ * list.
  */
 
 const MAX_DAYS = 60;
 // Extra weekend/holiday capacity means a plan can hold more sessions than the
 // old flat-budget limit. The document stays comfortably below Convex's size
 // limit even with a short session length across all 60 revision days.
-const MAX_ENTRIES = 480;
+const MAX_ENTRIES = 720;
 
 const SESSION_LENGTHS = [25, 45, 60, 90];
 const DAILY_LENGTHS = [30, 60, 90, 120];
@@ -271,24 +271,14 @@ function schoolHolidaysBetween(start: Date, end: Date) {
 }
 
 /**
- * Capacity for a date: the school-day budget, or the day-off budget the
- * student chose in the builder. Nothing is assumed about holidays — someone
- * who can only manage an hour at the weekend says so, and someone with a free
- * half-term chooses a longer day instead.
+ * True when the student is not at school that day: a weekend, a bank holiday
+ * or a school holiday. Those days use the day-off budget and start time the
+ * student chose, not a multiple of a school evening.
  */
-function dailyCapacity(
-  date: Date,
-  schoolDayMinutes: number,
-  dayOffMinutes: number,
-): number {
+function isDayOff(date: Date): boolean {
   const weekday = date.getUTCDay();
-  const isWeekend = weekday === 0 || weekday === 6;
-  const namedHoliday =
-    schoolHolidayName(date) !== null || bankHolidayName(date) !== null;
-  // Weekdays without school still get the student's chosen day-off budget.
-  // That budget is explicit in the builder — the planner does not assume how
-  // much time someone has on a holiday or half-term.
-  return isWeekend || namedHoliday ? dayOffMinutes : schoolDayMinutes;
+  if (weekday === 0 || weekday === 6) return true;
+  return schoolHolidayName(date) !== null || bankHolidayName(date) !== null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -307,20 +297,44 @@ function topicsFor(course: Doc<"courses">): TopicEntry[] {
   );
 }
 
+// Sessions are separated by one equal gap, not by a break as long as the
+// session. Twenty minutes is the most, so a short evening is not spread across
+// the whole afternoon, and a tight one uses whatever room it has.
+const MAX_GAP_MINUTES = 20;
+// Anything shorter than this is not worth a session of its own.
+const MIN_BLOCK_MINUTES = 10;
+
 /**
- * Fills one day up to `dailyMinutes` of study, rotating through subjects. Each
- * subject's own session length is respected; a subject that no longer fits is
- * skipped until the next day. Starting the rotation at a different subject each
- * day stops the same subject always occupying the first slot.
+ * One day's study blocks. Whole sessions fill the budget, and a short final
+ * block takes whatever is left when the budget does not divide exactly — a
+ * two-hour evening of 25-minute sessions is four sessions plus twenty minutes,
+ * not the 100 minutes that used to be scheduled.
+ */
+function studyBlocks(budgetMinutes: number, sessionMinutes: number): number[] {
+  const blocks: number[] = [];
+  let remaining = budgetMinutes;
+  while (remaining >= sessionMinutes) {
+    blocks.push(sessionMinutes);
+    remaining -= sessionMinutes;
+  }
+  if (remaining >= MIN_BLOCK_MINUTES) blocks.push(remaining);
+  return blocks;
+}
+
+/**
+ * Fills one day up to its budget, rotating through subjects. Starting the
+ * rotation at a different subject each day stops the same subject always
+ * occupying the first slot.
  *
- * Sessions are never back to back: the clock advances by the session plus a
- * break of the same length, so a 45-minute session is followed by 45 minutes
- * off before the next subject. Breaks sit outside the study budget — the
- * student asked for the amount of studying, not the amount of sitting at a desk.
+ * The chosen budget is actually spent: every whole session plus the leftover
+ * block is scheduled, and the sessions are spaced out with one equal gap
+ * between them. Nothing runs past 8pm, so a start time too late for the whole
+ * budget is filled from the time that is left instead of pretending the day is
+ * longer.
  */
 function scheduleDay(
   states: SubjectState[],
-  dailyMinutes: number,
+  capacityMinutes: number,
   startMinutes: number,
   dayIndex: number,
   // Every session is the same length. The student chooses one study block
@@ -329,7 +343,26 @@ function scheduleDay(
 ) {
   // A chosen start time at or after 8pm can never produce a session.
   if (startMinutes >= LATEST_END_MINUTES) return [];
-  let remaining = dailyMinutes;
+  const window = LATEST_END_MINUTES - startMinutes;
+
+  // A late start gives less room before 8pm, so the blocks are sized from the
+  // time that actually exists rather than planning a day that cannot happen.
+  const blocks = studyBlocks(
+    Math.min(capacityMinutes, window),
+    sessionMinutes,
+  );
+  if (blocks.length === 0) return [];
+
+  const studyMinutes = blocks.reduce((sum, length) => sum + length, 0);
+  // Equal spacing: whatever the 8pm limit leaves is shared between the gaps.
+  const gapMinutes =
+    blocks.length > 1
+      ? Math.min(
+          MAX_GAP_MINUTES,
+          Math.max(0, Math.floor((window - studyMinutes) / (blocks.length - 1))),
+        )
+      : 0;
+
   let clock = startMinutes;
   let cursor = states.length > 0 ? dayIndex % states.length : 0;
   const sessions: Array<
@@ -337,28 +370,23 @@ function scheduleDay(
       minutes: number;
       paper: string;
       startMinutes: number;
-      breakMinutes: number;
     }
   > = [];
 
-  while (remaining >= sessionMinutes) {
+  for (const minutes of blocks) {
+    if (clock + minutes > LATEST_END_MINUTES) break;
     let picked = -1;
     for (let offset = 0; offset < states.length; offset += 1) {
       const index = (cursor + offset) % states.length;
-      const state = states[index];
-      if (
-        state.topics.length > 0 &&
-        sessionMinutes <= remaining &&
-        clock + sessionMinutes <= LATEST_END_MINUTES
-      ) {
+      if (states[index]!.topics.length > 0) {
         picked = index;
         break;
       }
     }
     if (picked === -1) break;
 
-    const state = states[picked];
-    const topic = state.topics[state.topicIndex % state.topics.length];
+    const state = states[picked]!;
+    const topic = state.topics[state.topicIndex % state.topics.length]!;
     const paper =
       state.paper === "Both"
         ? state.paperCount % 2 === 0
@@ -368,23 +396,15 @@ function scheduleDay(
 
     sessions.push({
       ...topic,
-      minutes: sessionMinutes,
+      minutes,
       paper,
       startMinutes: clock,
-      breakMinutes: 0,
     });
 
     state.topicIndex += 1;
     state.paperCount += 1;
-    // The break after this session is the same length as the session itself.
-    clock += sessionMinutes * 2;
-    remaining -= sessionMinutes;
+    clock += minutes + gapMinutes;
     cursor = (picked + 1) % states.length;
-  }
-
-  // A break only exists between two sessions, so the day's last one has none.
-  for (let index = 0; index < sessions.length - 1; index += 1) {
-    sessions[index]!.breakMinutes = sessions[index]!.minutes;
   }
 
   return sessions;
@@ -417,7 +437,10 @@ export const build = mutation({
     // How much time the student actually has on a weekend, bank holiday or
     // school holiday. Asked explicitly, never derived from the school-day budget.
     dayOffMinutes: v.number(),
+    // Sessions start at the school-day time on school days, and at the day-off
+    // time on holidays and weekends.
     startMinutes: v.number(),
+    dayOffStartMinutes: v.number(),
     // One uninterrupted study block length, shared by every subject.
     sessionMinutes: v.number(),
     courseSettings: v.array(
@@ -468,10 +491,27 @@ export const build = mutation({
       args.startMinutes < 0 ||
       args.startMinutes > 23 * 60 + 30
     ) {
-      throw new Error("Choose a start time for your revision sessions.");
+      throw new Error("Choose a start time for your school-day revision sessions.");
     }
     if (args.startMinutes >= LATEST_END_MINUTES) {
       throw new Error("Revision has to start before 8pm. Choose an earlier start time.");
+    }
+    if (
+      !Number.isInteger(args.dayOffStartMinutes) ||
+      args.dayOffStartMinutes < 0 ||
+      args.dayOffStartMinutes > 23 * 60 + 30
+    ) {
+      throw new Error("Choose a start time for revision on days off.");
+    }
+    if (args.dayOffStartMinutes >= LATEST_END_MINUTES) {
+      throw new Error(
+        "Revision on days off has to start before 8pm. Choose an earlier start time.",
+      );
+    }
+    if (args.dayOffStartMinutes + args.sessionMinutes > LATEST_END_MINUTES) {
+      throw new Error(
+        `A ${args.sessionMinutes}-minute session starting at ${formatClock(args.dayOffStartMinutes)} on a day off would finish after 8pm. Start earlier or shorten the session.`,
+      );
     }
     if (args.courseSettings.length === 0) {
       throw new Error("Choose at least one course to revise.");
@@ -538,7 +578,6 @@ export const build = mutation({
       minutes: number;
       paper: string;
       startMinutes: number;
-      breakMinutes: number;
     };
 
     /** One full pass from a start date, with fresh per-subject cursors. */
@@ -562,10 +601,11 @@ export const build = mutation({
             truncated = true;
             break;
           }
+          const off = isDayOff(cursor);
           const sessions = scheduleDay(
             states,
-            dailyCapacity(cursor, args.dailyMinutes, args.dayOffMinutes),
-            args.startMinutes,
+            off ? args.dayOffMinutes : args.dailyMinutes,
+            off ? args.dayOffStartMinutes : args.startMinutes,
             revisionDays,
             args.sessionMinutes,
           );
@@ -627,6 +667,7 @@ export const build = mutation({
       dailyMinutes: args.dailyMinutes,
       dayOffMinutes: args.dayOffMinutes,
       startMinutes: args.startMinutes,
+      dayOffStartMinutes: args.dayOffStartMinutes,
       sessionMinutes: args.sessionMinutes,
       daysPerWeek: args.daysPerWeek,
       courseSettings: ordered.map((course) => {
