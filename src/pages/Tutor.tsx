@@ -313,7 +313,8 @@ export default function TutorPage() {
             onChange={setDraft}
             onSubmit={send}
             placeholder="Ask anything about this material…"
-            className="px-4 pb-2"
+            className="pb-2"
+            fullWidth
             maxAttachments={1}
             models={tierLabels}
             modelIcons={{}}

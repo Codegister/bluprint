@@ -308,7 +308,8 @@ export function TutorChat({
                 ? "Ask anything about this set…"
                 : "Ask anything about this course…"
             }
-            className="px-4 pb-2"
+            className="pb-2"
+            fullWidth
             maxAttachments={1}
             models={tierLabels}
             onDictate={async (audio, format) =>

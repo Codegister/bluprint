@@ -513,6 +513,12 @@ export interface PromptInputProps {
   onChange?: (value: string) => void;
   maxAttachments?: number;
   /**
+   * Stretch the composer to the width of its container instead of the default
+   * 320px → 480px pill. Only the max-width changes; every transition below
+   * (height, fades, attachment tab, model menu) is left exactly as it was.
+   */
+  fullWidth?: boolean;
+  /**
    * Turns a recorded clip into text. The greeting app passes a Convex action so
    * the speech keys stay on the server; the base64 payload has no data-URL
    * prefix and `format` is the audio container (webm, m4a, …).
@@ -533,6 +539,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       value: controlledValue,
       onChange,
       maxAttachments = 6,
+      fullWidth = false,
       onDictate,
     },
     ref,
@@ -1154,7 +1161,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
           onBlur={handleBlur}
           className={cn("relative flex flex-col w-full", className)}
           style={{
-            maxWidth: expanded ? 480 : 320,
+            maxWidth: fullWidth ? "100%" : expanded ? 480 : 320,
             transition: isSmoothResize
               ? "max-width 0.15s ease-out"
               : "max-width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
