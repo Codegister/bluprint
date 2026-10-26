@@ -21,6 +21,28 @@ const DAILY_MINUTES = [30, 60, 90, 120];
 const DAY_OFF_MINUTES = [60, 90, 120, 180, 240];
 const DAYS_PER_WEEK = [3, 5, 7];
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
+/** The three study routes a plan can take. */
+const STUDY_METHODS = [
+  {
+    value: "topics",
+    title: "Topics",
+    description:
+      "Work through the pathway, one topic study set per session.",
+  },
+  {
+    value: "papers",
+    title: "Past papers",
+    description:
+      "Only saved past papers. Each paper is a one-hour session.",
+  },
+  {
+    value: "mixed",
+    title: "Mix of both",
+    description:
+      "Alternate a past paper with a topic session, so recall and exam practice both get time.",
+  },
+] as const;
+type StudyMethod = (typeof STUDY_METHODS)[number]["value"];
 const START_HOURS = [9, 10, 14, 16, 17, 18, 19];
 // Sessions never cross this line, so a start time plus the longest session has
 // to land before it. Kept in step with the planner's LATEST_END_MINUTES.
@@ -86,6 +108,8 @@ export default function TimetableBuilder() {
   const [daysPerWeek, setDaysPerWeek] = useState(5);
   // One paper answer for the whole timetable instead of a choice per subject.
   const [paper, setPaper] = useState("Paper 1");
+  // Topics, past papers, or a mix of both, for every subject in the plan.
+  const [studyMethod, setStudyMethod] = useState<StudyMethod>("topics");
   const [settings, setSettings] = useState<CourseSetting[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +161,21 @@ export default function TimetableBuilder() {
     setError(null);
   };
 
+  const chooseStudyMethod = (method: StudyMethod) => {
+    setStudyMethod(method);
+    // A past paper fills a whole hour, so a paper day needs at least that much
+    // time. Raise the budget rather than sending a plan the server must reject.
+    if (method !== "topics") {
+      if (dailyMinutes < 60) setDailyMinutes(60);
+      if (dayOffMinutes < 60) setDayOffMinutes(90);
+    }
+    setError(null);
+  };
+
+  const methodLabel =
+    STUDY_METHODS.find((method) => method.value === studyMethod)?.title ??
+    "Topics";
+
   const goToStep = (next: number) => {
     const target = Math.min(4, Math.max(1, next));
     navigate(target === 1 ? "/timetable/new" : `/timetable/new/${target}`);
@@ -181,6 +220,7 @@ export default function TimetableBuilder() {
         startMinutes,
         dayOffStartMinutes,
         sessionMinutes,
+        studyMethod,
         courseSettings: settings.map((setting) => ({
           courseId: setting.courseId,
           paper,
@@ -387,15 +427,63 @@ export default function TimetableBuilder() {
               Step 2 of 4
             </p>
             <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
-              How long should each session be?
+              How do you want to study?
             </h2>
             <p className="mt-0.5 text-[0.8rem] text-muted-foreground">
-              One uninterrupted study block, used for every subject. Each day is
-              filled with whole sessions until your time is used up, with an even
-              gap between one session and the next.
+              Choose one route for the whole timetable. Each day is filled with
+              whole sessions until your time is used up, with an even gap between
+              one session and the next.
             </p>
 
             <div className="mt-4">
+              <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Study method
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {STUDY_METHODS.map((option) => {
+                  const active = studyMethod === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => chooseStudyMethod(option.value)}
+                      className={cn(
+                        "rounded-2xl border px-3.5 py-3 text-left transition-colors",
+                        active
+                          ? "border-[#6B4EE6] bg-[#F6F2FF]"
+                          : "border-border bg-white hover:bg-brand-panel",
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-[0.84rem] font-semibold text-brand-ink">
+                          {option.title}
+                        </span>
+                        {active && (
+                          <Check
+                            className="size-3.5 shrink-0 text-[#6B4EE6]"
+                            aria-hidden
+                          />
+                        )}
+                      </span>
+                      <span className="mt-1 block text-[0.7rem] leading-relaxed text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {studyMethod !== "topics" && (
+                <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                  Every paper counts as a 60-minute session, so a paper day needs at
+                  least an hour of revision time.
+                </p>
+              )}
+            </div>
+
+            <div
+              className={cn("mt-5", studyMethod === "papers" && "hidden")}
+            >
               <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Session length
               </p>
@@ -429,7 +517,9 @@ export default function TimetableBuilder() {
               </p>
             </div>
 
-            <div className="mt-5">
+            <div
+              className={cn("mt-5", studyMethod === "papers" && "hidden")}
+            >
               <p className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Papers
               </p>
@@ -459,9 +549,18 @@ export default function TimetableBuilder() {
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
                 One answer for every subject. “Papers 1 and 2” alternates the two
-                across sessions so the whole timetable covers both.
+                across sessions so the whole timetable covers both. It labels topic
+                sessions; a past paper session always opens the saved paper itself.
               </p>
             </div>
+
+            {studyMethod === "papers" && (
+              <p className="mt-4 rounded-2xl bg-[#F3F0FF] px-4 py-3 text-[0.78rem] leading-relaxed text-[#5130D8]">
+                A past paper takes an hour, so every session is one full paper. The
+                session length and paper label only apply to topic sessions and can
+                be chosen on the mix route.
+              </p>
+            )}
           </section>
 
           <section
@@ -484,10 +583,15 @@ export default function TimetableBuilder() {
                 Time on a school day
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {DAILY_MINUTES.map((minutes) => (
+                {DAILY_MINUTES.map((minutes) => {
+                  // Papers are an hour each, so half an hour cannot hold one.
+                  const tooShort =
+                    minutes < 60 && studyMethod !== "topics";
+                  return (
                   <button
                     key={minutes}
                     type="button"
+                    disabled={tooShort}
                     aria-pressed={dailyMinutes === minutes}
                     onClick={() => chooseDailyMinutes(minutes)}
                     className={cn(
@@ -495,11 +599,13 @@ export default function TimetableBuilder() {
                       dailyMinutes === minutes
                         ? "border-[#7C5CFF] bg-[#F3ECFF] text-[#5B3DF5]"
                         : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                      tooShort && "cursor-not-allowed opacity-40 hover:bg-white",
                     )}
                   >
                     {minutes < 60 ? `${minutes} min` : `${minutes / 60} hour${minutes === 60 ? "" : "s"}`}
                   </button>
-                ))}
+                  );
+                })}
               </div>
               <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
                 Bluprint fills this time with {sessionMinutes}-minute sessions, plus
@@ -707,8 +813,12 @@ export default function TimetableBuilder() {
               {step === 4 ? (
                 <>
                   {settings.length} subject{settings.length === 1 ? "" : "s"} ·{" "}
-                  {sessionMinutes} min sessions · {dailyMinutes} min on school days
-                  · {dayOffMinutes} min on days off · {daysPerWeek} days a week
+                  {methodLabel} ·{" "}
+                  {studyMethod === "papers"
+                    ? "60 min papers"
+                    : `${sessionMinutes} min sessions`}{" "}
+                  · {dailyMinutes} min on school days · {dayOffMinutes} min on days
+                  off · {daysPerWeek} days a week
                 </>
               ) : (
                 <>

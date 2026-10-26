@@ -24,6 +24,13 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 
+/** How the plan fills its sessions. Older plans predate the choice. */
+function methodLabel(method: "topics" | "papers" | "mixed" | undefined): string {
+  if (method === "papers") return "Past papers only";
+  if (method === "mixed") return "Mix of topics and papers";
+  return "Topics";
+}
+
 function durationLabel(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
@@ -52,7 +59,11 @@ function SessionBlock({
       onClick={onOpen}
       disabled={disabled}
       title={`${entry.unit} · ${entry.topic}`}
-      aria-label={`Study ${entry.topic} from ${entry.course}`}
+      aria-label={
+        entry.kind === "paper"
+          ? `Practise ${entry.topic} for ${entry.course}`
+          : `Study ${entry.topic} from ${entry.course}`
+      }
       className="group relative flex min-h-[62px] w-full flex-col overflow-hidden rounded-lg border border-border bg-white py-1 pl-2 pr-1 text-left shadow-[0_1px_2px_rgba(22,24,31,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#CFC7E8] hover:shadow-[0_8px_18px_-12px_rgba(22,24,31,0.5)] disabled:opacity-60 sm:min-h-[78px] sm:rounded-xl sm:py-1.5 sm:pl-3 sm:pr-2"
     >
       <span
@@ -83,15 +94,21 @@ function SessionBlock({
         {entry.course}
       </span>
       <span className="mt-1 hidden flex-wrap items-center gap-1 sm:flex">
-        <span
-          className={cn(
-            "w-fit rounded-full px-1.5 py-0.5 text-[0.5rem] font-semibold",
-            color.tint,
-            color.text,
-          )}
-        >
-          {entry.paper ?? "All papers"}
-        </span>
+        {entry.kind === "paper" ? (
+          <span className="w-fit rounded-full bg-[#F3F0FF] px-1.5 py-0.5 text-[0.5rem] font-semibold text-[#5130D8]">
+            Past paper · 1h
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "w-fit rounded-full px-1.5 py-0.5 text-[0.5rem] font-semibold",
+              color.tint,
+              color.text,
+            )}
+          >
+            {entry.paper ?? "All papers"}
+          </span>
+        )}
       </span>
     </button>
   );
@@ -365,7 +382,7 @@ function WeekTable({
         </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-[#FCFCFD] px-4 py-2.5 text-[0.64rem] text-muted-foreground">
-        <span>Click a session to open its study set.</span>
+        <span>Click a session to open its study set or past paper.</span>
         <span>
           {days.length} day{days.length === 1 ? "" : "s"} · {" "}
           {durationLabel(week.minutes)} planned
@@ -455,6 +472,13 @@ export default function Timetable() {
   }, [plan, weeks]);
 
   const handleOpen = async (entry: RevisionEntry) => {
+    // A past paper session opens the saved paper. If the course had none when
+    // the plan was built, the course page is where one can be made.
+    if (entry.kind === "paper") {
+      navigate(entry.paperId ? `/papers/${entry.paperId}` : `/courses/${entry.courseId}`);
+      return;
+    }
+
     const key = `${entry.date}:${entry.topicId}:${entry.startMinutes ?? 0}`;
     setBusy(key);
     try {
@@ -563,6 +587,8 @@ export default function Timetable() {
         </span>
         <span aria-hidden>·</span>
         <span>{durationLabel(totalMinutes)} total</span>
+        <span aria-hidden>·</span>
+        <span>{methodLabel(plan.studyMethod)}</span>
         <span aria-hidden>·</span>
         <span>{schoolDayMinutes} min on school days</span>
         {holidayAware && (
@@ -675,8 +701,10 @@ Bank holidays
       )}
 
       <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
-        Each session opens the study set for that topic. If one does not exist yet,
-        Bluprint builds it from the course pathway and takes you straight there.
+        Topic sessions open the study set for that topic; if one does not exist
+        yet, Bluprint builds it from the course pathway and takes you straight
+        there. Past paper sessions are one hour long and open the saved paper for
+        that course, where your answers are marked against the mark scheme.
         School days use the school-day time and start time you chose; bank holidays,
         weekends and school holidays use the day-off time and start time. Sessions
         are spaced evenly, with one short gap between them.

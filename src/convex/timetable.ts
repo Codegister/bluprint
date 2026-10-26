@@ -28,6 +28,15 @@ const DAILY_LENGTHS = [30, 60, 90, 120];
 const DAY_OFF_LENGTHS = [60, 90, 120, 180, 240];
 const PAPERS = ["Paper 1", "Paper 2", "Both"];
 const DAYS_PER_WEEK = [3, 5, 7];
+/**
+ * How a plan spends its session slots. "topics" is the original route through
+ * the pathway, "papers" works only through saved past papers, and "mixed"
+ * alternates the two.
+ */
+const STUDY_METHODS = ["topics", "papers", "mixed"] as const;
+type StudyMethod = (typeof STUDY_METHODS)[number];
+/** A past paper is one hour, so every paper block is 60 minutes. */
+const PAPER_MINUTES = 60;
 
 /**
  * Revision stops at 8pm. Evenings after that are for the rest of a student's
@@ -53,12 +62,18 @@ type TopicEntry = {
   topic: string;
 };
 
+type ScheduledPaper = { paperId?: Id<"pastPapers">; title: string };
+
 type SubjectState = {
   courseId: Id<"courses">;
   subject: string;
   paper: string;
   topics: TopicEntry[];
   topicIndex: number;
+  // Saved papers for this course, used in order by paper sessions. A course
+  // with none still gets a paper session, labelled "Past paper practice".
+  papers: ScheduledPaper[];
+  paperIndex: number;
   paperCount: number;
 };
 
@@ -321,6 +336,63 @@ function studyBlocks(budgetMinutes: number, sessionMinutes: number): number[] {
   return blocks;
 }
 
+type StudyBlock = { kind: "topic" | "paper"; minutes: number };
+
+/**
+ * One day's blocks for the chosen study method.
+ *
+ * Past papers are whole one-hour sessions, so a paper day holds as many hours
+ * as the budget allows. The mixed route alternates a paper with the student's
+ * normal session length, and a leftover too short for a paper is still offered
+ * to a topic block rather than left unplanned.
+ */
+function dayBlocks(
+  method: StudyMethod,
+  budgetMinutes: number,
+  sessionMinutes: number,
+  // Mixed plans alternate which kind of block starts the day, so a short day
+  // still mixes topics and papers across the plan instead of only ever papers.
+  dayIndex = 0,
+): StudyBlock[] {
+  if (method === "topics") {
+    return studyBlocks(budgetMinutes, sessionMinutes).map((minutes) => ({
+      kind: "topic" as const,
+      minutes,
+    }));
+  }
+
+  if (method === "papers") {
+    const count = Math.floor(budgetMinutes / PAPER_MINUTES);
+    return Array.from({ length: count }, () => ({
+      kind: "paper" as const,
+      minutes: PAPER_MINUTES,
+    }));
+  }
+
+  const blocks: StudyBlock[] = [];
+  let remaining = budgetMinutes;
+  let kind: "topic" | "paper" = dayIndex % 2 === 0 ? "paper" : "topic";
+  while (remaining > 0) {
+    const minutes = kind === "paper" ? PAPER_MINUTES : sessionMinutes;
+    if (remaining < minutes) {
+      // A paper needs the full hour; anything shorter can go to a topic block.
+      if (kind === "paper" && remaining >= MIN_BLOCK_MINUTES) {
+        kind = "topic";
+        continue;
+      }
+      break;
+    }
+    blocks.push({ kind, minutes });
+    remaining -= minutes;
+    kind = kind === "paper" ? "topic" : "paper";
+  }
+  // Whatever is left of the budget still goes to study, as a short topic block.
+  if (remaining >= MIN_BLOCK_MINUTES) {
+    blocks.push({ kind: "topic", minutes: remaining });
+  }
+  return blocks;
+}
+
 /**
  * Fills one day up to its budget, rotating through subjects. Starting the
  * rotation at a different subject each day stops the same subject always
@@ -340,6 +412,8 @@ function scheduleDay(
   // Every session is the same length. The student chooses one study block
   // length, not a different one per subject.
   sessionMinutes: number,
+  // Topics only, past papers only, or a mix of the two.
+  method: StudyMethod,
 ) {
   // A chosen start time at or after 8pm can never produce a session.
   if (startMinutes >= LATEST_END_MINUTES) return [];
@@ -347,13 +421,15 @@ function scheduleDay(
 
   // A late start gives less room before 8pm, so the blocks are sized from the
   // time that actually exists rather than planning a day that cannot happen.
-  const blocks = studyBlocks(
+  const blocks = dayBlocks(
+    method,
     Math.min(capacityMinutes, window),
     sessionMinutes,
+    dayIndex,
   );
   if (blocks.length === 0) return [];
 
-  const studyMinutes = blocks.reduce((sum, length) => sum + length, 0);
+  const studyMinutes = blocks.reduce((sum, block) => sum + block.minutes, 0);
   // Equal spacing: whatever the 8pm limit leaves is shared between the gaps.
   const gapMinutes =
     blocks.length > 1
@@ -370,11 +446,13 @@ function scheduleDay(
       minutes: number;
       paper: string;
       startMinutes: number;
+      kind: "topic" | "paper";
+      paperId?: Id<"pastPapers">;
     }
   > = [];
 
-  for (const minutes of blocks) {
-    if (clock + minutes > LATEST_END_MINUTES) break;
+  for (const block of blocks) {
+    if (clock + block.minutes > LATEST_END_MINUTES) break;
     let picked = -1;
     for (let offset = 0; offset < states.length; offset += 1) {
       const index = (cursor + offset) % states.length;
@@ -386,24 +464,43 @@ function scheduleDay(
     if (picked === -1) break;
 
     const state = states[picked]!;
-    const topic = state.topics[state.topicIndex % state.topics.length]!;
     const paper =
       state.paper === "Both"
         ? state.paperCount % 2 === 0
           ? "Paper 1"
           : "Paper 2"
         : state.paper;
-
-    sessions.push({
-      ...topic,
-      minutes,
-      paper,
-      startMinutes: clock,
-    });
-
-    state.topicIndex += 1;
     state.paperCount += 1;
-    clock += minutes + gapMinutes;
+
+    if (block.kind === "paper") {
+      const saved = state.papers[state.paperIndex % state.papers.length];
+      if (!saved) break;
+      state.paperIndex += 1;
+      sessions.push({
+        courseId: state.courseId,
+        course: state.subject,
+        unit: "Past paper",
+        topicId: `paper:${state.courseId}:${state.paperIndex}`,
+        topic: saved.title,
+        minutes: block.minutes,
+        paper,
+        startMinutes: clock,
+        kind: "paper",
+        ...(saved.paperId ? { paperId: saved.paperId } : {}),
+      });
+    } else {
+      const topic = state.topics[state.topicIndex % state.topics.length]!;
+      state.topicIndex += 1;
+      sessions.push({
+        ...topic,
+        minutes: block.minutes,
+        paper,
+        startMinutes: clock,
+        kind: "topic",
+      });
+    }
+
+    clock += block.minutes + gapMinutes;
     cursor = (picked + 1) % states.length;
   }
 
@@ -443,6 +540,12 @@ export const build = mutation({
     dayOffStartMinutes: v.number(),
     // One uninterrupted study block length, shared by every subject.
     sessionMinutes: v.number(),
+    // Topics, past papers, or a mix of both, for the whole plan.
+    studyMethod: v.union(
+      v.literal("topics"),
+      v.literal("papers"),
+      v.literal("mixed"),
+    ),
     courseSettings: v.array(
       v.object({
         courseId: v.id("courses"),
@@ -471,19 +574,36 @@ export const build = mutation({
     if (!SESSION_LENGTHS.includes(args.sessionMinutes)) {
       throw new Error("Choose how long one study session should be.");
     }
-    if (args.sessionMinutes > args.dailyMinutes) {
+    if (!STUDY_METHODS.includes(args.studyMethod)) {
+      throw new Error("Choose topics, past papers, or a mix of both.");
+    }
+    // A paper is a fixed one-hour task, so a day that studies papers needs room
+    // for at least one whole paper.
+    if (
+      args.studyMethod !== "topics" &&
+      (args.dailyMinutes < PAPER_MINUTES || args.dayOffMinutes < PAPER_MINUTES)
+    ) {
+      throw new Error(
+        "A past paper takes an hour, so choose at least 60 minutes on a school day and on a day off.",
+      );
+    }
+    // Session length is unused by a papers-only plan, where every block is one
+    // hour. Mixed plans still use it for their topic blocks.
+    const blockMinutes =
+      args.studyMethod === "papers" ? PAPER_MINUTES : args.sessionMinutes;
+    if (args.studyMethod !== "papers" && args.sessionMinutes > args.dailyMinutes) {
       throw new Error(
         "A session is longer than your school-day revision time. Choose a longer day or a shorter session.",
       );
     }
-    if (args.sessionMinutes > args.dayOffMinutes) {
+    if (args.studyMethod !== "papers" && args.sessionMinutes > args.dayOffMinutes) {
       throw new Error(
         "A session is longer than your day-off revision time. Choose a longer day off or a shorter session.",
       );
     }
-    if (args.startMinutes + args.sessionMinutes > LATEST_END_MINUTES) {
+    if (args.startMinutes + blockMinutes > LATEST_END_MINUTES) {
       throw new Error(
-        `A ${args.sessionMinutes}-minute session starting at ${formatClock(args.startMinutes)} would finish after 8pm. Start earlier or shorten the session.`,
+        `A ${blockMinutes}-minute session starting at ${formatClock(args.startMinutes)} would finish after 8pm. Start earlier or shorten the session.`,
       );
     }
     if (
@@ -508,9 +628,9 @@ export const build = mutation({
         "Revision on days off has to start before 8pm. Choose an earlier start time.",
       );
     }
-    if (args.dayOffStartMinutes + args.sessionMinutes > LATEST_END_MINUTES) {
+    if (args.dayOffStartMinutes + blockMinutes > LATEST_END_MINUTES) {
       throw new Error(
-        `A ${args.sessionMinutes}-minute session starting at ${formatClock(args.dayOffStartMinutes)} on a day off would finish after 8pm. Start earlier or shorten the session.`,
+        `A ${blockMinutes}-minute session starting at ${formatClock(args.dayOffStartMinutes)} on a day off would finish after 8pm. Start earlier or shorten the session.`,
       );
     }
     if (args.courseSettings.length === 0) {
@@ -578,6 +698,38 @@ export const build = mutation({
       minutes: number;
       paper: string;
       startMinutes: number;
+      kind: "topic" | "paper";
+      paperId?: Id<"pastPapers">;
+    };
+
+    // Saved papers are read once so a paper session links to the paper the
+    // student can actually practise. A course with none still gets a labelled
+    // slot, and the course page is where a paper can be built.
+    const paperLists = await Promise.all(
+      ordered.map((course) =>
+        ctx.db
+          .query("pastPapers")
+          .withIndex("by_course", (q) => q.eq("courseId", course._id))
+          .collect(),
+      ),
+    );
+    const savedByCourse = new Map<Id<"courses">, ScheduledPaper[]>(
+      ordered.map((course, index) => [
+        course._id,
+        (paperLists[index] ?? [])
+          .filter(
+            (paper) =>
+              paper.userId === userId &&
+              paper.status === "ready" &&
+              paper.questionCount > 0,
+          )
+          .sort((a, b) => a.createdAt - b.createdAt)
+          .map((paper) => ({ paperId: paper._id, title: paper.title })),
+      ]),
+    );
+    const papersFor = (courseId: Id<"courses">): ScheduledPaper[] => {
+      const saved = savedByCourse.get(courseId) ?? [];
+      return saved.length > 0 ? saved : [{ title: "Past paper practice" }];
     };
 
     /** One full pass from a start date, with fresh per-subject cursors. */
@@ -588,6 +740,8 @@ export const build = mutation({
         paper: setting.paper,
         topics: topicsFor(course),
         topicIndex: 0,
+        papers: papersFor(course._id),
+        paperIndex: 0,
         paperCount: 0,
       }));
       const entries: PlannedEntry[] = [];
@@ -608,6 +762,7 @@ export const build = mutation({
             off ? args.dayOffStartMinutes : args.startMinutes,
             revisionDays,
             args.sessionMinutes,
+            args.studyMethod,
           );
           revisionDays += 1;
           for (const session of sessions) {
@@ -635,7 +790,13 @@ export const build = mutation({
     let planned = planFrom(parseDateKey(planStart));
     let daysEarlier = 0;
     const todayKey = toDateKey(new Date());
-    while (planned.scheduledTopics < topicTotal && daysEarlier < 84) {
+    // Only the topics route tries to cover every topic. Papers and mixed plans
+    // are bounded by the time the student has, so they keep the chosen start.
+    while (
+      args.studyMethod === "topics" &&
+      planned.scheduledTopics < topicTotal &&
+      daysEarlier < 84
+    ) {
       const earlier = toDateKey(addDays(parseDateKey(planStart), -1));
       if (earlier < todayKey) break;
       planStart = earlier;
@@ -658,12 +819,20 @@ export const build = mutation({
       await ctx.db.delete(plan._id);
     }
 
+    // Paper sessions are not pathway topics, so a paper or mixed plan reports
+    // what it schedules instead of claiming to cover the topic list.
+    const targetTotal =
+      args.studyMethod === "topics" ? topicTotal : entries.length;
+    const plannedTotal =
+      args.studyMethod === "topics" ? scheduledTopics : entries.length;
+
     const now = Date.now();
     await ctx.db.insert("revisionPlans", {
       userId,
       startDate: planStart,
       requestedStartDate: start,
       examDate: exam,
+      studyMethod: args.studyMethod,
       dailyMinutes: args.dailyMinutes,
       dayOffMinutes: args.dayOffMinutes,
       startMinutes: args.startMinutes,
@@ -681,8 +850,8 @@ export const build = mutation({
       entries,
       holidays: bankHolidaysBetween(parseDateKey(planStart), examDate),
       schoolHolidays: schoolHolidaysBetween(parseDateKey(planStart), examDate),
-      topicTotal,
-      scheduledTopics,
+      topicTotal: targetTotal,
+      scheduledTopics: plannedTotal,
       truncated,
       createdAt: now,
       updatedAt: now,

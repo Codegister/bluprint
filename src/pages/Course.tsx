@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { CoursePastPapers } from "@/components/study/CoursePastPapers";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -479,6 +480,8 @@ export default function Course() {
                 board's current specification before relying on a topic list.
               </p>
             </section>
+
+            <CoursePastPapers courseId={course._id} />
 
             {nextTopic && (
               <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-[#D8CCFF] bg-[#FAF8FF] p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">

@@ -14,6 +14,7 @@ const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const CourseSetup = lazy(() => import("./pages/CourseSetup.tsx"));
 const CoursePage = lazy(() => import("./pages/Course.tsx"));
+const PastPaperPage = lazy(() => import("./pages/PastPaper.tsx"));
 const StudySet = lazy(() => import("./pages/StudySet.tsx"));
 const Timetable = lazy(() => import("./pages/Timetable.tsx"));
 const TimetableBuilder = lazy(() => import("./pages/TimetableBuilder.tsx"));
@@ -178,6 +179,17 @@ createRoot(document.getElementById("root")!).render(
                     description="Course pathways are private to the account that created them."
                   >
                     <CoursePage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/papers/:paperId"
+                element={
+                  <RequireAuth
+                    title="Sign in to sit this past paper"
+                    description="Past papers are saved to the account that built them."
+                  >
+                    <PastPaperPage />
                   </RequireAuth>
                 }
               />

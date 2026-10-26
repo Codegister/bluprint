@@ -163,11 +163,70 @@ const schema = defineSchema(
       lastStudiedAt: v.optional(v.number()),
     }).index("by_user_updated", ["userId", "updatedAt"]),
 
+    // A saved past paper for one course. Real board papers are copyrighted, so
+    // a paper here is an original, exam-style paper written from the stored
+    // specification and saved once: it reads the same on every visit and the
+    // revision timetable can point at it.
+    pastPapers: defineTable({
+      userId: v.id("users"),
+      courseId: v.id("courses"),
+      title: v.string(),
+      // Every paper is one hour long. The timetable assumes 60 minutes per
+      // paper, so the duration is stored rather than guessed at render time.
+      durationMinutes: v.number(),
+      totalMarks: v.number(),
+      questionCount: v.number(),
+      // How much of the paper has been attempted, so the course page can show
+      // progress without loading every question.
+      answeredCount: v.number(),
+      earnedMarks: v.number(),
+      status: v.union(
+        v.literal("queued"),
+        v.literal("processing"),
+        v.literal("ready"),
+        v.literal("error"),
+      ),
+      progress: v.optional(v.string()),
+      errorMessage: v.optional(v.string()),
+      processingStartedAt: v.optional(v.number()),
+      lastAttemptedAt: v.optional(v.number()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_course", ["courseId", "createdAt"])
+      .index("by_user", ["userId", "createdAt"]),
+
+    // One question in a saved past paper, marked by the same examiner prompt as
+    // a study set's exam questions.
+    pastPaperQuestions: defineTable({
+      paperId: v.id("pastPapers"),
+      userId: v.id("users"),
+      question: v.string(),
+      marks: v.number(),
+      modelAnswer: v.string(),
+      markingGuide: v.array(v.string()),
+      order: v.number(),
+      userAnswer: v.optional(v.string()),
+      awardedMarks: v.optional(v.number()),
+      feedback: v.optional(v.string()),
+      gradedAt: v.optional(v.number()),
+    }).index("by_paper", ["paperId"]),
+
     // One saved revision timetable per account. Dates are UTC calendar keys
     // (YYYY-MM-DD) so a plan renders the same day regardless of server timezone.
     revisionPlans: defineTable({
       userId: v.id("users"),
       startDate: v.string(),
+      // How the plan fills its sessions. "topics" opens a pathway topic,
+      // "papers" works through saved past papers, and "mixed" alternates the
+      // two. Missing on plans built before the choice existed, which are topics.
+      studyMethod: v.optional(
+        v.union(
+          v.literal("topics"),
+          v.literal("papers"),
+          v.literal("mixed"),
+        ),
+      ),
       // The start the student asked for. When every topic would not fit before
       // the first exam, the plan begins earlier and startDate is that earlier
       // date; this keeps the original so the timetable can explain the change.
@@ -209,6 +268,12 @@ const schema = defineSchema(
           topic: v.string(),
           minutes: v.number(),
           paper: v.optional(v.string()),
+          // "paper" entries are a whole past paper (60 minutes) and link to the
+          // saved paper; missing means a normal topic session.
+          kind: v.optional(
+            v.union(v.literal("topic"), v.literal("paper")),
+          ),
+          paperId: v.optional(v.id("pastPapers")),
           startMinutes: v.optional(v.number()),
           // Legacy: plans built when a break as long as the session followed
           // it stored that gap here. New plans space sessions with one equal

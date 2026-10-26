@@ -4,8 +4,10 @@ Bluprint is a private revision workspace with two ways in. Choose your courses o
 maps each specification into units and topics, then builds study material for any topic — or
 upload photos of your notes, sample a video, or paste text and compile a study set directly.
 Every set gets a summary, flashcards, a multiple-choice quiz, and exam-style questions with
-AI marking, plus an AI tutor that knows the material. Courses can also be turned into a
-colour-coded weekly revision timetable, with every session linked to a topic study set.
+AI marking, plus an AI tutor that knows the material. Each course also keeps a small library
+of **saved past papers** — full practice papers written from the specification, marked
+question by question. Courses can be turned into a colour-coded weekly revision timetable
+built from topics, from past papers only, or from a mix of the two.
 
 Version 1 is built for a small group of friends. Each person signs in separately and gets
 their own dashboard containing only their courses and study sets.
@@ -16,8 +18,8 @@ their own dashboard containing only their courses and study sets.
 - **Tailwind CSS v4 + shadcn/ui** — the interface
 - **Convex** — database, file storage, server actions, and authentication
 - **Convex Auth (email one-time code)** — separate accounts without password management
-- **NVIDIA API** — study-set generation, vision, marking, and tutoring, through the
-  OpenAI-compatible endpoint at `integrate.api.nvidia.com`
+- **NVIDIA API** — study-set and past-paper generation, vision, marking, and tutoring,
+  through the OpenAI-compatible endpoint at `integrate.api.nvidia.com`
 - **Cognito (`cognito.org`, scraped)** — the published topic outline for each course. The
   pathway builder follows Cognito's qualification → subject → exam board → tier route, so
   the map matches the board's own specification headings exactly. No AI is used to build a
@@ -88,6 +90,21 @@ flashcards, quiz questions and exam-style questions, each from 1 to 100. If the 
 cannot realistically support the number asked for, Bluprint builds the maximum it can and
 says so on the set page; it never silently pretends the request was met.
 
+### 3. Sit a past paper
+
+Every ready course has a **Past papers** section. **Build a past paper** writes one full
+practice paper from the saved specification: about eight questions across the course, from
+short recall to an extended response, with a model answer and a mark scheme for each. The
+paper is generated once and saved, so it is the same paper on every visit — and the
+timetable can schedule it as a one-hour session.
+
+Open a paper and answer each question in full sentences. **Mark answer** sends it to the
+examiner prompt used across the app, which credits only the mark-scheme points that are
+actually in the answer, gives a terse note naming the marks lost, and then reveals the
+model answer and marking guide. Scores are saved, so the course section shows how much of
+each paper you have answered and how many marks you earned. Four papers per course is the
+cap; remove one to build another.
+
 ## What version 1 does
 
 1. **Add source material** — up to eight photos (JPG or PNG), a video (six frames are
@@ -128,15 +145,18 @@ says so on the set page; it never silently pretends the request was met.
 9. **Persist** — study sets, extracted notes, uploads, card progress, due dates, quiz
    scores, and tutor conversations stay saved between sessions, scoped to the account that
    created them.
-10. **Plan your revision** — **Build revision timetable** asks which subjects to revise, how
-    long each study session should be, one paper choice for the whole plan, how long a school
-    day and a day off
-    should be, how many days a week you can work, and when your first exam is. Sessions are
-    separated by breaks as long as the session before them, nothing runs past 8:00 pm, and
-    if the topics will not fit the date you chose, the plan starts earlier rather than
-    dropping topics. The schedule is
-    saved to your account and appears in the sidebar as a colour-coded weekly timetable;
-    clicking a session opens (or builds) the study set for that topic.
+10. **Plan your revision** — **Build revision timetable** asks which subjects to revise,
+    which **study method** the plan uses (topics, past papers only, or a mix of both), how
+    long each topic session should be, one paper choice for the whole plan, how long a school
+    day and a day off should be, how many days a week you can work, and when your first exam
+    is. Sessions are separated by short gaps, nothing runs past 8:00 pm, and if the topics
+    will not fit the date you chose, the plan starts earlier rather than dropping topics.
+    The schedule is saved to your account and appears in the sidebar as a colour-coded weekly
+    timetable; clicking a topic session opens (or builds) its study set, and clicking a past
+    paper session opens the saved paper.
+11. **Practise past papers** — every ready course keeps up to four saved practice papers,
+    written from its specification and marked question by question against their own mark
+    schemes. Progress and marks per paper are kept alongside the course.
 
 After signing in, the main screen is the **Home** dashboard. It keeps one primary action,
 **New study set**, for uploading notes, a **Build revision timetable** action for planning
@@ -180,6 +200,11 @@ it. Sets built from a course topic link back to that course.
   International answers use B1/M1/A1 points, IB extended answers use markband
   descriptors, and AQA, Edexcel, OCR, WJEC, and SQA answers earn one mark per creditable
   bullet.
+- **A saved past paper is an original practice paper.** It is written from the course's
+  stored specification (about eight questions totalling roughly 40 marks), not copied from
+  a board paper. The timetable still counts it as one hour, because that is the time a
+  student should give it under exam conditions. Papers are generated on demand, up to four
+  per course, so a large course setup only pays for the papers someone actually sits.
 - **The tutor has three scopes.** A study set reads that set's notes (up to 12,000
   characters); a course reads the whole scraped pathway; a unit reads only that unit's
   topics. Each scope keeps the last ten saved turns, has no web access, and is not a
@@ -328,8 +353,8 @@ Startpage and Qwant forbid automated retrieval in their terms.
 ### Course pathways need no key
 
 Pathways are scraped from Cognito's published pages, so they build with no AI key at all.
-`NVIDIA_API_KEY` is used only to build study sets, mark exam answers and answer tutor
-questions.
+`NVIDIA_API_KEY` is used only to build study sets and past papers, mark written answers
+and answer tutor questions.
 
 ### Optional model overrides
 
@@ -396,13 +421,23 @@ same rate-limit messages as the rest of the app.
 ## How a revision timetable is built
 
 - The builder is four separate pages, each with its own URL and a **Next** button:
-  subjects; **one session length for the whole timetable** (25, 45, 60, or 90 minutes) and
-  **one paper choice** for every subject (Paper 1, Paper 2, or both); a school-day study budget
-  (30, 60, 90, or 120 minutes), a day-off study budget (1, 1½, 2, 3, or 4 hours), revision
-  days per week (three, five, or seven) and a session start time; then the start date and
-  first exam date. The four answers stay in place while paging, and the final page builds.
+  subjects; **one study method for the whole timetable** (topics, past papers only, or a mix
+  of both) plus a session length (25, 45, 60, or 90 minutes) and **one paper choice** for
+  every subject (Paper 1, Paper 2, or both); a school-day study budget (30, 60, 90, or 120
+  minutes), a day-off study budget (1, 1½, 2, 3, or 4 hours), revision days per week (three,
+  five, or seven) and a session start time; then the start date and first exam date. The
+  answers stay in place while paging, and the final page builds.
+- **Topics** is the original route: every session opens a pathway topic. **Past papers only**
+  makes every session a whole paper, and each paper counts as **60 minutes**, so a paper day
+  holds one paper per hour of budget. **Mix of both** alternates paper and topic blocks,
+  starting with a paper on the first day and a topic on the next so a short day still mixes
+  the two across the plan. A paper or mixed plan needs at least 60 minutes on a school day
+  and on a day off; the builder disables a 30-minute day for those routes.
+- Paper sessions rotate through the course's saved papers in creation order. A course with
+  no saved paper still gets a labelled "Past paper practice" slot, whose card opens the
+  course page where one can be built.
 - The server fills each school day up to the chosen budget with interleaved subject
-  sessions of that one length. A subject that no longer has time for a whole session waits
+  sessions. A subject that no longer has time for a whole session waits
   for the next revision day. A different subject starts each day so the same course does
   not always occupy the first slot.
 - Sessions never run back to back. A break as long as the session before it is inserted
@@ -437,10 +472,31 @@ same rate-limit messages as the rest of the app.
   holidays and school breaks are labelled with the longer day they carry. The grid is
   fluid rather than fixed-width, so the whole week fits the screen (a narrower time
   gutter and compact session cards on phones) with no horizontal scrolling.
-- Every entry is clickable. It calls the same topic-to-study-set mutation as the course
-  page, reusing an existing set for that topic or creating one and opening it.
+- Every entry is clickable. A topic entry calls the same topic-to-study-set mutation as the
+  course page, reusing an existing set for that topic or creating one and opening it. A past
+  paper entry opens its saved paper.
 - Only one plan is stored per account. Building again replaces it, so the sidebar never
   shows a stale schedule beside a new one.
+
+## How a past paper is built
+
+- **Build a past paper** creates the paper row immediately, then schedules one Convex
+  action. The course page and the paper page both subscribe to that row, so the paper
+  appears as it finishes.
+- The prompt contains the qualification (board, level, subject, tier or route) and the
+  stored specification as a list of units, topics and specification references. The model
+  is asked for about eight original questions totalling roughly 40 marks, in specification
+  order: short recall, explain questions, and one extended response, using the board's own
+  command words and mark-scheme wording.
+- Questions are stored once the whole paper validates, along with the model answer and a
+  one-bullet-per-mark guide. A failed build leaves a readable message and a **Build again**
+  button on the paper page; nothing half-written is shown as a paper.
+- Marking reuses the examiner prompt from study sets: point by point against the stored
+  guide, whole marks only, no benefit of the doubt, and a ceiling from its own point
+  ledger. The awarded mark and the examiner note are saved with the answer.
+- A paper is **60 minutes** by definition, and that is what the timetable schedules. The
+  questions are a representative paper rather than a reproduction of a board paper, which
+  is why every page says so.
 
 ## Project structure
 
@@ -451,7 +507,9 @@ src/
     Auth.tsx             email-code sign-in and guest sign-in
     Dashboard.tsx        primary actions, course table, and saved study sets
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
-    Course.tsx           one course workspace: units, topics, progress, topic sets
+    Course.tsx           one course workspace: units, topics, progress, topic sets,
+                         and saved past papers
+    PastPaper.tsx        one saved past paper: build progress and AI-marked questions
     StudySet.tsx         set detail, compile progress, and the five study tabs
     TimetableBuilder.tsx subjects, session length, one paper answer, budgets, exam dates
     Timetable.tsx        colour-coded weekly plan with holidays and clickable sessions
@@ -460,12 +518,14 @@ src/
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
-    study/               flashcard review, quiz runner, exam practice, tutor chat,
-                         set settings
+    study/               flashcard review, quiz runner, exam practice, past papers,
+                         tutor chat, set settings
   convex/
-    schema.ts            users, courses, studySets, cards, quiz, exam, tutor, study days, plans
+    schema.ts            users, courses, studySets, cards, quiz, exam, past papers, tutor,
+                         study days, plans
     courses.ts           pathway CRUD, topic progress, topic-to-set creation, schedulers
-    timetable.ts         deterministic revision-plan generation and saved-plan queries
+    pastPapers.ts        saved practice papers, build queue, progress and marked answers
+    timetable.ts         deterministic revision-plan generation (topics, papers, mixed)
     studySets.ts         ownership-checked queries/mutations + internal compile writes
     tutor.ts             saved tutor threads and the context the action reads
     ai.ts                "use node" NVIDIA calls, key rotation, OCR, JSON validation, marking,
@@ -518,6 +578,12 @@ src/
   answer covers the whole timetable** instead of a paper per subject, since friends revise
   the same paper across their subjects. A session that does not fit the day's remaining
   budget or would cross 8:00 pm moves to the next revision day.
+- **The study method is also one choice for the whole plan.** Topics, past papers only, or
+  a mix of both is chosen once in the builder, like the session length. A past paper is a
+  fixed 60-minute block, so a paper or mixed plan needs at least an hour of daily budget on
+  school days and days off; the builder disables the 30-minute option for those routes.
+  Leftover
+  minutes in a mixed day go to a short topic block rather than staying free.
 - **Paper choices label sessions, not separate sets.** A session marked Paper 1 or Paper 2
   opens the topic's study set; the set still covers the whole specification topic. Choosing
   "both" alternates the paper label between sessions so the plan covers both papers over

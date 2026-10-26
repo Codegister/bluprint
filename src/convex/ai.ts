@@ -966,6 +966,198 @@ async function generateExams(
 }
 
 // ---------------------------------------------------------------------------
+// Past papers
+// ---------------------------------------------------------------------------
+
+/** Eight questions is a realistic one-hour practice paper. */
+const PAPER_QUESTION_COUNT = 8;
+
+/** The course fields a paper needs. The rest of the doc is not sent anywhere. */
+type PaperCourse = {
+  subject: string;
+  level: string;
+  examBoard: string;
+  tier?: string;
+  variant?: string;
+  poetryTheme?: string;
+  pathway?: {
+    units: Array<{
+      title: string;
+      topics: Array<{ title: string; specReference?: string }>;
+    }>;
+  };
+};
+
+/**
+ * The stored specification as plain lines. Topic names and references keep the
+ * paper inside the qualification the student is actually studying, and the cap
+ * keeps the prompt within the model's comfortable context.
+ */
+function specificationDigest(course: PaperCourse): string {
+  const lines: string[] = [];
+  for (const unit of course.pathway?.units ?? []) {
+    lines.push(`## ${unit.title}`);
+    for (const topic of unit.topics) {
+      lines.push(
+        `- ${topic.title}${topic.specReference ? ` [${topic.specReference}]` : ""}`,
+      );
+    }
+  }
+  return lines.join("\n").slice(0, 9000);
+}
+
+/**
+ * Writes one full practice paper from the saved pathway. The questions are
+ * original — published papers and mark schemes are copyrighted — but the
+ * command words, question order and marking style follow the board's papers.
+ */
+async function generatePaperQuestions(
+  apiKeys: string[],
+  course: PaperCourse,
+  paperTitle: string,
+  target = PAPER_QUESTION_COUNT,
+): Promise<GeneratedExam[]> {
+  const qualification = qualificationText({
+    course: course.subject,
+    examBoard: course.examBoard,
+    level: course.level,
+  });
+  const detail = [course.variant, course.tier, course.poetryTheme]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+  const digest = specificationDigest(course);
+
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
+          `<specification>\n${digest}\n</specification>\n\n` +
+          `Write one complete ${paperTitle.toLowerCase()} for this qualification, using only the specification above. ` +
+          `Write ${target} original exam-style questions totalling about 40 marks, in specification order. ` +
+          "Include short recall questions (1-2 marks), explain questions (4-6 marks), and at least one extended response (8-12 marks). " +
+          "Use this board's command words exactly, and make every question unambiguous and answerable from the specification. " +
+          "Do not copy or paraphrase a published past paper, and do not repeat a question. " +
+          "Each question needs a full-mark model answer and a marking guide written the way the board writes it: " +
+          "one bullet per mark, with examiner wording such as '1 mark: states that …', and the bullets adding up to the marks available. " +
+          `${markSchemeStyle(course.examBoard)} ` +
+          'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
+      },
+    ],
+    maxTokens: 12000,
+    temperature: 0.2,
+    topP: 1.0,
+    disableThinking: true,
+    // A whole paper with model answers and mark schemes is a long reply.
+    timeoutMs: 240_000,
+  });
+
+  // The paper uses the same validated question shape as a study set's exam
+  // questions, so one parser keeps both honest.
+  const questions = parseExams(raw, target);
+  if (questions.length < 3) {
+    throw new Error(
+      "NVIDIA did not return enough usable questions to make a paper. Try building it again.",
+    );
+  }
+  return questions;
+}
+
+/** Builds one saved past paper for a course. Scheduled by `pastPapers.create`. */
+export const buildPastPaper = internalAction({
+  args: { paperId: v.id("pastPapers") },
+  handler: async (ctx, { paperId }): Promise<{ ok: boolean }> => {
+    const paper = await ctx.runQuery(internal.pastPapers.getForBuild, { paperId });
+    if (!paper) return { ok: false };
+    if (paper.status === "ready") return { ok: true };
+
+    const claim = await ctx.runMutation(internal.pastPapers.claimBuild, { paperId });
+    if (!claim.claimed) return { ok: false };
+
+    try {
+      const course = await ctx.runQuery(internal.courses.getForBuild, {
+        courseId: paper.courseId,
+      });
+      if (!course) throw new Error("The course for this paper no longer exists.");
+
+      const apiKeys = resolveNvidiaKeys();
+      const questions = await generatePaperQuestions(
+        apiKeys,
+        course,
+        paper.title,
+      );
+      await ctx.runMutation(internal.pastPapers.completeBuild, {
+        paperId,
+        questions,
+      });
+      return { ok: true };
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Bluprint could not build this paper. Please try again.";
+      await ctx.runMutation(internal.pastPapers.failBuild, { paperId, message });
+      return { ok: false };
+    }
+  },
+});
+
+/** Marks one answer from a saved past paper. */
+export const gradePastPaperAnswer = action({
+  args: {
+    questionId: v.id("pastPaperQuestions"),
+    answer: v.string(),
+  },
+  handler: async (
+    ctx,
+    { questionId, answer },
+  ): Promise<{ awardedMarks: number; marks: number; feedback: string }> => {
+    const userId = await requireUserId(ctx);
+    const response = answer.trim();
+    if (response.length < 15) {
+      throw new Error("Write a fuller answer before sending it for grading.");
+    }
+
+    const data = await ctx.runQuery(
+      internal.pastPapers.getQuestionForGrading,
+      { questionId },
+    );
+    if (!data || data.paper.userId !== userId) {
+      throw new Error("Past paper question not found.");
+    }
+
+    const course = await ctx.runQuery(internal.courses.getForBuild, {
+      courseId: data.paper.courseId,
+    });
+    const apiKeys = resolveNvidiaKeys();
+    const { awardedMarks, feedback } = await markExamAnswer(
+      apiKeys,
+      data.question,
+      response,
+      course
+        ? {
+            course: course.subject,
+            examBoard: course.examBoard,
+            level: course.level,
+          }
+        : undefined,
+    );
+
+    await ctx.runMutation(internal.pastPapers.saveQuestionResult, {
+      questionId,
+      answer: response,
+      awardedMarks,
+      feedback,
+    });
+
+    return { awardedMarks, marks: data.question.marks, feedback };
+  },
+});
+
+// ---------------------------------------------------------------------------
 // OCR / transcription of uploaded photos and video frames
 // ---------------------------------------------------------------------------
 
