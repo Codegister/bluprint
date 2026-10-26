@@ -33,6 +33,11 @@ import {
   NVIDIA_VISION_MODEL,
   readNvidiaKeys,
 } from "./lib/nvidiaConfig";
+import {
+  buildPaperCover,
+  paperFormatBrief,
+  type PaperQualification,
+} from "./lib/paperFormat";
 
 
 type TextPart = { type: "text"; text: string };
@@ -61,6 +66,15 @@ type GeneratedExam = {
   marks: number;
   modelAnswer: string;
   markingGuide: string[];
+  // Past papers only: the label the board prints ("1 (a)", "0 1 . 1"), the
+  // section the question sits in, the command word it opens with, and the
+  // specification reference it tests. Study-set exam questions leave these
+  // unset and render as a plain numbered list.
+  label?: string;
+  section?: string;
+  sectionInstruction?: string;
+  commandWord?: string;
+  specReference?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -540,6 +554,12 @@ function parseQuiz(raw: string, limit = 6): GeneratedQuiz[] {
   return questions.slice(0, limit);
 }
 
+/** An optional short field: the trimmed value, or undefined when it is empty. */
+function optionalText(value: unknown, limit: number): string | undefined {
+  const text = asText(value, limit);
+  return text.length > 0 ? text : undefined;
+}
+
 function parseExams(raw: string, limit = 4): GeneratedExam[] {
   const items = collectionItems(
     raw,
@@ -552,8 +572,10 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
     const question = asText(row.question, 800);
     const modelAnswer = asText(row.modelAnswer, 2500);
     const marks = Math.round(Number(row.marks));
+    // A 12-mark extended response needs up to twelve creditable points, so the
+    // cap is high enough for a complete mark scheme to survive intact.
     const markingGuide = Array.isArray(row.markingGuide)
-      ? row.markingGuide.map((point) => asText(point, 400)).filter(Boolean).slice(0, 8)
+      ? row.markingGuide.map((point) => asText(point, 400)).filter(Boolean).slice(0, 14)
       : [];
     if (
       question &&
@@ -563,7 +585,17 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
       marks <= 12 &&
       markingGuide.length > 0
     ) {
-      questions.push({ question, marks, modelAnswer, markingGuide });
+      questions.push({
+        question,
+        marks,
+        modelAnswer,
+        markingGuide,
+        label: optionalText(row.label, 24),
+        section: optionalText(row.section, 80),
+        sectionInstruction: optionalText(row.sectionInstruction, 240),
+        commandWord: optionalText(row.commandWord, 40),
+        specReference: optionalText(row.specReference, 40),
+      });
     }
   }
   return questions.slice(0, limit);
@@ -969,8 +1001,15 @@ async function generateExams(
 // Past papers
 // ---------------------------------------------------------------------------
 
-/** Eight questions is a realistic one-hour practice paper. */
-const PAPER_QUESTION_COUNT = 8;
+/**
+ * A one-hour practice paper. Real papers run longer (AQA GCSE Biology Paper 1 is
+ * 100 marks in 1 hour 45), but every paper in Bluprint fills a one-hour slot in
+ * the revision timetable, so a practice paper matches that length and prints a
+ * one-hour time allowance on its cover.
+ */
+const PAPER_QUESTION_COUNT = 10;
+/** What the paper aims for, so the cover's "advised time per mark" is right. */
+const PAPER_TARGET_MARKS = 60;
 
 /** The course fields a paper needs. The rest of the doc is not sent anywhere. */
 type PaperCourse = {
@@ -1015,6 +1054,7 @@ async function generatePaperQuestions(
   apiKeys: string[],
   course: PaperCourse,
   paperTitle: string,
+  durationMinutes: number,
   target = PAPER_QUESTION_COUNT,
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText({
@@ -1026,6 +1066,26 @@ async function generatePaperQuestions(
     .filter((part): part is string => Boolean(part))
     .join(" · ");
   const digest = specificationDigest(course);
+  const paperQualification: PaperQualification = {
+    subject: course.subject,
+    level: course.level,
+    examBoard: course.examBoard,
+    tier: course.tier,
+    variant: course.variant,
+    poetryTheme: course.poetryTheme,
+  };
+  // The exemplar is the layout the model is asked to imitate. It is built with
+  // the target mark total; the cover stored with the finished paper is rebuilt
+  // from the marks the paper actually carries.
+  const formatBrief = paperFormatBrief(
+    paperQualification,
+    buildPaperCover(
+      paperQualification,
+      paperTitle,
+      PAPER_TARGET_MARKS,
+      durationMinutes,
+    ),
+  );
 
   const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
@@ -1036,18 +1096,18 @@ async function generatePaperQuestions(
         content:
           `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
           `<specification>\n${digest}\n</specification>\n\n` +
-          `Write one complete ${paperTitle.toLowerCase()} for this qualification, using only the specification above. ` +
-          `Write ${target} original exam-style questions totalling about 40 marks, in specification order. ` +
+          `${formatBrief}\n\n` +
+          `Write one complete practice paper titled "${paperTitle}" for this qualification, using only the specification above. ` +
+          `Write ${target} original exam-style questions totalling about ${PAPER_TARGET_MARKS} marks, in specification order. ` +
           "Include short recall questions (1-2 marks), explain questions (4-6 marks), and at least one extended response (8-12 marks). " +
           "Use this board's command words exactly, and make every question unambiguous and answerable from the specification. " +
           "Do not copy or paraphrase a published past paper, and do not repeat a question. " +
           "Each question needs a full-mark model answer and a marking guide written the way the board writes it: " +
           "one bullet per mark, with examiner wording such as '1 mark: states that …', and the bullets adding up to the marks available. " +
-          `${markSchemeStyle(course.examBoard)} ` +
-          'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
-      },
-    ],
-    maxTokens: 12000,
+          `${markSchemeStyle(course.examBoard)} ` +          'Return JSON exactly like: {"questions":[{"label":"1 (a)","section":"Section A","sectionInstruction":"Answer all questions in this section.","commandWord":"Describe","specReference":"4.1.1","question":"...","marks":4,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
+        },
+      ],
+      maxTokens: 14000,
     temperature: 0.2,
     topP: 1.0,
     disableThinking: true,
@@ -1088,9 +1148,30 @@ export const buildPastPaper = internalAction({
         apiKeys,
         course,
         paper.title,
+        paper.durationMinutes,
+      );
+      // The cover is built from the marks the paper actually carries, so the
+      // total it prints is the total the student can score.
+      const totalMarks = questions.reduce(
+        (sum, question) => sum + question.marks,
+        0,
+      );
+      const cover = buildPaperCover(
+        {
+          subject: course.subject,
+          level: course.level,
+          examBoard: course.examBoard,
+          tier: course.tier,
+          variant: course.variant,
+          poetryTheme: course.poetryTheme,
+        },
+        paper.title,
+        totalMarks,
+        paper.durationMinutes,
       );
       await ctx.runMutation(internal.pastPapers.completeBuild, {
         paperId,
+        cover,
         questions,
       });
       return { ok: true };

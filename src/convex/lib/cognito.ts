@@ -31,6 +31,8 @@ export type CognitoOutline = {
 };
 
 const SITE = "https://cognito.org";
+/** The same origin, exported so the past-paper index reader uses one constant. */
+export const COGNITO_SITE = SITE;
 const PAGE_TIMEOUT_MS = 20_000;
 /** Guard against an unexpectedly enormous page; real course pages are < 1 MB. */
 const MAX_HTML_CHARS = 4_000_000;
@@ -499,6 +501,16 @@ export async function findSubjectSlug(
 function boardSlugFor(board: string): string | null {
   const found = BOARD_SLUGS.find((entry) => entry.match.test(board.trim()));
   return found?.slug ?? null;
+}
+
+/** Qualification folder name for a level, e.g. "GCSE" → "gcse". */
+export function cognitoLevelSlug(level: string): string | null {
+  return LEVEL_SLUGS[level.trim()] ?? null;
+}
+
+/** Exam-board folder name, e.g. "Pearson Edexcel" → "edexcel". */
+export function cognitoBoardSlug(board: string): string | null {
+  return boardSlugFor(board);
 }
 
 /**

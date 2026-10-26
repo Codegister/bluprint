@@ -33,6 +33,25 @@ const generatedQuestion = v.object({
   marks: v.number(),
   modelAnswer: v.string(),
   markingGuide: v.array(v.string()),
+  // The board's layout, written by the paper generator. Optional so the shape
+  // stays compatible with any caller that does not supply it.
+  label: v.optional(v.string()),
+  section: v.optional(v.string()),
+  sectionInstruction: v.optional(v.string()),
+  commandWord: v.optional(v.string()),
+  specReference: v.optional(v.string()),
+});
+
+/** The paper's cover page, built server-side from the board's own rubric. */
+const paperCover = v.object({
+  paperLabel: v.string(),
+  qualification: v.string(),
+  timeAllowed: v.string(),
+  totalMarks: v.number(),
+  materials: v.array(v.string()),
+  instructions: v.array(v.string()),
+  information: v.array(v.string()),
+  advice: v.array(v.string()),
 });
 
 function stale(paper: Doc<"pastPapers">): boolean {
@@ -266,9 +285,10 @@ export const claimBuild = internalMutation({
 export const completeBuild = internalMutation({
   args: {
     paperId: v.id("pastPapers"),
+    cover: paperCover,
     questions: v.array(generatedQuestion),
   },
-  handler: async (ctx, { paperId, questions }) => {
+  handler: async (ctx, { paperId, cover, questions }) => {
     const paper = await ctx.db.get(paperId);
     if (!paper) throw new Error("Past paper not found.");
 
@@ -282,6 +302,11 @@ export const completeBuild = internalMutation({
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
         order: index,
+        label: question.label,
+        section: question.section,
+        sectionInstruction: question.sectionInstruction,
+        commandWord: question.commandWord,
+        specReference: question.specReference,
       });
       totalMarks += question.marks;
     }
@@ -290,6 +315,7 @@ export const completeBuild = internalMutation({
       status: "ready",
       progress: undefined,
       errorMessage: undefined,
+      cover,
       questionCount: questions.length,
       totalMarks,
       answeredCount: 0,

@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { CognitoPaperLibrary } from "@/components/study/CognitoPaperLibrary";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
 import {
   AlertDialog,
@@ -480,6 +481,9 @@ export default function Course() {
                 board's current specification before relying on a topic list.
               </p>
             </section>
+
+            {/* The real board papers first, then the AI practice papers. */}
+            <CognitoPaperLibrary courseId={course._id} />
 
             <CoursePastPapers courseId={course._id} />
 

@@ -4,10 +4,12 @@ Bluprint is a private revision workspace with two ways in. Choose your courses o
 maps each specification into units and topics, then builds study material for any topic — or
 upload photos of your notes, sample a video, or paste text and compile a study set directly.
 Every set gets a summary, flashcards, a multiple-choice quiz, and exam-style questions with
-AI marking, plus an AI tutor that knows the material. Each course also keeps a small library
-of **saved past papers** — full practice papers written from the specification, marked
-question by question. Courses can be turned into a colour-coded weekly revision timetable
-built from topics, from past papers only, or from a mix of the two.
+AI marking, plus an AI tutor that knows the material. Each course also opens onto **two
+kinds of past paper**: the board's own papers and official mark schemes, listed from Cognito
+exactly as they are published, and a small library of **saved practice papers** written from
+the specification in that board's paper format and marked question by question. Courses can
+be turned into a colour-coded weekly revision timetable built from topics, from past papers
+only, or from a mix of the two.
 
 Version 1 is built for a small group of friends. Each person signs in separately and gets
 their own dashboard containing only their courses and study sets.
@@ -20,10 +22,11 @@ their own dashboard containing only their courses and study sets.
 - **Convex Auth (email one-time code)** — separate accounts without password management
 - **NVIDIA API** — study-set and past-paper generation, vision, marking, and tutoring,
   through the OpenAI-compatible endpoint at `integrate.api.nvidia.com`
-- **Cognito (`cognito.org`, scraped)** — the published topic outline for each course. The
-  pathway builder follows Cognito's qualification → subject → exam board → tier route, so
-  the map matches the board's own specification headings exactly. No AI is used to build a
-  pathway.
+- **Cognito (`cognito.org`, scraped)** — the published topic outline for each course, and
+  the published past-paper index for it. The pathway builder follows Cognito's qualification
+  → subject → exam board → tier route, so the map matches the board's own specification
+  headings exactly, and the past-paper reader lists the real papers Cognito publishes for
+  that same course, by exam series and by topic. No AI is used for either.
 - **Bun** — package manager and scripts
 
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
@@ -90,20 +93,33 @@ flashcards, quiz questions and exam-style questions, each from 1 to 100. If the 
 cannot realistically support the number asked for, Bluprint builds the maximum it can and
 says so on the set page; it never silently pretends the request was met.
 
-### 3. Sit a past paper
+### 3. Practise past papers
 
-Every ready course has a **Past papers** section. **Build a past paper** writes one full
-practice paper from the saved specification: about eight questions across the course, from
-short recall to an extended response, with a model answer and a mark scheme for each. The
-paper is generated once and saved, so it is the same paper on every visit — and the
-timetable can schedule it as a one-hour session.
+Every ready course opens onto **Official papers** — the board's actual papers and official
+mark schemes, read from Cognito and listed exactly as Cognito publishes them. The toggle
+switches between **By year**, which groups whole papers by exam series (newest first, and
+including the specimen papers and the old specification), and **By topic**, which lists the
+same archive's past-paper questions grouped by specification topic. Each entry has a
+**Paper** and a **Mark scheme** link that open the official PDF at the source in a new tab.
+The list is read once per course and shared, so it looks the same every time and Cognito is
+only visited again when something new may have been released.
+
+Below that, **Build a past paper** writes one practice paper from the saved specification,
+laid out the way the board lays out its own papers: the board's cover rubric (Materials,
+Instructions, Information and Advice), its question numbering, its mark notation —
+`(4 marks)` for AQA, `[4]` for OCR and Cambridge, a running `(Total for Question 1 = 4
+marks)` for Edexcel — its command words, and Section A / Section B where the board uses
+sections. It is about ten questions totalling roughly 60 marks, from short recall to an
+extended response, with a model answer and a mark scheme for each. The paper is generated
+once and saved, so it is the same paper on every visit — and the timetable can schedule it
+as a one-hour session.
 
 Open a paper and answer each question in full sentences. **Mark answer** sends it to the
 examiner prompt used across the app, which credits only the mark-scheme points that are
 actually in the answer, gives a terse note naming the marks lost, and then reveals the
 model answer and marking guide. Scores are saved, so the course section shows how much of
-each paper you have answered and how many marks you earned. Four papers per course is the
-cap; remove one to build another.
+each paper you have answered and how many marks you earned. Four practice papers per course
+is the cap; remove one to build another.
 
 ## What version 1 does
 
@@ -154,8 +170,10 @@ cap; remove one to build another.
     The schedule is saved to your account and appears in the sidebar as a colour-coded weekly
     timetable; clicking a topic session opens (or builds) its study set, and clicking a past
     paper session opens the saved paper.
-11. **Practise past papers** — every ready course keeps up to four saved practice papers,
-    written from its specification and marked question by question against their own mark
+11. **Practise past papers** — every ready course lists the board's real papers and
+    official mark schemes, by exam series and by specification topic, opening each at the
+    source. It also keeps up to four saved practice papers, written from its specification
+    in that board's paper format and marked question by question against their own mark
     schemes. Progress and marks per paper are kept alongside the course.
 
 After signing in, the main screen is the **Home** dashboard. It keeps one primary action,
@@ -200,11 +218,26 @@ it. Sets built from a course topic link back to that course.
   International answers use B1/M1/A1 points, IB extended answers use markband
   descriptors, and AQA, Edexcel, OCR, WJEC, and SQA answers earn one mark per creditable
   bullet.
-- **A saved past paper is an original practice paper.** It is written from the course's
-  stored specification (about eight questions totalling roughly 40 marks), not copied from
-  a board paper. The timetable still counts it as one hour, because that is the time a
-  student should give it under exam conditions. Papers are generated on demand, up to four
-  per course, so a large course setup only pays for the papers someone actually sits.
+- **A saved practice paper is original, but set out in the board's format.** It is written
+  from the course's stored specification (about ten questions totalling roughly 60 marks)
+  and laid out the way that board lays out its own papers — cover rubric, question
+  numbering, mark notation, command words and sections. The model is "trained" on that
+  format through a written format exemplar in the prompt, not by reproducing a real paper.
+  The timetable still counts it as one hour, because that is the time a student should give
+  it under exam conditions. A one-hour paper is shorter than a real one (AQA GCSE Biology
+  Paper 1 is 100 marks in 1 hour 45), so the cover states a one-hour allowance and about 60
+  marks rather than a real paper's length. Papers are generated on demand, up to four per
+  course, so a large course setup only pays for the papers someone actually sits.
+- **Real past papers are linked, not copied.** The papers and mark schemes belong to the
+  exam boards. Bluprint stores only the index Cognito publishes — the paper's label, the
+  exam series it belongs to, and the URL of the PDF — and opens each one on Cognito's own
+  host in a new tab. Nothing the boards or Cognito wrote is served from Bluprint's storage
+  or bundled into the app. If Cognito publishes no papers for a course, the official-papers
+  section simply does not appear.
+- **The official-papers index is read once per course and refreshed at most monthly.** It
+  is shared between everyone studying that course, so two friends on the same qualification
+  see the same list and Cognito sees roughly one request a month. Only the two past-paper
+  pages of the course being viewed are read; the app does not crawl the site.
 - **The tutor has three scopes.** A study set reads that set's notes (up to 12,000
   characters); a course reads the whole scraped pathway; a unit reads only that unit's
   topics. Each scope keeps the last ten saved turns, has no web access, and is not a
@@ -483,11 +516,21 @@ same rate-limit messages as the rest of the app.
 - **Build a past paper** creates the paper row immediately, then schedules one Convex
   action. The course page and the paper page both subscribe to that row, so the paper
   appears as it finishes.
-- The prompt contains the qualification (board, level, subject, tier or route) and the
-  stored specification as a list of units, topics and specification references. The model
-  is asked for about eight original questions totalling roughly 40 marks, in specification
-  order: short recall, explain questions, and one extended response, using the board's own
-  command words and mark-scheme wording.
+- The prompt contains the qualification (board, level, subject, tier or route), the stored
+  specification as a list of units, topics and specification references, and a **format
+  brief** built for that board: the cover rubric it is about to be given, its question
+  numbering (including AQA GCSE science's `0 1 . 1` style), its mark notation, its published
+  command words, and a short specimen showing exactly how a question and its parts are set
+  out. The model is asked for about ten original questions totalling roughly 60 marks, in
+  specification order, each labelled with its section, command word and specification
+  reference. Only the layout is imitated — never a real question.
+- The **cover is built on the server**, not by the model, from the board's own rubric in
+  `convex/lib/paperFormat.ts`, so it is exact and identical every time the paper is rebuilt,
+  and the total mark it prints is the total the stored questions actually carry.
+- Questions are stored as a flat ordered list that carries its layout — the printed label
+  (`1 (a)`), the section, the section's instruction line, the command word and the
+  specification reference — so the paper page can render real section headings and the
+  board's mark notation without storing a second structure.
 - Questions are stored once the whole paper validates, along with the model answer and a
   one-bullet-per-mark guide. A failed build leaves a readable message and a **Build again**
   button on the paper page; nothing half-written is shown as a paper.
@@ -495,8 +538,35 @@ same rate-limit messages as the rest of the app.
   guide, whole marks only, no benefit of the doubt, and a ceiling from its own point
   ledger. The awarded mark and the examiner note are saved with the answer.
 - A paper is **60 minutes** by definition, and that is what the timetable schedules. The
-  questions are a representative paper rather than a reproduction of a board paper, which
-  is why every page says so.
+  questions are a representative paper rather than a reproduction of a board paper, which is
+  why the cover is stamped **"Practice mock — not an official examination paper"** and every
+  paper page says so.
+
+## How the official past papers are read
+
+- A course's real papers come from Cognito's own two views of the archive:
+  `/courses/<level>/<subject>/<board>[/<tier>]/past-papers/by-year` and
+  `…/past-papers/by-topic`. The reader tries that course's board and tier paths in order and
+  lets Cognito redirect to its canonical route (Biology → biology-triple), exactly as the
+  pathway builder does.
+- Those pages are server-rendered, and each element carries a stable hook: an `<h3>` for a
+  top-level group (`New 9-1 specification`), a `<button aria-label="Paper 1 — 2 downloads">`
+  for a paper row, and an `<a href>` pointing at the PDF. The parser walks those in document
+  order, so a paper stays attached to the year group it sits under even though the markup
+  nests deeply and repeats every link once for the mobile layout and once for the desktop
+  one. The first URL for each slot wins, so no paper is listed twice.
+- A row's two links are labelled `Paper` and `Mark scheme`, and that label is what pairs a
+  question paper with its official mark scheme — not the file name, which differs from board
+  to board (`AQA-84611H-QP-JUN25.pdf` for AQA, `1BI0_1H_que_20211116.pdf` for Edexcel,
+  `137177-question-paper-unit-a171-02-…` for OCR).
+- Combined Science is split by Cognito into Biology, Chemistry and Physics before the exam
+  board, so all three components are read and merged, each tagged with its science.
+- The index is stored under a course signature (`subject|level|board|variant|tier`) so it is
+  shared between everyone on that course, and is refreshed after 30 days. A course Cognito
+  publishes nothing for is stored as a valid empty result rather than an error, and the
+  section hides itself.
+- No AI is involved, so the list is identical on every load, and a read that fails shows a
+  readable message with a **Try again** button.
 
 ## Project structure
 
@@ -508,8 +578,9 @@ src/
     Dashboard.tsx        primary actions, course table, and saved study sets
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
     Course.tsx           one course workspace: units, topics, progress, topic sets,
-                         and saved past papers
-    PastPaper.tsx        one saved past paper: build progress and AI-marked questions
+                         official papers, and saved practice papers
+    PastPaper.tsx        one saved practice paper: its cover, build progress, and
+                         AI-marked questions
     StudySet.tsx         set detail, compile progress, and the five study tabs
     TimetableBuilder.tsx subjects, session length, one paper answer, budgets, exam dates
     Timetable.tsx        colour-coded weekly plan with holidays and clickable sessions
@@ -518,13 +589,14 @@ src/
     CreateSetDialog.tsx  photo, video, and pasted-text upload flow
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
-    study/               flashcard review, quiz runner, exam practice, past papers,
-                         tutor chat, set settings
+    study/               flashcard review, quiz runner, exam practice, the official
+                         past-paper library, practice papers, tutor chat, set settings
   convex/
-    schema.ts            users, courses, studySets, cards, quiz, exam, past papers, tutor,
-                         study days, plans
+    schema.ts            users, courses, studySets, cards, quiz, exam, practice papers,
+                         the official past-paper index, tutor, study days, plans
     courses.ts           pathway CRUD, topic progress, topic-to-set creation, schedulers
     pastPapers.ts        saved practice papers, build queue, progress and marked answers
+    cognitoPapers.ts     one shared, cached index of a course's real past papers per course
     timetable.ts         deterministic revision-plan generation (topics, papers, mixed)
     studySets.ts         ownership-checked queries/mutations + internal compile writes
     tutor.ts             saved tutor threads and the context the action reads
@@ -533,6 +605,8 @@ src/
     settings.ts          environment key-pool status for the UI
     lib/nvidiaConfig.ts  NVIDIA URL, model IDs, key parsing, notes limit
     lib/cognito.ts       scrapes the published outline for a course from cognito.org
+    lib/cognitoPapers.ts reads Cognito's past-paper pages (by year and by topic)
+    lib/paperFormat.ts   each board's cover rubric, numbering, mark notation and format brief
   lib/
     media.ts             image compression and video frame sampling
     examBoards.ts        exam board and level choices, qualification labels

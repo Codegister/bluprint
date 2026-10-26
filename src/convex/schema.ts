@@ -190,6 +190,21 @@ const schema = defineSchema(
       errorMessage: v.optional(v.string()),
       processingStartedAt: v.optional(v.number()),
       lastAttemptedAt: v.optional(v.number()),
+      // The paper's cover, built on the server from the board's own rubric so
+      // the paper reads like a real one and rebuilds identically. Missing on
+      // papers built before the cover existed.
+      cover: v.optional(
+        v.object({
+          paperLabel: v.string(),
+          qualification: v.string(),
+          timeAllowed: v.string(),
+          totalMarks: v.number(),
+          materials: v.array(v.string()),
+          instructions: v.array(v.string()),
+          information: v.array(v.string()),
+          advice: v.array(v.string()),
+        }),
+      ),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
@@ -206,11 +221,61 @@ const schema = defineSchema(
       modelAnswer: v.string(),
       markingGuide: v.array(v.string()),
       order: v.number(),
+      // How the board lays the question out: its printed label ("1 (a)",
+      // "0 1 . 1"), the section it belongs to, that section's instruction line,
+      // the command word it opens with, and the specification reference it
+      // tests. Missing on papers built before the layout was stored.
+      label: v.optional(v.string()),
+      section: v.optional(v.string()),
+      sectionInstruction: v.optional(v.string()),
+      commandWord: v.optional(v.string()),
+      specReference: v.optional(v.string()),
       userAnswer: v.optional(v.string()),
       awardedMarks: v.optional(v.number()),
       feedback: v.optional(v.string()),
       gradedAt: v.optional(v.number()),
     }).index("by_paper", ["paperId"]),
+
+    // Cognito's published past-paper index for one course, shared by everyone
+    // studying that course. Read once and kept, so the same course always shows
+    // the same papers and Cognito is only visited again when the index is old.
+    // The entries point at the official PDFs; exam board papers and mark
+    // schemes are the boards' copyright, so none of them are stored here.
+    cognitoPaperIndexes: defineTable({
+      // Course signature: subject|level|examBoard|variant|tier.
+      key: v.string(),
+      label: v.string(),
+      sourceUrl: v.string(),
+      description: v.optional(v.string()),
+      status: v.union(
+        v.literal("queued"),
+        v.literal("processing"),
+        v.literal("ready"),
+        v.literal("error"),
+      ),
+      errorMessage: v.optional(v.string()),
+      processingStartedAt: v.optional(v.number()),
+      fetchedAt: v.optional(v.number()),
+      // Real board papers by exam series, newest first as Cognito lists them.
+      byYear: v.array(
+        v.object({
+          label: v.string(),
+          year: v.optional(v.string()),
+          specification: v.optional(v.string()),
+          questionPaperUrl: v.string(),
+          markSchemeUrl: v.optional(v.string()),
+        }),
+      ),
+      // The same archive's past-paper questions, grouped by specification topic.
+      byTopic: v.array(
+        v.object({
+          topic: v.string(),
+          unit: v.optional(v.string()),
+          questionPaperUrl: v.string(),
+          markSchemeUrl: v.optional(v.string()),
+        }),
+      ),
+    }).index("by_key", ["key"]),
 
     // One saved revision timetable per account. Dates are UTC calendar keys
     // (YYYY-MM-DD) so a plan renders the same day regardless of server timezone.
