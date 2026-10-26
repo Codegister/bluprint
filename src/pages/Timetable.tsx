@@ -70,14 +70,13 @@ function SessionBlock({
         aria-hidden
         className={cn("absolute inset-y-0 left-0 w-1 sm:w-1.5", color.bar)}
       />
-      {/* On phones the start time is in the row's gutter, so the range only
-          appears where there is room for it. */}
-      <span
-        className={cn(
-          "flex items-center justify-between gap-1",
-          !loading && "hidden sm:flex",
-        )}
-      >
+      {/* There is no shared time gutter any more, so every block carries its
+          own time: the start only on a phone (a column is too narrow for a
+          range), the full range from tablet size up. */}
+      <span className="flex items-center justify-between gap-1">
+        <span className="text-[0.5rem] font-semibold tabular-nums text-muted-foreground sm:hidden">
+          {formatTime24(start)}
+        </span>
         <span className="hidden text-[0.54rem] font-semibold tabular-nums text-muted-foreground sm:block">
           {formatTimeRange(start, entry.minutes)}
         </span>
@@ -144,21 +143,27 @@ function WeekTable({
   // weekend columns, which is where the extra capacity is most visible.
   const days =
     daysPerWeek === 7 ? week.days : week.days.filter((day) => !day.isWeekend);
-  const entriesByStart = new Map<number, Map<string, RevisionEntry[]>>();
-  for (const day of days) {
-    for (const entry of day.entries) {
-      const start = entry.startMinutes ?? 17 * 60;
-      const byDate = entriesByStart.get(start) ?? new Map<string, RevisionEntry[]>();
-      const list = byDate.get(day.date) ?? [];
-      list.push(entry);
-      byDate.set(day.date, list);
-      entriesByStart.set(start, byDate);
-    }
-  }
-  const starts = [...entriesByStart.keys()].sort((a, b) => a - b);
+  /**
+   * Rows are session slots, not clock times.
+   *
+   * School days start later than days off, so a grid keyed on clock times needs
+   * a row for every distinct start time in the week: the early weekend rows sat
+   * empty across Monday to Friday and the evening rows sat empty across the
+   * weekend. Half the grid was "Free", and the weekday revision that actually
+   * needs doing was pushed below the fold. Slotting by position keeps a day's
+   * sessions together and makes the week only as tall as its busiest day,
+   * whatever start times the plan uses.
+   *
+   * buildTimetableWeeks already orders each day's entries by start time.
+   */
+  const slotCount = days.reduce(
+    (most, day) => Math.max(most, day.entries.length),
+    0,
+  );
+  const slots = Array.from({ length: slotCount }, (_, index) => index);
   const today = new Date().toISOString().slice(0, 10);
-  // The grid is fluid (see .week-grid in index.css): the time gutter narrows on
-  // phones so all seven days fit, and no horizontal scrolling is needed.
+  // Fluid columns (see .week-columns in index.css): all seven days stay on
+  // screen at every width, with no sideways scrolling.
   const gridVars = { "--week-days": days.length } as CSSProperties;
 
   return (
@@ -203,12 +208,9 @@ function WeekTable({
 
       <div>
         <div
-          className="week-grid border-b border-border bg-[#FCFCFD]"
+          className="week-columns border-b border-border bg-[#FCFCFD]"
           style={gridVars}
         >
-          <div className="flex items-end bg-[#FCFCFD] px-1 py-2 text-[0.52rem] font-semibold uppercase tracking-[0.04em] text-muted-foreground sm:px-2.5 sm:text-[0.56rem] sm:tracking-[0.08em]">
-            Time
-          </div>
             {days.map((day) => {
               const isToday = day.date === today;
               return (
@@ -307,36 +309,26 @@ function WeekTable({
             })}
           </div>
 
-          {starts.length === 0 ? (
+          {slots.length === 0 ? (
             <div className="px-6 py-12 text-center text-[0.8rem] text-muted-foreground">
               No revision is scheduled in this week.
             </div>
           ) : (
-            starts.map((start) => (
+            slots.map((slot) => (
               <div
-                key={start}
-                className="week-grid border-b border-border/70 last:border-b-0"
+                key={slot}
+                className="week-columns border-b border-border/70 last:border-b-0"
                 style={gridVars}
               >
-                <div className="flex items-start border-r border-border/60 bg-[#FCFCFD] px-1 py-2 sm:px-2.5">
-                  <span className="text-[0.58rem] font-bold tabular-nums text-brand-ink sm:text-[0.66rem]">
-                    {formatTime24(start)}
-                  </span>
-                </div>
                 {days.map((day) => {
-                  const entries = entriesByStart.get(start)?.get(day.date) ?? [];
-                  const paused = day.isExamDay;
-                  // A previous row's longer session can still be running here.
-                  // Leave that cell blank rather than labelling it "Free".
-                  const covered = day.entries.some((entry) => {
-                    const entryStart = entry.startMinutes ?? 17 * 60;
-                    return entryStart < start && start < entryStart + entry.minutes;
-                  });
+                  // Row 3 is every day's third session, whether that is 13:45
+                  // on a Saturday or 19:30 on a Tuesday.
+                  const entry = day.entries[slot];
                   return (
                     <div
-                      key={`${day.date}:${start}`}
+                      key={`${day.date}:${slot}`}
                       className={cn(
-                        "min-h-[76px] border-l border-border/60 p-1 sm:min-h-[94px] sm:p-1.5",
+                        "border-l border-border/60 p-1 sm:p-1.5",
                         day.isHoliday
                           ? "bg-[#FFFBF2]"
                           : day.isExamDay
@@ -344,30 +336,30 @@ function WeekTable({
                             : "bg-white",
                       )}
                     >
-                      {entries.length > 0 ? (
-                        <div className="space-y-1.5">
-                          {entries.map((entry) => {
-                            const key = `${entry.date}:${entry.topicId}:${entry.startMinutes ?? 0}`;
-                            return (
-                              <SessionBlock
-                                key={key}
-                                entry={entry}
-                                color={
-                                  colorByCourse.get(entry.courseId) ??
-                                  SUBJECT_COLORS[0]
-                                }
-                                loading={busy === key}
-                                disabled={busy !== null}
-                                onOpen={() => onOpen(entry)}
-                              />
-                            );
-                          })}
+                      {entry ? (
+                        <SessionBlock
+                          entry={entry}
+                          color={
+                            colorByCourse.get(entry.courseId) ??
+                            SUBJECT_COLORS[0]
+                          }
+                          loading={
+                            busy ===
+                            `${entry.date}:${entry.topicId}:${entry.startMinutes ?? 0}`
+                          }
+                          disabled={busy !== null}
+                          onOpen={() => onOpen(entry)}
+                        />
+                      ) : slot > 0 ? (
+                        // Later slots simply run out on a quieter day.
+                        null
+                      ) : day.isExamDay ? (
+                        <div className="flex h-full min-h-[62px] items-center justify-center rounded-lg bg-[#FAE9EF] px-1 text-center text-[0.52rem] font-semibold text-[#98304F] sm:min-h-[78px] sm:text-[0.58rem]">
+                          First exam
                         </div>
-                      ) : paused || covered ? (
-                        <div className="h-full min-h-[64px] sm:min-h-[74px]" />
                       ) : (
                         <div
-                          className="flex h-full min-h-[64px] items-center justify-center rounded-lg border border-dashed border-border/70 text-[0.52rem] font-medium text-muted-foreground/50 sm:min-h-[74px] sm:text-[0.58rem]"
+                          className="flex h-full min-h-[62px] items-center justify-center rounded-lg border border-dashed border-border/70 text-[0.52rem] font-medium text-muted-foreground/50 sm:min-h-[78px] sm:text-[0.58rem]"
                           style={FREE_CELL_STYLE}
                         >
                           Free
@@ -382,7 +374,10 @@ function WeekTable({
         </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-[#FCFCFD] px-4 py-2.5 text-[0.64rem] text-muted-foreground">
-        <span>Click a session to open its study set or past paper.</span>
+        <span>
+          Each day lists its own sessions in order, with the time on every block.
+          Click one to open its study set or past paper.
+        </span>
         <span>
           {days.length} day{days.length === 1 ? "" : "s"} · {" "}
           {durationLabel(week.minutes)} planned

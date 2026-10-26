@@ -323,18 +323,13 @@
   animation: caret-blink 1.2s steps(1) infinite;
 }
 
-/* The revision timetable fits its container at every width: a narrow time
-   gutter on phones keeps all seven days on screen without sideways scrolling,
-   and a wider one from tablet size up gives the time column room to breathe. */
-.week-grid {
+/* The revision timetable fits its container at every width. Rows follow the
+   order of each day's sessions rather than a shared clock, so there is no time
+   gutter: all seven day columns share the full width and nothing needs
+   sideways scrolling. */
+.week-columns {
   display: grid;
-  grid-template-columns: 2.6rem repeat(var(--week-days, 5), minmax(0, 1fr));
-}
-
-@media (min-width: 640px) {
-  .week-grid {
-    grid-template-columns: 4rem repeat(var(--week-days, 5), minmax(0, 1fr));
-  }
+  grid-template-columns: repeat(var(--week-days, 5), minmax(0, 1fr));
 }
 
 @media (prefers-reduced-motion: reduce) {
