@@ -19,14 +19,18 @@ import {
   BUILD_MIN,
   shortfallSentence,
 } from "./lib/buildDefaults";
+import { isSelfContained } from "./lib/paperData";
 import { normalizeAnswer } from "./lib/recall";
 import { parseSummary, type Summary } from "./lib/summary";
 import { cleanTopicTitle } from "./lib/titles";
 import {
   awardCriterion,
   criteriaFor,
+  criterionText,
+  distinctiveCoverage,
   distinctiveTermsFor,
   guideFromCriteria,
+  meaningAward,
 } from "./lib/markingCriteria";
 import { requireUserId } from "./lib/requireUser";
 import {
@@ -114,6 +118,13 @@ type GeneratedExam = {
   sectionInstruction?: string;
   commandWord?: string;
   specReference?: string;
+  /** Past papers only: the table the question refers to. */
+  data?: {
+    title?: string;
+    columns: string[];
+    rows: string[][];
+    note?: string;
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -615,6 +626,40 @@ function optionalText(value: unknown, limit: number): string | undefined {
   return text.length > 0 ? text : undefined;
 }
 
+/**
+ * The table a question needs, read from the model's `data` object. Anything
+ * that is not a real table is dropped rather than rendered half-empty, because
+ * a broken table is worse than the question the validator then rejects.
+ */
+function parseQuestionData(value: unknown): GeneratedExam["data"] {
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as { title?: unknown; columns?: unknown; rows?: unknown; note?: unknown };
+  const columns = Array.isArray(row.columns)
+    ? row.columns.map((column) => asText(column, 60)).filter(Boolean).slice(0, 8)
+    : [];
+  if (columns.length < 2) return undefined;
+
+  const rows: string[][] = [];
+  if (Array.isArray(row.rows)) {
+    for (const rawRow of row.rows.slice(0, 12)) {
+      if (!Array.isArray(rawRow)) continue;
+      const cells = rawRow.map((cell) => asText(cell, 120));
+      // Every row has to fill the header, or the table misstates its own data.
+      if (cells.length !== columns.length) continue;
+      if (cells.every((cell) => cell.length === 0)) continue;
+      rows.push(cells);
+    }
+  }
+  if (rows.length === 0) return undefined;
+
+  return {
+    title: optionalText(row.title, 120),
+    columns,
+    rows,
+    note: optionalText(row.note, 200),
+  };
+}
+
 function parseExams(raw: string, limit = 4): GeneratedExam[] {
   const items = collectionItems(
     raw,
@@ -650,6 +695,7 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
         sectionInstruction: optionalText(row.sectionInstruction, 240),
         commandWord: optionalText(row.commandWord, 40),
         specReference: optionalText(row.specReference, 40),
+        data: parseQuestionData(row.data),
       });
     }
   }
@@ -1208,6 +1254,85 @@ function applyBlueprint(
 }
 
 /**
+ * Rebuilds one question whose data did not arrive. The model is asked for the
+ * data table, or for a version of the question that needs none. Marks, labels
+ * and sections stay exactly as the blueprint set them.
+ */
+async function repairQuestionData(
+  apiKeys: string[],
+  question: GeneratedExam,
+  qualification: string,
+): Promise<GeneratedExam | null> {
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `<qualification>${qualification || "Not specified"}</qualification>\n` +
+          `<question>${question.question}</question>\n` +
+          `<marks>${question.marks}</marks>\n\n` +
+          "This exam question refers to data that is not there, so it cannot be answered. " +
+          "Either supply the data as `data` with `columns` and `rows` (short cell values, one row per item), or rewrite the question so it needs no data at all. " +
+          "The question must stay worth the same marks and ask about the same idea. Keep the model answer and marking guide consistent with the question you return.\n" +
+          'Return JSON exactly like: {"question":"...","data":{"title":"...","columns":["..."],"rows":[["..."]]},"modelAnswer":"...","markingGuide":["1 mark: ..."]}. ' +
+          "Omit `data` only if the rewritten question needs none.",
+      },
+    ],
+    maxTokens: 2200,
+    temperature: 0,
+    disableThinking: true,
+  });
+
+  const repaired = parseExams(raw, 1)[0];
+  if (!repaired) return null;
+  const merged: GeneratedExam = {
+    ...question,
+    question: repaired.question,
+    modelAnswer: repaired.modelAnswer,
+    markingGuide: repaired.markingGuide,
+    data: repaired.data,
+  };
+  return isSelfContained(merged) ? merged : null;
+}
+
+/**
+ * Checks every question is self-contained, repairing the ones that are not and
+ * dropping any that cannot be repaired. A slightly shorter paper is better than
+ * a question nobody can answer.
+ */
+async function ensureSelfContained(
+  apiKeys: string[],
+  questions: GeneratedExam[],
+  qualification: string,
+): Promise<GeneratedExam[]> {
+  const kept: GeneratedExam[] = [];
+  // One repair call per broken question, capped so a bad reply cannot turn into
+  // a long chain of paid calls.
+  let repairs = 0;
+  for (const question of questions) {
+    if (isSelfContained(question)) {
+      kept.push(question);
+      continue;
+    }
+    if (repairs < 3) {
+      repairs += 1;
+      const repaired = await repairQuestionData(apiKeys, question, qualification);
+      if (repaired) {
+        kept.push(repaired);
+        continue;
+      }
+    }
+    console.error(
+      "Dropped a past-paper question that referred to data it did not include",
+      question.label ?? "",
+    );
+  }
+  return kept;
+}
+
+/**
  * Writes one full practice paper from the saved pathway. The questions are
  * original — published papers and mark schemes are copyrighted — but the
  * subject's real question types, marks, command words and marking style are
@@ -1269,8 +1394,10 @@ async function generatePaperQuestions(
     "Do not add, remove, reorder or re-mark a question: the paper format above is fixed. " +
     "Make every question unambiguous and answerable from the specification, and do not copy or paraphrase a published past paper. " +
     "Each question needs a full-mark model answer and a marking guide written the way the board writes it. " +
+    "If a question needs data — readings, percentages, observations — include it in a `data` object with `columns` and `rows` and refer to it as \"the table below\". " +
+    "Never refer to a table, graph, chart, figure, diagram or photograph you have not supplied: a question that points at missing data cannot be answered. " +
     `${schemeNotes} ` +
-    `Return JSON exactly like: {"questions":[{"question":"...","marks":${slots[0]?.marks ?? 3},"modelAnswer":"...","markingGuide":["the mark scheme"],"commandWord":"Outline","specReference":"1.1"}]}`;
+    `Return JSON exactly like: {"questions":[{"question":"...","marks":${slots[0]?.marks ?? 3},"modelAnswer":"...","markingGuide":["the mark scheme"],"commandWord":"Outline","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]}`;
 
   let mismatch = "";
   // One retry is enough to recover a reply that drifted from the format, and
@@ -1303,7 +1430,13 @@ async function generatePaperQuestions(
     // silently sliced off.
     const questions = parseExams(raw, slots.length + 4);
     mismatch = blueprintMismatch(questions, blueprint) ?? "";
-    if (!mismatch) return applyBlueprint(questions, blueprint);
+    if (!mismatch) {
+      return await ensureSelfContained(
+        apiKeys,
+        applyBlueprint(questions, blueprint),
+        qualification,
+      );
+    }
   }
 
   throw new Error(
@@ -1329,6 +1462,13 @@ export const buildPastPaper = internalAction({
       if (!course) throw new Error("The course for this paper no longer exists.");
 
       const apiKeys = resolveNvidiaKeys();
+      // The specification is already on the course, so the wait from here is the
+      // writing. Saying so is what stops the page sitting on "Reading your
+      // specification…" for the whole build.
+      await ctx.runMutation(internal.pastPapers.setProgress, {
+        paperId,
+        progress: "Writing the questions and mark schemes…",
+      });
       // Papers built before the course had paper groupings, and courses whose
       // specification publishes none, are written from the whole pathway.
       const chosenPaper = paper.paper
@@ -1340,6 +1480,10 @@ export const buildPastPaper = internalAction({
         paper.title,
         chosenPaper,
       );
+      await ctx.runMutation(internal.pastPapers.setProgress, {
+        paperId,
+        progress: "Laying out the paper and its cover…",
+      });
       // The cover is built from the marks the paper actually carries, so the
       // total it prints is the total the student can score.
       const totalMarks = questions.reduce(
@@ -1476,6 +1620,86 @@ export const gradePastPaperAnswer = action({
       marks: question.marks,
       feedback: marked.feedback,
       checklist: marked.checklist,
+    };
+  },
+});
+
+/**
+ * Marks the student's stored answer again after they dispute the mark.
+ *
+ * Disputes happen because the marker missed a paraphrase; a student who has
+ * produced the point should not have to rewrite it. The second pass is the same
+ * examiner with the meaning check described above, and the stored mark is a
+ * floor: a dispute can raise a mark, never lower it, so asking twice can never
+ * cost marks.
+ */
+export const disputePastPaperMark = action({
+  args: { questionId: v.id("pastPaperQuestions") },
+  handler: async (
+    ctx,
+    { questionId },
+  ): Promise<{
+    awardedMarks: number;
+    marks: number;
+    feedback: string;
+    checklist: MarkCheck[];
+    changed: boolean;
+  }> => {
+    const userId = await requireUserId(ctx);
+    const data = await ctx.runQuery(
+      internal.pastPapers.getQuestionForGrading,
+      { questionId },
+    );
+    if (!data || data.paper.userId !== userId) {
+      throw new Error("Past paper question not found.");
+    }
+
+    const { question } = data;
+    if (question.userAnswer === undefined || question.awardedMarks === undefined) {
+      throw new Error("Mark an answer before disputing the mark.");
+    }
+
+    const course = await ctx.runQuery(internal.courses.getForBuild, {
+      courseId: data.paper.courseId,
+    });
+    const apiKeys = resolveNvidiaKeys();
+    const marked = await markExamAnswer(
+      apiKeys,
+      question,
+      question.userAnswer,
+      course
+        ? {
+            course: course.subject,
+            examBoard: course.examBoard,
+            level: course.level,
+          }
+        : undefined,
+      question.marking ?? (question.marks >= 12 ? "levels" : "points"),
+    );
+
+    const awardedMarks = Math.max(
+      question.awardedMarks,
+      Math.min(question.marks, marked.awardedMarks),
+    );
+    const changed = awardedMarks > question.awardedMarks;
+
+    await ctx.runMutation(internal.pastPapers.saveQuestionResult, {
+      questionId,
+      answer: question.userAnswer,
+      awardedMarks,
+      // A re-mark that agrees changes nothing the student reads, so the stored
+      // feedback and checklist stay exactly as they were.
+      feedback: changed ? marked.feedback : (question.feedback ?? marked.feedback),
+      checklist: changed ? marked.checklist : (question.checklist ?? marked.checklist),
+      disputed: true,
+    });
+
+    return {
+      awardedMarks,
+      marks: question.marks,
+      feedback: changed ? marked.feedback : (question.feedback ?? ""),
+      checklist: changed ? marked.checklist : (question.checklist ?? []),
+      changed,
     };
   },
 });
@@ -2762,6 +2986,66 @@ async function recheckUncredited(
 }
 
 /**
+ * One meaning check across the criteria the word guard could not confirm.
+ *
+ * The criterion-by-criterion guard compares the answer's words with the
+ * criterion's words, which keeps a temperature-only answer from taking marks
+ * for pH but also rejected "It controls what enters and leaves the cell" for
+ * "Controls the movement of substances into and out of the cell". This pass asks
+ * for the meaning instead: says the answer state the idea, whatever words it
+ * used? It can only add marks the guard blocked, it needs a verbatim quote, and
+ * the quote must share at least one of the criterion's own terms — so a
+ * paraphrase is credited while a whole idea that is genuinely missing is not.
+ */
+async function meaningVerdicts(
+  apiKeys: string[],
+  exam: { question: string; marks: number },
+  response: string,
+  qualification: string,
+  criteria: Array<{ index: number; point: string }>,
+): Promise<Map<number, { share: number; evidence: string }>> {
+  if (criteria.length === 0) return new Map();
+
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: EXAMINER_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `<qualification>${qualification || "Not specified"}</qualification>\n` +
+          `<question>${exam.question}</question>\n` +
+          `<criteria>\n${criteria
+            .map((criterion) => `${criterion.index + 1}. ${criterionText(criterion.point)}`)
+            .join("\n")}\n</criteria>\n` +
+          `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
+          "For each numbered criterion, decide whether the student's answer states that idea. Mark on meaning, not wording: accept a paraphrase, a synonym, a different word order, or a simpler sentence that carries the same idea. Reject an idea the answer only gestures at, or that belongs to another criterion.\n" +
+          'Return JSON exactly like: {"verdicts":[{"index":1,"stated":"yes","evidence":"the student\'s exact words, or absent"}]} with one entry per criterion, using the criterion number as index. ' +
+          'stated is "yes" when the idea is clearly there, "partly" when only some of it is, and "no" when it is missing. '
+          + "The evidence must be copied verbatim from the student's answer, or the word absent.",
+      },
+    ],
+    maxTokens: 1000,
+    temperature: 0,
+    disableThinking: true,
+  });
+
+  const parsed = parseModelJson<{ verdicts?: unknown }>(raw);
+  const rows = Array.isArray(parsed.verdicts) ? parsed.verdicts : [];
+  const verdicts = new Map<number, { share: number; evidence: string }>();
+  for (const row of rows) {
+    const value = row as { index?: unknown; stated?: unknown; evidence?: unknown };
+    const index = Math.round(Number(value.index)) - 1;
+    if (!criteria.some((criterion) => criterion.index === index)) continue;
+    const stated = asText(value.stated, 12).toLowerCase();
+    const share = stated === "yes" ? 1 : stated === "partly" ? 0.5 : 0;
+    if (share === 0) continue;
+    verdicts.set(index, { share, evidence: asText(value.evidence, 400) });
+  }
+  return verdicts;
+}
+
+/**
  * Sends one answer to NVIDIA for marking and counts the score from the
  * verdicts. Point-marked questions get one checklist row per guide bullet with
  * the student's quoted words; essays are marked against their level
@@ -2833,9 +3117,15 @@ async function markExamAnswer(
     context?.examBoard,
   );
 
-  // A bullet whose own words are already in the answer goes back for a second
-  // look, so a point is never recorded as missing while the answer states it.
-  const contested = contestedChecks(checks, response);
+  // Criteria the answer's own words already cover, but which scored nothing,
+  // go back for a second look.
+  const terms = distinctiveTermsFor(guide);
+  const coverage = guide.map((point, index) =>
+    distinctiveCoverage(terms[index] ?? [], response),
+  );
+  const contested = checks.filter(
+    (check, index) => check.awarded === 0 && coverage[index]! >= 0.5,
+  );
   if (contested.length > 0) {
     checks = await recheckUncredited(
       apiKeys,
@@ -2845,6 +3135,38 @@ async function markExamAnswer(
       checks,
       contested,
     );
+  }
+
+  // Criteria whose words the answer does not reuse are checked by meaning, so a
+  // correct paraphrase is credited and a missing idea is still not.
+  const byMeaning = checks
+    .map((check, index) => ({ check, index }))
+    .filter(({ check, index }) => check.awarded === 0 && coverage[index]! < 0.5);
+  if (byMeaning.length > 0) {
+    const verdicts = await meaningVerdicts(
+      apiKeys,
+      exam,
+      response,
+      qualification,
+      byMeaning.map(({ check, index }) => ({ index, point: check.point })),
+    );
+    checks = checks.map((check, index) => {
+      if (check.awarded > 0) return check;
+      const verdict = verdicts.get(index);
+      if (!verdict) return check;
+      // The quote has to be the student's, and it has to touch the criterion's
+      // own vocabulary. Without both, a confident verdict could take marks for
+      // an idea the answer never mentions.
+      if (!quoteIsInAnswer(verdict.evidence, response)) return check;
+      const award = meaningAward(
+        check.marks,
+        verdict.share,
+        terms[index] ?? [],
+        verdict.evidence,
+      );
+      if (award <= 0) return check;
+      return { ...check, awarded: award, evidence: verdict.evidence };
+    });
   }
 
   // The score is counted from the checklist, so the same verdicts always

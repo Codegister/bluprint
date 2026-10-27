@@ -38,12 +38,14 @@ export function PastPaperPractice({
   cover?: PaperCover | null;
 }) {
   const gradeAnswer = useAction(api.ai.gradePastPaperAnswer);
+  const disputeMark = useAction(api.ai.disputePastPaperMark);
   const family = boardFamily(examBoard);
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(questions.map((question) => [question._id, question.userAnswer ?? ""])),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [gradingId, setGradingId] = useState<string | null>(null);
+  const [disputingId, setDisputingId] = useState<string | null>(null);
 
   if (questions.length === 0) {
     return (
@@ -84,6 +86,29 @@ export function PastPaperPractice({
       items: [question],
     });
   }
+
+  /**
+   * Asks for a stored mark to be looked at again. The server re-grades the same
+   * answer and keeps the old mark as a floor, so this can only help.
+   */
+  const handleDispute = async (question: PaperQuestion) => {
+    setDisputingId(question._id);
+    setErrors((current) => ({ ...current, [question._id]: "" }));
+    try {
+      const result = await disputeMark({ questionId: question._id });
+      toast.success(
+        result.changed
+          ? `Re-marked: ${result.awardedMarks}/${result.marks} — the mark went up.`
+          : `Checked again: the mark stands at ${result.awardedMarks}/${result.marks}.`,
+      );
+    } catch (error) {
+      const message = readableError(error, "Could not re-mark that answer.");
+      setErrors((current) => ({ ...current, [question._id]: message }));
+      toast.error(message);
+    } finally {
+      setDisputingId(null);
+    }
+  };
 
   const handleMark = async (question: PaperQuestion) => {
     const answer = (answers[question._id] ?? "").trim();
@@ -224,6 +249,62 @@ export function PastPaperPractice({
                           </span>
                         )}
                       </div>
+                    )}
+
+                    {/* The data the question is about. Without it a question
+                        that says "the table below" cannot be answered. */}
+                    {question.data && (
+                      <figure className="mt-3 overflow-x-auto rounded-2xl border border-border">
+                        {question.data.title && (
+                          <figcaption className="border-b border-border bg-brand-panel px-3 py-2 text-[0.78rem] font-semibold text-brand-ink">
+                            {question.data.title}
+                          </figcaption>
+                        )}
+                        <table className="w-full border-collapse text-[0.8rem]">
+                          <thead>
+                            <tr>
+                              {question.data.columns.map((column) => (
+                                <th
+                                  key={column}
+                                  scope="col"
+                                  className="border-b border-border bg-brand-panel/60 px-3 py-2 text-left font-semibold text-brand-ink"
+                                >
+                                  {column}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {question.data.rows.map((row, rowIndex) => (
+                              <tr key={rowIndex}>
+                                {row.map((cell, cellIndex) =>
+                                  cellIndex === 0 ? (
+                                    <th
+                                      key={cellIndex}
+                                      scope="row"
+                                      className="border-b border-border px-3 py-2 text-left font-medium text-brand-ink"
+                                    >
+                                      {cell}
+                                    </th>
+                                  ) : (
+                                    <td
+                                      key={cellIndex}
+                                      className="border-b border-border px-3 py-2 tabular-nums text-brand-ink/85"
+                                    >
+                                      {cell}
+                                    </td>
+                                  ),
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {question.data.note && (
+                          <p className="px-3 py-2 text-[0.74rem] leading-relaxed text-muted-foreground">
+                            {question.data.note}
+                          </p>
+                        )}
+                      </figure>
                     )}
                   </div>
                 </div>
@@ -393,6 +474,30 @@ export function PastPaperPractice({
                         </div>
                       </div>
                     )}
+
+                    {/* A wrong mark is not the student's problem to work
+                        around: they can ask for it to be looked at again. */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleDispute(question)}
+                        disabled={disputingId === question._id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-[0.74rem] font-semibold text-brand-ink/75 transition-colors hover:bg-brand-panel disabled:opacity-60"
+                      >
+                        {disputingId === question._id ? (
+                          <Loader2 className="size-3 animate-spin" aria-hidden />
+                        ) : null}
+                        {disputingId === question._id
+                          ? "Looking again…"
+                          : "Dispute this mark"}
+                      </button>
+                      {question.disputedAt && (
+                        <span className="text-[0.72rem] text-muted-foreground">
+                          Looked at again at your request — the mark cannot go
+                          down.
+                        </span>
+                      )}
+                    </div>
 
                     <div className="mt-4 space-y-2">
                       <details className="group rounded-2xl bg-white p-3.5">

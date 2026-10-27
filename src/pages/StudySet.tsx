@@ -12,7 +12,7 @@ import { WeakSpots } from "@/components/study/WeakSpots";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { BUILD_DEFAULTS } from "@/convex/lib/buildDefaults";
+import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
 import { buildErrorMessage, readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
@@ -639,6 +639,17 @@ export default function StudySet() {
     const backTo = set.courseId ? `/courses/${set.courseId}` : "/tutor#sets";
     const backLabel = set.courseId ? "Back to course" : "Back to my sets";
     const isMode = activeSection !== "summary";
+    // The one sentence for a build that came in under the request, in the same
+    // words the generator wrote it with.
+    const shortfall = set.generationNote
+      ? normaliseCapacityNote(set.generationNote)
+      : "";
+    // One build can fall short in more than one section; each sentence pair is
+    // shown on its own line rather than run together into a paragraph.
+    const shortfallLines = shortfall
+      .split(/(?<=\.)\s+(?=Built )/)
+      .map((line) => line.trim())
+      .filter(Boolean);
     // One recommended way in: due cards first, then the quiz if it has never
     // been taken, otherwise flashcards.
     const recommendedSection: SetSection = details.dueCount > 0
@@ -854,43 +865,67 @@ export default function StudySet() {
                   </dd>
                 </div>
               ))}
-            </motion.dl>
-
-            {/* One compact build summary: three counts, never three sentences. */}
+            </motion.dl>            {/* One compact build summary. The denominators are what was actually
+                built, not what was asked for: a bar that can never fill is worse
+                than no bar. The shortfall sentence below explains any gap. */}
             {(() => {
+              const examMarked = details.exams.filter(
+                (exam) => exam.gradedAt !== undefined,
+              ).length;
               const rows = [
                 {
-                  label: "Cards",
-                  built: set.cardCount,
-                  target: set.targetCardCount ?? BUILD_DEFAULTS.cards,
+                  label: `${set.cardCount} card${set.cardCount === 1 ? "" : "s"}`,
+                  title: "Flashcards built from these notes",
                 },
                 {
-                  label: "Quiz",
-                  built: set.quizCount,
-                  target: set.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+                  // The denominator is the built count, so a set that came in
+                  // under the request never shows a bar or ratio that cannot
+                  // reach its end.
+                  label:
+                    set.quizCount > 0
+                      ? `Quiz ${details.quizAnswered}/${set.quizCount}`
+                      : "No quiz questions",
+                  title: "Quiz questions answered, out of the ones built",
                 },
                 {
-                  label: "Exam",
-                  built: set.examCount,
-                  target: set.targetExamCount ?? BUILD_DEFAULTS.exam,
+                  label:
+                    set.examCount > 0
+                      ? `Exam ${examMarked}/${set.examCount}`
+                      : "No exam questions",
+                  title: "Written answers marked, out of the ones built",
                 },
               ];
               return (
-                <div
-                  className="mt-3 flex flex-wrap items-center gap-2"
-                  aria-label="What this set was built with"
-                >
-                  {rows.map((row) => (
-                    <span
-                      key={row.label}
-                      className="rounded-full border border-border bg-brand-panel px-3 py-1 text-[0.76rem] font-semibold tabular-nums text-brand-ink/75"
-                    >
-                      {row.label} {row.built}/{row.target}
-                    </span>
-                  ))}
+                <div className="mt-3">
+                  <div
+                    className="flex flex-wrap items-center gap-2"
+                    aria-label="What this set was built with"
+                  >
+                    {rows.map((row) => (
+                      <span
+                        key={row.label}
+                        title={row.title}
+                        className="rounded-full border border-border bg-brand-panel px-3 py-1 text-[0.76rem] font-semibold tabular-nums text-brand-ink/75"
+                      >
+                        {row.label}
+                      </span>
+                    ))}
+                  </div>
+                  {shortfallLines.length > 0 && (
+                    <ul className="mt-2 space-y-0.5">
+                      {shortfallLines.map((line) => (
+                        <li
+                          key={line}
+                          className="text-[0.74rem] leading-relaxed text-muted-foreground"
+                        >
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               );
-            })()}
+            })()} 
 
             {/* One line that defines the percentage, right under the number. */}
             <p className="mt-2 text-[0.72rem] leading-relaxed text-muted-foreground">

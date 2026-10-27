@@ -32,6 +32,25 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
+    // Attempt accounting for the six-digit email code, one row per address.
+    // Convex Auth verifies the code, but it has no per-code attempt limit, so a
+    // code could be guessed at indefinitely. This row is what the sign-in page
+    // reads to show "2 attempts left" and what decides when a code is dead.
+    otpGuards: defineTable({
+      email: v.string(),
+      // Wrong codes tried against the code currently in the inbox. Reset when a
+      // new code is sent; the code itself is deleted at the limit.
+      codeFailures: v.number(),
+      // Failures inside the current hour. Requesting a fresh code does not reset
+      // this, so a resend cannot buy more guesses.
+      windowStart: v.number(),
+      windowFailures: v.number(),
+      lastCodeSentAt: v.number(),
+      lastFailedAt: v.optional(v.number()),
+      // True once the current code has been thrown away after too many misses.
+      codeInvalidated: v.optional(v.boolean()),
+    }).index("by_email", ["email"]),
+
     // A study set is one uploaded bundle of notes plus everything Bluprint
     // generated from it. `notes` is the plain text extracted from photos/video
     // or pasted directly, so the source material survives between sessions.
@@ -269,6 +288,18 @@ const schema = defineSchema(
       marking: v.optional(v.union(v.literal("points"), v.literal("levels"))),
       modelAnswer: v.string(),
       markingGuide: v.array(v.string()),
+      // The table a question refers to, when it needs one (readings, percentage
+      // cover, observations). A question that says "the table below" and has no
+      // table is unanswerable, so this is generated and validated with the
+      // question rather than left to the reader to imagine.
+      data: v.optional(
+        v.object({
+          title: v.optional(v.string()),
+          columns: v.array(v.string()),
+          rows: v.array(v.array(v.string())),
+          note: v.optional(v.string()),
+        }),
+      ),
       // The guide as discrete criteria. Optional because papers built before
       // structure existed still open; their rows are derived from the guide.
       criteria: v.optional(
@@ -308,6 +339,9 @@ const schema = defineSchema(
         ),
       ),
       gradedAt: v.optional(v.number()),
+      // Set when the student asked for the mark to be looked at again. A
+      // re-grade can only raise the mark, never lower it.
+      disputedAt: v.optional(v.number()),
     }).index("by_paper", ["paperId"]),
 
     // One course topic's published notes, read from Cognito and stored so the

@@ -12,7 +12,7 @@ import { courseSubtitle } from "@/lib/subjects";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 
@@ -54,6 +54,29 @@ export default function PastPaper() {
   );
   const rebuild = useMutation(api.pastPapers.rebuild);
   const [retrying, setRetrying] = useState(false);
+
+  // A build can outlive the copy on the page, so the page keeps its own clock
+  // instead of claiming a fixed wait. `details` is a live query: every stage the
+  // server writes arrives without a reload, and this timer is what makes the
+  // wait visible in between.
+  const building =
+    details?.paper.status === "queued" ||
+    details?.paper.status === "processing";
+  const startedAt = details?.paper.processingStartedAt ?? details?.paper.createdAt;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!building) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [building]);
+  const elapsedSeconds =
+    building && startedAt ? Math.max(0, Math.floor((now - startedAt) / 1000)) : 0;
+  const elapsed = `${Math.floor(elapsedSeconds / 60)}:${String(
+    elapsedSeconds % 60,
+  ).padStart(2, "0")}`;
+  // Long enough that the student deserves an explanation and a way out.
+  const slow = elapsedSeconds >= 180;
 
   const handleRetry = async () => {
     if (!validId) return;
@@ -210,7 +233,7 @@ export default function PastPaper() {
             <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
               Building questions and mark schemes
             </h2>
-            <p className="mt-1 text-[0.84rem] text-muted-foreground">
+            <p className="mt-1 text-[0.84rem] text-muted-foreground" aria-live="polite">
               {paper.progress ?? "Waiting to start"}
             </p>
             <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-brand-panel">
@@ -220,21 +243,37 @@ export default function PastPaper() {
                 transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
               />
             </div>
-            <p className="mt-4 text-[0.78rem] leading-relaxed text-muted-foreground">
-              This usually takes under a minute. You can leave the page. The paper
-              keeps building and will be here when you come back.
-            </p>
-            {details.processingStale && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleRetry()}
-                disabled={retrying}
-                className="mt-4 h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-              >
-                {retrying ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                Take too long? Build again
-              </Button>
+            <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[0.78rem] text-muted-foreground">
+              <span className="font-semibold tabular-nums text-brand-ink">
+                {elapsed} elapsed
+              </span>
+              <span>
+                Usually one to two minutes. This page updates on its own; you can
+                also leave and come back.
+              </span>
+            </div>
+            {slow && (
+              <div className="mt-4 rounded-2xl bg-[#FFF7F9] px-4 py-3">
+                <p className="text-[0.8rem] font-semibold text-[#A81F28]">
+                  This one is taking longer than usual.
+                </p>
+                <p className="mt-1 text-[0.78rem] leading-relaxed text-muted-foreground">
+                  NVIDIA can be slow on a whole paper. It keeps building in the
+                  background, so you can come back to it. If it never finishes,
+                  start it again here — that replaces this paper and clears any
+                  answers on it.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleRetry()}
+                  disabled={retrying}
+                  className="mt-3 h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                >
+                  {retrying ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                  Start this paper again
+                </Button>
+              </div>
             )}
           </section>
         ) : (

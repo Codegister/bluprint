@@ -373,6 +373,29 @@ export function awardCriterion(
 }
 
 /**
+ * The marks a criterion keeps when the answer was judged by meaning instead of
+ * by its words.
+ *
+ * Used for a criterion the word guard could not confirm (coverage below half),
+ * where the marker has read the answer and said the idea is there. The quote must
+ * still touch the criterion's own vocabulary: "It controls what enters and
+ * leaves the cell" shares enough with "Controls the movement of substances into
+ * and out of the cell" to pass, while a temperature sentence shares nothing with
+ * a pH criterion and takes nothing for it. `share` is 1 for a clear statement
+ * and 0.5 for a partial one.
+ */
+export function meaningAward(
+  marks: number,
+  share: number,
+  terms: string[],
+  quote: string,
+): number {
+  if (!(share > 0)) return 0;
+  if (distinctiveCoverage(terms, quote) <= 0) return 0;
+  return Math.min(marks, Math.max(1, Math.ceil(marks * share)));
+}
+
+/**
  * The examiner feedback without the bullet-by-bullet list it used to embed.
  * The checklist renders those rows; keeping both repeated every mark twice.
  */

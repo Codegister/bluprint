@@ -35,6 +35,15 @@ const generatedQuestion = v.object({
   marking: v.optional(v.union(v.literal("points"), v.literal("levels"))),
   modelAnswer: v.string(),
   markingGuide: v.array(v.string()),
+  // The table a question refers to, when it needs one.
+  data: v.optional(
+    v.object({
+      title: v.optional(v.string()),
+      columns: v.array(v.string()),
+      rows: v.array(v.array(v.string())),
+      note: v.optional(v.string()),
+    }),
+  ),
   // The board's layout, written by the paper generator. Optional so the shape
   // stays compatible with any caller that does not supply it.
   label: v.optional(v.string()),
@@ -280,6 +289,22 @@ export const getQuestionForGrading = internalQuery({
   },
 });
 
+/**
+ * Writes the stage a build is on. The paper page subscribes to the paper, so
+ * each write moves the copy on screen without the student reloading.
+ */
+export const setProgress = internalMutation({
+  args: { paperId: v.id("pastPapers"), progress: v.string() },
+  handler: async (ctx, { paperId, progress }) => {
+    const paper = await ctx.db.get(paperId);
+    if (!paper || paper.status !== "processing") return;
+    await ctx.db.patch(paperId, {
+      progress: progress.slice(0, 160),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 /** Takes ownership of a build so two schedulers cannot generate twice. */
 export const claimBuild = internalMutation({
   args: { paperId: v.id("pastPapers") },
@@ -326,6 +351,7 @@ export const completeBuild = internalMutation({
         marking: question.marking,
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
+        data: question.data,
         // The guide stored as discrete criteria, scaled to the question's
         // marks, so the marked page renders one row per mark and partial marks
         // are possible.
@@ -385,8 +411,10 @@ export const saveQuestionResult = internalMutation({
     awardedMarks: v.number(),
     feedback: v.string(),
     checklist: v.optional(v.array(markCheck)),
+    // True when the mark was looked at again at the student's request.
+    disputed: v.optional(v.boolean()),
   },
-  handler: async (ctx, { questionId, answer, awardedMarks, feedback, checklist }) => {
+  handler: async (ctx, { questionId, answer, awardedMarks, feedback, checklist, disputed }) => {
     const question = await ctx.db.get(questionId);
     if (!question) throw new Error("Question not found.");
     const paper = await ctx.db.get(question.paperId);
@@ -401,6 +429,7 @@ export const saveQuestionResult = internalMutation({
       feedback: feedback.slice(0, 4000),
       checklist: checklist?.slice(0, 40),
       gradedAt: now,
+      ...(disputed ? { disputedAt: now } : {}),
     });
 
     const questions = await ctx.db
