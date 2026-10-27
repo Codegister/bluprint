@@ -364,6 +364,14 @@ export const failBuild = internalMutation({
   },
 });
 
+/** One row of the marked checklist: a guide bullet and its quoted evidence. */
+const markCheck = v.object({
+  point: v.string(),
+  marks: v.number(),
+  awarded: v.number(),
+  evidence: v.string(),
+});
+
 /** Stores one marked answer and refreshes the paper's progress counters. */
 export const saveQuestionResult = internalMutation({
   args: {
@@ -371,8 +379,9 @@ export const saveQuestionResult = internalMutation({
     answer: v.string(),
     awardedMarks: v.number(),
     feedback: v.string(),
+    checklist: v.optional(v.array(markCheck)),
   },
-  handler: async (ctx, { questionId, answer, awardedMarks, feedback }) => {
+  handler: async (ctx, { questionId, answer, awardedMarks, feedback, checklist }) => {
     const question = await ctx.db.get(questionId);
     if (!question) throw new Error("Question not found.");
     const paper = await ctx.db.get(question.paperId);
@@ -385,6 +394,7 @@ export const saveQuestionResult = internalMutation({
       userAnswer: answer.slice(0, 12000),
       awardedMarks: Math.max(0, Math.min(question.marks, Math.round(awardedMarks))),
       feedback: feedback.slice(0, 4000),
+      checklist: checklist?.slice(0, 40),
       gradedAt: now,
     });
 

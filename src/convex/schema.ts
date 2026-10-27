@@ -38,6 +38,12 @@ const schema = defineSchema(
     studySets: defineTable({
       userId: v.id("users"),
       title: v.string(),
+      // Who named the set: "user" when it was typed, "auto" when it came from
+      // the upload. The generator replaces an auto name with a short topic title
+      // and never touches a typed one.
+      titleSource: v.optional(
+        v.union(v.literal("auto"), v.literal("user")),
+      ),
       notes: v.string(),
       sourceType: v.union(
         v.literal("text"),
@@ -272,6 +278,20 @@ const schema = defineSchema(
       userAnswer: v.optional(v.string()),
       awardedMarks: v.optional(v.number()),
       feedback: v.optional(v.string()),
+      // One row per marking-guide bullet, in guide order: the marks it carries,
+      // the marks earned and the student's own words that earned them ("absent"
+      // when it earned nothing). The page renders this as the awarded-marks
+      // checklist, so every mark can be traced to a sentence of the answer.
+      checklist: v.optional(
+        v.array(
+          v.object({
+            point: v.string(),
+            marks: v.number(),
+            awarded: v.number(),
+            evidence: v.string(),
+          }),
+        ),
+      ),
       gradedAt: v.optional(v.number()),
     }).index("by_paper", ["paperId"]),
 
@@ -521,6 +541,14 @@ const schema = defineSchema(
       // questions that actually keep going wrong.
       missCount: v.optional(v.number()),
       correctCount: v.optional(v.number()),
+      // The student's latest answer, saved the moment it is checked. A quiz
+      // left half-finished is therefore real progress on every screen that
+      // shows it: the set page, the library and today's goal all count these
+      // rows rather than a separate tally that only a finished quiz updates.
+      lastAnswer: v.optional(v.string()),
+      lastSelectedIndex: v.optional(v.number()),
+      lastCorrect: v.optional(v.boolean()),
+      lastAnsweredAt: v.optional(v.number()),
       lastMissedAt: v.optional(v.number()),
     }).index("by_set", ["setId"]),
 
@@ -537,6 +565,19 @@ const schema = defineSchema(
       userAnswer: v.optional(v.string()),
       awardedMarks: v.optional(v.number()),
       feedback: v.optional(v.string()),
+      // One row per marking-guide bullet: the marks it carries, the marks earned
+      // and the quoted words that earned them. See pastPaperQuestions for the
+      // same field; both render as the marked checklist on their pages.
+      checklist: v.optional(
+        v.array(
+          v.object({
+            point: v.string(),
+            marks: v.number(),
+            awarded: v.number(),
+            evidence: v.string(),
+          }),
+        ),
+      ),
       gradedAt: v.optional(v.number()),
     }).index("by_set", ["setId"]),
 

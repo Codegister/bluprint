@@ -8,7 +8,7 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
 import { motion } from "framer-motion";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { Check, ChevronDown, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -208,6 +208,55 @@ export function ExamPractice({
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-brand-ink/80">
                   {exam.feedback}
                 </p>
+
+                {/* The mark as a checklist against the guide: one row per
+                    bullet, with the sentence of the answer that earned it. */}
+                {(exam.checklist?.length ?? 0) > 0 && (
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold text-brand-ink">
+                      Awarded marks, bullet by bullet
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {exam.checklist?.map((check) => (
+                        <div
+                          key={check.point}
+                          className={cn(
+                            "flex items-start gap-2 rounded-2xl border p-3 text-[0.8rem] leading-relaxed",
+                            check.awarded > 0
+                              ? "border-[#CFE7DC] bg-[#F3FBF7]"
+                              : "border-border bg-white",
+                          )}
+                        >
+                          {check.awarded > 0 ? (
+                            <Check
+                              className="mt-0.5 size-4 shrink-0 text-[#128A5B]"
+                              aria-hidden
+                            />
+                          ) : (
+                            <X
+                              className="mt-0.5 size-4 shrink-0 text-[#C93C49]"
+                              aria-hidden
+                            />
+                          )}
+                          <div>
+                            <p className="font-semibold text-brand-ink">
+                              {check.awarded}/{check.marks} · {check.point}
+                            </p>
+                            <p className="mt-1 text-muted-foreground">
+                              {check.awarded > 0
+                                ? check.evidence && check.evidence !== "absent"
+                                  ? `Your words: “${check.evidence}”`
+                                  : "Credited from your answer."
+                                : check.evidence && check.evidence !== "absent"
+                                  ? `You wrote “${check.evidence}”, which is not a creditable statement of this point.`
+                                  : "Absent: nothing in your answer states this point."}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-4 space-y-2">
                   <details className="group rounded-2xl bg-white p-3.5">

@@ -7,6 +7,12 @@ import {
   mutation,
   query,
 } from "./_generated/server";
+import {
+  BUILD_DEFAULTS,
+  BUILD_MAX,
+  BUILD_MIN,
+} from "./lib/buildDefaults";
+import { shortTitle } from "./lib/titles";
 import { requireUserId } from "./lib/requireUser";
 import {
   requireVerifiedUser,
@@ -102,8 +108,10 @@ function questionsOn(day: { cardsReviewed: number; questionsAnswered?: number })
 }
 
 /**
- * Streak rule: today counts once the starter tier is reached; otherwise the
- * chain stays alive if yesterday reached it. Higher tiers describe today only.
+ * Streak rule: any study today makes the streak at least one day, so a short
+ * session counts the moment it happens. Days behind today only extend the chain
+ * once they reached the starter tier, which is what stops one stray card on an
+ * idle day from faking a day. The tiers still describe today only.
  */
 function streakFrom(
   reviewed: Map<string, number>,
@@ -116,8 +124,9 @@ function streakFrom(
   nextTier: { label: string; questions: number } | null;
 } {
   const todayCount = reviewed.get(dayKey(now)) ?? 0;
-  let cursor = todayCount >= STREAK_BASE ? now : now - DAY_MS;
-  let streak = 0;
+  // Today counts as soon as anything was answered on it.
+  let streak = todayCount > 0 ? 1 : 0;
+  let cursor = now - DAY_MS;
   while ((reviewed.get(dayKey(cursor)) ?? 0) >= STREAK_BASE) {
     streak += 1;
     cursor -= DAY_MS;
@@ -256,9 +265,12 @@ export const listMine = query({
             .collect(),
         ]);
 
+        // Readiness only counts finished quizzes; progress counts every answer
+        // saved so far. Both come from the same rows.
         const quiz = set.lastQuizTotal
           ? { score: set.lastQuizScore ?? 0, total: set.lastQuizTotal }
           : null;
+        const quizSoFar = quizProgress(quizRows);
         const graded = exams.filter((exam) => exam.gradedAt !== undefined);
         const exam =
           graded.length > 0
@@ -296,6 +308,11 @@ export const listMine = query({
           lastStudiedAt: set.lastStudiedAt,
           lastQuizScore: set.lastQuizScore,
           lastQuizTotal: set.lastQuizTotal,
+          // Progress the student can see: answered as they go, not only at the
+          // end of a completed quiz.
+          quizAnswered: quizSoFar.answered,
+          quizCorrect: quizSoFar.correct,
+          quizTotal: quizSoFar.total,
           examDate: set.examDate,
           dueCount: cards.filter((card) => isDue(card, now)).length,
           // Cards and missed quiz questions both earn a place in weak spots.
@@ -357,8 +374,15 @@ export const studyStats = query({
           (card.stability ?? 0) < 21 ||
           isDue(card, now),
       ).length;
-      // A set with no quiz taken yet still has questions to answer.
-      if (!set.lastQuizTotal) remaining += set.quizCount;
+      // Questions still to answer, counted from the saved answers rather than
+      // from a separate tally, so today's goal matches the quiz progress the
+      // set page shows.
+      const quizRows = await ctx.db
+        .query("quizQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", set._id))
+        .collect();
+      const quizSoFar = quizProgress(quizRows);
+      remaining += Math.max(0, quizSoFar.total - quizSoFar.answered);
 
       if (set.examDate) {
         const examAt = examTimestamp(set.examDate);
@@ -425,6 +449,7 @@ export const getDetails = query({
     const quizPart = set.lastQuizTotal
       ? { score: set.lastQuizScore ?? 0, total: set.lastQuizTotal }
       : null;
+    const quizSoFar = quizProgress(quiz);
     const graded = exams.filter((exam) => exam.gradedAt !== undefined);
     const examPart =
       graded.length > 0
@@ -461,6 +486,9 @@ export const getDetails = query({
       dueCount: cards.filter((card) => isDue(card, now)).length,
       weakCardCount: cards.filter(isWeakCard).length,
       weakQuizCount: quiz.filter((question) => (question.missCount ?? 0) > 0).length,
+      quizAnswered: quizSoFar.answered,
+      quizCorrect: quizSoFar.correct,
+      quizTotal: quizSoFar.total,
       // Computed server-side so the page doesn't call Date.now() during render.
       processingStale:
         set.status === "processing" &&
@@ -570,10 +598,14 @@ export const generateUploadUrl = mutation({
 
 export const create = mutation({
   args: {
-    title: v.string(),
-    notes: v.string(),
-    sourceType,
-    sourceLabel: v.optional(v.string()),
+    title: v.string(),      notes: v.string(),
+      sourceType,
+      // "user" when the student typed the name, "auto" when it was derived from
+      // the upload. The generator may replace an auto name with a topic title.
+      titleSource: v.optional(
+        v.union(v.literal("auto"), v.literal("user")),
+      ),
+      sourceLabel: v.optional(v.string()),
     course: v.optional(v.string()),
     examBoard: v.optional(v.string()),
     level: v.optional(v.string()),
@@ -602,6 +634,9 @@ export const create = mutation({
     return await ctx.db.insert("studySets", {
       userId,
       title,
+      // Defaults to "user": a name is never overwritten unless the caller says
+      // it was derived from the upload.
+      titleSource: args.titleSource ?? "user",
       notes,
       sourceType: args.sourceType,
       sourceLabel: safeLabel(args.sourceLabel),
@@ -615,10 +650,26 @@ export const create = mutation({
       quizCount: 0,
       examCount: 0,
       // The sliders allow 1–100 of each; the generation action then caps the
-      // request at what the material can actually support.
-      targetCardCount: targetCount(args.targetCardCount, 1, 100, 20),
-      targetQuizCount: targetCount(args.targetQuizCount, 1, 100, 10),
-      targetExamCount: targetCount(args.targetExamCount, 1, 100, 4),
+      // request at what the material can actually support. The defaults come
+      // from the one build config the product quotes everywhere.
+      targetCardCount: targetCount(
+        args.targetCardCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        BUILD_DEFAULTS.cards,
+      ),
+      targetQuizCount: targetCount(
+        args.targetQuizCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        BUILD_DEFAULTS.quiz,
+      ),
+      targetExamCount: targetCount(
+        args.targetExamCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        BUILD_DEFAULTS.exam,
+      ),
       knownCount: 0,
       updatedAt: now,
     });
@@ -685,19 +736,44 @@ export const updateDetails = mutation({
     const nextTitle = normalizeStudyText(title);
     if (nextTitle.length < 2) throw new Error("Give the set a name first.");
 
+    // Only the fields the caller actually sent are patched. An inline rename
+    // sends just the title, and must not clear the course, board or counts.
     await ctx.db.patch(setId, {
       title: nextTitle,
-      course: safeLabel(course),
-      examBoard: safeLabel(examBoard),
-      level: safeLabel(level),
+      // Naming it by hand means the generator stops titling it.
+      titleSource: "user" as const,
+      ...(course !== undefined ? { course: safeLabel(course) } : {}),
+      ...(examBoard !== undefined ? { examBoard: safeLabel(examBoard) } : {}),
+      ...(level !== undefined ? { level: safeLabel(level) } : {}),
       ...(targetCardCount !== undefined
-        ? { targetCardCount: targetCount(targetCardCount, 1, 100, set.targetCardCount ?? 20) }
+        ? {
+            targetCardCount: targetCount(
+              targetCardCount,
+              BUILD_MIN,
+              BUILD_MAX,
+              set.targetCardCount ?? BUILD_DEFAULTS.cards,
+            ),
+          }
         : {}),
       ...(targetQuizCount !== undefined
-        ? { targetQuizCount: targetCount(targetQuizCount, 1, 100, set.targetQuizCount ?? 10) }
+        ? {
+            targetQuizCount: targetCount(
+              targetQuizCount,
+              BUILD_MIN,
+              BUILD_MAX,
+              set.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+            ),
+          }
         : {}),
       ...(targetExamCount !== undefined
-        ? { targetExamCount: targetCount(targetExamCount, 1, 100, set.targetExamCount ?? 4) }
+        ? {
+            targetExamCount: targetCount(
+              targetExamCount,
+              BUILD_MIN,
+              BUILD_MAX,
+              set.targetExamCount ?? BUILD_DEFAULTS.exam,
+            ),
+          }
         : {}),
       updatedAt: Date.now(),
     });
@@ -837,6 +913,24 @@ export const reviewCard = mutation({
   },
 });
 
+/**
+ * How far through the quiz the student is, read from the saved answers. This is
+ * the one source of truth for quiz progress: a question counts the moment it is
+ * checked, so "1 of 6 answered" is the same number on the set page, in the
+ * library and in today's goal.
+ */
+function quizProgress(rows: Array<{ lastAnsweredAt?: number; lastCorrect?: boolean }>): {
+  answered: number;
+  correct: number;
+  total: number;
+} {
+  return {
+    answered: rows.filter((row) => row.lastAnsweredAt !== undefined).length,
+    correct: rows.filter((row) => row.lastCorrect === true).length,
+    total: rows.length,
+  };
+}
+
 /** Grades one answer against the saved question. Shared by both mutations. */
 function gradeQuizQuestion(
   question: Doc<"quizQuestions">,
@@ -871,7 +965,21 @@ export const checkQuizAnswer = mutation({
       await ctx.db.get(questionId),
       userId,
     );
-    return gradeQuizQuestion(question, { selectedIndex, text });
+    const grade = gradeQuizQuestion(question, { selectedIndex, text });
+
+    // Saved as soon as it is checked, so leaving the quiz half-finished still
+    // counts as progress everywhere. The first answer moves the day's counts;
+    // re-answering the same question does not count twice.
+    const first = question.lastAnsweredAt === undefined;
+    await ctx.db.patch(question._id, {
+      lastAnswer: text?.slice(0, 2000),
+      lastSelectedIndex: selectedIndex,
+      lastCorrect: grade.correct,
+      lastAnsweredAt: Date.now(),
+    });
+    if (first) await bumpStudyDay(ctx, userId, { questions: 1 });
+
+    return grade;
   },
 });
 
@@ -918,6 +1026,7 @@ export const submitQuiz = mutation({
       expected: string;
     }> = [];
     let score = 0;
+    let newlyAnswered = 0;
 
     for (const question of questions) {
       const response = byId.get(question._id);
@@ -939,7 +1048,18 @@ export const submitQuiz = mutation({
           ? Math.max(0, (question.missCount ?? 0) - 1)
           : (question.missCount ?? 0) + 1,
         lastMissedAt: grade.correct ? question.lastMissedAt : now,
+        lastAnswer:
+          response.text === undefined
+            ? question.lastAnswer
+            : response.text.slice(0, 2000),
+        lastSelectedIndex:
+          response.selectedIndex === undefined
+            ? question.lastSelectedIndex
+            : response.selectedIndex,
+        lastCorrect: grade.correct,
+        lastAnsweredAt: now,
       });
+      if (question.lastAnsweredAt === undefined) newlyAnswered += 1;
     }
 
     await ctx.db.insert("quizAttempts", {
@@ -955,7 +1075,11 @@ export const submitQuiz = mutation({
       lastStudiedAt: now,
       updatedAt: now,
     });
-    await bumpStudyDay(ctx, userId, { questions: questions.length });
+    // Only questions answered for the first time move the day's counts, so a
+    // quiz checked question by question is not counted twice when submitted.
+    if (newlyAnswered > 0) {
+      await bumpStudyDay(ctx, userId, { questions: newlyAnswered });
+    }
 
     return { score, total: questions.length, results };
   },
@@ -1032,11 +1156,17 @@ export const completeGeneration = internalMutation({
     cards: v.array(cardInput),
     quiz: v.array(quizInput),
     exams: v.array(examInput),
+    // A short topic name from the generator, applied only when the student has
+    // not named the set themselves.
+    title: v.optional(v.string()),
     generationNote: v.optional(v.string()),
   },
-  handler: async (ctx, { setId, summary, cards, quiz, exams, generationNote }) => {
+  handler: async (ctx, { setId, summary, cards, quiz, exams, title, generationNote }) => {
     const set = await ctx.db.get(setId);
     if (!set) throw new Error("Study set not found.");
+
+    const generatedTitle = title ? shortTitle(title) : "";
+    const named = generatedTitle.length >= 3 && set.titleSource !== "user";
 
     // Makes retrying a failed or interrupted run safe.
     await deleteStudySetContent(ctx, setId);
@@ -1090,6 +1220,9 @@ export const completeGeneration = internalMutation({
 
     await ctx.db.patch(setId, {
       summary,
+      // The generator's short topic title replaces a name derived from the
+      // upload, and leaves a name the student typed alone.
+      ...(named ? { title: generatedTitle, titleSource: "auto" as const } : {}),
       cardCount: cards.length,
       quizCount: quiz.length,
       examCount: exams.length,
@@ -1146,14 +1279,23 @@ export const getExamForGrading = internalQuery({
   },
 });
 
+/** One row of the marked checklist: a guide bullet and its quoted evidence. */
+const markCheck = v.object({
+  point: v.string(),
+  marks: v.number(),
+  awarded: v.number(),
+  evidence: v.string(),
+});
+
 export const saveExamResult = internalMutation({
   args: {
     examId: v.id("examQuestions"),
     answer: v.string(),
     awardedMarks: v.number(),
     feedback: v.string(),
+    checklist: v.optional(v.array(markCheck)),
   },
-  handler: async (ctx, { examId, answer, awardedMarks, feedback }) => {
+  handler: async (ctx, { examId, answer, awardedMarks, feedback, checklist }) => {
     const exam = await ctx.db.get(examId);
     if (!exam) throw new Error("Question not found.");
     const set = await ctx.db.get(exam.setId);
@@ -1167,6 +1309,7 @@ export const saveExamResult = internalMutation({
       userAnswer: normalizeStudyText(answer).slice(0, 5000),
       awardedMarks: Math.max(0, Math.min(exam.marks, Math.round(awardedMarks))),
       feedback: normalizeStudyText(feedback).slice(0, 4000),
+      checklist: checklist?.slice(0, 40),
       gradedAt: now,
     });
     await ctx.db.patch(set._id, { lastStudiedAt: now, updatedAt: now });

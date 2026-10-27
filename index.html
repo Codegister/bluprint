@@ -43,7 +43,77 @@
 </head>
 
 <body>
-  <div id="root"></div>
+  <!--
+    First-paint loader. The bundle takes a moment to arrive, and the marketing
+    page is the first thing a visitor sees, so it must never be a blank screen.
+    This is static markup with inline styles (no stylesheet is loaded yet) and
+    React replaces it the moment it mounts into #root.
+  -->
+  <div id="root">
+    <div class="boot-loader" role="status" aria-live="polite">
+      <style>
+        .boot-loader {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 16px;
+          background: #eef2f6;
+          font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+          color: #111;
+        }
+        html.dark .boot-loader {
+          background: #101216;
+          color: #f5f7fa;
+        }
+        .boot-loader__mark {
+          font-size: 1.35rem;
+          font-weight: 700;
+          letter-spacing: -0.02em;
+        }
+        .boot-loader__bar {
+          width: 168px;
+          height: 4px;
+          border-radius: 999px;
+          overflow: hidden;
+          background: rgba(17, 17, 17, 0.1);
+        }
+        html.dark .boot-loader__bar {
+          background: rgba(245, 247, 250, 0.16);
+        }
+        .boot-loader__bar span {
+          display: block;
+          width: 40%;
+          height: 100%;
+          border-radius: 999px;
+          background: #7dd3fc;
+          animation: boot-slide 1.15s ease-in-out infinite;
+        }
+        .boot-loader__text {
+          font-size: 0.8rem;
+          opacity: 0.6;
+        }
+        @keyframes boot-slide {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(250%);
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .boot-loader__bar span {
+            animation: none;
+            width: 100%;
+          }
+        }
+      </style>
+      <p class="boot-loader__mark">Bluprint</p>
+      <div class="boot-loader__bar"><span></span></div>
+      <p class="boot-loader__text">Loading your study space…</p>
+    </div>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

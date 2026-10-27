@@ -1,10 +1,8 @@
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import {
-  DEFAULT_TUTOR_EFFORT_LABEL,
   DEFAULT_TUTOR_TIER_LABEL,
   NVIDIA_KEY_NAME,
-  TUTOR_EFFORTS,
   TUTOR_TIER_DETAILS,
   TUTOR_TIER_LABELS,
   readNvidiaKeys,
@@ -33,16 +31,13 @@ export const aiStatus = query({
       // Do not expose how many keys are loaded. That leaks operational detail
       // that is useful only to an attacker trying keys against the endpoint.
       keyName: NVIDIA_KEY_NAME,
-      // Tutor tiers are shown by label only: Ultra (ultra fast) through Max
-      // (maximum strength). The NVIDIA model behind each one stays on the server.
+      // Exactly three levels, in order: Fast, Balanced, Deep. The NVIDIA model
+      // behind each one stays on the server.
       tutorTiers: TUTOR_TIER_LABELS,
-      // Tagline and icon name per label, so the picker can say "Ultra fast" next
-      // to Ultra and draw a different glyph for every model.
+      // Tagline and icon name per label, so the picker can say "Longest answers"
+      // next to Deep and draw a different glyph for every level.
       tutorTierDetails: TUTOR_TIER_DETAILS,
       defaultTutorTier: DEFAULT_TUTOR_TIER_LABEL,
-      // Effort bars mirror these labels; the value is sent with each question.
-      tutorEfforts: TUTOR_EFFORTS.map((effort) => effort.label),
-      defaultTutorEffort: DEFAULT_TUTOR_EFFORT_LABEL,
     };
   },
 });

@@ -16,6 +16,7 @@ import { EASE, Meter, TypingDots, enter } from "@/components/motion/Motion";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { displayName, percent } from "@/lib/format";
+import { takePendingNotes } from "@/lib/pendingNotes";
 import { subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
@@ -137,7 +138,27 @@ export default function TutorPage() {
     if (open) next.set("new", "1");
     else next.delete("new");
     setSearchParams(next, { replace: true });
+    if (!open) setHeroNotes(null);
   };
+
+  // Notes pasted on the landing hero before signing in. They are handed to the
+  // create dialog once, so the visitor's words become their first set.
+  const [heroNotes, setHeroNotes] = useState<string | null>(null);
+  useEffect(() => {
+    const pending = takePendingNotes();
+    if (!pending) return;
+    setHeroNotes(pending);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.set("new", "1");
+        return next;
+      },
+      { replace: true },
+    );
+    // Runs once on arrival: the saved notes are cleared as they are read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
@@ -156,16 +177,11 @@ export default function TutorPage() {
       { tagline: tier.tagline, icon: tier.icon },
     ]),
   );
-  const effortLabels = aiStatus?.tutorEfforts ?? ["Low", "Medium", "Max Effort"];
-
   const [draft, setDraft] = useState(questionParam);
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [useWeb, setUseWeb] = useState(false);
-  const [effort, setEffort] = useState<string>(
-    aiStatus?.defaultTutorEffort ?? "Medium",
-  );
   // Last tier used, so a suggested question keeps the same answer style.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -189,18 +205,19 @@ export default function TutorPage() {
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages?.length, sending, streamedLength]);
 
-  const send = async (value: string, meta: { model: string; effort: string; attachments: File[] }) => {
+  const send = async (
+    value: string,
+    meta: { model: string; attachments: File[] },
+  ) => {
     const question = value.trim();
     if (!question || sending) return;
     markTutorUsed();
 
-    // The picker reports a tier label; the server maps it to a NVIDIA model.
-    const chosenTier = meta.model || tier;
-    // The effort bars report a label the server turns into a budget, a
+    // The picker reports a level label; the server maps it to a NVIDIA model.
+    // Fast, Balanced or Deep: the server turns the label into a budget, a
     // temperature and a depth instruction.
-    const chosenEffort = meta.effort || effort;
+    const chosenTier = meta.model || tier;
     setTier(chosenTier);
-    setEffort(chosenEffort);
     setError(null);
     setSending(true);
     setPending(question);
@@ -212,7 +229,6 @@ export default function TutorPage() {
           question,
           useWeb,
           tier: chosenTier,
-          effort: chosenEffort,
         });
       } else if (validCourseId && courseId) {
         await askCourseTutor({
@@ -221,7 +237,6 @@ export default function TutorPage() {
           question,
           useWeb,
           tier: chosenTier,
-          effort: chosenEffort,
         });
       }
     } catch (sendError) {
@@ -354,7 +369,7 @@ export default function TutorPage() {
           />
 
           {/* The tutor is the page's main tool: the full chat with model tiers,
-              effort, dictation and streaming answers, not a link elsewhere. */}
+              the picker, dictation and streaming answers, not a link elsewhere. */}
           <motion.section
             id="home-tutor"
             aria-label="Ask the tutor"
@@ -561,7 +576,11 @@ export default function TutorPage() {
           />
         </div>
 
-        <CreateSetDialog open={newSetOpen} onOpenChange={setNewSetOpen} />
+        <CreateSetDialog
+          open={newSetOpen}
+          onOpenChange={setNewSetOpen}
+          initialText={heroNotes ?? undefined}
+        />
       </AppShell>
     );
   }
@@ -644,11 +663,7 @@ export default function TutorPage() {
                     key={suggestion}
                     type="button"
                     onClick={() =>
-                      void send(suggestion, {
-                        model: tier,
-                        effort,
-                        attachments: [],
-                      })
+                      void send(suggestion, { model: tier, attachments: [] })
                     }
                     className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-chrome-4 hover:bg-brand-panel"
                   >
@@ -750,7 +765,6 @@ export default function TutorPage() {
             maxAttachments={1}
             models={tierLabels}
             modelDetails={modelDetails}
-            efforts={effortLabels}
             onDictate={async (audio, format) =>
               (await transcribe({ audio, format })).text
             }
@@ -761,7 +775,7 @@ export default function TutorPage() {
             {useWeb
               ? "web search is on, so recent and specification details can be checked online."
               : "web search is off, so answers come from your material and the model only."}{" "}
-            Effort sets how long and deep the answer is. Answers can be wrong, so
+            Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>
         </motion.div>

@@ -16,7 +16,7 @@ import { readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Layers3,
   Loader2,
+  Pencil,
   PenLine,
   RotateCcw,
   Sparkles,
@@ -31,6 +32,83 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
+
+/**
+ * The set's name, editable in place. Clicking it opens an input; Enter or
+ * leaving the field saves. A typed name is never replaced by a generated one.
+ */
+function SetTitle({ setId, title }: { setId: Id<"studySets">; title: string }) {
+  const updateDetails = useMutation(api.studySets.updateDetails);
+  const [value, setValue] = useState(title);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setValue(title);
+  }, [title, editing]);
+
+  const save = async () => {
+    const next = value.trim();
+    setEditing(false);
+    if (next.length < 2 || next === title) {
+      setValue(title);
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateDetails({ setId, title: next });
+    } catch (error) {
+      setValue(title);
+      toast.error(readableError(error, "Could not rename that set."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={value}
+        maxLength={80}
+        aria-label="Set name"
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") void save();
+          if (event.key === "Escape") {
+            setValue(title);
+            setEditing(false);
+          }
+        }}
+        className="w-full rounded-xl border border-chrome-5 bg-white px-2 py-1 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink outline-none focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/20 sm:text-[2rem]"
+      />
+    );
+  }
+
+  return (
+    <motion.h1
+      className="min-w-0"
+      {...enter(0.04)}
+    >
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        title="Rename this set"
+        className="group flex max-w-full items-center gap-2 text-left"
+      >
+        <span className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink transition-colors group-hover:text-chrome-7 sm:text-[2rem]">
+          {title}
+        </span>
+        <Pencil
+          aria-hidden
+          className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+        />
+        <span className="sr-only">{saving ? "Saving name" : "Rename this set"}</span>
+      </button>
+    </motion.h1>
+  );
+}
 
 /** One screen per study mode. The overview is the set's summary. */
 type SetSection = "summary" | "cards" | "quiz" | "exam" | "weak";
@@ -404,10 +482,15 @@ function StudyActions({
   setId,
   set,
   recommended,
+  quizAnswered,
+  quizTotal,
 }: {
   setId: string;
   set: Doc<"studySets">;
   recommended: SetSection;
+  /** Answered quiz questions, counted from the saved answers. */
+  quizAnswered: number;
+  quizTotal: number;
 }) {
   const mastery = percent(set.knownCount, set.cardCount);
   const items = [
@@ -425,9 +508,12 @@ function StudyActions({
       to: `/sets/${setId}/quiz`,
       label: "Quiz",
       count: set.quizCount,
-      note: set.lastQuizTotal
-        ? `Last score ${set.lastQuizScore}/${set.lastQuizTotal}`
-        : "Multiple choice, with explanations",
+      // Counted from the saved answers, so a half-finished quiz still reads as
+      // progress rather than "not yet".
+      note:
+        quizAnswered > 0
+          ? `${quizAnswered}/${quizTotal} answered`
+          : "Multiple choice, with explanations",
       icon: CheckCircle2,
       tint: "bg-[#E6F7EF] text-[#128A4C]",
     },
@@ -546,15 +632,6 @@ export default function StudySet() {
 
     const set = details.set;
     const qualification = qualificationLabel(set);
-    // A build can stop at the material's practical ceiling; say so rather than
-    // leaving a shorter deck looking like the requested one.
-    const shortfall = (
-      [
-        ["flashcards", set.targetCardCount, set.cardCount],
-        ["quiz questions", set.targetQuizCount, set.quizCount],
-        ["exam-style questions", set.targetExamCount, set.examCount],
-      ] as Array<[string, number | undefined, number]>
-    ).filter(([, asked, built]) => asked !== undefined && asked > built);
     const backTo = set.courseId ? `/courses/${set.courseId}` : "/tutor#sets";
     const backLabel = set.courseId ? "Back to course" : "Back to my sets";
     const isMode = activeSection !== "summary";
@@ -562,7 +639,7 @@ export default function StudySet() {
     // been taken, otherwise flashcards.
     const recommendedSection: SetSection = details.dueCount > 0
       ? "cards"
-      : !set.lastQuizTotal && set.quizCount > 0
+      : details.quizAnswered === 0 && details.quizTotal > 0
         ? "quiz"
         : "cards";
     const recommendedLabel =
@@ -637,12 +714,7 @@ export default function StudySet() {
               {SECTION_LABEL[activeSection]}
             </p>
           )}
-          <motion.h1
-            className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
-            {...enter(0.04)}
-          >
-            {set.title}
-          </motion.h1>
+          <SetTitle setId={set._id} title={set.title} />
           <motion.p
             className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground"
             {...enter(0.1)}
@@ -740,7 +812,7 @@ export default function StudySet() {
             >
               {[
                 {
-                  label: "Ready for the exam",
+                  label: "Exam ready",
                   value: `${details.readiness.score}%`,
                   tone: "border-l-brand-mint text-brand-mint",
                 },
@@ -750,10 +822,8 @@ export default function StudySet() {
                   tone: "border-l-brand-peach text-brand-peach",
                 },
                 {
-                  label: "Last quiz",
-                  value: set.lastQuizTotal
-                    ? `${set.lastQuizScore}/${set.lastQuizTotal}`
-                    : "Not yet",
+                  label: "Quiz answered",
+                  value: `${details.quizAnswered}/${details.quizTotal}`,
                   tone: "border-l-brand-sky text-brand-sky",
                 },
                 {
@@ -781,30 +851,30 @@ export default function StudySet() {
               ))}
             </motion.dl>
 
-            {(set.generationNote || shortfall.length > 0) && (
+            {/* One banner, written by the build itself: it carries the same
+                "Built X of Y" sentence the generator used, so the page never
+                shows two explanations of the same shortfall. */}
+            {set.generationNote && (
               <div className="mt-3 rounded-2xl border border-border bg-[#FFFBEC] px-4 py-3 text-[0.82rem] leading-relaxed text-[#7A5306]">
-                {shortfall.length > 0 && (
-                  <p>
-                    You asked for{" "}
-                    {shortfall
-                      .map(([label, asked, built]) => `${asked} ${label} (built ${built})`)
-                      .join(", ")}
-                    . Bluprint built the maximum this material supports.
-                  </p>
-                )}
-                {set.generationNote && (
-                  <p className={shortfall.length > 0 ? "mt-1.5" : undefined}>
-                    {set.generationNote}
-                  </p>
-                )}
+                {set.generationNote}
               </div>
             )}
+
+            {/* One line that defines the percentage, right under the number. */}
+            <p className="mt-2 text-[0.72rem] leading-relaxed text-muted-foreground">
+              Exam ready % is the share of this set you can currently recall and
+              answer correctly. It counts cards that are settled and not due,
+              quiz questions you have answered right, and written answers you
+              have had marked.
+            </p>
 
             <div className="mt-5">
               <StudyActions
                 setId={set._id}
                 set={set}
                 recommended={recommendedSection}
+                quizAnswered={details.quizAnswered}
+                quizTotal={details.quizTotal}
               />
             </div>
 

@@ -13,6 +13,14 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, internalAction } from "./_generated/server";
+import {
+  BUILD_DEFAULTS,
+  BUILD_MAX,
+  BUILD_MIN,
+  shortfallSentence,
+} from "./lib/buildDefaults";
+import { normalizeAnswer } from "./lib/recall";
+import { shortTitle } from "./lib/titles";
 import { requireUserId } from "./lib/requireUser";
 import {
   fetchCognitoOutline,
@@ -46,11 +54,8 @@ import {
   NVIDIA_CHAT_URL,
   NVIDIA_TEXT_MODEL,
   NVIDIA_VISION_MODEL,
-  applyTutorEffort,
   readNvidiaKeys,
-  readTutorEffort,
   readTutorTier,
-  type TutorEffort,
   type TutorTier,
 } from "./lib/nvidiaConfig";
 import { buildPaperCover } from "./lib/paperFormat";
@@ -73,6 +78,8 @@ type ChatMessage = {
 };
 
 type Summary = {
+  /** A short topic name for the set ("Photosynthesis"), when the model gave one. */
+  title?: string;
   overview: string;
   keyPoints: string[];
   examFocus: string[];
@@ -533,6 +540,7 @@ function parseSummary(raw: string): Summary {
       | Partial<Summary>
       | undefined) ??
     {};
+  const title = shortTitle(asText(parsed.title, 120));
   const overview = asText(parsed.overview, 2500);
   const keyPoints = Array.isArray(parsed.keyPoints)
     ? parsed.keyPoints.map((point) => asText(point, 500)).filter(Boolean).slice(0, 10)
@@ -543,7 +551,7 @@ function parseSummary(raw: string): Summary {
   if (!overview || keyPoints.length < 2) {
     throw new Error("Bluprint could not build a useful summary from this material. Try a clearer photo or more notes.");
   }
-  return { overview, keyPoints, examFocus };
+  return { ...(title ? { title } : {}), overview, keyPoints, examFocus };
 }
 
 function parseCards(raw: string, limit = 12): GeneratedCard[] {
@@ -772,7 +780,8 @@ async function summariseNotes(
             : "") +
           (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
           "Create a revision summary of the material. Return JSON shaped exactly like:\n" +
-          '{"overview":"3-5 sentence overview","keyPoints":["6-10 specific points worth remembering"],"examFocus":["3-5 likely exam angles or things to memorise"]}\n' +
+          '{"title":"2-5 word topic name","overview":"3-5 sentence overview","keyPoints":["6-10 specific points worth remembering"],"examFocus":["3-5 likely exam angles or things to memorise"]}\n' +
+          "The title names the topic, the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. " +
           "Be concrete and faithful to the material. No markdown inside values.",
       },
     ],
@@ -791,7 +800,7 @@ const CARD_BATCH_SIZE = 20;
 const QUIZ_BATCH_SIZE = 20;
 const EXAM_BATCH_SIZE = 10;
 /** One deck can ask for up to this many of each item (see the builder sliders). */
-const MAX_REQUESTED_ITEMS = 100;
+const MAX_REQUESTED_ITEMS = BUILD_MAX;
 
 /** Reports batch completion to the build screen. Cosmetic; failures are ignored. */
 type BatchProgress = (completed: number, target: number) => Promise<void> | void;
@@ -1397,7 +1406,12 @@ export const gradePastPaperAnswer = action({
   handler: async (
     ctx,
     { questionId, answer },
-  ): Promise<{ awardedMarks: number; marks: number; feedback: string }> => {
+  ): Promise<{
+    awardedMarks: number;
+    marks: number;
+    feedback: string;
+    checklist: MarkCheck[];
+  }> => {
     const userId = await requireUserId(ctx);
     const response = answer.trim();
 
@@ -1416,13 +1430,30 @@ export const gradePastPaperAnswer = action({
       throw new Error("Write a fuller answer before sending it for grading.");
     }
 
+    const { question } = data;
+
+    // The same answer is never marked twice: the stored result is returned
+    // unchanged, so re-marking cannot drift and cannot score lower.
+    if (
+      question.userAnswer !== undefined &&
+      question.awardedMarks !== undefined &&
+      normalizeAnswer(question.userAnswer) === normalizeAnswer(response)
+    ) {
+      return {
+        awardedMarks: question.awardedMarks,
+        marks: question.marks,
+        feedback: question.feedback ?? "",
+        checklist: question.checklist ?? [],
+      };
+    }
+
     const course = await ctx.runQuery(internal.courses.getForBuild, {
       courseId: data.paper.courseId,
     });
     const apiKeys = resolveNvidiaKeys();
-    const { awardedMarks, feedback } = await markExamAnswer(
+    const marked = await markExamAnswer(
       apiKeys,
-      data.question,
+      question,
       response,
       course
         ? {
@@ -1433,18 +1464,34 @@ export const gradePastPaperAnswer = action({
         : undefined,
       // Older papers predate the stored marking flag; long answers were always
       // meant to be levels-marked, so fall back to their length.
-      data.question.marking ??
-        (data.question.marks >= 12 ? "levels" : "points"),
+      question.marking ?? (question.marks >= 12 ? "levels" : "points"),
     );
+
+    const floor =
+      question.userAnswer !== undefined &&
+      question.awardedMarks !== undefined &&
+      answerExtends(question.userAnswer, response)
+        ? question.awardedMarks
+        : undefined;
+    const awardedMarks =
+      floor === undefined
+        ? marked.awardedMarks
+        : Math.max(floor, marked.awardedMarks);
 
     await ctx.runMutation(internal.pastPapers.saveQuestionResult, {
       questionId,
       answer: response,
       awardedMarks,
-      feedback,
+      feedback: marked.feedback,
+      checklist: marked.checklist,
     });
 
-    return { awardedMarks, marks: data.question.marks, feedback };
+    return {
+      awardedMarks,
+      marks: question.marks,
+      feedback: marked.feedback,
+      checklist: marked.checklist,
+    };
   },
 });
 
@@ -2093,15 +2140,15 @@ export const processStudySet = action({
       // syllabus outline is the exception: its length reflects scope, not depth.
       const requestedCards = Math.min(
         MAX_REQUESTED_ITEMS,
-        Math.max(1, existing.targetCardCount ?? 20),
+        Math.max(BUILD_MIN, existing.targetCardCount ?? BUILD_DEFAULTS.cards),
       );
       const requestedQuiz = Math.min(
         MAX_REQUESTED_ITEMS,
-        Math.max(1, existing.targetQuizCount ?? 10),
+        Math.max(BUILD_MIN, existing.targetQuizCount ?? BUILD_DEFAULTS.quiz),
       );
       const requestedExam = Math.min(
         MAX_REQUESTED_ITEMS,
-        Math.max(1, existing.targetExamCount ?? 4),
+        Math.max(BUILD_MIN, existing.targetExamCount ?? BUILD_DEFAULTS.exam),
       );
       const limits = syllabus
         ? // The outline is short because it names scope, not because the topic
@@ -2209,14 +2256,21 @@ export const processStudySet = action({
       if (cards.length === 0) missed.push("the flashcards");
       if (quiz.length === 0) missed.push("the quiz");
       if (exams.length === 0) missed.push("the exam questions");
-      const capped =
-        requestedCards > limits.cards ||
-        requestedQuiz > limits.quiz ||
-        requestedExam > limits.exam;
-      const note = [
-        capped
-          ? `The notes support about ${limits.cards} flashcards, ${limits.quiz} quiz questions and ${limits.exam} exam questions, so Bluprint built the maximum it could.`
+      // One sentence per item, in the same words everywhere it appears, so the
+      // set page never shows two different explanations of the same build.
+      const shortfall = [
+        cards.length < requestedCards
+          ? shortfallSentence(cards.length, requestedCards)
           : "",
+        quiz.length < requestedQuiz
+          ? shortfallSentence(quiz.length, requestedQuiz)
+          : "",
+        exams.length < requestedExam
+          ? shortfallSentence(exams.length, requestedExam)
+          : "",
+      ].filter(Boolean);
+      const note = [
+        shortfall.length > 0 ? shortfall.join(" ") : "",
         missed.length > 0
           ? `NVIDIA could not finish ${missed.join(", ")}. Everything that did generate is saved; rebuild to fill the gaps.`
           : "",
@@ -2238,6 +2292,9 @@ export const processStudySet = action({
         cards,
         quiz,
         exams,
+        // A short topic name replaces a name derived from the first line of the
+        // upload. A name the student typed is never overwritten.
+        title: summary.title,
         generationNote: note || undefined,
       });
       return { started: true };
@@ -2257,41 +2314,54 @@ export const processStudySet = action({
 // ---------------------------------------------------------------------------
 
 /**
- * Examiner persona. The rules below follow how published UK mark schemes work
- * (AQA, Edexcel, OCR, Cambridge): point-marked, whole marks only, no benefit of
- * the doubt, and contradictions cancelling a point. The goal is a mark a real
- * examiner would defend, not an encouraging estimate.
+ * Examiner persona. Marking follows how published mark schemes work (AQA,
+ * Edexcel, OCR, Cambridge): one verdict per guide bullet, whole marks only, and
+ * a mark is only earned by words that are actually in the answer. Every verdict
+ * quotes the answer, and the score is counted from those verdicts here rather
+ * than taken from the model, so the same answer always scores the same.
  */
 const EXAMINER_SYSTEM_PROMPT =
   "You are a senior examiner marking a written exam answer against the mark scheme provided. " +
-  "You are rigorous and ungenerous: a mark is only earned by evidence in the answer. " +
+  "You credit only what the answer says, and you prove it by quoting the answer. " +
   "Answer with strict JSON only, no markdown fences, no commentary.";
 
-function examinerRules(marksAvailable: number): string {
+/**
+ * The marking rules. The two rules that matter most are the quoting rule and
+ * the re-read rule: a mark cannot be given without a quote, and a point cannot
+ * be called missing while the answer states it, so "no mention of X" is not a
+ * verdict the examiner is allowed to reach without checking.
+ */
+function examinerRules(): string {
   return (
-    "MARK EXACTLY AS A REAL EXAMINER WOULD:\n" +
-    "1. Mark point by point against the marking guide above. A point scores only when the student states it explicitly. " +
-    "If you have to infer it, finish their sentence, or give benefit of the doubt, it scores 0.\n" +
-    "2. Accept wording that carries the same meaning. Do not accept a vague generality, a topic name with no explanation, " +
-    "or a partly correct version of the point.\n" +
-    "3. No marks for restating the question, for repeating one idea in different words, or for content the question did not ask for.\n" +
-    "4. A contradiction cancels the mark for that point even if it was stated correctly elsewhere. " +
-    "Wrong extra detail earns no credit and no leniency.\n" +
-    "5. The model answer shows the standard of a full-mark answer. An answer that conveys its points must earn every one of those points, even where the marking guide words them differently or lists fewer points than the question is worth.\n" +
-    `6. Award whole marks only. Total = the marks you award per point, capped at ${marksAvailable}. Never round up.\n` +
-    "7. Calibrate against a real cohort: a thin or 'on topic' answer scores 0-2 even if it sounds confident; " +
-    `full marks require every creditable point; ${Math.ceil(marksAvailable / 2)} out of ${marksAvailable} is a strong answer.\n` +
-    "8. Do not reward effort, length, structure, or enthusiasm. Report marked evidence only."
+    "HOW TO MARK, ONE GUIDE BULLET AT A TIME:\n" +
+    "1. Take the bullets in the order given and give exactly one verdict per bullet, with the bullet copied word for word into the point field.\n" +
+    "2. Quote the answer in the evidence field. When a bullet is earned, copy the student's own words exactly as they appear. When it is not earned, the evidence field is the single word absent.\n" +
+    "3. Never award a mark you cannot quote, and never withhold one whose words are in the answer. Before writing absent, read the whole answer again and look for the same idea in other words, a synonym, a number written as a figure or as a word, or an abbreviation the answer defines.\n" +
+    "4. Never write that the answer does not mention something when it does refer to it. If the answer names the idea without the creditable detail, quote that reference and award 0 for the bullet.\n" +
+    "5. A bullet that asks for more than one thing earns only the parts the answer meets, so awarded counts the marks earned out of the marks that bullet carries.\n" +
+    "6. Whole marks only. A contradiction cancels a bullet even when the same point is stated correctly elsewhere.\n" +
+    "7. The model answer is not a second mark scheme: judge only against the bullets. Do not reward restating the question, repetition, length, effort or confidence, and do not mark a correct answer down for being short.\n" +
+    "8. Same wording, same verdicts. Decide from what is written, every time, so marking the same answer twice cannot produce two different marks."
   );
 }
 
 const EXAMINER_OUTPUT_SHAPE =
-  'Return JSON exactly like: {"pointChecks":[{"point":"the mark scheme bullet","marks":1,"awarded":0,"evidence":"exact student words or empty string"}],' +
-  '"awardedMarks":0,"feedback":"terse examiner note"}. ' +
-  "Include one pointCheck per marking-guide bullet, in order. awardedMarks must equal the sum of the awarded fields. " +
-  "The feedback is at most 90 words and names what was credited and exactly which marks were lost — no praise, no encouragement.";
+  'Return JSON exactly like: {"pointChecks":[{"point":"the guide bullet, copied exactly","awarded":1,"evidence":"the student\'s exact words"}]}. ' +
+  "Give one pointCheck per guide bullet, in the guide's own order, with the bullet copied word for word. " +
+  'For a bullet the answer does not earn, set awarded to 0 and evidence to "absent". ' +
+  "Do not report a total: the marks are counted from these verdicts.";
 
-type PointCheck = { point: string; marks: number; awarded: number };
+/**
+ * One marking-guide bullet: the marks it carries, the marks earned and the
+ * student's own words that earned them ("absent" when it earned nothing). This
+ * is what the exam page renders as the awarded-marks checklist.
+ */
+type MarkCheck = {
+  point: string;
+  marks: number;
+  awarded: number;
+  evidence: string;
+};
 
 /**
  * Levels marking is how essays and long responses are assessed: the examiner
@@ -2308,7 +2378,8 @@ function levelsExaminerRules(marksAvailable: number): string {
     "4. Judge the whole essay: argument, analysis of the writer's methods or the evidence, use of supporting detail, and technical accuracy where the board assesses it.\n" +
     "5. Do not reward length, effort, confidence or a list of facts that does not answer the question.\n" +
     `6. Award whole marks only, between 0 and ${marksAvailable}. Never exceed the level's upper mark.\n` +
-    "7. The feedback must name the level awarded, what lifted the answer, and the single change that would move it into the next level. No praise, no encouragement."
+    "7. The feedback must name the level awarded, what lifted the answer, and the single change that would move it into the next level. No praise, no encouragement.\n" +
+    "8. Quote the answer: name the phrases that place it in the level, and never write that the answer does not mention something unless you have read the whole answer and it truly does not."
   );
 }
 
@@ -2318,19 +2389,21 @@ const LEVELS_OUTPUT_SHAPE =
   "The feedback is at most 110 words.";
 
 /**
- * The ledger's marks as a total out of the marks the question is worth.
+ * The score, counted from the checklist rather than reported by the model.
  *
- * A generated marking guide does not always carry one bullet per mark: a
- * 10-mark question can arrive with six one-mark bullets. Capping the award at
- * the ledger's raw total then made a perfect answer worth 6/10, which is how a
- * pasted model answer lost four marks. The guide's total is treated as the
- * whole of the available marks, so a fully credited answer always reaches full
- * marks and a partly credited one keeps the same proportion.
+ * The guide is written with one creditable point per mark and the bullets add
+ * up to the marks on offer, so the score is the literal number of credited
+ * marks — 7 credited bullets out of 10 are 7/10, every time. A guide that does
+ * not add up (an older set, or a model that answered with six bullets for a
+ * ten-mark question) is scaled to the marks on offer instead, so a fully
+ * credited answer still reaches full marks rather than being capped at the
+ * guide's own total, which is how a pasted model answer once scored 6/10.
  */
-function ledgerCeiling(checks: PointCheck[], marksAvailable: number): number {
+function awardedFromChecks(checks: MarkCheck[], marksAvailable: number): number {
   const guideTotal = checks.reduce((sum, check) => sum + check.marks, 0);
   if (guideTotal <= 0) return marksAvailable;
   const earned = checks.reduce((sum, check) => sum + check.awarded, 0);
+  if (guideTotal === marksAvailable) return Math.min(marksAvailable, earned);
   return Math.min(
     marksAvailable,
     Math.floor((earned / guideTotal) * marksAvailable),
@@ -2368,10 +2441,312 @@ function matchesModelAnswer(response: string, modelAnswer: string): boolean {
 }
 
 /**
- * Sends one answer to NVIDIA for marking and reconciles the model's totals with
- * its own point ledger (for point-marked questions) or its chosen level (for
- * essays). The ledger acts as a ceiling: an answer cannot be awarded more marks
- * than the credits it can point to.
+ * Marks a levels-marked response (an essay or extended answer). The board's
+ * level descriptors are the mark scheme, so the examiner picks the band the
+ * whole answer reaches and a mark inside it; quoting is still required in the
+ * feedback. There is no per-bullet checklist to store for these questions.
+ */
+async function markByLevels(
+  apiKeys: string[],
+  exam: {
+    question: string;
+    marks: number;
+    modelAnswer: string;
+    markingGuide: string[];
+  },
+  response: string,
+  qualification: string,
+): Promise<{ awardedMarks: number; feedback: string; checklist: MarkCheck[] }> {
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: EXAMINER_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `<qualification>${qualification || "Not specified"}</qualification>\n` +
+          `<question>${exam.question}</question>\n` +
+          `<marks_available>${exam.marks}</marks_available>\n` +
+          `<level_descriptors>\n${exam.markingGuide.join("\n")}\n</level_descriptors>\n` +
+          `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
+          `<student_answer>${response.slice(0, 8000)}</student_answer>\n\n` +
+          `${levelsExaminerRules(exam.marks)}\n\n` +
+          LEVELS_OUTPUT_SHAPE,
+      },
+    ],
+    // A whole essay plus the note needs room, and a decisive temperature keeps
+    // the same answer in the same band.
+    maxTokens: 2000,
+    temperature: 0,
+    disableThinking: true,
+  });
+
+  const parsed = parseModelJson<{ awardedMarks?: number; feedback?: string }>(raw);
+  const awarded = Math.round(Number(parsed.awardedMarks));
+  const feedback = asText(parsed.feedback, 2500);
+  if (!Number.isFinite(awarded) || !feedback) {
+    throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
+  }
+  return {
+    awardedMarks: Math.max(0, Math.min(exam.marks, awarded)),
+    feedback,
+    checklist: [],
+  };
+}
+
+/** Marks a guide bullet carries, read from its own wording ("2 marks: …"). */
+function bulletMarks(point: string): number {
+  const match = /(\d{1,2})\s*marks?\b/i.exec(point);
+  const value = match ? Number(match[1]) : 1;
+  return Math.max(1, Math.min(4, value));
+}
+
+/** Meaningful words of a text, with number spellings and accents folded. */
+function markingTokens(text: string): string[] {
+  return normalizeAnswer(text)
+    .split(" ")
+    .filter((word) => word.length > 2);
+}
+
+/**
+ * Whether a quoted piece of evidence really is in the answer. The quote's words
+ * must all be present, which is what makes "I credited this point" a claim the
+ * page can show next to the student's own sentence instead of an assertion.
+ */
+function quoteIsInAnswer(evidence: string, answer: string): boolean {
+  const quote = markingTokens(evidence);
+  if (quote.length === 0) return false;
+  const pool = new Map<string, number>();
+  for (const word of markingTokens(answer)) {
+    pool.set(word, (pool.get(word) ?? 0) + 1);
+  }
+  for (const word of quote) {
+    const left = pool.get(word) ?? 0;
+    if (left <= 0) return false;
+    pool.set(word, left - 1);
+  }
+  return true;
+}
+
+/**
+ * Whether the new answer only adds to the previous one: every word of the
+ * earlier answer is still present. An answer that grew cannot deserve a lower
+ * mark, so the stored mark stands as a floor.
+ */
+function answerExtends(previous: string, next: string): boolean {
+  const pool = new Map<string, number>();
+  for (const word of markingTokens(next)) {
+    pool.set(word, (pool.get(word) ?? 0) + 1);
+  }
+  for (const word of markingTokens(previous)) {
+    const left = pool.get(word) ?? 0;
+    if (left <= 0) return false;
+    pool.set(word, left - 1);
+  }
+  return true;
+}
+
+/**
+ * Bullets the examiner credited nothing for while the answer already uses the
+ * bullet's own words. Those go back for a second look, so a point is never
+ * recorded as missing when the answer states it in different words.
+ */
+function contestedChecks(checks: MarkCheck[], answer: string): MarkCheck[] {
+  const words = new Set(markingTokens(answer));
+  return checks.filter((check) => {
+    if (check.awarded > 0) return false;
+    const wanted = new Set(markingTokens(check.point));
+    if (wanted.size === 0) return false;
+    let shared = 0;
+    for (const word of wanted) if (words.has(word)) shared += 1;
+    return shared / wanted.size >= 0.5;
+  });
+}
+
+/** The answer's best-matching sentence for a bullet, used as its evidence. */
+function bestSentenceFor(point: string, answer: string): string {
+  const sentences = answer
+    .split(/(?<=[.!?;])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+  const wanted = new Set(markingTokens(point));
+  let best = "";
+  let bestScore = 0;
+  for (const sentence of sentences) {
+    const words = new Set(markingTokens(sentence));
+    if (words.size === 0) continue;
+    let shared = 0;
+    for (const word of words) if (wanted.has(word)) shared += 1;
+    const score = shared / Math.max(1, wanted.size);
+    if (score > bestScore) {
+      bestScore = score;
+      best = sentence;
+    }
+  }
+  return bestScore > 0 ? best.slice(0, 300) : "";
+}
+
+/**
+ * Turns the guide and the examiner's verdicts into the stored checklist. A
+ * verdict is only kept when its quote can be found in the answer, so a mark is
+ * never recorded on evidence the student did not write.
+ */
+function buildChecks(
+  guide: string[],
+  verdicts: unknown,
+  answer: string,
+): MarkCheck[] {
+  const rows = Array.isArray(verdicts) ? verdicts : [];
+  return guide.map((point, index) => {
+    const marks = bulletMarks(point);
+    const row = rows[index] as { awarded?: unknown; evidence?: unknown } | undefined;
+    const claimed = Math.max(
+      0,
+      Math.min(marks, Math.floor(Number(row?.awarded) || 0)),
+    );
+    const evidence = asText(row?.evidence, 400);
+    const verifiable = quoteIsInAnswer(evidence, answer) ? evidence : "absent";
+    return {
+      point,
+      marks,
+      awarded: claimed > 0 && verifiable !== "absent" ? claimed : 0,
+      evidence: verifiable,
+    };
+  });
+}
+
+/**
+ * The mark written out as the checklist it was counted from.
+ *
+ * Every credited bullet carries the student's own sentence, and every missed
+ * one that the answer touches on carries the sentence it was judged against, so
+ * the note never claims a point is missing without showing where it was looked
+ * for.
+ */
+function checklistFeedback(
+  checks: MarkCheck[],
+  awardedMarks: number,
+  marksAvailable: number,
+  answer: string,
+): string {
+  const credited = checks.filter((check) => check.awarded > 0);
+  const missed = checks.filter((check) => check.awarded === 0);
+  const lines = [`${awardedMarks} of ${marksAvailable} marks.`];
+  if (credited.length > 0) {
+    lines.push("", "Credited:");
+    for (const check of credited) {
+      const quote =
+        check.evidence && check.evidence !== "absent"
+          ? ` — “${check.evidence}”`
+          : "";
+      lines.push(`- ${check.awarded}/${check.marks} · ${check.point}${quote}`);
+    }
+  }
+  if (missed.length > 0) {
+    lines.push("", "Not credited:");
+    for (const check of missed) {
+      // The nearest sentence is shown when the answer refers to the point at
+      // all. Silence means the answer really does not touch on it.
+      const nearest = bestSentenceFor(check.point, answer);
+      lines.push(`- ${check.point}${nearest ? ` — nearest line: “${nearest}”` : ""}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+/** One examiner pass over the guide, returning a verdict for every bullet. */
+async function markPointByPoint(
+  apiKeys: string[],
+  exam: { question: string; marks: number; modelAnswer: string },
+  response: string,
+  qualification: string,
+  guide: string[],
+  board?: string,
+): Promise<MarkCheck[]> {
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: EXAMINER_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `<qualification>${qualification || "Not specified"}</qualification>\n` +
+          `<question>${exam.question}</question>\n` +
+          `<marks_available>${exam.marks}</marks_available>\n` +
+          `<marking_guide>\n${guide.join("\n")}\n</marking_guide>\n` +
+          `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
+          `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
+          `${examinerRules()}\n\n` +
+          `BOARD CONVENTIONS — apply these when deciding whether a point is creditable:\n${markSchemeStyle(board)}\n\n` +
+          EXAMINER_OUTPUT_SHAPE,
+      },
+    ],
+    // One verdict per bullet plus its quote needs room, and a decisive
+    // temperature keeps the same answer scoring the same way.
+    maxTokens: 1800,
+    temperature: 0,
+    disableThinking: true,
+  });
+
+  const parsed = parseModelJson<{ pointChecks?: unknown }>(raw);
+  return buildChecks(guide, parsed.pointChecks, response);
+}
+
+/**
+ * The second look at bullets that scored nothing while the answer uses their
+ * words. Only a verdict with a quote can change the outcome, so this pass can
+ * add marks the first pass missed but can never invent them.
+ */
+async function recheckUncredited(
+  apiKeys: string[],
+  exam: { question: string; marks: number; modelAnswer: string },
+  response: string,
+  qualification: string,
+  checks: MarkCheck[],
+  contested: MarkCheck[],
+): Promise<MarkCheck[]> {
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: EXAMINER_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `<qualification>${qualification || "Not specified"}</qualification>\n` +
+          `<question>${exam.question}</question>\n` +
+          `<marks_available>${exam.marks}</marks_available>\n` +
+          `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
+          `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
+          `<uncredited_bullets>\n${contested.map((check) => check.point).join("\n")}\n</uncredited_bullets>\n\n` +
+          "You marked this answer and credited none of the bullets above. Read the answer once more, word by word, and decide for each bullet whether the answer states the creditable point, in its own words or in different words that carry the same meaning.\n" +
+          'Return JSON exactly like: {"pointChecks":[{"point":"the bullet, copied exactly","awarded":0,"evidence":"the student\'s exact words, or absent"}]} with one entry per bullet above, in the same order. ' +
+          "Award only what you can quote verbatim. If the answer does not state the point, awarded is 0 and evidence is absent.",
+      },
+    ],
+    maxTokens: 1200,
+    temperature: 0,
+    disableThinking: true,
+  });
+
+  const parsed = parseModelJson<{ pointChecks?: unknown }>(raw);
+  const rebuilt = buildChecks(
+    contested.map((check) => check.point),
+    parsed.pointChecks,
+    response,
+  );
+  const recovered = new Map(rebuilt.map((check) => [check.point, check]));
+  return checks.map((check) => {
+    const found = recovered.get(check.point);
+    if (!found || found.awarded === 0) return check;
+    return { ...check, awarded: Math.min(check.marks, found.awarded), evidence: found.evidence };
+  });
+}
+
+/**
+ * Sends one answer to NVIDIA for marking and counts the score from the
+ * verdicts. Point-marked questions get one checklist row per guide bullet with
+ * the student's quoted words; essays are marked against their level
+ * descriptors. Nothing here trusts a total reported by the model.
  */
 async function markExamAnswer(
   apiKeys: string[],
@@ -2384,133 +2759,71 @@ async function markExamAnswer(
   response: string,
   context?: StudyContext,
   marking: "points" | "levels" = "points",
-): Promise<{ awardedMarks: number; feedback: string }> {
+): Promise<{ awardedMarks: number; feedback: string; checklist: MarkCheck[] }> {
   const qualification = qualificationText(context);
-  const levels = marking === "levels";
+
+  if (marking === "levels") {
+    return await markByLevels(apiKeys, exam, response, qualification);
+  }
+
+  // A guide can be missing on very old rows. The model answer then carries the
+  // marks, so the answer is still marked against something the page can show.
+  const guide =
+    exam.markingGuide.length > 0
+      ? exam.markingGuide
+      : [`${exam.marks} marks: the answer states what the model answer states`];
 
   if (matchesModelAnswer(response, exam.modelAnswer)) {
+    const checklist = guide.map((point) => {
+      const marks = bulletMarks(point);
+      return {
+        point,
+        marks,
+        awarded: marks,
+        evidence: bestSentenceFor(point, response),
+      };
+    });
+    const awardedMarks = ledgerCeiling(checklist, exam.marks);
     return {
-      awardedMarks: exam.marks,
+      awardedMarks,
       feedback:
-        `All ${exam.marks} marks: this answer reproduces the model answer, which is the full-mark answer for this question. ` +
-        "Try writing it from memory next time to check you can produce every point unaided.",
+        "This answer reproduces the model answer, the full-mark answer for this question.\n\n" +
+        checklistFeedback(checklist, awardedMarks, exam.marks),
+      checklist,
     };
   }
 
-  const raw = await nvidiaChat(apiKeys, {
-    model: NVIDIA_TEXT_MODEL,
-    messages: [
-      { role: "system", content: EXAMINER_SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: levels
-          ? `<qualification>${qualification || "Not specified"}</qualification>\n` +
-            `<question>${exam.question}</question>\n` +
-            `<marks_available>${exam.marks}</marks_available>\n` +
-            `<level_descriptors>\n${exam.markingGuide.join("\n")}\n</level_descriptors>\n` +
-            `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
-            `<student_answer>${response.slice(0, 8000)}</student_answer>\n\n` +
-            `${levelsExaminerRules(exam.marks)}\n\n` +
-            LEVELS_OUTPUT_SHAPE
-          : `<qualification>${qualification || "Not specified"}</qualification>\n` +
-            `<question>${exam.question}</question>\n` +
-            `<marks_available>${exam.marks}</marks_available>\n` +
-            `<marking_guide>\n${exam.markingGuide.join("\n")}\n</marking_guide>\n` +
-            `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
-            `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
-            `${examinerRules(exam.marks)}\n\n` +
-            `BOARD CONVENTIONS — apply these when deciding whether a point is creditable:\n${markSchemeStyle(context?.examBoard)}\n\n` +
-            EXAMINER_OUTPUT_SHAPE,
-      },
-    ],
-    // Point-by-point marking plus the note needs more room than a bare score,
-    // and a decisive temperature keeps the same answer scoring the same way.
-    maxTokens: levels ? 2000 : 1400,
-    temperature: 0,
-    disableThinking: true,
-  });
+  let checks = await markPointByPoint(
+    apiKeys,
+    exam,
+    response,
+    qualification,
+    guide,
+    context?.examBoard,
+  );
 
-  const parsed = parseModelJson<{
-    awardedMarks?: number;
-    feedback?: string;
-    level?: number;
-    pointChecks?: unknown;
-  }>(raw);
-
-  if (levels) {
-    const awarded = Math.round(Number(parsed.awardedMarks));
-    const feedback = asText(parsed.feedback, 2500);
-    if (!Number.isFinite(awarded) || !feedback) {
-      throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
-    }
-    return {
-      awardedMarks: Math.max(0, Math.min(exam.marks, awarded)),
-      feedback,
-    };
+  // A bullet whose own words are already in the answer goes back for a second
+  // look, so a point is never recorded as missing while the answer states it.
+  const contested = contestedChecks(checks, response);
+  if (contested.length > 0) {
+    checks = await recheckUncredited(
+      apiKeys,
+      exam,
+      response,
+      qualification,
+      checks,
+      contested,
+    );
   }
 
-  const checks: PointCheck[] = Array.isArray(parsed.pointChecks)
-    ? parsed.pointChecks
-        .map((entry) => {
-          const row = entry as { point?: unknown; marks?: unknown; awarded?: unknown };
-          const point = asText(row.point, 400);
-          const marks = Math.max(1, Math.min(4, Math.round(Number(row.marks) || 1)));
-          const awarded = Math.max(0, Math.min(marks, Math.floor(Number(row.awarded) || 0)));
-          return point ? { point, marks, awarded } : null;
-        })
-        .filter((check): check is PointCheck => check !== null)
-    : [];
-
-  const claimed = Number(parsed.awardedMarks);
-  const reported = Number.isFinite(claimed)
-    ? Math.round(claimed)
-    : checks.reduce((sum, check) => sum + check.awarded, 0);
-  // A thin guide makes the examiner report out of the guide's total as well as
-  // cap at it (six bullets for a ten-mark question yields "6" even when every
-  // bullet was credited), so both totals are mapped onto the question's marks.
-  const guideTotal = checks.reduce((sum, check) => sum + check.marks, 0);
-  const guideScale =
-    guideTotal > 0 && guideTotal < exam.marks ? exam.marks / guideTotal : 1;
-  const reportedMarks = Math.min(exam.marks, Math.round(reported * guideScale));
-  // Every bullet credited is a full answer, whatever total the examiner wrote:
-  // the ledger is the evidence, and a thin guide must not hold the mark down.
-  // The check count must also account for the whole guide, so a reply that
-  // lists one awarded bullet cannot turn a ten-mark answer into full marks.
-  const fullyCredited =
-    checks.length >= exam.markingGuide.length &&
-    checks.length > 0 &&
-    checks.every((check) => check.awarded >= check.marks);
-  // Otherwise take the stricter of the reported total and the ledger, then the
-  // paper limit.
-  const awardedMarks = fullyCredited
-    ? exam.marks
-    : Math.max(
-        0,
-        Math.min(
-          exam.marks,
-          checks.length > 0
-            ? Math.min(reportedMarks, ledgerCeiling(checks, exam.marks))
-            : reportedMarks,
-        ),
-      );
-
-  const credited = checks.filter((check) => check.awarded > 0).map((check) => check.point);
-  const missed = checks.filter((check) => check.awarded === 0).map((check) => check.point);
-  const fallbackFeedback = [
-    credited.length > 0
-      ? `Credited: ${credited.join("; ")}`
-      : "No mark-scheme points were credited in this answer.",
-    missed.length > 0 ? `Marks lost: ${missed.join("; ")}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const feedback = asText(parsed.feedback, 2500) || fallbackFeedback;
-  if (!feedback) {
-    throw new Error("The model couldn't grade that answer cleanly. Retry the grade.");
-  }
-
-  return { awardedMarks, feedback };
+  // The score is the count of matched marks mapped onto what the question is
+  // worth, so the same verdicts always produce the same mark.
+  const awardedMarks = ledgerCeiling(checks, exam.marks);
+  return {
+    awardedMarks,
+    feedback: checklistFeedback(checks, awardedMarks, exam.marks),
+    checklist: checks,
+  };
 }
 
 /** AI-marks one written exam answer against the stored marking guide. */
@@ -2522,7 +2835,12 @@ export const gradeExamAnswer = action({
   handler: async (
     ctx,
     { examId, answer },
-  ): Promise<{ awardedMarks: number; marks: number; feedback: string }> => {
+  ): Promise<{
+    awardedMarks: number;
+    marks: number;
+    feedback: string;
+    checklist: MarkCheck[];
+  }> => {
     const userId = await requireUserId(ctx);
     const response = answer.trim();
     if (response.length < 15) {
@@ -2534,22 +2852,57 @@ export const gradeExamAnswer = action({
       throw new Error("Exam question not found.");
     }
 
-    const apiKeys = resolveNvidiaKeys();
     const { exam, set } = data;
-    const { awardedMarks, feedback } = await markExamAnswer(apiKeys, exam, response, {
+
+    // The same answer is never marked twice: the stored result is returned
+    // unchanged, so re-marking cannot drift and cannot score lower.
+    if (
+      exam.userAnswer !== undefined &&
+      exam.awardedMarks !== undefined &&
+      normalizeAnswer(exam.userAnswer) === normalizeAnswer(response)
+    ) {
+      return {
+        awardedMarks: exam.awardedMarks,
+        marks: exam.marks,
+        feedback: exam.feedback ?? "",
+        checklist: exam.checklist ?? [],
+      };
+    }
+
+    const apiKeys = resolveNvidiaKeys();
+    const marked = await markExamAnswer(apiKeys, exam, response, {
       course: set.course,
       examBoard: set.examBoard,
       level: set.level,
     });
 
+    // An answer that only adds to the previous one keeps at least the marks it
+    // already earned.
+    const floor =
+      exam.userAnswer !== undefined &&
+      exam.awardedMarks !== undefined &&
+      answerExtends(exam.userAnswer, response)
+        ? exam.awardedMarks
+        : undefined;
+    const awardedMarks =
+      floor === undefined
+        ? marked.awardedMarks
+        : Math.max(floor, marked.awardedMarks);
+
     await ctx.runMutation(internal.studySets.saveExamResult, {
       examId,
       answer: response,
       awardedMarks,
-      feedback,
+      feedback: marked.feedback,
+      checklist: marked.checklist,
     });
 
-    return { awardedMarks, marks: exam.marks, feedback };
+    return {
+      awardedMarks,
+      marks: exam.marks,
+      feedback: marked.feedback,
+      checklist: marked.checklist,
+    };
   },
 });
 
@@ -2669,30 +3022,42 @@ export const gradeRecallAnswer = action({
  * the idea back to the material it was pointed at, and speaks in the command
  * words of the student's exam board. Plain text keeps the chat rendering simple.
  */
+/**
+ * The tutor answers the request it was given. Earlier wording told it to
+ * "explain the reasoning" and to keep one continuous lesson, and the result was
+ * an assistant that asked the student a question instead of explaining, and
+ * greeted them as returning to a conversation they had just started.
+ */
 const TUTOR_SYSTEM_PROMPT =
   "You are Bluprint's AI tutor: a patient, precise subject teacher working one-to-one with a student. " +
-  "Explain the reasoning rather than only the conclusion, and use a concrete example when it helps. " +
-  "Use the provided study material as the primary source. If it does not cover something, say so plainly before giving the standard explanation, and never invent content and attribute it to the material. " +
-  "When you can search the web, use it for anything recent, exam-board specific, or outside the study material, and name the site you took the fact from. " +
-  "Never cite a page you did not actually read, and never invent a source. " +
-  "Answer in plain text with short paragraphs and hyphen bullets. No markdown headings, tables, or code fences. " +
+  "Answer the request that was actually made. \"Explain X\" gets an explanation of X, \"what am I likely to lose marks on\" gets the specific things examiners deduct marks for, and \"give me an example\" gets a worked example. " +
+  "Answer it directly and in prose, and never turn the request into a question back to the student. " +
+  "Explain the reasoning, not only the conclusion, and use a concrete example when it helps. " +
+  "The study material provided is the source: work from it, and say plainly when it does not cover something before giving the standard explanation. " +
+  "Never invent content and attribute it to the material, never cite a page you did not read, and never invent a source. " +
+  "When web results are provided, use them for anything outside the material and name the site they came from. " +
+  "Only test or quiz the student when they ask to be quizzed or tested. " +
+  "This thread begins where the student's first message begins: never greet them as returning, never say \"welcome back\", and never refer to a previous session or a continuing conversation. " +
+  "Plain text with short paragraphs and hyphen bullets. No markdown headings, tables, or code fences. " +
   "Be direct and warm, not effusive. Keep answers under 250 words unless the student asks for a model answer or a step-by-step walkthrough.";
 
 /**
- * The rule that keeps one continuous lesson continuous.
+ * The rules that keep one thread coherent without pretending it is a resumed
+ * lesson.
  *
- * Previously the whole conversation was flattened into one prompt string, and
- * a fast model would lose the thread: asked to quiz the student, then given
- * "11, 6, 2", it replied with a definition of a function instead of marking
- * the answers. Replaying the turns with their real roles fixes most of that;
- * this instruction fixes the rest, including the one-question-at-a-time rule.
+ * Previously the whole thread was flattened into one prompt string, and a fast
+ * model would lose it: asked to quiz the student, then given "11, 6, 2", it
+ * replied with a definition of a function instead of marking the answers.
+ * Replaying the turns with their real roles fixes most of that; this instruction
+ * fixes the rest.
  */
-const TUTOR_CONTINUITY_RULES =
-  "This is one continuous conversation, not a set of unrelated questions. Read the entire exchange before replying. " +
-  "If your previous message asked the student anything, their newest message is their answer: mark each answer as correct or incorrect, give the right answer where it is wrong, and only then continue. " +
+const TUTOR_THREAD_RULES =
+  "Read the whole exchange, then answer the newest message. " +
+  "If your own previous message asked the student something, their newest message is their answer: mark each answer as correct or incorrect, give the right answer where it is wrong, and only then continue. " +
   "Never restart the topic, never reply with a definition or a new explanation the student did not ask for, and never ignore answers you are holding. " +
   "If the student asked for several practice questions, keep your own numbered list and mark their replies against it in order. " +
-  "Ask one question at a time unless the student explicitly asked for a set of questions. ";
+  "Ask one question at a time, and only when the student asked to be quizzed. " +
+  "Do not open with a greeting or a summary of the material. ";
 
 /** What the tutor is pointed at, already reduced to plain text. */
 type TutorContext = {
@@ -2710,7 +3075,6 @@ function tutorPrompt(
   context: TutorContext,
   question: string,
   web: WebResult[] = [],
-  effort?: TutorEffort,
 ): ChatMessage[] {
   const qualification = qualificationText(context);
 
@@ -2719,7 +3083,7 @@ function tutorPrompt(
   // focused on the reply they are waiting for.
   const system = [
     TUTOR_SYSTEM_PROMPT,
-    TUTOR_CONTINUITY_RULES,
+    TUTOR_THREAD_RULES,
     materialBlock(context.material),
     `<material_title>${context.title}</material_title>`,
     `<qualification>${qualification || "Not specified"}</qualification>`,
@@ -2749,10 +3113,7 @@ function tutorPrompt(
     role: "user",
     content:
       `<student_message>${question}</student_message>\n\n` +
-      // The effort bars write their choice into the prompt, so Low really is
-      // shorter and Max Effort really is deeper rather than only relabelled.
-      (effort?.guidance ? `${effort.guidance}\n\n` : "") +
-      "Continue the conversation above. If the student is answering questions you asked, mark those answers first. If they ask for exam practice, give one question at a time unless they asked for several, and wait for their answers before marking them.",
+      "Answer the newest message above. If the student is answering questions you asked, mark those answers first. If they ask for exam practice, give one question at a time unless they asked for several, and wait for their answers before marking them.",
   });
 
   return messages;
@@ -2945,7 +3306,7 @@ async function streamNvidiaAnswer(
  */
 async function streamWebAnswer(
   messages: ChatMessage[],
-  effort: TutorEffort,
+  tier: TutorTier,
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
   const apiKey = readOpenRouterKey();
@@ -2963,9 +3324,10 @@ async function streamWebAnswer(
     body: JSON.stringify({
       model: OPENROUTER_TUTOR_MODEL,
       messages,
-      // The browsing model follows the same effort dial as the NVIDIA one.
-      temperature: Math.max(0, 0.3 + effort.temperatureShift),
-      max_tokens: Math.round(1500 * effort.budgetScale),
+      // The browsing model keeps the level's own temperature and budget, so a
+      // Deep answer stays deep when it happens to need the web.
+      temperature: tier.temperature,
+      max_tokens: Math.max(900, Math.round(tier.maxTokens * 0.9)),
       stream: true,
       plugins: [{ id: "web", max_results: 4 }],
     }),
@@ -3005,18 +3367,13 @@ async function streamTutorAnswer(
   question: string,
   useWeb: boolean,
   tier: TutorTier,
-  effort: TutorEffort,
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
-  // Effort scales the tier's answer budget and nudges its temperature, so the
-  // bars beside the model picker change the reply itself.
-  const answerTier = applyTutorEffort(tier, effort);
-
   if (!useWeb) {
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, [], effort),
-      answerTier,
+      tutorPrompt(context, question, []),
+      tier,
       onSnapshot,
     );
   }
@@ -3027,24 +3384,22 @@ async function streamTutorAnswer(
   if (results.length > 0) {
     const grounded = await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, results, effort),
-      answerTier,
+      tutorPrompt(context, question, results),
+      tier,
       onSnapshot,
     );
     return { text: grounded.text, sources: sourcesFrom(results) };
   }
 
   try {
-    return await streamWebAnswer(
-      tutorPrompt(context, question, [], effort),
-      effort,
-      onSnapshot,
-    );
+    return await streamWebAnswer(tutorPrompt(context, question, []), tier, onSnapshot);
   } catch {
+    // The browsing provider is optional, so a web failure never costs the
+    // answer: the tutor falls back to the student's own material.
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, [], effort),
-      answerTier,
+      tutorPrompt(context, question, []),
+      tier,
       onSnapshot,
     );
   }
@@ -3264,19 +3619,16 @@ export const askTutor = action({
     setId: v.id("studySets"),
     question: v.string(),
     useWeb: v.optional(v.boolean()),
-    // A tier label such as "Ultra"; the matching NVIDIA model stays server-side.
+    // A level label such as "Deep"; the matching NVIDIA model stays server-side.
     tier: v.optional(v.string()),
-    // "Low" | "Medium" | "Max Effort" from the effort bars beside the picker.
-    effort: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { setId, question, useWeb, tier, effort },
+    { setId, question, useWeb, tier },
   ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
     const chosenTier = readTutorTier(tier);
-    const chosenEffort = readTutorEffort(effort);
 
     const context = await ctx.runQuery(internal.tutor.getTutorContext, {
       setId,
@@ -3307,7 +3659,6 @@ export const askTutor = action({
         // Off unless the browser explicitly asks for it.
         useWeb === true,
         chosenTier,
-        chosenEffort,
         async (content, sources) => {
           await ctx.runMutation(internal.tutor.appendTutorAnswer, {
             messageId,
@@ -3344,19 +3695,16 @@ export const askCourseTutor = action({
     unitTitle: v.optional(v.string()),
     question: v.string(),
     useWeb: v.optional(v.boolean()),
-    // Same tier labels as `askTutor`; the model mapping is shared.
+    // Same level labels as `askTutor`; the model mapping is shared.
     tier: v.optional(v.string()),
-    // Same effort labels as `askTutor`.
-    effort: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { courseId, unitTitle, question, useWeb, tier, effort },
+    { courseId, unitTitle, question, useWeb, tier },
   ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
     const chosenTier = readTutorTier(tier);
-    const chosenEffort = readTutorEffort(effort);
 
     const context = await ctx.runQuery(internal.tutor.getCourseTutorContext, {
       courseId,
@@ -3379,7 +3727,6 @@ export const askCourseTutor = action({
         // Off unless the browser explicitly asks for it.
         useWeb === true,
         chosenTier,
-        chosenEffort,
         async (content, sources) => {
           await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
             messageId,

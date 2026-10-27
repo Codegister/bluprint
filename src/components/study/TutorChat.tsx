@@ -104,20 +104,19 @@ export function TutorChat({
   const askCourseTutor = useAction(api.ai.askCourseTutor);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
-  // Tiers are named by feel only (Ultra is ultra fast, Max is maximum strength).
-  // The NVIDIA model behind each label is chosen on the server, never sent here.
+  // The three levels are named by feel only — Fast, Balanced, Deep. The NVIDIA
+  // model behind each label is chosen on the server, never sent here.
   const aiStatus = useQuery(api.settings.aiStatus);
   const tierLabels = aiStatus?.tutorTiers ?? ["Balanced"];
   const defaultTier = aiStatus?.defaultTutorTier ?? "Balanced";
-  // Each tier gets its own tagline and glyph, so the picker can say "ultra
-  // fast" beside Ultra and no two models share an icon.
+  // Each level gets its own tagline and glyph, so the picker can say "Longest
+  // answers" beside Deep and no two levels share an icon.
   const modelDetails = Object.fromEntries(
     (aiStatus?.tutorTierDetails ?? []).map((tier) => [
       tier.label,
       { tagline: tier.tagline, icon: tier.icon },
     ]),
   );
-  const effortLabels = aiStatus?.tutorEfforts ?? ["Low", "Medium", "Max Effort"];
 
   const groundedIn =
     scope.kind === "set"
@@ -133,9 +132,6 @@ export function TutorChat({
   // Web search stays off unless the student asks for it: the tutor answers
   // from the saved notes and specification first.
   const [useWeb, setUseWeb] = useState(false);
-  const [effort, setEffort] = useState<string>(
-    aiStatus?.defaultTutorEffort ?? "Medium",
-  );
   // The last tier the student used, so a suggested question uses the same one.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -150,7 +146,10 @@ export function TutorChat({
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages?.length, sending, streamedLength]);
 
-  const send = async (value: string, meta: { model: string; effort: string; attachments: File[] }) => {
+  const send = async (
+    value: string,
+    meta: { model: string; attachments: File[] },
+  ) => {
     const question = value.trim();
     if (!question || sending) return;
     onAsk?.();
@@ -158,11 +157,7 @@ export function TutorChat({
     // The composer's model picker reports a tier label; an unknown one falls
     // back to the default on the server.
     const chosenTier = meta.model || tier;
-    // Effort is a real setting: the server turns this label into the answer
-    // budget, temperature and a short/long-answer instruction.
-    const chosenEffort = meta.effort || effort;
     setTier(chosenTier);
-    setEffort(chosenEffort);
     setError(null);
     setSending(true);
     setPending(question);
@@ -174,7 +169,6 @@ export function TutorChat({
           question,
           useWeb,
           tier: chosenTier,
-          effort: chosenEffort,
         });
       } else {
         await askCourseTutor({
@@ -183,7 +177,6 @@ export function TutorChat({
           question,
           useWeb,
           tier: chosenTier,
-          effort: chosenEffort,
         });
       }
     } catch (sendError) {
@@ -257,11 +250,7 @@ export function TutorChat({
                     key={suggestion}
                     type="button"
                     onClick={() =>
-                      void send(suggestion, {
-                        model: tier,
-                        effort,
-                        attachments: [],
-                      })
+                      void send(suggestion, { model: tier, attachments: [] })
                     }
                     className="rounded-2xl border border-border bg-white px-3.5 py-2.5 text-left text-[0.82rem] font-medium text-brand-ink/80 transition-colors hover:border-chrome-4 hover:bg-brand-panel"
                   >
@@ -364,7 +353,6 @@ export function TutorChat({
             maxAttachments={1}
             models={tierLabels}
             modelDetails={modelDetails}
-            efforts={effortLabels}
             onDictate={async (audio, format) =>
               (await transcribe({ audio, format })).text
             }
@@ -375,7 +363,7 @@ export function TutorChat({
             {useWeb
               ? "web search is on, so recent and specification details can be checked online."
               : "web search is off, so answers come from your material and the model only."}{" "}
-            Effort sets how long and deep the answer is. Answers can be wrong, so
+            Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>
         </div>

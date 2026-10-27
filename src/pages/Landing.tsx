@@ -25,14 +25,27 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, Camera, Sparkles } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
+import { savePendingNotes } from "@/lib/pendingNotes";
 
 /**
  * A working card in the hero preview. It reuses the same question/answer shape
  * as the real flashcard deck, so the preview shows the product rather than a
  * picture of it.
+ *
+ * The notes box and Generate button are real: whatever is pasted is carried
+ * through sign-in and becomes the source material of a new set, so the hero
+ * never discards what a visitor types.
  */
-function HeroPreview() {
+function HeroPreview({
+  notes,
+  onNotesChange,
+  onGenerate,
+}: {
+  notes: string;
+  onNotesChange: (value: string) => void;
+  onGenerate: () => void;
+}) {
   const [revealed, setRevealed] = useState(false);
 
   return (
@@ -47,17 +60,38 @@ function HeroPreview() {
         </div>
       </div>
 
-      <div className="mt-5 rounded-3xl border border-border bg-white p-4">
-        <p className="text-[0.95rem] text-muted-foreground">Paste notes, or add photos…</p>
-        <div className="mt-4 flex items-center justify-between">
+      <form
+        className="mt-5 rounded-3xl border border-border bg-white p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onGenerate();
+        }}
+      >
+        <label className="block">
+          <span className="sr-only">Notes to build a set from</span>
+          <textarea
+            value={notes}
+            onChange={(event) => onNotesChange(event.target.value)}
+            rows={2}
+            maxLength={4000}
+            placeholder="Paste notes, or start from a photo…"
+            className="w-full resize-none rounded-2xl border border-border bg-[#FCFBF8] px-3 py-2 text-[0.9rem] leading-relaxed text-brand-ink outline-none placeholder:text-muted-foreground/70 focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/20"
+          />
+        </label>
+        <div className="mt-3 flex items-center justify-between gap-3">
           <span className="text-[0.78rem] font-medium text-muted-foreground">
-            Cell biology, page 42
+            {notes.trim().length >= 40
+              ? "Ready to build"
+              : "Cell biology, page 42"}
           </span>
-          <span className="rounded-full border border-brand-ink/40 bg-gizmo-lime px-4 py-2 text-[0.82rem] font-semibold text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.16)]">
+          <button
+            type="submit"
+            className="rounded-full border border-brand-ink/40 bg-gizmo-lime px-4 py-2 text-[0.82rem] font-semibold text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.16)] transition-transform hover:-translate-y-0.5"
+          >
             Generate
-          </span>
+          </button>
         </div>
-      </div>
+      </form>
 
       <button
         type="button"
@@ -139,7 +173,15 @@ function HeroChip({
  * orbit, and two small cards drifting around it. Each layer moves at its own
  * speed on scroll, which is what gives the page depth without any 3D assets.
  */
-function HeroArt() {
+function HeroArt({
+  notes,
+  onNotesChange,
+  onGenerate,
+}: {
+  notes: string;
+  onNotesChange: (value: string) => void;
+  onGenerate: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -184,7 +226,11 @@ function HeroArt() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.85, ease: EASE, delay: 0.15 }}
         >
-          <HeroPreview />
+          <HeroPreview
+            notes={notes}
+            onNotesChange={onNotesChange}
+            onGenerate={onGenerate}
+          />
         </motion.div>
       </motion.div>
 
@@ -259,8 +305,17 @@ function OutputCard({
 
 export default function Landing() {
   const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const [heroNotes, setHeroNotes] = useState("");
   const startHref = isAuthenticated ? "/tutor" : "/auth?returnTo=%2Ftutor";
   const startLabel = isAuthenticated ? "Open dashboard" : "Start a study set";
+  // The hero's own field: the pasted text is saved for this tab and handed to
+  // the create dialog after sign-in, so nothing typed here is discarded.
+  const startFromHero = () => {
+    const notes = heroNotes.trim();
+    if (notes.length >= 40) savePendingNotes(notes);
+    navigate(startHref);
+  };
   // Reading progress drawn along the bottom edge of the sticky header.
   const { scrollYProgress } = useScroll();
 
@@ -350,7 +405,7 @@ export default function Landing() {
               {...enter(0.22)}
             >
               Upload notes, a photo of a textbook page or a short screen recording.
-              Bluprint writes a summary, ten flashcards, a multiple-choice quiz and three
+              Bluprint writes a summary, ten flashcards, five quiz questions and three
               exam-style questions you can answer for marks.
             </motion.p>
 
@@ -383,7 +438,11 @@ export default function Landing() {
             </motion.p>
           </div>
 
-          <HeroArt />
+          <HeroArt
+            notes={heroNotes}
+            onNotesChange={setHeroNotes}
+            onGenerate={startFromHero}
+          />
         </div>
       </section>
 
@@ -423,7 +482,7 @@ export default function Landing() {
               },
               {
                 title: "Bluprint builds the set",
-                copy: "A vision model reads the source. A text model writes a short summary, ten flashcards, five quiz questions with explanations, and three written exam questions with a marking guide.",
+                copy: "A vision model reads the source. A text model writes a short summary, ten flashcards, five quiz questions with explanations, and three written exam questions with a marking guide. Every count is yours to change before the build starts.",
               },
               {
                 title: "Practise and get marked",

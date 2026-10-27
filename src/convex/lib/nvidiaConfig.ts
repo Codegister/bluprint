@@ -28,23 +28,21 @@ export const NVIDIA_VISION_MODEL =
 export const NVIDIA_KEY_NAME = "NVIDIA_API_KEY";
 
 /**
- * Tutor tiers.
+ * Tutor levels.
  *
- * Students choose a speed/power trade-off by label only — Ultra, Fast,
- * Balanced, Powerful, Max. The NVIDIA model behind each label never leaves the
- * server, so the tutor can show plain words instead of model ids and the
- * deployment can re-point a tier through an environment variable without
- * touching the UI.
+ * There are exactly three, in order: Fast, Balanced, Deep. They used to be
+ * five tiers crossed with a separate effort dial, which meant fifteen ways to
+ * ask the same question and no clear default. Speed against depth is one
+ * decision, so it is one control.
  *
- * "Ultra" means ultra fast: the quickest endpoint with a short answer budget.
- * "Max" means maximum strength: the largest reasoning model, given the longest
- * budget and the lowest temperature for deep deliberation. The tiers in between
- * step up in power, and each one gets a larger answer budget than the last.
+ * The NVIDIA model behind each label never leaves the server, so the tutor
+ * shows plain words and the deployment can re-point a level through an
+ * environment variable without touching the UI.
  */
-export type TutorTierId = "fast" | "balanced" | "powerful" | "max" | "ultra";
+export type TutorTierId = "fast" | "balanced" | "deep";
 
 /** Icons are named here and drawn by the browser, so no URLs are involved. */
-export type TutorTierIcon = "zap" | "rabbit" | "scale" | "flame" | "crown";
+export type TutorTierIcon = "rabbit" | "scale" | "flame";
 
 export type TutorTier = {
   id: TutorTierId;
@@ -65,66 +63,36 @@ function tierModel(envName: string, fallback: string): string {
 
 export const TUTOR_TIERS: TutorTier[] = [
   {
-    id: "balanced",
-    label: "Balanced",
-    tagline: "Everyday default · steady detail",
-    icon: "scale",
-    // The deployment's default text model, so the everyday tutor path stays
-    // exactly what it was before tiers existed. Kept first so the picker opens
-    // on the tier most students want.
-    model: tierModel("NVIDIA_TUTOR_BALANCED_MODEL", NVIDIA_TEXT_MODEL),
-    maxTokens: 1500,
-    temperature: 0.3,
-  },
-  {
-    id: "ultra",
-    label: "Ultra",
-    // Ultra means ultra fast: the lowest-latency model in the catalog with a
-    // short answer budget, for a definition or a quick yes/no while revising.
-    // The tagline says so out loud, because "Ultra" alone reads as "strongest".
-    tagline: "Ultra fast · quickest reply, shortest answer",
-    icon: "zap",
-    model: tierModel(
-      "NVIDIA_TUTOR_ULTRA_MODEL",
-      "nvidia/nemotron-3.5-lightning-30b-a3b",
-    ),
-    maxTokens: 900,
-    temperature: 0.35,
-  },
-  {
     id: "fast",
     label: "Fast",
-    // Smallest model in the catalog: answers in a second or two, best for
-    // quick definitions while revising. Slightly more detail than Ultra.
-    tagline: "Quick short answers, a little more detail than Ultra",
+    tagline: "Quick short answers",
     icon: "rabbit",
     model: tierModel("NVIDIA_TUTOR_FAST_MODEL", "meta/llama-3.1-8b-instruct"),
-    maxTokens: 1200,
+    maxTokens: 1100,
     temperature: 0.35,
   },
   {
-    id: "powerful",
-    label: "Powerful",
-    tagline: "Deeper explanations, slower to reply",
-    icon: "flame",
-    model: tierModel("NVIDIA_TUTOR_POWERFUL_MODEL", "meta/llama-3.3-70b-instruct"),
-    maxTokens: 1800,
+    id: "balanced",
+    label: "Balanced",
+    // The deployment's default text model: the everyday answer, and the one the
+    // picker opens on.
+    tagline: "Everyday default · steady detail",
+    icon: "scale",
+    model: tierModel("NVIDIA_TUTOR_BALANCED_MODEL", NVIDIA_TEXT_MODEL),
+    maxTokens: 1600,
     temperature: 0.3,
   },
   {
-    id: "max",
-    label: "Max",
-    tagline: "Maximum strength · deepest reasoning, slowest",
-    icon: "crown",
-    // Max means maximum strength: the largest reasoning model on
-    // build.nvidia.com, given the longest budget and the lowest temperature so
-    // it deliberates over a full derivation or a marked essay plan. Slowest.
+    id: "deep",
+    label: "Deep",
+    tagline: "Longest answers · worked reasoning",
+    icon: "flame",
     model: tierModel(
-      "NVIDIA_TUTOR_MAX_MODEL",
-      "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+      "NVIDIA_TUTOR_DEEP_MODEL",
+      tierModel("NVIDIA_TUTOR_POWERFUL_MODEL", "meta/llama-3.3-70b-instruct"),
     ),
     maxTokens: 2600,
-    temperature: 0.2,
+    temperature: 0.25,
   },
 ];
 
@@ -157,82 +125,6 @@ export function readTutorTier(value?: string | null): TutorTier {
       (tier) => tier.id === key || tier.label.toLowerCase() === key,
     ) ?? fallback
   );
-}
-
-/**
- * Tutor effort.
- *
- * Effort is the student's answer-depth dial, and it is applied on top of the
- * chosen tier: it scales the answer budget and lowers the temperature slightly
- * at the top end, and it adds a line to the prompt asking for a shorter or a
- * deeper answer. That way the bars beside the picker change the answer, not just
- * the label. "Max Effort" is accepted because that is the composer's own label.
- */
-export type TutorEffortId = "low" | "medium" | "max";
-
-export type TutorEffort = {
-  id: TutorEffortId;
-  /** Matches the composer's `efforts` labels. */
-  label: string;
-  /** Multiplies the tier's answer budget. */
-  budgetScale: number;
-  /** Added to the tier's temperature, then clamped. */
-  temperatureShift: number;
-  /** Extra prompt line; empty for the default effort. */
-  guidance: string;
-};
-
-export const TUTOR_EFFORTS: TutorEffort[] = [
-  {
-    id: "low",
-    label: "Low",
-    budgetScale: 0.55,
-    temperatureShift: -0.05,
-    guidance:
-      "The student chose LOW effort: give the shortest correct answer — a couple of sentences or one short bullet list, with no worked example. Shortness never overrides the conversation: if the student is answering questions you already asked, mark each one briefly before anything else.",
-  },
-  {
-    id: "medium",
-    label: "Medium",
-    budgetScale: 1,
-    temperatureShift: 0,
-    guidance: "",
-  },
-  {
-    id: "max",
-    label: "Max Effort",
-    budgetScale: 2,
-    temperatureShift: -0.1,
-    guidance:
-      "The student chose MAXIMUM effort: answer in depth. Break the reasoning into steps, include one worked example, quote the mark-scheme wording where it helps, and name the mistake students usually make. The usual length limit does not apply here.",
-  },
-];
-
-export const DEFAULT_TUTOR_EFFORT: TutorEffortId = "medium";
-
-export const DEFAULT_TUTOR_EFFORT_LABEL =
-  TUTOR_EFFORTS.find((effort) => effort.id === DEFAULT_TUTOR_EFFORT)?.label ?? "Medium";
-
-/** Turns an effort label or id from the client into a real effort. */
-export function readTutorEffort(value?: string | null): TutorEffort {
-  const key = (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-  const fallback = TUTOR_EFFORTS.find((effort) => effort.id === DEFAULT_TUTOR_EFFORT)!;
-  if (!key) return fallback;
-  return (
-    TUTOR_EFFORTS.find(
-      (effort) => effort.id === key || effort.label.toLowerCase() === key,
-    ) ?? fallback
-  );
-}
-
-/** Applies an effort's budget and temperature to a tier. */
-export function applyTutorEffort(tier: TutorTier, effort: TutorEffort): TutorTier {
-  const maxTokens = Math.min(
-    4000,
-    Math.max(400, Math.round(tier.maxTokens * effort.budgetScale)),
-  );
-  const temperature = Math.min(1, Math.max(0, tier.temperature + effort.temperatureShift));
-  return { ...tier, maxTokens, temperature };
 }
 
 /**

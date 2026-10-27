@@ -1,5 +1,6 @@
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import { SkeletonRows } from "@/components/Skeletons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Meter, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,8 +94,8 @@ function SetRow({ set }: { set: SetSummary }) {
             <p className="font-medium text-brand-ink">
               {set.pace
                 ? `${set.pace.daysLeft}d to exam`
-                : set.lastQuizTotal
-                  ? `${set.lastQuizScore}/${set.lastQuizTotal} last quiz`
+                : set.quizTotal > 0
+                  ? `${set.quizAnswered}/${set.quizTotal} quiz answered`
                   : "No quiz yet"}
             </p>
             <p className="mt-0.5">
@@ -153,9 +154,18 @@ export function SetLibrary({ onCreate }: { onCreate: () => void }) {
           <Layers3 className="size-4 text-brand-sky" aria-hidden />
           Your study sets
         </h2>
-        <span className="text-[0.74rem] font-semibold tabular-nums text-muted-foreground">
-          {sets?.length ?? 0}
-        </span>
+        {/* A count is never shown before it is known: the first paint shows a
+            placeholder chip rather than a confident "0". */}
+        {sets === undefined ? (
+          <Skeleton
+            aria-hidden
+            className="h-3.5 w-6 rounded-full bg-border"
+          />
+        ) : (
+          <span className="text-[0.74rem] font-semibold tabular-nums text-muted-foreground">
+            {sets.length}
+          </span>
+        )}
         <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
         {(sets?.length ?? 0) > 0 && (
           <Input

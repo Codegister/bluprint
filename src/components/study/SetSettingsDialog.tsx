@@ -18,6 +18,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { EASE, EASE_EXIT } from "@/components/motion/Motion";
+import {
+  BUILD_DEFAULTS,
+  BUILD_MAX,
+  BUILD_MIN,
+} from "@/convex/lib/buildDefaults";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
@@ -56,9 +61,15 @@ export function SetSettingsDialog({
   const [course, setCourse] = useState(set.course ?? "");
   const [examBoard, setExamBoard] = useState(set.examBoard ?? "");
   const [level, setLevel] = useState(set.level ?? "");
-  const [cardCount, setCardCount] = useState(set.targetCardCount ?? 20);
-  const [quizCount, setQuizCount] = useState(set.targetQuizCount ?? 10);
-  const [examCount, setExamCount] = useState(set.targetExamCount ?? 4);
+  const [cardCount, setCardCount] = useState(
+    set.targetCardCount ?? BUILD_DEFAULTS.cards,
+  );
+  const [quizCount, setQuizCount] = useState(
+    set.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+  );
+  const [examCount, setExamCount] = useState(
+    set.targetExamCount ?? BUILD_DEFAULTS.exam,
+  );
   const [examDate, setExamDate] = useState(set.examDate ?? "");
   const [saving, setSaving] = useState<"save" | "rebuild" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,9 +83,9 @@ export function SetSettingsDialog({
     setCourse(set.course ?? "");
     setExamBoard(set.examBoard ?? "");
     setLevel(set.level ?? "");
-    setCardCount(set.targetCardCount ?? 20);
-    setQuizCount(set.targetQuizCount ?? 10);
-    setExamCount(set.targetExamCount ?? 4);
+    setCardCount(set.targetCardCount ?? BUILD_DEFAULTS.cards);
+    setQuizCount(set.targetQuizCount ?? BUILD_DEFAULTS.quiz);
+    setExamCount(set.targetExamCount ?? BUILD_DEFAULTS.exam);
     setExamDate(set.examDate ?? "");
     setError(null);
   }, [
@@ -297,8 +308,7 @@ export function SetSettingsDialog({
           <div className="mt-5 rounded-2xl border border-border bg-[#FCFCFD] p-3.5">
             <p className="text-xs font-semibold text-brand-ink">Material to build</p>
             <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-              1–100 of each. A rebuild uses these counts, and Bluprint stops at the
-              most the notes can support.
+              {`${BUILD_MIN}–${BUILD_MAX} of each. A rebuild uses these counts, and Bluprint says so when the notes can only support fewer: “Built 6 of 10 because the notes only support 6.”`}
             </p>
             <div className="rise-stagger mt-3 grid gap-3 sm:grid-cols-3">
               {[
@@ -319,8 +329,8 @@ export function SetSettingsDialog({
                   </span>
                   <input
                     type="range"
-                    min={1}
-                    max={100}
+                    min={BUILD_MIN}
+                    max={BUILD_MAX}
                     step={1}
                     value={control.value}
                     disabled={saving !== null}

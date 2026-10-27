@@ -8,6 +8,7 @@ import {
   query,
   type MutationCtx,
 } from "./_generated/server";
+import { BUILD_DEFAULTS } from "./lib/buildDefaults";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner, requireVerifiedUser } from "./lib/authorization";
 import {
@@ -564,9 +565,9 @@ export const createTopicSet = mutation({
       cardCount: 0,
       quizCount: 0,
       examCount: 0,
-      targetCardCount: 20,
-      targetQuizCount: 10,
-      targetExamCount: 4,
+      targetCardCount: BUILD_DEFAULTS.cards,
+      targetQuizCount: BUILD_DEFAULTS.quiz,
+      targetExamCount: BUILD_DEFAULTS.exam,
       knownCount: 0,
       updatedAt: now,
     });

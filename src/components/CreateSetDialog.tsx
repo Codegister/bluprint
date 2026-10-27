@@ -12,6 +12,13 @@ import { EASE, EASE_EXIT } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
+import {
+  BUILD_DEFAULTS,
+  BUILD_MAX,
+  BUILD_MIN,
+} from "@/convex/lib/buildDefaults";
+import { Input } from "@/components/ui/input";
+import { titleFromSource } from "@/convex/lib/titles";
 import { compressImage, extractVideoFrames } from "@/lib/media";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -48,9 +55,12 @@ const dropzoneClass =
 export function CreateSetDialog({
   open,
   onOpenChange,
+  initialText,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Notes carried over from the landing hero, used as the pasted source. */
+  initialText?: string;
 }) {
   const navigate = useNavigate();
   const ai = useQuery(api.settings.aiStatus);
@@ -62,12 +72,17 @@ export function CreateSetDialog({
   const createTopicSet = useMutation(api.courses.createTopicSet);
 
   const [mode, setMode] = useState<Mode>("photos");
+  // Optional, and named inline: leaving it empty lets the generator title the
+  // set with a short topic name after the first build.
+  const [name, setName] = useState("");
   const [images, setImages] = useState<ImageDraft[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [text, setText] = useState("");
-  const [cardCount, setCardCount] = useState(20);
-  const [quizCount, setQuizCount] = useState(10);
-  const [examCount, setExamCount] = useState(4);
+  // The one build config the product quotes everywhere (hero copy, pathway
+  // sets, the edit dialog and this one), so the numbers never disagree.
+  const [cardCount, setCardCount] = useState<number>(BUILD_DEFAULTS.cards);
+  const [quizCount, setQuizCount] = useState<number>(BUILD_DEFAULTS.quiz);
+  const [examCount, setExamCount] = useState<number>(BUILD_DEFAULTS.exam);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -112,12 +127,20 @@ export function CreateSetDialog({
       openedRef.current = false;
       return;
     }
+    // Notes typed on the landing hero arrive here: they are the pasted source,
+    // so the dialog opens on the paste tab with the text already in place.
+    if (initialText && initialText.trim().length >= 40) {
+      openedRef.current = true;
+      setMode("text");
+      setText(initialText);
+      return;
+    }
     if (openedRef.current || courseRows === undefined) return;
     openedRef.current = true;
     if (courseRows.some((course) => course.status === "ready")) {
       setMode("course");
     }
-  }, [open, courseRows]);
+  }, [open, courseRows, initialText]);
 
   const clearMedia = () => {
     previewsRef.current.forEach((preview) => URL.revokeObjectURL(preview));
@@ -129,9 +152,10 @@ export function CreateSetDialog({
   const reset = () => {
     clearMedia();
     setText("");
-    setCardCount(20);
-    setQuizCount(10);
-    setExamCount(4);
+    setName("");
+    setCardCount(BUILD_DEFAULTS.cards);
+    setQuizCount(BUILD_DEFAULTS.quiz);
+    setExamCount(BUILD_DEFAULTS.exam);
     setMode("photos");
     setStep("");
     setError(null);
@@ -294,19 +318,22 @@ export function CreateSetDialog({
         sourceLabel = "Pasted notes";
       }
 
+      // A short, whole-word name derived from the upload, used until the
+      // generator replaces it with a topic title after the first build.
       const fallbackTitle =
         mode === "video" && videoFile
           ? titleFromFile(videoFile.name)
           : mode === "photos" && images[0]
             ? titleFromFile(images[0].file.name)
-            : text.trim().split("\n")[0]?.slice(0, 60) ?? "Study set";
+            : titleFromSource(notes) || "Study set";
+      const typedName = name.trim();
 
       setStep("Saving set…");
-      // The name, course and exam context are no longer asked for here: the set
-      // is named after its source file or first line, and the whole set can be
-      // renamed or re-tagged later from the set page.
+      // The course and exam context are still tagged afterwards; the name can be
+      // typed here or changed from the set header at any time.
       const setId = await createSet({
-        title: fallbackTitle || "New set",
+        title: typedName || fallbackTitle || "New set",
+        titleSource: typedName ? "user" : "auto",
         notes,
         sourceType,
         sourceLabel,
@@ -368,6 +395,27 @@ export function CreateSetDialog({
                 owner to add it before compiling a set.
               </p>
             </motion.div>
+          )}
+
+          {/* Optional inline name. Empty means Bluprint titles the set itself
+              with a short topic name once the first build finishes. */}
+          {mode !== "course" && (
+            <label className="mb-4 block">
+              <span className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-chrome-7">
+                Name (optional)
+              </span>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                disabled={isLoading}
+                maxLength={60}
+                placeholder="Photosynthesis"
+                className="mt-1 h-10 rounded-xl border-border bg-card text-sm font-medium text-brand-ink shadow-none focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
+              />
+              <span className="mt-1 block text-[0.7rem] text-muted-foreground">
+                Leave it empty and Bluprint names the set from the material.
+              </span>
+            </label>
           )}
 
           <Tabs
@@ -644,9 +692,7 @@ export function CreateSetDialog({
               </span>
             </summary>
             <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-              Choose anything from 1 to 100 of each. If your notes cannot support
-              the number, Bluprint builds the maximum it can and explains why on
-              the set page.
+              {`Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. If your notes cannot support the number, Bluprint says so on the set page in one sentence: “Built 6 of 10 because the notes only support 6.”`}
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -679,8 +725,8 @@ export function CreateSetDialog({
                   </span>
                   <input
                     type="range"
-                    min={1}
-                    max={100}
+                    min={BUILD_MIN}
+                    max={BUILD_MAX}
                     step={1}
                     value={control.value}
                     disabled={isLoading}
@@ -689,8 +735,8 @@ export function CreateSetDialog({
                     className="mt-2 w-full cursor-pointer accent-chrome-6"
                   />
                   <span className="flex justify-between text-[0.62rem] font-medium text-muted-foreground">
-                    <span>1</span>
-                    <span>100</span>
+                    <span>{BUILD_MIN}</span>
+                    <span>{BUILD_MAX}</span>
                   </span>
                 </label>
               ))}

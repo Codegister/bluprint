@@ -206,52 +206,6 @@ function CloseIcon() {
   );
 }
 
-function DynamicBarsIcon({ level }: { level: string }) {
-  const isMediumOrHigh = level === "Medium" || level === "Max Effort";
-  const isHigh = level === "Max Effort";
-
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect
-        x="1.5"
-        y="8"
-        width="2.5"
-        height="4.5"
-        rx="1"
-        fill="currentColor"
-        className="transition-opacity duration-300"
-        opacity={1}
-      />
-      <rect
-        x="5.75"
-        y="5"
-        width="2.5"
-        height="7.5"
-        rx="1"
-        fill="currentColor"
-        className="transition-opacity duration-300"
-        opacity={isMediumOrHigh ? 1 : 0.3}
-      />
-      <rect
-        x="10"
-        y="2"
-        width="2.5"
-        height="10.5"
-        rx="1"
-        fill="currentColor"
-        className="transition-opacity duration-300"
-        opacity={isHigh ? 1 : 0.3}
-      />
-    </svg>
-  );
-}
-
 // ----------------------------------------------------------------------
 // Attachment Thumbnail
 // ----------------------------------------------------------------------
@@ -537,7 +491,7 @@ function readRecording(blob: Blob): Promise<string> {
 export interface PromptInputProps {
   onSubmit?: (
     value: string,
-    meta: { model: string; effort: string; attachments: File[] },
+    meta: { model: string; attachments: File[] },
   ) => void;
   placeholder?: string;
   className?: string;
@@ -548,7 +502,6 @@ export interface PromptInputProps {
    * reply") and an icon name. Icons are drawn here, never fetched.
    */
   modelDetails?: Record<string, { tagline?: string; icon?: string }>;
-  efforts?: string[];
   defaultValue?: string;
   value?: string;
   onChange?: (value: string) => void;
@@ -576,7 +529,6 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       models = ["NVIDIA"],
       modelIcons: propModelIcons = {},
       modelDetails = {},
-      efforts = ["Low", "Medium", "Max Effort"],
       defaultValue = "",
       value: controlledValue,
       onChange,
@@ -591,7 +543,6 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     const [localValue, setLocalValue] = useState(defaultValue);
     const [selectedModel, setSelectedModel] = useState(models[0]);
     const [modelIcons, setModelIcons] = useState<Record<string, string>>(propModelIcons);
-    const [effortIndex, setEffortIndex] = useState(1);
     const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
 
     // Rows grow when a model carries a tagline, so the moving highlight follows
@@ -1123,17 +1074,12 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     const handleSubmit = () => {
       if (value.trim() === "" && !hasAttachments) return;
       setIsSmoothResize(false);
-      onSubmit?.(value, { model: selectedModel, effort: efforts[effortIndex], attachments: attachments.map((a) => a.file) });
+      onSubmit?.(value, { model: selectedModel, attachments: attachments.map((a) => a.file) });
       handleValueChange("");
       attachments.forEach((a) => URL.revokeObjectURL(a.url));
       setAttachments([]);
       setExpanded(false);
       setIsModelSelectOpen(false);
-    };
-
-    const cycleEffort = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setEffortIndex((prev) => (prev + 1) % efforts.length);
     };
 
     const openFileChooser = (e: React.MouseEvent) => {
@@ -1474,24 +1420,6 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                   </div>
                 </div>
               </div>
-
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={cycleEffort}
-                // The bars are a real setting: the label is sent with the question
-                // and changes how long and how deep the answer is.
-                title={`Answer effort: ${efforts[effortIndex]}. Click to cycle ${efforts.join(" → ")}.`}
-                aria-label={`Answer effort. Current: ${efforts[effortIndex]}. Click to change.`}
-                className="group flex items-center gap-1 rounded-full px-2 py-1 text-foreground/50 transition-all duration-200 hover:bg-accent/60 hover:text-foreground outline-none cursor-default"
-              >
-                <span className="text-brand-mint">
-                  <DynamicBarsIcon level={efforts[effortIndex]} />
-                </span>
-                <span className="text-xs font-semibold select-none transition-colors">
-                  <MorphingText text={efforts[effortIndex]} />
-                </span>
-              </button>
 
               <button
                 type="button"
