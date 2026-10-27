@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { EASE } from "@/components/motion/Motion";
+import { EASE, EASE_EXIT } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
@@ -486,7 +486,11 @@ export function CreateSetDialog({
                 key={error}
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
+                exit={{
+                  opacity: 0,
+                  y: -4,
+                  transition: { duration: 0.22, ease: EASE_EXIT },
+                }}
                 transition={{ duration: 0.25, ease: EASE }}
                 className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#C93C49]"
               >
@@ -501,7 +505,7 @@ export function CreateSetDialog({
                 key={step}
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
+                exit={{ opacity: 0, transition: { duration: 0.2, ease: EASE_EXIT } }}
                 transition={{ duration: 0.2, ease: EASE }}
                 className="mt-4 flex items-center gap-2 rounded-2xl bg-brand-panel px-3.5 py-2.5 text-xs font-medium text-muted-foreground"
               >

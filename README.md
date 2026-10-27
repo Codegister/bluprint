@@ -40,11 +40,19 @@ blur into what is behind it. The only colour is a chrome-blue action accent
 tags and active navigation. Headings are Space Grotesk and body copy is Inter. The
 backdrop is a fine engineering grid under three broad specular ribbons that travel across
 the screen at different speeds, with soft white and steel-blue reflections behind them.
-The landing hero adds an **ink-in-water** canvas: pigment plumes drift through a curl
-field, rendered from pre-built sprites so the effect stays on the compositor budget. Both
-motion layers pause when off-screen or when the tab is hidden, and fall back to a still
-frame under `prefers-reduced-motion`. The little mascot is drawn in SVG, so the app still
-needs no image assets.
+The landing hero and every signed-in screen carry an **ink-in-water** canvas: pigment
+plumes are pulled around a travelling vortex and carried by a curl field, so the ink
+visibly crosses the glass rather than sitting still. It is rendered from pre-built sprites
+so the effect stays on the compositor budget, and the app-wide layer sits above the chrome
+backdrop but below all content. Both motion layers pause when off-screen or when the tab
+is hidden, and fall back to a still frame under `prefers-reduced-motion`. The little mascot
+is drawn in SVG, so the app still needs no image assets.
+
+**Motion rules.** Every animation follows three rules, shared by the Framer helpers and
+the CSS tokens (`--ease-entrance`, `--ease-exit`, `--ease-ui`): entrances start fast and
+settle slowly, exits hold a beat and then accelerate away, and interface moves overshoot
+their target slightly before settling. Overlay openings, nav pills, hover lifts and the
+staggered card rises all draw from that same vocabulary.
 
 **Light / dark switch.** The first visit follows the operating system. The switch in the
 sidebar, mobile header, landing header and sign-in screen stores the choice in

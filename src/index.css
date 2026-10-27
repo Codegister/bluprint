@@ -6,6 +6,31 @@
    the student's choice. */
 @custom-variant dark (&:is(.dark *));
 
+/* The three motion rules, as CSS tokens so plain transitions and keyframes
+   speak the same language as the Framer helpers in components/motion/Motion.
+   1. entrance: fast to leave, slow to settle  (--ease-entrance)
+   2. exit:     slow to leave, fast to go       (--ease-exit)
+   3. interface: overshoots, then settles       (--ease-ui) */
+@theme {
+  --ease-entrance: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-ui: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Every default transition (hover lifts, colours, transforms) settles with
+     the small overshoot the interface rule asks for. */
+  --default-transition-timing-function: var(--ease-ui);
+}
+
+/* Radix and tw-animate overlays: openings overshoot into place, closings hold
+   a beat and then accelerate away. The attribute part matters because shadcn
+   spells these as variants (`data-[state=open]:animate-in`), so the literal
+   class name never appears on the element. */
+:is(.animate-in, [data-state="open"][class*="animate-in"]) {
+  --tw-ease: var(--ease-ui);
+}
+:is(.animate-out, [data-state="closed"][class*="animate-out"]) {
+  --tw-ease: var(--ease-exit);
+}
+
 /* Exposes the variables below as Tailwind utilities: font-sans, bg-card, etc. */
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -575,6 +600,16 @@
     mix-blend-mode: multiply;
   }
 
+  /* App-wide ink: one fixed layer above the chrome backdrop and below all
+     in-flow content, so the pigment moves behind every screen without ever
+     covering a card or intercepting a click. */
+  .ink-page {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
   /* A fine engineering grid: reads as the surface of a machined plate. */
   .gizmo-dots {
     position: absolute;
@@ -761,8 +796,8 @@
   /* Cards that should feel pressable. */
   .lift {
     transition:
-      transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.32s var(--ease-ui),
+      box-shadow 0.32s var(--ease-ui),
       border-color 0.28s ease,
       background-color 0.28s ease;
   }
@@ -773,7 +808,7 @@
 
   /* Stagger children as they appear, without adding wrapper elements. */
   .rise-stagger > * {
-    animation: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: rise-in 0.55s var(--ease-entrance) both;
   }
   .rise-stagger > *:nth-child(1) {
     animation-delay: 0.02s;
@@ -857,7 +892,7 @@
   }
 
   .animate-rise {
-    animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: rise-in 0.5s var(--ease-entrance) both;
   }
   .delay-1 {
     animation-delay: 0.06s;
@@ -1619,10 +1654,15 @@
   }
 }
 
+/* Interface pop: it rises past its resting size, then settles back. */
 @keyframes soft-pop {
   0% {
     opacity: 0;
-    transform: translateY(6px) scale(0.985);
+    transform: translateY(6px) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.012);
   }
   100% {
     opacity: 1;
@@ -1631,7 +1671,7 @@
 }
 
 .animate-soft-pop {
-  animation: soft-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: soft-pop 0.4s var(--ease-ui) both;
 }
 
 @keyframes caret-blink {

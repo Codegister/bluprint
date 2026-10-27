@@ -1,9 +1,10 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
+import { PageInk } from "@/components/InkInWater";
 import { Mascot } from "@/components/Mascot";
 import { SkeletonText } from "@/components/Skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
-import { enter } from "@/components/motion/Motion";
+import { EASE, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
@@ -69,6 +70,7 @@ export function RequireAuth({
     return (
       <div className="min-h-screen">
         <ChromeBackdrop intensity={0.9} />
+        <PageInk />
         <header className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
           <Brand />
           <div className="flex items-center gap-2">
@@ -91,7 +93,7 @@ export function RequireAuth({
               className="flex justify-center"
               initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
+              transition={{ duration: 0.7, ease: EASE, delay: 0.1 }}
             >
               <Mascot size={150} />
             </motion.div>

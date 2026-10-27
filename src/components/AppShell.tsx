@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
+import { PageInk } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Meter, SPRING } from "@/components/motion/Motion";
 import {
@@ -319,8 +320,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      {/* The paper wash behind every signed-in screen. */}
+      {/* The paper wash, then the ink that moves through it, behind every
+          signed-in screen. */}
       <ChromeBackdrop intensity={0.55} />
+      <PageInk intensity={0.8} />
       <motion.div
         aria-hidden
         className="chrome-progress fixed inset-x-0 top-0 z-40 h-[2px] origin-left"

@@ -21,17 +21,27 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-/** Expo-out: quick to leave, slow to settle. Used for every entrance. */
-export const EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+/**
+ * The three motion rules, in one place:
+ *
+ * 1. Entrance — start fast, end slow. Expo-out, so the element arrives
+ *    immediately and spends the rest of the curve settling.
+ * 2. Exit — start slow, end fast. Ease-in, so the element lingers a beat and
+ *    then leaves quickly rather than fading at a constant rate.
+ * 3. Interface — overshoot, then settle. A lightly underdamped spring, so a
+ *    nav pill, hover lift or tap lands just past its target and eases back.
+ */
+export const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
+export const EASE_EXIT: [number, number, number, number] = [0.7, 0, 0.84, 0];
 /** Symmetric ease for loops (drift, spin, shimmer). */
 export const EASE_LOOP: [number, number, number, number] = [0.45, 0, 0.55, 1];
 
 /** The house spring for hover/tap and layout moves. */
 export const SPRING: Transition = {
   type: "spring",
-  stiffness: 320,
-  damping: 30,
-  mass: 0.8,
+  stiffness: 380,
+  damping: 22,
+  mass: 0.9,
 };
 
 /**

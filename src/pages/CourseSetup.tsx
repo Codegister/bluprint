@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/AppShell";
-import { EASE, SPRING, enter } from "@/components/motion/Motion";
+import { EASE, EASE_EXIT, SPRING, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
@@ -686,7 +686,11 @@ export default function CourseSetup() {
           key="qualification"
           initial={{ opacity: 0, x: 16 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -16 }}
+          exit={{
+            opacity: 0,
+            x: -16,
+            transition: { duration: 0.26, ease: EASE_EXIT },
+          }}
           transition={{ duration: 0.3, ease: EASE }}
           className="mt-6 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-7"
         >
@@ -744,7 +748,11 @@ export default function CourseSetup() {
           key="subjects"
           initial={{ opacity: 0, x: 16 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -16 }}
+          exit={{
+            opacity: 0,
+            x: -16,
+            transition: { duration: 0.26, ease: EASE_EXIT },
+          }}
           transition={{ duration: 0.3, ease: EASE }}
         >
           <p className="mt-5 text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-chrome-6">

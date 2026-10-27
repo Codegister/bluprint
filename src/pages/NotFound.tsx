@@ -1,7 +1,8 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
+import { PageInk } from "@/components/InkInWater";
 import { Mascot } from "@/components/Mascot";
-import { enter } from "@/components/motion/Motion";
+import { EASE, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Link } from "react-router";
@@ -10,6 +11,7 @@ export default function NotFound() {
   return (
     <div className="flex min-h-screen flex-col">
       <ChromeBackdrop intensity={0.9} />
+      <PageInk />
       <header className="mx-auto flex h-20 w-full max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Brand />
       </header>
@@ -21,7 +23,7 @@ export default function NotFound() {
           <motion.div
             initial={{ opacity: 0, scale: 0.9, rotate: -5 }}
             animate={{ opacity: 1, scale: 1, rotate: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
+            transition={{ duration: 0.7, ease: EASE, delay: 0.1 }}
           >
             <Mascot size={140} className="mx-auto" />
           </motion.div>

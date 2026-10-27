@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
+import { PageInk } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Mascot } from "@/components/Mascot";
 import { EASE, enter } from "@/components/motion/Motion";
@@ -98,8 +99,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[1.02fr_0.98fr]">
-      {/* The paper wash. The aside carries a heavier plate of its own. */}
+      {/* The paper wash, then the ink moving through it. The aside carries a
+          heavier plate of its own. */}
       <ChromeBackdrop intensity={0.8} />
+      <PageInk intensity={0.75} />
       {/* Context panel */}
       <aside className="chrome-rail relative hidden flex-col justify-between overflow-hidden border-r border-border p-10 lg:flex xl:p-14">
         <motion.div className="relative flex items-center justify-between gap-3" {...enter(0.05)}>

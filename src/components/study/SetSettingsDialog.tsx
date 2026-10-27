@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { EASE } from "@/components/motion/Motion";
+import { EASE, EASE_EXIT } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
@@ -345,7 +345,11 @@ export function SetSettingsDialog({
                 key={error}
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
+                exit={{
+                  opacity: 0,
+                  y: -4,
+                  transition: { duration: 0.22, ease: EASE_EXIT },
+                }}
                 transition={{ duration: 0.25, ease: EASE }}
                 className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
               >

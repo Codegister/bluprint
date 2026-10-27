@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { EASE } from "@/components/motion/Motion";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/use-auth";
 import { installResizeObserverGuard } from "@/lib/resizeGuard";
@@ -213,7 +214,7 @@ function RouteFade({ children }: { children: React.ReactNode }) {
       key={screenKey}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.32, ease: EASE }}
       className="min-h-screen"
     >
       {children}

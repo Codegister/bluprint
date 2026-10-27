@@ -243,7 +243,13 @@ export function InkInWater({
       const seconds = delta / 1000;
       // Clamp the step so a tab that was asleep does not teleport every plume.
       const speed = Math.min(seconds, 1 / 24);
-      const t = time * 0.00016;
+      const t = time * 0.00022;
+
+      // A vortex centre that orbits the canvas. The tangential flow below turns
+      // plumes around it, so the field visibly stirs instead of drifting on a
+      // near-straight path.
+      const vortexX = width * (0.5 + Math.sin(t * 1.6) * 0.3);
+      const vortexY = height * (0.5 + Math.cos(t * 1.2) * 0.28);
 
       for (const puff of puffs) {
         puff.life += delta * 0.06;
@@ -261,19 +267,31 @@ export function InkInWater({
         // A curl field: the two sine terms push neighbouring plumes in
         // slightly different directions, which is what makes the ink fold and
         // swirl instead of drifting in straight lines.
-        const flowX =
-          Math.sin(puff.y * 0.0045 + t * 3.4 + puff.seed) * 18 +
-          Math.cos(puff.y * 0.0018 - t * 1.7) * 9;
-        const flowY =
-          Math.cos(puff.x * 0.0038 - t * 2.6 + puff.seed * 1.6) * 15 +
-          Math.sin(puff.x * 0.0015 + t * 1.2) * 7;
+        let flowX =
+          Math.sin(puff.y * 0.0045 + t * 3.4 + puff.seed) * 26 +
+          Math.cos(puff.y * 0.0018 - t * 1.7) * 12;
+        let flowY =
+          Math.cos(puff.x * 0.0038 - t * 2.6 + puff.seed * 1.6) * 22 +
+          Math.sin(puff.x * 0.0015 + t * 1.2) * 10;
 
-        puff.vx = puff.vx * 0.985 + flowX * speed * 0.012;
-        puff.vy = puff.vy * 0.985 + flowY * speed * 0.012;
+        // Tangential pull around the moving vortex, strongest near its centre
+        // and fading out with distance. This is the part that makes the ink
+        // travel around the screen rather than sit under the headline.
+        const dx = puff.x - vortexX;
+        const dy = puff.y - vortexY;
+        const distance = Math.hypot(dx, dy) + 1;
+        const pull = Math.min(1, 320 / distance);
+        flowX += (-dy / distance) * 40 * pull;
+        flowY += (dx / distance) * 40 * pull;
+
+        puff.vx = puff.vx * 0.986 + flowX * speed * 0.02;
+        puff.vy = puff.vy * 0.986 + flowY * speed * 0.02;
         puff.radius += puff.grow * delta * 0.06;
 
-        puff.x += puff.vx * speed * 8;
-        puff.y += puff.vy * speed * 8;
+        // A firm multiplier: the plumes should be seen crossing the glass, not
+        // inferred from a tint that barely changes.
+        puff.x += puff.vx * speed * 30;
+        puff.y += puff.vy * speed * 30;
       }
 
       render();
@@ -384,6 +402,22 @@ export function InkInWater({
   return (
     <div ref={holderRef} aria-hidden className={cn("ink-water", className)}>
       <canvas ref={canvasRef} />
+    </div>
+  );
+}
+
+/**
+ * The app-wide ink layer.
+ *
+ * Fixed above the chrome backdrop and below every in-flow surface, so each
+ * screen gets the same moving pigment without it covering text or catching a
+ * click. Signed-in screens mount it beside the backdrop in the app shell; the
+ * public screens mount it next to their own backdrop.
+ */
+export function PageInk({ intensity = 0.9 }: { intensity?: number }) {
+  return (
+    <div aria-hidden className="ink-page">
+      <InkInWater intensity={intensity} />
     </div>
   );
 }
