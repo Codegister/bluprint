@@ -11,24 +11,67 @@ import { useEffect, useRef } from "react";
  * drop of ink is dropped into a glass.
  *
  * The canvas uses `mix-blend-mode: multiply` in the light theme (dye on paper)
- * and `screen` in the dark theme (light in water); both are set in index.css.
+ * and `screen` in the dark theme (ink blooming in dark water); both are set in
+ * index.css. Each theme gets its own pigment set: pale, light dyes on paper,
+ * and deep, dark inks that lift off the near-black page. The sprites are
+ * re-rendered when the theme class changes, so a toggle recolours the plumes
+ * in place rather than leaving a light-mode wash on a dark screen.
+ *
  * Decorative only: the element is aria-hidden, the loop pauses when the graphic
  * scrolls out of view or the tab is hidden, and a static frame is drawn for
  * visitors who ask for reduced motion.
  */
 
 type Pigment = { rgb: string; weight: number };
+type Theme = "light" | "dark";
 
-// The same highlighter family as the rest of the app, at ink strength.
-const PIGMENTS: Pigment[] = [
-  { rgb: "143, 174, 24", weight: 3 }, // lime
-  { rgb: "125, 91, 214", weight: 2 }, // lilac
-  { rgb: "47, 111, 168", weight: 2 }, // sky
-  { rgb: "47, 122, 108", weight: 1 }, // teal
-  { rgb: "168, 87, 42", weight: 1 }, // peach
-];
+type Palette = {
+  key: Theme;
+  /** Multiplies plume opacity; multiply blending needs a firmer hand. */
+  strength: number;
+  pigments: Pigment[];
+};
 
-const MAX_PUFFS = 150;
+/**
+ * Light theme: pale highlighter dye. These sit on white paper with multiply, so
+ * they need to stay light or the hero turns into a colour block.
+ * Dark theme: deep ink (indigo, forest, teal, plum, umber). Screen blending
+ * lifts them off the near-black sheet without turning them into pale fog.
+ * Both lists keep the same order and weights, so a puff's sprite index stays
+ * valid across a theme switch.
+ */
+const PALETTES: Record<Theme, Palette> = {
+  light: {
+    key: "light",
+    strength: 1.5,
+    pigments: [
+      { rgb: "164, 206, 74", weight: 3 }, // pale lime
+      { rgb: "158, 132, 235", weight: 2 }, // pale lilac
+      { rgb: "110, 172, 222", weight: 2 }, // pale sky
+      { rgb: "104, 190, 174", weight: 1 }, // pale teal
+      { rgb: "230, 158, 104", weight: 1 }, // pale peach
+    ],
+  },
+  dark: {
+    key: "dark",
+    strength: 1.45,
+    pigments: [
+      { rgb: "26, 92, 58", weight: 3 }, // deep forest
+      { rgb: "54, 40, 120", weight: 2 }, // deep indigo
+      { rgb: "16, 74, 108", weight: 2 }, // deep petrol
+      { rgb: "12, 86, 78", weight: 1 }, // deep teal
+      { rgb: "96, 52, 28", weight: 1 }, // deep umber
+    ],
+  },
+};
+
+function currentTheme(): Theme {
+  return document.documentElement.classList.contains("dark")
+    ? "dark"
+    : "light";
+}
+
+const MAX_PUFFS = 220;
 
 type Puff = {
   x: number;
@@ -44,20 +87,20 @@ type Puff = {
   sprite: number;
 };
 
-/** Picks a pigment by weight, so lime appears most often. */
-function pickPigment(): number {
-  const total = PIGMENTS.reduce((sum, pigment) => sum + pigment.weight, 0);
+/** Picks a pigment by weight, so the first (lime / forest) appears most often. */
+function pickPigment(pigments: Pigment[]): number {
+  const total = pigments.reduce((sum, pigment) => sum + pigment.weight, 0);
   let roll = Math.random() * total;
-  for (let index = 0; index < PIGMENTS.length; index += 1) {
-    roll -= PIGMENTS[index].weight;
+  for (let index = 0; index < pigments.length; index += 1) {
+    roll -= pigments[index].weight;
     if (roll <= 0) return index;
   }
   return 0;
 }
 
 /** A soft radial sprite: one per pigment, reused for every plume. */
-function makeSprites(): HTMLCanvasElement[] {
-  return PIGMENTS.map(({ rgb }) => {
+function makeSprites(pigments: Pigment[]): HTMLCanvasElement[] {
+  return pigments.map(({ rgb }) => {
     const size = 128;
     const sprite = document.createElement("canvas");
     sprite.width = size;
@@ -66,9 +109,9 @@ function makeSprites(): HTMLCanvasElement[] {
     if (!ctx) return sprite;
     const half = size / 2;
     const gradient = ctx.createRadialGradient(half, half, 0, half, half, half);
-    gradient.addColorStop(0, `rgba(${rgb}, 0.95)`);
-    gradient.addColorStop(0.32, `rgba(${rgb}, 0.55)`);
-    gradient.addColorStop(0.62, `rgba(${rgb}, 0.2)`);
+    gradient.addColorStop(0, `rgba(${rgb}, 1)`);
+    gradient.addColorStop(0.32, `rgba(${rgb}, 0.62)`);
+    gradient.addColorStop(0.62, `rgba(${rgb}, 0.24)`);
     gradient.addColorStop(1, `rgba(${rgb}, 0)`);
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -78,7 +121,12 @@ function makeSprites(): HTMLCanvasElement[] {
   });
 }
 
-function makePuff(width: number, height: number, initial: boolean): Puff {
+function makePuff(
+  width: number,
+  height: number,
+  initial: boolean,
+  palette: Palette,
+): Puff {
   // Emitters sit along the edges and across the middle, so the plumes look
   // like they were released into the water rather than laid out in a grid.
   const emitter = Math.random();
@@ -95,21 +143,23 @@ function makePuff(width: number, height: number, initial: boolean): Puff {
     y = height * (0.65 + Math.random() * 0.3);
   }
 
-  const maxLife = 320 + Math.random() * 420;
+  const maxLife = 360 + Math.random() * 480;
   return {
     x,
     y,
     vx: (Math.random() - 0.5) * 0.5,
     vy: (Math.random() - 0.5) * 0.4,
-    radius: 26 + Math.random() * 54,
-    grow: 0.09 + Math.random() * 0.18,
+    // Larger blooms than before: the plumes should be readable as ink from
+    // across the page, not only as a faint tint under the headline.
+    radius: 32 + Math.random() * 66,
+    grow: 0.11 + Math.random() * 0.2,
     // Pre-seeded plumes start part-way through their life so the first frame
     // already shows a developed bloom.
     life: initial ? Math.random() * maxLife : 0,
     maxLife,
     seed: Math.random() * Math.PI * 2,
-    alpha: 0.05 + Math.random() * 0.07,
-    sprite: pickPigment(),
+    alpha: 0.07 + Math.random() * 0.09,
+    sprite: pickPigment(palette.pigments),
   };
 }
 
@@ -134,7 +184,11 @@ export function InkInWater({
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    const sprites = makeSprites();
+    // The page theme decides both the pigments and how firmly they are laid
+    // down. Reading the class (rather than a media query) follows a manual
+    // toggle as well as the OS default.
+    let palette = PALETTES[currentTheme()];
+    let sprites = makeSprites(palette.pigments);
 
     let width = 0;
     let height = 0;
@@ -156,7 +210,7 @@ export function InkInWater({
         // Fade in on release and out as the pigment disperses.
         const progress = Math.min(1, puff.life / puff.maxLife);
         const envelope = Math.sin(Math.PI * progress) ** 1.35;
-        const alpha = puff.alpha * envelope;
+        const alpha = puff.alpha * envelope * palette.strength;
         if (alpha <= 0.002) continue;
 
         // Two wake points along the velocity vector stretch the puff into a
@@ -200,7 +254,7 @@ export function InkInWater({
           puff.y < -puff.radius * 2 ||
           puff.y > height + puff.radius * 2
         ) {
-          Object.assign(puff, makePuff(width, height, false));
+          Object.assign(puff, makePuff(width, height, false, palette));
           continue;
         }
 
@@ -255,12 +309,12 @@ export function InkInWater({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const target = Math.round(
-        Math.min(MAX_PUFFS, Math.max(60, (width * height) / 12000)) *
+        Math.min(MAX_PUFFS, Math.max(80, (width * height) / 9000)) *
           Math.max(0.35, Math.min(1.4, intensity)),
       );
       if (puffs.length > target) puffs = puffs.slice(0, target);
       while (puffs.length < target) {
-        puffs.push(makePuff(width, height, true));
+        puffs.push(makePuff(width, height, true, palette));
       }
       // The canvas is cleared by resize, so a reduced-motion visitor still gets
       // a composition rather than a blank layer.
@@ -277,6 +331,20 @@ export function InkInWater({
     const observer = new ResizeObserver(resize);
     observer.observe(holder);
     resize();
+
+    // Re-ink on a theme change. The puffs keep their positions and sprite
+    // indices; only the pigment behind each index changes.
+    const themeObserver = new MutationObserver(() => {
+      const next = PALETTES[currentTheme()];
+      if (next.key === palette.key) return;
+      palette = next;
+      sprites = makeSprites(palette.pigments);
+      if (width > 0) render();
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
 
     let intersection: IntersectionObserver | null = null;
     if (!reducedMotion) {
@@ -307,6 +375,7 @@ export function InkInWater({
     return () => {
       stop();
       observer.disconnect();
+      themeObserver.disconnect();
       intersection?.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
     };

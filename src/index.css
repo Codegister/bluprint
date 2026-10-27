@@ -1185,9 +1185,11 @@
   .dark .gizmo-blob-peach {
     background-color: rgba(110, 92, 156, 0.24);
   }
+  /* Deep ink on a near-black sheet: screen lifts each plume just enough to
+     read as pigment, and the higher opacity keeps it from disappearing. */
   .dark .ink-water canvas {
     mix-blend-mode: screen;
-    opacity: 0.62;
+    opacity: 0.9;
   }
   .dark .subject-tile {
     background-image:
