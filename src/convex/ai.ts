@@ -66,12 +66,22 @@ import {
 } from "./lib/speechConfig";
 import { searchWeb, webResultsBlock, type WebResult } from "./lib/webSearch";
 import {
+  AI_RATE_LIMIT_MESSAGE,
+  AI_UNAVAILABLE_MESSAGE,
+  DICTATION_UNAVAILABLE_MESSAGE,
+  TUTOR_UNAVAILABLE_MESSAGE,
+} from "./lib/aiMessages";
+import { incidentKind } from "./lib/incidentRules";
+import { noteLimitMessage, withinNoteLimit } from "./lib/noteLimits";
+import {
   MAX_NOTES_CHARS,
   NVIDIA_CHAT_URL,
   NVIDIA_TEXT_MODEL,
   NVIDIA_VISION_MODEL,
   readNvidiaKeys,
   readTutorTier,
+  textModelCandidates,
+  visionModelCandidates,
   type TutorTier,
 } from "./lib/nvidiaConfig";
 import { buildPaperCover } from "./lib/paperFormat";
@@ -93,7 +103,7 @@ type ChatMessage = {
   content: string | ContentPart[];
 };
 
-type GeneratedCard = { front: string; back: string };
+type GeneratedCard = { front: string; back: string; beyondNotes?: boolean };
 type QuizKind = "mcq" | "cloze" | "typed";
 type GeneratedQuiz = {
   question: string;
@@ -106,12 +116,16 @@ type GeneratedQuiz = {
   answer?: string;
   /** Dictation and paraphrases the marker should also accept. */
   acceptedAnswers?: string[];
+  /** True when the item uses a fact the student's notes do not contain. */
+  beyondNotes?: boolean;
 };
 type GeneratedExam = {
   question: string;
   marks: number;
   modelAnswer: string;
   markingGuide: string[];
+  /** True when the item uses a fact the student's notes do not contain. */
+  beyondNotes?: boolean;
   /** Set for past papers: whether the answer is marked by points or levels. */
   marking?: "points" | "levels";
   // Past papers only: the label the board prints ("1 (a)", "0 1 . 1"), the
@@ -139,9 +153,9 @@ type GeneratedExam = {
 function resolveNvidiaKeys(): string[] {
   const keys = readNvidiaKeys();
   if (keys.length === 0) {
-    throw new Error(
-      "NVIDIA_API_KEY is not set on this deployment. Add one or more keys to the server environment and retry.",
-    );
+    // Internal detail stays in the log; the student gets a sentence.
+    console.error("[ai] no NVIDIA_API_KEY is configured on this deployment");
+    throw new Error(AI_UNAVAILABLE_MESSAGE);
   }
   return keys;
 }
@@ -166,9 +180,8 @@ let keyCursor = 0;
 function nextApiKey(keys: string[]): string {
   const active = keys.filter((key) => !rejectedKeys.has(key));
   if (active.length === 0) {
-    throw new Error(
-      "All NVIDIA_API_KEY values on this deployment were rejected. Update the server environment and retry.",
-    );
+    console.error("[ai] every NVIDIA_API_KEY on this deployment was rejected");
+    throw new Error(AI_UNAVAILABLE_MESSAGE);
   }
 
   const now = Date.now();
@@ -186,29 +199,139 @@ function nextApiKey(keys: string[]): string {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** A short, student-safe sentence for an upstream HTTP status. */
 function friendlyHttpError(status: number): string {
-  if (status === 401 || status === 403) {
-    return "NVIDIA rejected the API key pool. Check NVIDIA_API_KEY on the deployment.";
-  }
-  if (status === 400) {
-    return "NVIDIA rejected the request. Retry once, then check NVIDIA_TEXT_MODEL on the deployment if it persists.";
-  }
-  if (status === 402) {
-    return "Your NVIDIA account has no available credits for this request.";
-  }
-  if (status === 404) {
-    return "The configured NVIDIA model is not available. Try setting NVIDIA_TEXT_MODEL or NVIDIA_VISION_MODEL in the deployment environment.";
-  }
-  if (status === 410) {
-    return "This NVIDIA model has reached end of life. Set NVIDIA_TEXT_MODEL or NVIDIA_VISION_MODEL to a model from build.nvidia.com and retry.";
-  }
-  if (status === 429) {
-    return "The available NVIDIA API keys are rate-limited right now. Wait about a minute, then retry.";
-  }
+  if (status === 429) return AI_RATE_LIMIT_MESSAGE;
   if (status >= 500) {
-    return "NVIDIA's service is having trouble right now. Try again in a moment.";
+    return "The AI service is having trouble right now. Try again in a moment.";
   }
-  return `NVIDIA could not complete the request (HTTP ${status}). Please retry.`;
+  return AI_UNAVAILABLE_MESSAGE;
+}
+
+/**
+ * The technical meaning of a status, for the server log only. This is the half
+ * that names models and causes; it must never reach the browser.
+ */
+function providerDetail(status: number): string {
+  if (status === 401 || status === 403) return "provider rejected the API key";
+  if (status === 400) return "provider rejected the request";
+  if (status === 402) return "provider account has no credits";
+  if (status === 404) return "model not available to this account";
+  if (status === 410) return "model reached end of life";
+  if (status === 429) return "provider rate limit";
+  if (status >= 500) return "provider server error";
+  return "provider error";
+}
+
+/**
+ * An upstream AI failure that also carries what the server log and the health
+ * alert need. `message` is always a student-safe sentence; `status` and `model`
+ * exist for the log and the incident table, never for the browser.
+ */
+class ProviderError extends Error {
+  readonly status: number;
+  readonly model: string;
+
+  constructor(message: string, status: number, model: string) {
+    super(message);
+    this.name = "ProviderError";
+    this.status = status;
+    this.model = model;
+  }
+}
+
+/** Builds the provider failure for a status, with the student-safe message. */
+function providerError(
+  status: number,
+  model: string,
+  message?: string,
+): ProviderError {
+  return new ProviderError(message ?? friendlyHttpError(status), status, model);
+}
+
+/**
+ * Records one sanitised provider failure, so a retired model or an outage is
+ * visible on the deployment instead of only to students. Called from the catch
+ * block of every action that talks to the AI provider.
+ */
+async function recordProviderIncident(
+  ctx: ActionCtx,
+  purpose: string,
+  error: unknown,
+): Promise<void> {
+  // Only provider failures are reported: a student's own validation error is
+  // not an incident.
+  const status = error instanceof ProviderError ? error.status : null;
+  const model = error instanceof ProviderError ? error.model : "";
+  if (status === null) return;
+  try {
+    await ctx.runMutation(internal.incidents.record, {
+      purpose,
+      model,
+      status,
+      kind: incidentKind(status),
+    });
+  } catch (recordError) {
+    // Health reporting must never break the feature it is reporting on.
+    console.error("Could not record an AI incident", recordError);
+  }
+}
+
+/**
+ * Runs one AI device (marking, explaining) and turns a provider failure into a
+ * single friendly sentence, recording the incident on the way. The student's
+ * own validation errors (an empty answer, a bad id) pass through unchanged
+ * because they are written for a student already.
+ */
+async function withProviderGuard<T>(
+  ctx: ActionCtx,
+  purpose: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof ProviderError) {
+      await recordProviderIncident(ctx, purpose, error);
+      throw new Error(AI_UNAVAILABLE_MESSAGE);
+    }
+    throw error;
+  }
+}
+
+/**
+ * When a model answers 404 or 410 it is treated as gone for a while and the
+ * next candidate is used instead. The timer is what lets a republished model
+ * or a corrected deployment come back without a redeploy.
+ */
+const MODEL_RETRY_MS = 30 * 60 * 1000;
+const unavailableModels = new Map<string, number>();
+
+/** Whether a fallback model is out of its end-of-life cooling window. */
+function modelUsable(model: string, now: number): boolean {
+  const until = unavailableModels.get(model);
+  return until === undefined || until <= now;
+}
+
+/** Logs a retired/unavailable model by name, server-side, once per call. */
+function markModelUnavailable(model: string, status: number): void {
+  console.error(
+    `[ai] model unavailable (${providerDetail(status)}, HTTP ${status}): ${model}`,
+  );
+  unavailableModels.set(model, Date.now() + MODEL_RETRY_MS);
+}
+
+/**
+ * The models one call may use: the requested model first, then the checked
+ * fallbacks. A fallback that recently reached end of life is skipped while it
+ * cools, but the requested model is always kept so a fixed deployment heals.
+ */
+function modelChain(primary: string, candidates: string[]): string[] {
+  const now = Date.now();
+  const chain = [primary, ...candidates].filter(
+    (model, index) => index === 0 || modelUsable(model, now),
+  );
+  return [...new Set(chain)];
 }
 
 /**
@@ -217,6 +340,11 @@ function friendlyHttpError(status: number): string {
  * moves on immediately; rejected keys are removed from rotation. Server and
  * network errors get a short backoff, and every failure becomes a message that
  * is safe and useful to show in the UI.
+ *
+ * If the requested model answers 404 or 410 — retired, or not installed on
+ * this account — the same request is sent to the next checked model instead of
+ * failing, which is why a model reaching end of life no longer takes a core
+ * feature down with it.
  */
 async function nvidiaChat(
   apiKeys: string[],
@@ -226,6 +354,8 @@ async function nvidiaChat(
     maxTokens: number;
     temperature?: number;
     topP?: number;
+    /** Vision prompts fall back across vision models, text across text ones. */
+    purpose?: "text" | "vision";
     /**
      * Turn off chain-of-thought. Reasoning models otherwise spend most of
      * `maxTokens` on hidden thinking and can return an empty answer, which is
@@ -238,9 +368,20 @@ async function nvidiaChat(
   },
 ): Promise<string> {
   const retries = options.retries ?? 2;
+  const models = modelChain(
+    options.model,
+    options.purpose === "vision" ? visionModelCandidates() : textModelCandidates(),
+  );
+  // Each attempt also gets a turn at the next model, so an end-of-life model
+  // costs one request rather than the whole build.
+  let modelIndex = 0;
   // Try every key at least once, with a small cap so a large pool does not
   // hold one study set open indefinitely.
-  const maxAttempts = Math.max(retries + 1, Math.min(apiKeys.length, 6));
+  const maxAttempts = Math.max(
+    retries + 1,
+    Math.min(apiKeys.length, 6),
+    Math.min(models.length, 4),
+  );
   let lastStatus: number | null = null;
   // Flipped off once if the configured model does not understand the flag, so
   // a strict model can still answer instead of failing the whole build.
@@ -248,6 +389,7 @@ async function nvidiaChat(
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const apiKey = nextApiKey(apiKeys);
+    const model = models[Math.min(modelIndex, models.length - 1)]!;
     let response: Response;
     try {
       response = await fetch(NVIDIA_CHAT_URL, {
@@ -258,7 +400,7 @@ async function nvidiaChat(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: options.model,
+          model,
           messages: options.messages,
           temperature: options.temperature ?? 0,
           top_p: options.topP ?? 1,
@@ -280,9 +422,10 @@ async function nvidiaChat(
       }
       const reason =
         error instanceof Error && error.name === "TimeoutError"
-          ? "NVIDIA took too long to respond. Please retry."
-          : "Could not reach NVIDIA. Check the deployment's network connection and retry.";
-      throw new Error(reason);
+          ? "The AI took too long to respond. Please try again."
+          : "Could not reach the AI service. Check your connection and try again.";
+      console.error(`[ai] ${providerDetail(0)} on ${model}: ${reason}`);
+      throw providerError(0, model, reason);
     }
 
     if (response.ok) {
@@ -308,12 +451,31 @@ async function nvidiaChat(
       );
       if (fallback) return fallback;
 
-      throw new Error(
-        "NVIDIA sent back an empty answer, which usually means the model used its whole token budget on reasoning. Retry the build.",
+      // An empty answer is often the model's fault, so try the next one before
+      // giving up on the request.
+      if (modelIndex < models.length - 1) {
+        modelIndex += 1;
+        continue;
+      }
+      throw providerError(
+        0,
+        model,
+        "The AI sent back an empty answer. Please try again in a moment.",
       );
     }
 
     lastStatus = response.status;
+
+    if (response.status === 404 || response.status === 410) {
+      // Retired, or never installed on this account. Move to the next model
+      // rather than failing the whole run.
+      markModelUnavailable(model, response.status);
+      if (modelIndex < models.length - 1) {
+        modelIndex += 1;
+        continue;
+      }
+      throw providerError(response.status, model);
+    }
 
     if (response.status === 429) {
       // Throttled: park this key briefly and try the next one straight away.
@@ -336,14 +498,17 @@ async function nvidiaChat(
       // and retry the same request once.
       thinkingDisabled = false;
       if (attempt < maxAttempts - 1) continue;
-      throw new Error(friendlyHttpError(response.status));
+      throw providerError(response.status, model);
     } else {
-      throw new Error(friendlyHttpError(response.status));
+      console.error(
+        `[ai] ${providerDetail(response.status)} on ${model} (HTTP ${response.status})`,
+      );
+      throw providerError(response.status, model);
     }
   }
 
-  if (lastStatus !== null) throw new Error(friendlyHttpError(lastStatus));
-  throw new Error("NVIDIA could not complete the request. Please retry.");
+  if (lastStatus !== null) throw providerError(lastStatus, models[0]!);
+  throw providerError(0, options.model);
 }
 
 // ---------------------------------------------------------------------------
@@ -548,12 +713,27 @@ function asText(value: unknown, maxLength = 2000): string {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+/**
+ * Reads the "this item uses facts outside the notes" flag.
+ *
+ * Anything other than an explicit true is treated as grounded, because the
+ * prompt already asks for grounded material: the flag exists to warn a student
+ * about the exception, not to label the rule.
+ */
+function beyondNotes(value: unknown): boolean | undefined {
+  return value === true ? true : undefined;
+}
+
 function parseCards(raw: string, limit = 12): GeneratedCard[] {
   const items = collectionItems(raw, "cards", (row) => typeof row.front === "string");
   return items
     .map((card) => {
       const row = card as Partial<GeneratedCard>;
-      return { front: asText(row.front, 400), back: asText(row.back, 1600) };
+      return {
+        front: asText(row.front, 400),
+        back: asText(row.back, 1600),
+        beyondNotes: beyondNotes(row.beyondNotes),
+      };
     })
     .filter((card) => card.front && card.back)
     .slice(0, limit);
@@ -595,7 +775,14 @@ function parseQuiz(raw: string, limit = 6): GeneratedQuiz[] {
         correctIndex >= 0 &&
         correctIndex < 4
       ) {
-        questions.push({ question, options, correctIndex, explanation, type });
+        questions.push({
+          question,
+          options,
+          correctIndex,
+          explanation,
+          type,
+          beyondNotes: beyondNotes(row.beyondNotes),
+        });
       }
       continue;
     }
@@ -620,6 +807,7 @@ function parseQuiz(raw: string, limit = 6): GeneratedQuiz[] {
       type,
       answer,
       acceptedAnswers,
+      beyondNotes: beyondNotes(row.beyondNotes),
     });
   }
   return questions.slice(0, limit);
@@ -695,6 +883,7 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
         marks,
         modelAnswer,
         markingGuide,
+        beyondNotes: beyondNotes(row.beyondNotes),
         label: optionalText(row.label, 24),
         section: optionalText(row.section, 80),
         sectionInstruction: optionalText(row.sectionInstruction, 240),
@@ -714,6 +903,29 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
 const SYSTEM_PROMPT =
   "You are Bluprint, a study assistant. Answer directly with strict JSON and no markdown fences, commentary, or extra keys. " +
   "Do not plan, reason step by step, or narrate your thinking. Do not add keys that are not asked for.";
+
+/**
+ * The rule that keeps generated material inside the student's own notes.
+ *
+ * The product promises material "grounded in your notes", and the generation
+ * prompts used to invite invention: asking for "apply a concept to a new
+ * example" produced cards about pepsin and trypsin from a 202-character note on
+ * enzymes, and about reverse osmosis from a note on osmosis alone. Students
+ * then revise facts their teacher never gave them.
+ *
+ * So: the notes are the whole source. Fewer items is the correct outcome for
+ * thin notes. The one exception is marked, not hidden — an item that needs
+ * outside knowledge is flagged `beyondNotes`, the app shows it as "Beyond your
+ * notes", and at most one item in five may be like that.
+ */
+const GROUNDING_RULES =
+  "GROUNDING: the material above is your only source. Every card and question must be answerable from it. " +
+  "Do not introduce an enzyme, drug, organism, species, example, case study, date, formula, figure or name that the material does not contain, and do not extend a concept to an example the material never mentions. " +
+  "If the material is too thin for the number asked for, write fewer items — a smaller set built from the notes is correct, and inventing extra material is not. " +
+  "If one item genuinely needs a fact the material lacks, it is allowed, but mark it with \"beyondNotes\":true (at most one item in five) so the student knows to check it against their notes.";
+
+/** Cards, quiz questions and exam questions all carry the flag the same way. */
+const BEYOND_NOTES_FIELD = ' Include "beyondNotes":true only on an item that uses a fact from outside the material.';
 
 function materialBlock(notes: string): string {
   const clipped = notes.slice(0, MAX_NOTES_CHARS);
@@ -906,13 +1118,13 @@ async function generateCards(
           role: "user",
           content:
             `${materialBlock(notes)}\n\n` +
-            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
+            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : `${GROUNDING_RULES}\n`) +
             `Create ${want} revision flashcards from this material. Cover the breadth of the material, but prioritise the niche, exam-distinguishing details a student could actually be tested on: exact figures and dates, names, formulas, precise definitions, exceptions to rules, named examples and case studies, cause-and-effect chains, and common confusions. ` +
             "Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific question. Backs must be 2-4 sentences and include the precise detail, plus a caveat where one exists. " +
             (previous
               ? `These flashcards already exist; write different, non-overlapping ones:\n${previous}\n`
               : "") +
-            'Return JSON exactly like: {"cards":[{"front":"...","back":"..."}]}',
+            `Return JSON exactly like: {"cards":[{"front":"...","back":"..."}]}${BEYOND_NOTES_FIELD}`,
         },
       ],
       maxTokens: 7000,
@@ -994,7 +1206,8 @@ async function generateQuiz(
             `${materialBlock(notes)}\n\n` +
             (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
             `Create ${want} quiz questions of increasing difficulty. Mix three kinds: roughly half multiple choice, a quarter cloze, and a quarter short typed answer. Each kind tests recall in a different way, so the quiz does not become four options to guess between. ` +
-            "Cover different parts of the material and include at least two questions that ask the student to apply a concept to a new example rather than recall a definition. " +
+            (syllabus ? "" : `${GROUNDING_RULES}\n`) +
+            "Cover different parts of the material. Where the material gives data, a worked example or a case, ask the student to apply a concept to that — not to an example the material never mentions. " +
             "A multiple-choice question needs exactly 4 plausible options and one correct index (0-3). " +
             "A cloze question is one sentence from the material with the key term replaced by ____ (four underscores) and no options. " +
             "A typed question asks for a word or short phrase and must be answerable in a few words, with no options. " +
@@ -1088,7 +1301,7 @@ async function generateExams(
           content:
             `${materialBlock(notes)}\n\n` +
             (qualification ? `This set is for ${qualification}.\n` : "") +
-            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
+            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : `${GROUNDING_RULES}\n`) +
             "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
             `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
             "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
@@ -1401,6 +1614,7 @@ async function generatePaperQuestions(
     "Each question needs a full-mark model answer and a marking guide written the way the board writes it. " +
     "If a question needs data — readings, percentages, observations — include it in a `data` object with `columns` and `rows` and refer to it as \"the table below\". " +
     "Never refer to a table, graph, chart, figure, diagram or photograph you have not supplied: a question that points at missing data cannot be answered. " +
+    "Ask about the topics in the specification above and nothing else: a question on a topic the specification does not list cannot be revised for. " +
     `${schemeNotes} ` +
     `Return JSON exactly like: {"questions":[{"question":"...","marks":${slots[0]?.marks ?? 3},"modelAnswer":"...","markingGuide":["the mark scheme"],"commandWord":"Outline","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]}`;
 
@@ -1485,6 +1699,12 @@ export const buildPastPaper = internalAction({
         paper.title,
         chosenPaper,
       );
+      // Deleted while the paper was being written: stop instead of saving into
+      // a paper that no longer exists.
+      const stillThere = await ctx.runQuery(internal.pastPapers.isActive, {
+        paperId,
+      });
+      if (!stillThere) return { ok: false };
       await ctx.runMutation(internal.pastPapers.setProgress, {
         paperId,
         progress: "Laying out the paper and its cover…",
@@ -1519,11 +1739,16 @@ export const buildPastPaper = internalAction({
       });
       return { ok: true };
     } catch (error) {
-      // Same rule as a study set: the log keeps the detail, the page gets a
-      // sentence it can act on.
+      // If the paper was deleted mid-build there is nothing to report: its page
+      // is already gone. Everything else is logged and shown as a sentence.
+      const stillThere = await ctx.runQuery(internal.pastPapers.isActive, {
+        paperId,
+      });
+      if (!stillThere) return { ok: false };
       console.error("Past paper build failed", paperId, error);
+      await recordProviderIncident(ctx, "paper", error);
       const message = isRateLimit(error)
-        ? "NVIDIA is rate-limiting Bluprint right now. Wait about a minute, then rebuild this paper."
+        ? "The AI is rate-limiting Bluprint right now. Wait about a minute, then rebuild this paper."
         : "We couldn't finish this paper. Your course is saved — try again.";
       await ctx.runMutation(internal.pastPapers.failBuild, { paperId, message });
       return { ok: false };
@@ -1585,7 +1810,8 @@ export const gradePastPaperAnswer = action({
       courseId: data.paper.courseId,
     });
     const apiKeys = resolveNvidiaKeys();
-    const marked = await markExamAnswer(
+    const marked = await withProviderGuard(ctx, "marking", () =>
+      markExamAnswer(
       apiKeys,
       question,
       response,
@@ -1596,9 +1822,10 @@ export const gradePastPaperAnswer = action({
             level: course.level,
           }
         : undefined,
-      // Older papers predate the stored marking flag; long answers were always
-      // meant to be levels-marked, so fall back to their length.
-      question.marking ?? (question.marks >= 12 ? "levels" : "points"),
+        // Older papers predate the stored marking flag; long answers were
+        // always meant to be levels-marked, so fall back to their length.
+        question.marking ?? (question.marks >= 12 ? "levels" : "points"),
+      ),
     );
 
     const floor =
@@ -1663,15 +1890,19 @@ export const disputePastPaperMark = action({
     if (question.userAnswer === undefined || question.awardedMarks === undefined) {
       throw new Error("Mark an answer before disputing the mark.");
     }
+    // Read once: the stored answer is what is re-marked, and the narrowing above
+    // does not survive into the closure below.
+    const storedAnswer = question.userAnswer;
 
     const course = await ctx.runQuery(internal.courses.getForBuild, {
       courseId: data.paper.courseId,
     });
     const apiKeys = resolveNvidiaKeys();
-    const marked = await markExamAnswer(
+    const marked = await withProviderGuard(ctx, "marking", () =>
+      markExamAnswer(
       apiKeys,
       question,
-      question.userAnswer,
+      storedAnswer,
       course
         ? {
             course: course.subject,
@@ -1679,7 +1910,8 @@ export const disputePastPaperMark = action({
             level: course.level,
           }
         : undefined,
-      question.marking ?? (question.marks >= 12 ? "levels" : "points"),
+        question.marking ?? (question.marks >= 12 ? "levels" : "points"),
+      ),
     );
 
     const awardedMarks = Math.max(
@@ -1690,7 +1922,7 @@ export const disputePastPaperMark = action({
 
     await ctx.runMutation(internal.pastPapers.saveQuestionResult, {
       questionId,
-      answer: question.userAnswer,
+      answer: storedAnswer,
       awardedMarks,
       // A re-mark that agrees changes nothing the student reads, so the stored
       // feedback and checklist stay exactly as they were.
@@ -1732,7 +1964,9 @@ async function transcribeImages(
   ];
 
   const raw = await nvidiaChat(apiKeys, {
+    // Vision prompts fall back across vision models when one is retired.
     model: NVIDIA_VISION_MODEL,
+    purpose: "vision",
     messages: [{ role: "user", content: parts }],
     maxTokens: 2200,
     temperature: 0.1,
@@ -2427,15 +2661,23 @@ const BUILD_FAILED_MESSAGE =
 
 /** Only a real 429 gets the rate-limit message. */
 const RATE_LIMIT_MESSAGE =
-  "NVIDIA is rate-limiting Bluprint right now. Wait about a minute, then rebuild this set. Your notes are saved.";
+  "The AI is rate-limiting Bluprint right now. Wait about a minute, then rebuild this set. Your notes are saved.";
 
-/** Messages this file writes for students, safe to show as they are. */
+/**
+ * Messages this file writes for students, safe to show as they are. Anything
+ * that names a provider, an environment variable, a model or an HTTP status is
+ * deliberately absent: those are logged server-side instead, so a build
+ * failure can never read like a stack trace.
+ */
 const STUDENT_MESSAGES = [
   "Bluprint couldn't find enough readable text",
-  "NVIDIA did not return any usable material",
-  "NVIDIA_API_KEY is not set on this deployment",
-  "Your NVIDIA account has no available credits",
-  "NVIDIA rejected the API key pool",
+  "The AI did not return any usable material",
+  // A refused build is a message for the student, with both limits in it.
+  "You have reached the build limit",
+  "You've reached today's build limit",
+  "Your notes are too long",
+  "That's a lot of notes",
+  AI_UNAVAILABLE_MESSAGE,
 ];
 
 function isRateLimit(error: unknown): boolean {
@@ -2456,6 +2698,40 @@ function buildFailureMessage(error: unknown): string {
 }
 
 /**
+ * Thrown when the student deletes a set or paper while its build is running.
+ * The run then stops at the next checkpoint instead of finishing work nobody
+ * will see, and no error is recorded against a row that is already gone.
+ */
+class BuildCancelled extends Error {
+  constructor() {
+    super("Build cancelled");
+    this.name = "BuildCancelled";
+  }
+}
+
+/** True while the build's set still exists. Read between stages. */
+async function setStillExists(
+  ctx: ActionCtx,
+  setId: Id<"studySets">,
+): Promise<boolean> {
+  return await ctx.runQuery(internal.studySets.isActive, { setId });
+}
+
+/**
+ * Runs one generation stage. A cancelled build keeps propagating; any other
+ * failure just means that stage produced nothing, so the rest of the set is
+ * still built — a failed quiz must not cost the student their flashcards.
+ */
+async function stage<T>(run: () => Promise<T>, empty: T): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof BuildCancelled) throw error;
+    return empty;
+  }
+}
+
+/**
  * Runs the whole pipeline for a set: read images if needed, then summary,
  * flashcards, quiz and exam questions. Progress is written back so the set page
  * can show live steps. Safe to retry.
@@ -2468,6 +2744,16 @@ export const processStudySet = action({
     const existing = await ctx.runQuery(internal.studySets.getForProcessing, { setId });
     if (!existing || existing.userId !== userId) {
       throw new Error("Study set not found.");
+    }
+
+    // A rebuild is a second, full AI run over the same notes, so it spends an
+    // allowance like a new set does. The check happens before the claim, so a
+    // refused rebuild leaves the set exactly as it was.
+    if (existing.status !== "queued") {
+      await ctx.runMutation(internal.buildUsage.consume, {
+        userId,
+        kind: "rebuild",
+      });
     }
 
     const claim = await ctx.runMutation(internal.studySets.claimForProcessing, { setId });
@@ -2499,6 +2785,13 @@ export const processStudySet = action({
         throw new Error(
           "Bluprint couldn't find enough readable text in this upload. Try brighter, closer photos or add a little pasted text.",
         );
+      }
+
+      // Billing check before any AI call: the same 20,000 characters the paste
+      // box advertises. Nothing is generated for input over the limit, so a
+      // long paste cannot quietly cost a build.
+      if (!withinNoteLimit(notes)) {
+        throw new Error(noteLimitMessage(notes.length));
       }
 
       const context: StudyContext = {
@@ -2555,20 +2848,18 @@ export const processStudySet = action({
         percent: 24,
       });
       const reportCards: BatchProgress = async (done, target) => {
+        if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
         await ctx.runMutation(internal.studySets.setProgress, {
           setId,
           progress: `Building flashcards… ${done} of ${target}`,
           percent: 24 + (done / Math.max(1, target)) * 32,
         });
       };
-      const cards = await generateCards(
-        apiKeys,
-        notes,
-        targetCards,
-        deadline,
-        reportCards,
-        syllabus,
-      ).catch(() => []);
+      const cards = await stage(
+        () =>
+          generateCards(apiKeys, notes, targetCards, deadline, reportCards, syllabus),
+        [],
+      );
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
@@ -2576,20 +2867,17 @@ export const processStudySet = action({
         percent: 58,
       });
       const reportQuiz: BatchProgress = async (done, target) => {
+        if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
         await ctx.runMutation(internal.studySets.setProgress, {
           setId,
           progress: `Writing quiz questions… ${done} of ${target}`,
           percent: 58 + (done / Math.max(1, target)) * 20,
         });
       };
-      const quiz = await generateQuiz(
-        apiKeys,
-        notes,
-        targetQuiz,
-        deadline,
-        reportQuiz,
-        syllabus,
-      ).catch(() => []);
+      const quiz = await stage(
+        () => generateQuiz(apiKeys, notes, targetQuiz, deadline, reportQuiz, syllabus),
+        [],
+      );
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
@@ -2597,21 +2885,26 @@ export const processStudySet = action({
         percent: 80,
       });
       const reportExams: BatchProgress = async (done, target) => {
+        if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
         await ctx.runMutation(internal.studySets.setProgress, {
           setId,
           progress: `Drafting exam questions… ${done} of ${target}`,
           percent: 80 + (done / Math.max(1, target)) * 14,
         });
       };
-      const exams = await generateExams(
-        apiKeys,
-        notes,
-        context,
-        targetExam,
-        deadline,
-        reportExams,
-        syllabus,
-      ).catch(() => []);
+      const exams = await stage(
+        () =>
+          generateExams(
+            apiKeys,
+            notes,
+            context,
+            targetExam,
+            deadline,
+            reportExams,
+            syllabus,
+          ),
+        [],
+      );
 
       // A failed stage should not lose the rest of the set. Only a run where
       // nothing at all came back is a real failure, and it gets a clear message.
@@ -2623,7 +2916,7 @@ export const processStudySet = action({
         exams.length === 0
       ) {
         throw new Error(
-          "NVIDIA did not return any usable material for this set. Your notes are saved; rebuild in a moment.",
+          "The AI did not return any usable material for this set. Your notes are saved; rebuild in a moment.",
         );
       }
 
@@ -2662,9 +2955,17 @@ export const processStudySet = action({
       });
       return { started: true };
     } catch (error) {
+      // The set was deleted while the build ran: there is nothing to report and
+      // nothing to write. The set page is already gone.
+      if (error instanceof BuildCancelled) {
+        console.error("Study set build cancelled (set deleted)", setId);
+        return { started: false, cancelled: true };
+      }
       // The detail stays in the server log; the page only ever sees a sentence
-      // written for a student.
+      // written for a student. The provider failure is also recorded so the
+      // deployment's health sweep can alert on a repeated cause.
       console.error("Study set build failed", setId, error);
+      await recordProviderIncident(ctx, "build", error);
       const message = buildFailureMessage(error);
       await ctx.runMutation(internal.studySets.failGeneration, { setId, message });
       throw new Error(message);
@@ -3348,11 +3649,13 @@ export const gradeExamAnswer = action({
     }
 
     const apiKeys = resolveNvidiaKeys();
-    const marked = await markExamAnswer(apiKeys, exam, response, {
-      course: set.course,
-      examBoard: set.examBoard,
-      level: set.level,
-    });
+    const marked = await withProviderGuard(ctx, "marking", () =>
+      markExamAnswer(apiKeys, exam, response, {
+        course: set.course,
+        examBoard: set.examBoard,
+        level: set.level,
+      }),
+    );
 
     // An answer that only adds to the previous one keeps at least the marks it
     // already earned.
@@ -3446,7 +3749,10 @@ export const gradeRecallAnswer = action({
       level: set.level,
     });
     const apiKeys = resolveNvidiaKeys();
-    const raw = await nvidiaChat(apiKeys, {
+    // A provider failure here reads as Bluprint's AI having trouble; the card
+    // screen then falls back to its own word comparison for the answer.
+    const raw = await withProviderGuard(ctx, "recall", () =>
+      nvidiaChat(apiKeys, {
       model: NVIDIA_TEXT_MODEL,
       messages: [
         { role: "system", content: RECALL_MARKER_SYSTEM_PROMPT },
@@ -3466,7 +3772,8 @@ export const gradeRecallAnswer = action({
       maxTokens: 400,
       temperature: 0,
       disableThinking: true,
-    });
+      }),
+    );
 
     const parsed = parseModelJson<{
       correct?: unknown;
@@ -3701,12 +4008,21 @@ async function streamNvidiaAnswer(
   tier: TutorTier,
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
-  const maxAttempts = Math.max(2, Math.min(apiKeys.length + 1, 4));
+  // A retired or missing level model falls through to the checked text models,
+  // so a tutor question still gets an answer.
+  const models = modelChain(tier.model, textModelCandidates());
+  let modelIndex = 0;
+  const maxAttempts = Math.max(
+    2,
+    Math.min(apiKeys.length + 1, 4),
+    Math.min(models.length, 3),
+  );
   let thinkingDisabled = true;
   let lastStatus: number | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const apiKey = nextApiKey(apiKeys);
+    const model = models[Math.min(modelIndex, models.length - 1)]!;
     let response: Response;
     try {
       response = await fetch(NVIDIA_CHAT_URL, {
@@ -3717,7 +4033,7 @@ async function streamNvidiaAnswer(
           Accept: "text/event-stream",
         },
         body: JSON.stringify({
-          model: tier.model,
+          model,
           messages,
           temperature: tier.temperature,
           top_p: 1,
@@ -3734,14 +4050,20 @@ async function streamNvidiaAnswer(
         await sleep(1000 * (attempt + 1));
         continue;
       }
-      throw new Error(
-        "Could not reach NVIDIA. Check the deployment's network connection and retry.",
-      );
+      console.error(`[ai] tutor could not reach the provider: ${providerDetail(0)}`);
+      throw providerError(0, model, TUTOR_UNAVAILABLE_MESSAGE);
     }
 
     if (!response.ok || !response.body) {
       lastStatus = response.status;
-      if (response.status === 429) {
+      if (response.status === 404 || response.status === 410) {
+        // Retired model: move to the next candidate instead of failing.
+        markModelUnavailable(model, response.status);
+        if (modelIndex < models.length - 1) {
+          modelIndex += 1;
+          continue;
+        }
+      } else if (response.status === 429) {
         coolingKeys.set(apiKey, Date.now() + KEY_COOLDOWN_MS);
         if (attempt < maxAttempts - 1) {
           await sleep(400 * (attempt + 1));
@@ -3759,8 +4081,20 @@ async function streamNvidiaAnswer(
         // The model does not understand the thinking flag; drop it and retry.
         thinkingDisabled = false;
         if (attempt < maxAttempts - 1) continue;
+      } else {
+        console.error(
+          `[ai] tutor request failed (${providerDetail(response.status)}, HTTP ${response.status}) on ${model}`,
+        );
       }
-      throw new Error(friendlyHttpError(response.status));
+      // A 429 keeps its own wording, because waiting a minute really does fix
+      // it. Everything else is the tutor having trouble.
+      throw providerError(
+        response.status,
+        model,
+        response.status === 429
+          ? AI_RATE_LIMIT_MESSAGE
+          : TUTOR_UNAVAILABLE_MESSAGE,
+      );
     }
 
     const result = await readChatStream(response, onSnapshot);
@@ -3768,13 +4102,21 @@ async function streamNvidiaAnswer(
       return { text: stripReasoning(result.text).trim(), sources: result.sources };
     }
     if (attempt < maxAttempts - 1) continue;
-    throw new Error(
-      "NVIDIA sent back an empty answer, which usually means the model used its whole token budget on reasoning. Ask again.",
+    throw providerError(
+      0,
+      model,
+      "The tutor could not finish that answer. Ask again in a moment.",
     );
   }
 
-  if (lastStatus !== null) throw new Error(friendlyHttpError(lastStatus));
-  throw new Error("NVIDIA could not complete the answer. Please retry.");
+  if (lastStatus !== null) {
+    throw providerError(
+      lastStatus,
+      models[0]!,
+      lastStatus === 429 ? AI_RATE_LIMIT_MESSAGE : TUTOR_UNAVAILABLE_MESSAGE,
+    );
+  }
+  throw providerError(0, tier.model, TUTOR_UNAVAILABLE_MESSAGE);
 }
 
 /**
@@ -3788,7 +4130,7 @@ async function streamWebAnswer(
   onSnapshot: Snapshot,
 ): Promise<StreamResult> {
   const apiKey = readOpenRouterKey();
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY is not set on this deployment.");
+  if (!apiKey) throw new Error("Web search is unavailable right now.");
 
   const response = await fetch(OPENROUTER_CHAT_URL, {
     method: "POST",
@@ -3813,7 +4155,7 @@ async function streamWebAnswer(
   });
 
   if (!response.ok || !response.body) {
-    throw new Error(`OpenRouter could not search the web (HTTP ${response.status}).`);
+    throw new Error(`Web search could not run right now (HTTP ${response.status}).`);
   }
 
   const result = await readChatStream(response, onSnapshot);
@@ -3910,18 +4252,18 @@ function readTranscript(payload: unknown): string {
   return "";
 }
 
-/** A short, human explanation of a provider's failure, without leaking keys. */
+/**
+ * A short, student-safe explanation of a transcription failure. The provider
+ * name, the model and the status are logged server-side, never shown: a
+ * student only needs to know that dictation did not work this time, and the
+ * composer falls back to typing.
+ */
 function dictationHttpError(label: string, status: number): string {
-  if (status === 401 || status === 403) {
-    return `${label} rejected the API key on this deployment`;
+  console.error(`[ai] dictation failed (${label}): HTTP ${status}`);
+  if (status === 429) {
+    return "Dictation is busy right now. Type your answer, or try again in a moment.";
   }
-  if (status === 402) return `${label} has no credits left for transcription`;
-  if (status === 429) return `${label} is rate-limiting transcription right now`;
-  if (status === 400 || status === 404) {
-    return `${label} does not accept this audio or model (HTTP ${status})`;
-  }
-  if (status >= 500) return `${label} is having trouble right now (HTTP ${status})`;
-  return `${label} could not transcribe the recording (HTTP ${status})`;
+  return DICTATION_UNAVAILABLE_MESSAGE;
 }
 
 /** NVIDIA's hosted speech route: multipart upload with the model's own URL. */
@@ -4028,9 +4370,8 @@ async function transcribeDictationAudio(
   }
 
   if (attempts.length === 0) {
-    throw new Error(
-      "Dictation needs a transcription model. Set OPENROUTER_API_KEY, or set NVIDIA_ASR_URL alongside NVIDIA_API_KEY, on the deployment.",
-    );
+    console.error("[ai] dictation has no configured transcription model");
+    throw new Error(DICTATION_UNAVAILABLE_MESSAGE);
   }
 
   const failures: string[] = [];
@@ -4046,9 +4387,10 @@ async function transcribeDictationAudio(
     }
   }
 
-  throw new Error(
-    `Dictation could not be transcribed. ${failures.join(" · ")}. Check the deployment's speech keys, then try again.`,
-  );
+  // Why every provider failed is a server-side problem: it is logged in full
+  // here and reduced to one sentence for the composer.
+  console.error(`[ai] dictation failed: ${failures.join(" · ")}`);
+  throw new Error(DICTATION_UNAVAILABLE_MESSAGE);
 }
 
 /**
@@ -4156,7 +4498,14 @@ export const askTutor = action({
       return { reply: result.text };
     } catch (error) {
       await ctx.runMutation(internal.tutor.discardTutorAnswer, { messageId });
-      throw error;
+      await recordProviderIncident(ctx, "tutor", error);
+      // A provider failure reads as the tutor having trouble; a validation
+      // error (an empty question) keeps its own, more useful wording.
+      throw error instanceof ProviderError
+        ? new Error(
+            error.status === 429 ? AI_RATE_LIMIT_MESSAGE : TUTOR_UNAVAILABLE_MESSAGE,
+          )
+        : error;
     }
   },
 });
@@ -4225,7 +4574,12 @@ export const askCourseTutor = action({
       return { reply: result.text };
     } catch (error) {
       await ctx.runMutation(internal.tutor.discardCourseTutorAnswer, { messageId });
-      throw error;
+      await recordProviderIncident(ctx, "tutor", error);
+      throw error instanceof ProviderError
+        ? new Error(
+            error.status === 429 ? AI_RATE_LIMIT_MESSAGE : TUTOR_UNAVAILABLE_MESSAGE,
+          )
+        : error;
     }
   },
 });
@@ -4376,13 +4730,20 @@ export const explainQuestion = action({
     // Balanced is the everyday model and the shortest sensible answer budget:
     // an explanation beside a question should arrive quickly.
     const tier = readTutorTier("Balanced");
-    const raw = await nvidiaChat(apiKeys, {
-      model: tier.model,
-      messages,
-      maxTokens: 1100,
-      temperature: 0.25,
-      disableThinking: true,
-    });
+    let raw: string;
+    try {
+      raw = await nvidiaChat(apiKeys, {
+        model: tier.model,
+        messages,
+        maxTokens: 1100,
+        temperature: 0.25,
+        disableThinking: true,
+      });
+    } catch (error) {
+      // Same rule as the tutor: log the cause, show one friendly sentence.
+      await recordProviderIncident(ctx, "explain", error);
+      throw new Error(TUTOR_UNAVAILABLE_MESSAGE);
+    }
 
     return { reply: stripReasoning(raw).trim() };
   },

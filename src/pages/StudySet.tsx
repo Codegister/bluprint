@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
-import { buildErrorMessage, readableError } from "@/lib/errors";
+import { buildErrorMessage, notifyError, readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -60,7 +60,7 @@ function SetTitle({ setId, title }: { setId: Id<"studySets">; title: string }) {
       await updateDetails({ setId, title: next });
     } catch (error) {
       setValue(title);
-      toast.error(readableError(error, "Could not rename that set."));
+      notifyError(error, "Could not rename that set.");
     } finally {
       setSaving(false);
     }
@@ -608,7 +608,7 @@ export default function StudySet() {
     if (triggered.current === id) return;
     triggered.current = id;
     processSet({ setId: id }).catch((error) => {
-      toast.error(readableError(error, "The build stopped. Open the set to retry."));
+      notifyError(error, "The build stopped. Open the set to retry.");
     });
   }, [details, processSet]);
 
@@ -618,7 +618,7 @@ export default function StudySet() {
     try {
       await processSet({ setId: details.set._id });
     } catch (error) {
-      toast.error(readableError(error, "The build could not be restarted."));
+      notifyError(error, "The build could not be restarted.");
     } finally {
       setRetrying(false);
     }

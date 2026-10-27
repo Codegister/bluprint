@@ -25,7 +25,7 @@ import {
 } from "@/convex/lib/buildDefaults";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { readableError } from "@/lib/errors";
+import { notifyError, readableError } from "@/lib/errors";
 import { EXAM_BOARDS, STUDY_LEVELS, qualificationLabel } from "@/lib/examBoards";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
@@ -159,7 +159,7 @@ export function SetSettingsDialog({
       onOpenChange(false);
       navigate("/tutor");
     } catch (deleteError) {
-      toast.error(readableError(deleteError, "Could not delete that set."));
+      notifyError(deleteError, "Could not delete that set.");
     } finally {
       setDeleting(false);
     }

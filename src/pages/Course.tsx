@@ -24,7 +24,7 @@ import { Counter, Meter, enter, reveal } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
-import { readableError } from "@/lib/errors";
+import { notifyError, readableError } from "@/lib/errors";
 import { percent, relativeDate } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
@@ -388,7 +388,7 @@ export default function Course() {
       await rebuild({ courseId: courseId as Id<"courses"> });
       toast.success("Rebuilding the pathway in the background.");
     } catch (error) {
-      toast.error(readableError(error, "Could not rebuild this pathway."));
+      notifyError(error, "Could not rebuild this pathway.");
     } finally {
       setRetrying(false);
     }
@@ -406,7 +406,7 @@ export default function Course() {
       setSectionTarget(null);
       navigate(`/sets/${result.setId}`);
     } catch (error) {
-      toast.error(readableError(error, "Could not build material for that topic."));
+      notifyError(error, "Could not build material for that topic.");
     } finally {
       setBusyTopic(null);
     }
@@ -455,7 +455,7 @@ export default function Course() {
         done,
       });
     } catch (error) {
-      toast.error(readableError(error, "Could not update that topic."));
+      notifyError(error, "Could not update that topic.");
     } finally {
       setTickingTopic(null);
     }
@@ -477,7 +477,7 @@ export default function Course() {
       toast.success(`Removed ${removal.title} from this pathway.`);
       setRemoval(null);
     } catch (error) {
-      toast.error(readableError(error, "Could not remove that item."));
+      notifyError(error, "Could not remove that item.");
     } finally {
       setRemoving(false);
     }
@@ -491,7 +491,7 @@ export default function Course() {
       toast.success("Course removed. Your study sets are still in the library.");
       navigate("/courses");
     } catch (error) {
-      toast.error(readableError(error, "Could not remove that course."));
+      notifyError(error, "Could not remove that course.");
     } finally {
       setDeleting(false);
       setConfirmingDelete(false);

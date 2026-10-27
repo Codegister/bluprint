@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { gradeRecall, normalizeAnswer } from "@/convex/lib/recall";
 import { useDictation } from "@/hooks/use-dictation";
-import { readableError } from "@/lib/errors";
+import { notifyError, readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
@@ -204,7 +204,7 @@ export function FlashcardReview({
     try {
       await reviewCard({ cardId: card._id, rating });
     } catch (error) {
-      toast.error(readableError(error, "Could not save that review."));
+      notifyError(error, "Could not save that review.");
     } finally {
       setSaving(false);
     }
@@ -391,6 +391,14 @@ export function FlashcardReview({
           </div>
         </div>
 
+        {current.beyondNotes && (
+          <span
+            className="mt-3 inline-block rounded-full bg-brand-panel px-3 py-1 text-[0.7rem] font-semibold text-brand-ink/70"
+            title="This card uses material from outside your notes. Check it against them."
+          >
+            Beyond your notes
+          </span>
+        )}
         <p className="mt-3 font-display text-[1.35rem] font-bold leading-snug text-brand-ink sm:text-[1.55rem]">
           {current.front}
         </p>

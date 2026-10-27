@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { MAX_CODE_ATTEMPTS, describeAttempts } from "./lib/otpLimits";
@@ -48,9 +48,43 @@ export const status = query({
 });
 
 /**
+ * Every outstanding code for one address, oldest first.
+ *
+ * Accounts store the address as it was typed, so the scan compares the
+ * lowercased form rather than trusting one exact spelling.
+ */
+async function codesForAddress(
+  ctx: MutationCtx,
+  address: string,
+): Promise<Array<{ _id: Id<"authVerificationCodes">; _creationTime: number }>> {
+  const accounts = await ctx.db
+    .query("authAccounts")
+    .withIndex("providerAndAccountId", (q) => q.eq("provider", "email-otp"))
+    .collect();
+
+  const codes: Array<{ _id: Id<"authVerificationCodes">; _creationTime: number }> = [];
+  for (const account of accounts) {
+    if (account.providerAccountId.trim().toLowerCase() !== address) continue;
+    const rows = await ctx.db
+      .query("authVerificationCodes")
+      .withIndex("accountId", (q) => q.eq("accountId", account._id))
+      .collect();
+    for (const row of rows) {
+      codes.push({ _id: row._id, _creationTime: row._creationTime });
+    }
+  }
+  return codes.sort((a, b) => a._creationTime - b._creationTime);
+}
+
+/**
  * Records that a code was just emailed. Resets the per-code count (a fresh code
  * deserves a fresh five) but keeps the hourly window, so resending is not a way
  * to get more guesses.
+ *
+ * Issuing a new code also throws away every older outstanding code, except the
+ * one just sent: two live codes would mean two sets of five guesses, and a
+ * student who asked for a resend because their first code never arrived should
+ * not leave that code usable for a brute-force attempt.
  */
 export const noteCodeSent = mutation({
   args: { email: v.string() },
@@ -61,6 +95,7 @@ export const noteCodeSent = mutation({
     const now = Date.now();
     const row = await rowFor(ctx, address);
     if (!row) {
+      await discardOlderCodes(ctx, address);
       await ctx.db.insert("otpGuards", {
         email: address,
         codeFailures: 0,
@@ -70,6 +105,8 @@ export const noteCodeSent = mutation({
       });
       return describeAttempts(null, now);
     }
+
+    await discardOlderCodes(ctx, address);
 
     const windowOpen = now - row.windowStart < HOUR_MS;
     await ctx.db.patch(row._id, {
@@ -124,28 +161,33 @@ export const recordFailure = mutation({
     });
 
     if (dead) {
-      // Throw the code away so the count is a real limit rather than a message.
-      // Accounts store the address as it was typed, so the scan compares the
-      // lowercased form rather than trusting one exact spelling.
-      const accounts = await ctx.db
-        .query("authAccounts")
-        .withIndex("providerAndAccountId", (q) => q.eq("provider", "email-otp"))
-        .collect();
-      for (const account of accounts) {
-        if (account.providerAccountId.trim().toLowerCase() !== address) continue;
-        const codes = await ctx.db
-          .query("authVerificationCodes")
-          .withIndex("accountId", (q) => q.eq("accountId", account._id))
-          .collect();
-        for (const code of codes) {
-          await ctx.db.delete(code._id);
-        }
+      // Throw every code away so the count is a real limit rather than a
+      // message: with no live code, the fifth miss cannot be followed by a
+      // sixth guess even from a client that skips this page.
+      for (const code of await codesForAddress(ctx, address)) {
+        await ctx.db.delete(code._id);
       }
     }
 
     return describeAttempts(await rowFor(ctx, address), now);
   },
 });
+
+/**
+ * Deletes every outstanding code for an address except the newest one. Called
+ * right after a code has been emailed, so the code the student was just sent
+ * survives and any earlier one stops working immediately.
+ */
+async function discardOlderCodes(
+  ctx: MutationCtx,
+  address: string,
+): Promise<void> {
+  const codes = await codesForAddress(ctx, address);
+  const newest = codes[codes.length - 1];
+  for (const code of codes) {
+    if (code._id !== newest?._id) await ctx.db.delete(code._id);
+  }
+}
 
 /** A correct code clears the record, so the next sign-in starts from zero. */
 export const recordSuccess = mutation({

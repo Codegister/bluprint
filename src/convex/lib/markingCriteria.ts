@@ -279,26 +279,98 @@ export function guideFromCriteria(criteria: MarkingCriterion[]): string[] {
   );
 }
 
+/**
+ * Numbers written as words, so "six" and "6" are the same answer. Marking by
+ * wording used to fail an answer that spelled a value out, which is exactly
+ * what dictation produces.
+ */
+const NUMBER_WORDS: Record<string, string> = {
+  zero: "0",
+  one: "1",
+  two: "2",
+  three: "3",
+  four: "4",
+  five: "5",
+  six: "6",
+  seven: "7",
+  eight: "8",
+  nine: "9",
+  ten: "10",
+  eleven: "11",
+  twelve: "12",
+  twenty: "20",
+  thirty: "30",
+  fifty: "50",
+  hundred: "100",
+  thousand: "1000",
+};
+
+/** The answer's words, with number words and symbols flattened to one form. */
+function answerTokens(answer: string): string[] {
+  return normalise(answer)
+    .split(" ")
+    .map((word) => NUMBER_WORDS[word] ?? word)
+    .filter(Boolean);
+}
+
+/**
+ * Whether a short term is the initials of consecutive words in the answer:
+ * "ma" for "mass acceleration", which is how a mark scheme writes a formula
+ * and how a student writes it out.
+ */
+function initialsMatch(term: string, tokens: string[]): boolean {
+  if (!/^[a-z]{2,4}$/.test(term)) return false;
+  for (let start = 0; start < tokens.length; start += 1) {
+    let acc = "";
+    for (let index = start; index < tokens.length; index += 1) {
+      acc += tokens[index]![0] ?? "";
+      if (acc === term) return true;
+      if (acc.length >= term.length) break;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether a term is carried by the answer.
+ *
+ * Three ways count, because a mark scheme and a student rarely write the same
+ * thing the same way: the word itself (with the plural/tense stem), the spelled
+ * form of a number ("six" for "6"), and the initials of a written-out formula
+ * ("ma" for "mass acceleration"). Ratios and equations survive normalisation
+ * because their digits become plain words on both sides — "3:1" and "3 to 1"
+ * both leave "3 1" — so "answers a ratio question in a different notation" no
+ * longer scores zero.
+ */
+function termAppears(
+  keyword: string,
+  answerWords: Set<string>,
+  tokens: string[],
+): boolean {
+  for (const word of answerWords) {
+    const stem = word.length > 6 ? word.slice(0, 6) : word;
+    if (
+      word === keyword ||
+      stem === keyword ||
+      (keyword.length >= 5 &&
+        (word.startsWith(keyword) ||
+          keyword.startsWith(stem) ||
+          (word.length >= 5 && word.slice(0, 5) === keyword.slice(0, 5))))
+    ) {
+      return true;
+    }
+  }
+  return initialsMatch(keyword, tokens);
+}
+
 /** Share (0–1) of a set of terms that appear in the answer. */
 function coverageOf(keywords: string[], answer: string): number {
   if (keywords.length === 0) return 1;
-  const answerWords = new Set(normalise(answer).split(" ").filter(Boolean));
+  const tokens = answerTokens(answer);
+  const answerWords = new Set(tokens);
   let matched = 0;
   for (const keyword of keywords) {
-    for (const word of answerWords) {
-      const stem = word.length > 6 ? word.slice(0, 6) : word;
-      if (
-        word === keyword ||
-        stem === keyword ||
-        (keyword.length >= 5 &&
-          (word.startsWith(keyword) ||
-            keyword.startsWith(stem) ||
-            (word.length >= 5 && word.slice(0, 5) === keyword.slice(0, 5))))
-      ) {
-        matched += 1;
-        break;
-      }
-    }
+    if (termAppears(keyword, answerWords, tokens)) matched += 1;
   }
   return matched / keywords.length;
 }

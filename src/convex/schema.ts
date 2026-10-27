@@ -543,6 +543,10 @@ const schema = defineSchema(
       front: v.string(),
       back: v.string(),
       order: v.number(),
+      // True when the card uses a fact the student's notes do not contain. The
+      // review screen labels those "Beyond your notes" so enrichment is visible
+      // rather than passed off as something the teacher gave them.
+      beyondNotes: v.optional(v.boolean()),
       // "new" cards have not been reviewed yet.
       status: v.union(v.literal("new"), v.literal("known"), v.literal("again")),
       reviewCount: v.number(),
@@ -588,6 +592,8 @@ const schema = defineSchema(
       acceptedAnswers: v.optional(v.array(v.string())),
       explanation: v.string(),
       order: v.number(),
+      // True when the question uses a fact the notes do not contain.
+      beyondNotes: v.optional(v.boolean()),
       // Per-question accuracy, so the weak-spot session can point at the
       // questions that actually keep going wrong.
       missCount: v.optional(v.number()),
@@ -612,6 +618,8 @@ const schema = defineSchema(
       marks: v.number(),
       modelAnswer: v.string(),
       markingGuide: v.array(v.string()),
+      // True when the question uses a fact the notes do not contain.
+      beyondNotes: v.optional(v.boolean()),
       // The same guide as discrete criteria, each with its own id and marks.
       // Optional so questions built before this existed still open; the UI
       // derives the same rows from `markingGuide` for those.
@@ -684,6 +692,34 @@ const schema = defineSchema(
         v.array(v.object({ title: v.string(), url: v.string() })),
       ),
     }).index("by_course", ["courseId"]),
+
+    // One row per AI build a person starts, so the rate limit is enforced from
+    // the database rather than from the browser. Pruned as it is read: at most
+    // a day of one person's builds is ever stored.
+    buildUsage: defineTable({
+      userId: v.id("users"),
+      /** "set", "rebuild" or "paper": the three AI build entry points. */
+      kind: v.string(),
+      at: v.number(),
+    }).index("by_user_at", ["userId", "at"]),
+
+    // Sanitised AI provider failures. Written whenever the NVIDIA transport
+    // fails, so a retired model or an outage is visible to whoever runs the
+    // deployment instead of only to students. Deliberately holds no keys, no
+    // prompts and no model output: purpose, model id, status code and time.
+    aiIncidents: defineTable({
+      at: v.number(),
+      /** Which feature failed: "tutor", "build", "paper", "marking". */
+      purpose: v.string(),
+      /** The model id that failed. Never a key. */
+      model: v.string(),
+      /** Upstream HTTP status; 0 for a network or timeout failure. */
+      status: v.number(),
+      /** Grouped cause, so the sweep can spot one repeated failure. */
+      kind: v.string(),
+      /** Set once an alert has been sent for this row. */
+      alertedAt: v.optional(v.number()),
+    }).index("by_at", ["at"]),
 
     // One row per person per calendar day (UTC) so the dashboard can show a
     // daily review goal and a streak without storing every review event.

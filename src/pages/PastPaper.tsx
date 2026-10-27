@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
-import { readableError } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { courseSubtitle } from "@/lib/subjects";
 import { useMutation, useQuery } from "convex/react";
@@ -85,7 +85,7 @@ export default function PastPaper() {
       await rebuild({ paperId: paperId as Id<"pastPapers"> });
       toast.success("Building the paper again.");
     } catch (error) {
-      toast.error(readableError(error, "Could not rebuild that paper."));
+      notifyError(error, "Could not rebuild that paper.");
     } finally {
       setRetrying(false);
     }

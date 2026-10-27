@@ -119,6 +119,14 @@ export function ExamPractice({
                     ...(graded ? { correctAnswer: exam.modelAnswer } : {}),
                   }}
                 />
+                {exam.beyondNotes && (
+                  <span
+                    className="rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70"
+                    title="This question uses material from outside your notes. Check it against them."
+                  >
+                    Beyond your notes
+                  </span>
+                )}
                 <span className="rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70">
                   {exam.marks} marks
                 </span>

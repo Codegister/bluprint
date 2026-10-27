@@ -9,6 +9,7 @@ import {
 } from "./_generated/server";
 import { requireOwner } from "./lib/authorization";
 import { requireUserId } from "./lib/requireUser";
+import { consumeBuildAllowance } from "./buildUsage";
 import { alignCriteria, toCriteria } from "./lib/markingCriteria";
 
 /**
@@ -168,6 +169,10 @@ export const create = mutation({
     );
     if (building) return { paperId: building._id, created: false };
 
+    // Rate limit before anything is written or generated. A past paper is the
+    // most expensive build in the app, so guests get the tightest allowance.
+    await consumeBuildAllowance(ctx, userId, "paper");
+
     // Never leave a stalled paper blocking the course's paper allowance.
     const usable = mine.filter((row) => !stale(row));
     if (usable.length >= MAX_PAPERS_PER_COURSE) {
@@ -223,6 +228,8 @@ export const rebuild = mutation({
   handler: async (ctx, { paperId }) => {
     const userId = await requireUserId(ctx);
     await requireOwner(await ctx.db.get(paperId), userId);
+    // Rebuilding writes a whole paper again, so it costs an allowance too.
+    await consumeBuildAllowance(ctx, userId, "paper");
 
     const questions = await ctx.db
       .query("pastPaperQuestions")
@@ -339,7 +346,9 @@ export const completeBuild = internalMutation({
   },
   handler: async (ctx, { paperId, formatId, cover, questions }) => {
     const paper = await ctx.db.get(paperId);
-    if (!paper) throw new Error("Past paper not found.");
+    // Deleted while it was building: stop quietly instead of writing questions
+    // into a paper that no longer exists.
+    if (!paper) return { stored: false };
 
     let totalMarks = 0;
     for (const [index, question] of questions.entries()) {
@@ -379,12 +388,24 @@ export const completeBuild = internalMutation({
       processingStartedAt: undefined,
       updatedAt: Date.now(),
     });
+    return { stored: true };
+  },
+});
+
+/** Whether a build should keep running after a delete. */
+export const isActive = internalQuery({
+  args: { paperId: v.id("pastPapers") },
+  handler: async (ctx, { paperId }) => {
+    const paper = await ctx.db.get(paperId);
+    return paper !== null;
   },
 });
 
 export const failBuild = internalMutation({
   args: { paperId: v.id("pastPapers"), message: v.string() },
   handler: async (ctx, { paperId, message }) => {
+    const paper = await ctx.db.get(paperId);
+    if (!paper) return { written: false };
     await ctx.db.patch(paperId, {
       status: "error",
       errorMessage: message.slice(0, 600),
@@ -392,6 +413,7 @@ export const failBuild = internalMutation({
       processingStartedAt: undefined,
       updatedAt: Date.now(),
     });
+    return { written: true };
   },
 });
 

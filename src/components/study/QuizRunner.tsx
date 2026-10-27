@@ -4,7 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { EASE, SPRING } from "@/components/motion/Motion";
-import { readableError } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { animate, motion, useReducedMotion } from "framer-motion";
@@ -233,7 +233,7 @@ export function QuizRunner({
         return next;
       });
     } catch (error) {
-      toast.error(readableError(error, "Could not check that answer."));
+      notifyError(error, "Could not check that answer.");
     } finally {
       setChecking(false);
     }
@@ -265,7 +265,7 @@ export function QuizRunner({
       setResult(saved);
       toast.success(`Quiz saved: ${saved.score}/${saved.total}`);
     } catch (error) {
-      toast.error(readableError(error, "Could not save your quiz score."));
+      notifyError(error, "Could not save your quiz score.");
     } finally {
       setSubmitting(false);
     }
@@ -305,6 +305,14 @@ export function QuizRunner({
         transition={{ duration: 0.3, ease: EASE }}
         className="gizmo-card mt-4 p-5 sm:p-7"
       >
+        {question.beyondNotes && (
+          <span
+            className="mb-2 inline-block rounded-full bg-brand-panel px-3 py-1 text-[0.7rem] font-semibold text-brand-ink/70"
+            title="This question uses material from outside your notes. Check it against them."
+          >
+            Beyond your notes
+          </span>
+        )}
         <p className="font-display text-lg font-bold leading-snug text-brand-ink sm:text-xl">
           {kind === "cloze" ? <ClozePrompt text={question.question} /> : question.question}
         </p>

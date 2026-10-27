@@ -12,7 +12,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
-import { readableError } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { displayName, initialFor } from "@/lib/format";
 import { subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
@@ -144,7 +144,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       // /auth?returnTo=/tutor. This always lands on the marketing homepage.
       window.location.replace(import.meta.env.BASE_URL || "/");
     } catch (error) {
-      toast.error(readableError(error, "Could not sign out. Please try again."));
+      notifyError(error, "Could not sign out. Please try again.");
     }
   };
 

@@ -16,13 +16,69 @@ export const NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/complet
 // These are the defaults checked against NVIDIA's live model catalog. NVIDIA
 // retires models periodically — override with the env vars below (or edit
 // here) if one reaches end of life, as shown by a 410 response.
+//
+// Last verified live against https://integrate.api.nvidia.com/v1/models and a
+// real completion on 2026-10-27. `meta/llama-3.1-8b-instruct` and
+// `meta/llama-3.3-70b-instruct` both reached end of life on 2026-08-26 and
+// answered HTTP 410, which is why they are no longer referenced anywhere.
 export const NVIDIA_TEXT_MODEL =
   process.env.NVIDIA_TEXT_MODEL?.trim() ||
   "nvidia/nemotron-3.5-lightning-30b-a3b";
 
 export const NVIDIA_VISION_MODEL =
   process.env.NVIDIA_VISION_MODEL?.trim() ||
-  "meta/llama-3.2-90b-vision-instruct";
+  "nvidia/nemotron-3.5-super-vl-120b-a12b";
+
+/**
+ * Every model the text prompts may fall back to, best first.
+ *
+ * NVIDIA retires models without warning, so a single hard-coded id is a
+ * single point of failure: when one reaches end of life the whole product
+ * stops. Each installed model must be one that answered a real completion the
+ * last time it was checked, and the transport walks this list when the
+ * upstream replies 404 or 410.
+ */
+export const NVIDIA_TEXT_FALLBACK_MODELS = [
+  "nvidia/nemotron-3.5-bolt-e4b",
+  "nvidia/nemotron-3-ultra-550b-a55b",
+];
+
+export const NVIDIA_VISION_FALLBACK_MODELS = [
+  "meta/llama-3.2-90b-vision-instruct",
+];
+
+/** Reads a comma- or newline-separated model list from the environment. */
+function modelList(envName: string, fallback: string[]): string[] {
+  const raw = process.env[envName];
+  const values = (raw ? raw.split(/[\n,]+/) : fallback)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [...new Set(values)];
+}
+
+/**
+ * The models to try for a text prompt: the configured one first, then the
+ * checked fallbacks. The env var lets a deployment pin its own order without a
+ * code change.
+ */
+export function textModelCandidates(): string[] {
+  return [
+    ...new Set([
+      NVIDIA_TEXT_MODEL,
+      ...modelList("NVIDIA_TEXT_FALLBACK_MODELS", NVIDIA_TEXT_FALLBACK_MODELS),
+    ]),
+  ];
+}
+
+/** The models to try for a prompt that includes an image. */
+export function visionModelCandidates(): string[] {
+  return [
+    ...new Set([
+      NVIDIA_VISION_MODEL,
+      ...modelList("NVIDIA_VISION_FALLBACK_MODELS", NVIDIA_VISION_FALLBACK_MODELS),
+    ]),
+  ];
+}
 
 /** Name used everywhere the key pool is referenced. */
 export const NVIDIA_KEY_NAME = "NVIDIA_API_KEY";
@@ -67,7 +123,9 @@ export const TUTOR_TIERS: TutorTier[] = [
     label: "Fast",
     tagline: "Quick short answers",
     icon: "rabbit",
-    model: tierModel("NVIDIA_TUTOR_FAST_MODEL", "meta/llama-3.1-8b-instruct"),
+    // A small, fast, currently-live model. The retired
+    // meta/llama-3.1-8b-instruct used to sit here and answered 410.
+    model: tierModel("NVIDIA_TUTOR_FAST_MODEL", "nvidia/nemotron-3.5-bolt-e4b"),
     maxTokens: 1100,
     temperature: 0.35,
   },
@@ -87,9 +145,11 @@ export const TUTOR_TIERS: TutorTier[] = [
     label: "Deep",
     tagline: "Longest answers · worked reasoning",
     icon: "flame",
+    // The largest live model, for the deepest answers. The retired
+    // meta/llama-3.3-70b-instruct used to sit here and answered 410.
     model: tierModel(
       "NVIDIA_TUTOR_DEEP_MODEL",
-      tierModel("NVIDIA_TUTOR_POWERFUL_MODEL", "meta/llama-3.3-70b-instruct"),
+      tierModel("NVIDIA_TUTOR_POWERFUL_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
     ),
     maxTokens: 2600,
     temperature: 0.25,

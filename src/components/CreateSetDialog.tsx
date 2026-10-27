@@ -11,7 +11,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { EASE, EASE_EXIT } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { readableError } from "@/lib/errors";
+import { notifyError, readableError } from "@/lib/errors";
+import {
+  MAX_NOTE_CHARS,
+  MAX_NOTE_CHARS_LABEL,
+  noteLimitMessage,
+} from "@/convex/lib/noteLimits";
 import {
   BUILD_DEFAULTS,
   BUILD_MAX,
@@ -138,7 +143,12 @@ export function CreateSetDialog({
     if (initialText && initialText.trim().length >= 40) {
       openedRef.current = true;
       setMode("text");
-      setText(initialText);
+      // Text handed over from the landing hero is capped like anything typed:
+      // the box, the counter and the server all use the same limit.
+      setText(initialText.slice(0, MAX_NOTE_CHARS));
+      if (initialText.length > MAX_NOTE_CHARS) {
+        setError(noteLimitMessage(initialText.length));
+      }
       return;
     }
     if (openedRef.current || courseRows === undefined) return;
@@ -281,7 +291,7 @@ export function CreateSetDialog({
         onOpenChange(false);
         navigate(`/sets/${result.setId}`);
       } catch (submitError) {
-        const message = readableError(
+        const message = notifyError(
           submitError,
           "Could not build a set from that topic. Try again.",
         );
@@ -322,6 +332,14 @@ export function CreateSetDialog({
       if (mode === "text") {
         notes = text.trim();
         sourceLabel = "Pasted notes";
+        // Blocked here as well as on the server, so an over-long paste stops
+        // with a clear message instead of starting (and paying for) a build.
+        if (notes.length > MAX_NOTE_CHARS) {
+          setError(noteLimitMessage(notes.length));
+          setIsLoading(false);
+          setStep("");
+          return;
+        }
       }
 
       // A short, whole-word name derived from the upload, used until the
@@ -354,12 +372,11 @@ export function CreateSetDialog({
       onOpenChange(false);
       navigate(`/sets/${setId}`);
     } catch (submitError) {
-      const message = readableError(
+      const message = notifyError(
         submitError,
         "Could not create that set. Try again.",
       );
       setError(message);
-      toast.error(message);
     } finally {
       setIsLoading(false);
       setStep("");
@@ -670,16 +687,18 @@ export function CreateSetDialog({
             <TabsContent value="text" className="mt-0">
               <Textarea
                 value={text}
-                onChange={(event) => setText(event.target.value)}
+                onChange={(event) => setText(event.target.value.slice(0, MAX_NOTE_CHARS))}
                 placeholder="Paste lecture notes, a textbook section or your own writing…"
-                maxLength={20_000}
+                maxLength={MAX_NOTE_CHARS}
                 rows={8}
                 disabled={isLoading}
                 className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
               />
               <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
                 <span>A few sentences is enough to start</span>
-                <span>{text.length.toLocaleString()} / 20,000</span>
+                <span>
+                  {text.length.toLocaleString()} / {MAX_NOTE_CHARS_LABEL}
+                </span>
               </div>
             </TabsContent>
           </Tabs>

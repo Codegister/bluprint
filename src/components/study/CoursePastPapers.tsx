@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { readableError } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -82,7 +82,7 @@ export function CoursePastPapers({
       }
       navigate(`/papers/${result.paperId}`);
     } catch (error) {
-      toast.error(readableError(error, "Could not build that past paper."));
+      notifyError(error, "Could not build that past paper.");
     } finally {
       setBuilding(false);
     }
@@ -94,7 +94,7 @@ export function CoursePastPapers({
       await rebuildPaper({ paperId });
       toast.success("Rebuilding this paper in the current format.");
     } catch (error) {
-      toast.error(readableError(error, "Could not rebuild that paper."));
+      notifyError(error, "Could not rebuild that paper.");
     } finally {
       setRebuildingId(null);
     }
@@ -108,7 +108,7 @@ export function CoursePastPapers({
       toast.success(`Removed ${removal.title}.`);
       setRemoval(null);
     } catch (error) {
-      toast.error(readableError(error, "Could not remove that paper."));
+      notifyError(error, "Could not remove that paper.");
     } finally {
       setRemoving(false);
     }

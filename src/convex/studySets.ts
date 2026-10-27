@@ -8,6 +8,13 @@ import {
   query,
 } from "./_generated/server";
 import {
+  MAX_NOTE_CHARS,
+  clipNote,
+  noteLimitMessage,
+  withinNoteLimit,
+} from "./lib/noteLimits";
+import { consumeBuildAllowance } from "./buildUsage";
+import {
   BUILD_DEFAULTS,
   BUILD_MAX,
   BUILD_MIN,
@@ -39,12 +46,19 @@ const sourceType = v.union(
 // summary and the mutation that stores it must agree on every field. A local
 // copy is exactly how `title` once broke every build.
 
-const cardInput = v.object({ front: v.string(), back: v.string() });
+const cardInput = v.object({
+  front: v.string(),
+  back: v.string(),
+  // True when the item uses a fact the student's notes do not contain. Shown as
+  // "Beyond your notes" so enrichment is visible instead of indistinguishable.
+  beyondNotes: v.optional(v.boolean()),
+});
 const quizInput = v.object({
   question: v.string(),
   options: v.array(v.string()),
   correctIndex: v.number(),
   explanation: v.string(),
+  beyondNotes: v.optional(v.boolean()),
   // New quiz questions mix multiple choice, cloze and typed answers.
   type: v.optional(
     v.union(v.literal("mcq"), v.literal("cloze"), v.literal("typed")),
@@ -57,6 +71,7 @@ const examInput = v.object({
   marks: v.number(),
   modelAnswer: v.string(),
   markingGuide: v.array(v.string()),
+  beyondNotes: v.optional(v.boolean()),
   // Optional on the way in: the build derives these from the guide below.
   criteria: v.optional(
     v.array(
@@ -667,12 +682,18 @@ export const create = mutation({
     const userId = await requireUserId(ctx);
     await requireVerifiedUser(ctx, userId);
 
+    // Rate limit before anything is written or generated: a guest can otherwise
+    // start build after build and burn the deployment's AI tokens.
+    await consumeBuildAllowance(ctx, userId, "set");
+
     const notes = normalizeStudyText(args.notes);
     if (args.sourceType === "text" && notes.length < 40) {
       throw new Error("Paste at least a few sentences so Bluprint has source material.");
     }
-    if (notes.length > 60_000) {
-      throw new Error("That's a lot of notes. Please use under 60,000 characters.");
+    // The same limit the dialog shows. Checked here, before the set exists, so
+    // an oversized paste can never start a build (and never bill a build).
+    if (!withinNoteLimit(notes)) {
+      throw new Error(noteLimitMessage(notes.length));
     }
 
     const now = Date.now();
@@ -732,7 +753,9 @@ export const create = mutation({
  */
 function normalizeStudyText(value: string): string {
   return value
-    .slice(0, 60_000)
+    // The mutation rejects anything longer, so this is only a guard for text
+    // that arrives from somewhere other than the paste box.
+    .slice(0, MAX_NOTE_CHARS)
     .replace(/\x00/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -1174,6 +1197,14 @@ export const claimForProcessing = internalMutation({
   },
 });
 
+/**
+ * Progress writes are no-ops once a set has been deleted mid-build.
+ *
+ * Deleting a set while it was still generating used to surface Convex's own
+ * "Update on nonexistent document ID" in the page's toast, because the action
+ * kept patching a row that no longer existed. Checking first keeps orphaned
+ * writes out of the database and out of the UI.
+ */
 export const setProgress = internalMutation({
   args: {
     setId: v.id("studySets"),
@@ -1182,19 +1213,39 @@ export const setProgress = internalMutation({
     percent: v.optional(v.number()),
   },
   handler: async (ctx, { setId, progress, percent }) => {
+    const set = await ctx.db.get(setId);
+    if (!set) return { written: false };
     await ctx.db.patch(setId, {
       progress,
       ...(percent === undefined
         ? {}
         : { progressPercent: Math.max(0, Math.min(99, Math.round(percent))) }),
     });
+    return { written: true };
   },
 });
 
 export const saveExtractedNotes = internalMutation({
   args: { setId: v.id("studySets"), notes: v.string() },
   handler: async (ctx, { setId, notes }) => {
-    await ctx.db.patch(setId, { notes });
+    const set = await ctx.db.get(setId);
+    if (!set) return { written: false };
+    // Text read from photos is clipped rather than refused: the student
+    // uploaded pages, not characters, and failing here would lose their work.
+    await ctx.db.patch(setId, { notes: clipNote(notes) });
+    return { written: true };
+  },
+});
+
+/**
+ * Whether a build should keep running. Read between stages so a deleted set
+ * stops costing AI calls instead of finishing work nobody will see.
+ */
+export const isActive = internalQuery({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const set = await ctx.db.get(setId);
+    return set !== null;
   },
 });
 
@@ -1212,7 +1263,8 @@ export const completeGeneration = internalMutation({
   },
   handler: async (ctx, { setId, summary, cards, quiz, exams, title, generationNote }) => {
     const set = await ctx.db.get(setId);
-    if (!set) throw new Error("Study set not found.");
+    // Deleted mid-build: stop quietly rather than writing into a missing set.
+    if (!set) return { stored: false };
 
     const generatedTitle = title ? shortTitle(title) : "";
     const named = generatedTitle.length >= 3 && set.titleSource !== "user";
@@ -1228,6 +1280,7 @@ export const completeGeneration = internalMutation({
         front: card.front,
         back: card.back,
         order: index,
+        beyondNotes: card.beyondNotes,
         status: "new",
         reviewCount: 0,
         // New cards are due immediately and have no memory state yet. FSRS
@@ -1250,6 +1303,7 @@ export const completeGeneration = internalMutation({
         type: question.type,
         answer: question.answer,
         acceptedAnswers: question.acceptedAnswers,
+        beyondNotes: question.beyondNotes,
         order: index,
         missCount: 0,
         correctCount: 0,
@@ -1263,6 +1317,7 @@ export const completeGeneration = internalMutation({
         marks: question.marks,
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
+        beyondNotes: question.beyondNotes,
         // Stored as discrete criteria, scaled to the question's marks, so a
         // six-mark answer can score 3 and each award is its own row.
         criteria:
@@ -1291,12 +1346,15 @@ export const completeGeneration = internalMutation({
       processingStartedAt: undefined,
       updatedAt: now,
     });
+    return { stored: true };
   },
 });
 
 export const failGeneration = internalMutation({
   args: { setId: v.id("studySets"), message: v.string() },
   handler: async (ctx, { setId, message }) => {
+    const set = await ctx.db.get(setId);
+    if (!set) return { written: false };
     await ctx.db.patch(setId, {
       status: "error",
       errorMessage: message.slice(0, 600),
@@ -1304,6 +1362,7 @@ export const failGeneration = internalMutation({
       processingStartedAt: undefined,
       updatedAt: Date.now(),
     });
+    return { written: true };
   },
 });
 
