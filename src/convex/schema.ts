@@ -1,6 +1,7 @@
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
+import { topicNoteSectionValidator } from "./lib/topicNotes";
 
 // default user roles. can add / remove based on the project as needed
 export const ROLES = {
@@ -349,13 +350,14 @@ const schema = defineSchema(
     cognitoTopicNotes: defineTable({
       courseId: v.id("courses"),
       topicId: v.string(),
-      sections: v.array(
-        v.object({
-          heading: v.string(),
-          blocks: v.array(v.string()),
-        }),
-      ),
+      // One shape, shared with the parser that fills it (lib/topicNotes).
+      sections: v.array(topicNoteSectionValidator),
       sources: v.array(v.object({ title: v.string(), url: v.string() })),
+      // Who wrote this copy. Absent on notes stored before the field existed,
+      // and every one of those was read from Cognito's published pages.
+      origin: v.optional(
+        v.union(v.literal("cognito"), v.literal("bluprint")),
+      ),
       fetchedAt: v.number(),
     }).index("by_course_topic", ["courseId", "topicId"]),
 

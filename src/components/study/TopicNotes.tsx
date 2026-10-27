@@ -10,11 +10,15 @@ import { BookOpen, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * The published notes for one pathway topic, read from Cognito and shown here
- * rather than linking out. A topic's notes are several subtopic pages, so the
- * first open reads them once and the copy is then served from the database.
+ * The detailed notes for one pathway topic, shown here rather than linking out.
+ *
+ * The copy is read once and stored. Most courses publish notes for each topic
+ * and those are what appears; a course with nothing published — Edexcel GCSE
+ * Religious Studies and AQA GCSE Spanish, for instance — has notes written by
+ * Bluprint instead. The stored origin decides which of the two the heading
+ * claims, so the reader never passes one off as the other.
  */
-export function CognitoTopicNotes({
+export function TopicNotes({
   courseId,
   topicId,
   onClose,
@@ -35,20 +39,24 @@ export function CognitoTopicNotes({
     try {
       await load({ courseId, topicId });
     } catch (cause) {
-      setError(readableError(cause, "Cognito's notes could not be read just now."));
+      setError(
+        readableError(cause, "The notes for this topic could not be prepared just now."),
+      );
     } finally {
       setBusy(false);
     }
   };
 
   useEffect(() => {
-    // Open the notes immediately; only the first visit does the scraping.
+    // Open the notes immediately; only the first visit does the reading.
     if (started.current || cached === undefined || cached !== null) return;
     started.current = true;
     void run();
   });
 
   const sections = cached?.sections ?? [];
+  // Notes stored before this source existed were all read from Cognito.
+  const written = (cached?.origin ?? "cognito") === "bluprint";
 
   return (
     <motion.div
@@ -63,7 +71,9 @@ export function CognitoTopicNotes({
             Topic notes
           </p>
           <p className="mt-0.5 text-[0.78rem] font-semibold text-brand-ink">
-            Read here, from Cognito&apos;s published notes
+            {written
+              ? "Written by Bluprint from your specification"
+              : "Read here, from Cognito's published notes"}
           </p>
         </div>
         <button
@@ -81,7 +91,7 @@ export function CognitoTopicNotes({
           aria-busy="true"
           className="mt-4 space-y-3"
         >
-          <span className="sr-only">Reading the published notes</span>
+          <span className="sr-only">Preparing the notes for this topic</span>
           <Skeleton className="h-3 w-1/3" aria-hidden="true" />
           <SkeletonText lines={5} />
         </div>
@@ -111,8 +121,8 @@ export function CognitoTopicNotes({
       {!busy && !error && cached && sections.length === 0 && (
         <p className="mt-3 flex items-start gap-2 text-[0.78rem] leading-relaxed text-muted-foreground">
           <BookOpen className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          Cognito does not publish separate notes for this topic, so there is
-          nothing to read here yet. Use the topic summary and key points above.
+          No notes are stored for this topic yet. Use the topic summary and key
+          points above, or open the notes again to have them written.
         </p>
       )}
 
@@ -138,12 +148,15 @@ export function CognitoTopicNotes({
         </div>
       )}
 
-      {cached && cached.sources.length > 0 && (
+      {cached && sections.length > 0 && (
         <p className="mt-3 text-[0.68rem] leading-relaxed text-muted-foreground">
-          {cached.sections.length} note sections from Cognito ·{" "}
-          {cached.sources.length} subtopic
-          {cached.sources.length === 1 ? "" : "s"} · checked{" "}
-          {new Date(cached.fetchedAt).toLocaleDateString()}
+          {cached.sections.length} note sections{" "}
+          {written
+            ? "written by Bluprint"
+            : `from Cognito · ${cached.sources.length} subtopic${
+                cached.sources.length === 1 ? "" : "s"
+              }`}{" "}
+          · checked {new Date(cached.fetchedAt).toLocaleDateString()}
         </p>
       )}
     </motion.div>

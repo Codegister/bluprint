@@ -16,17 +16,25 @@ import {
   topicNotesPages,
   type CognitoNoteSection,
 } from "./lib/cognito";
+import {
+  topicNotesOriginValidator,
+  type TopicNotesOrigin,
+} from "./lib/topicNotes";
 
 /**
- * Cognito content shown inside Bluprint.
+ * Cognito content shown inside Bluprint, plus the notes Bluprint writes when
+ * Cognito publishes none.
  *
  * A course pathway already comes from Cognito, and the same course page also
  * publishes the notes for each topic and the real past papers. Both are read on
  * request and stored, so the student reads them here rather than being sent to
  * another site, and a topic is only scraped once.
  *
- * Nothing in this file writes study material: the notes are Cognito's own text
- * and the papers are Cognito's own PDF files.
+ * Some courses have no published notes to read: Edexcel GCSE Religious Studies
+ * is saved Pearson content with no Cognito page, and AQA GCSE Spanish has only
+ * a specification page. Those topics get notes written with NVIDIA instead, and
+ * the copy is marked so the reader can say who wrote it. Papers are always
+ * Cognito's own list and PDF files.
  */
 
 /** Notes change rarely, so a cached copy is kept for a month. */
@@ -105,15 +113,17 @@ export const readPastPapers = internalQuery({
   },
 });
 
-/** Replaces one topic's cached notes. */
+/** Replaces one topic's cached notes, however they were obtained. */
 export const saveTopicNotes = internalMutation({
   args: {
     courseId: v.id("courses"),
     topicId: v.string(),
     sections: v.array(noteSection),
     sources: v.array(v.object({ title: v.string(), url: v.string() })),
+    // Defaults to Cognito: every caller but the notes writer read a page.
+    origin: v.optional(topicNotesOriginValidator),
   },
-  handler: async (ctx, { courseId, topicId, sections, sources }) => {
+  handler: async (ctx, { courseId, topicId, sections, sources, origin }) => {
     const existing = await ctx.db
       .query("cognitoTopicNotes")
       .withIndex("by_course_topic", (q) =>
@@ -126,6 +136,7 @@ export const saveTopicNotes = internalMutation({
       topicId,
       sections,
       sources,
+      origin: origin ?? "cognito",
       fetchedAt: Date.now(),
     });
   },
@@ -195,16 +206,59 @@ function findTopic(
 }
 
 /**
- * Reads the published notes for one pathway topic and stores them. The notes
- * page is per subtopic, so a topic with fourteen subtopics reads fourteen
- * pages once and then serves them from the database.
+ * The notes a topic's own published pages hold. A topic is several subtopic
+ * pages, so this reads them politely in small batches. Returns empty when the
+ * course publishes nothing for this topic — the caller decides what to do then.
+ */
+async function readPublishedNotes(
+  notesUrl: string,
+  topic: { title: string; reference?: string },
+): Promise<{ sections: CognitoNoteSection[]; sources: Array<{ title: string; url: string }> }> {
+  const index = await fetchCognitoPage(notesUrl);
+  if (!index) {
+    throw new Error(
+      "Cognito's notes could not be reached just now. Try again in a moment.",
+    );
+  }
+
+  const pages = topicNotesPages(parseCognitoTopicLinks(index.html), topic);
+  if (pages.length === 0) return { sections: [], sources: [] };
+
+  const read = await inBatches(pages, NOTES_CONCURRENCY, async (page) => {
+    const html = await fetchCognitoPage(page.url);
+    return html ? parseCognitoTopicPage(html.html) : [];
+  });
+
+  const sections: CognitoNoteSection[] = read
+    .flat()
+    .slice(0, MAX_SECTIONS)
+    .map((section) => ({
+      heading: section.heading,
+      blocks: section.blocks,
+    }));
+  // Pages that exist but carried no notes are not worth citing.
+  if (sections.length === 0) return { sections: [], sources: [] };
+  return {
+    sections,
+    sources: pages.map((page) => ({ title: page.title, url: page.url })),
+  };
+}
+
+/**
+ * The notes for one pathway topic, stored so the next visit is instant.
+ *
+ * Cognito's published notes are read first whenever the course has them. A
+ * topic with nothing published — Edexcel GCSE RS, AQA GCSE Spanish, or a note
+ * page whose leaf pages do not match this topic — is written with NVIDIA
+ * instead, so no course is left without a notes tab. Either way the stored copy
+ * records who wrote it.
  */
 export const loadTopicNotes = action({
   args: { courseId: v.id("courses"), topicId: v.string() },
   handler: async (
     ctx,
     { courseId, topicId },
-  ): Promise<{ sections: number; cached: boolean }> => {
+  ): Promise<{ sections: number; cached: boolean; origin: TopicNotesOrigin }> => {
     const userId = await requireUserId(ctx);
     const course = await ctx.runQuery(internal.courses.getForBuild, { courseId });
     if (!course || course.userId !== userId) {
@@ -215,58 +269,51 @@ export const loadTopicNotes = action({
       courseId,
       topicId,
     });
-    if (cached && Date.now() - cached.fetchedAt < NOTES_TTL) {
-      return { sections: cached.sections.length, cached: true };
+    // A copy with no sections was stored before notes were written for topics
+    // Cognito does not cover, so it is treated as missing and replaced.
+    if (
+      cached &&
+      cached.sections.length > 0 &&
+      Date.now() - cached.fetchedAt < NOTES_TTL
+    ) {
+      return {
+        sections: cached.sections.length,
+        cached: true,
+        origin: cached.origin ?? "cognito",
+      };
     }
 
     const topic = findTopic(course, topicId);
     if (!topic) throw new Error("That topic is not part of this pathway.");
 
     const notesUrl = course.pathway?.sourceUrl;
-    if (!notesUrl) {
-      throw new Error(
-        "Cognito does not publish notes for this course, so there is nothing to read here yet.",
-      );
-    }
+    const published = notesUrl
+      ? await readPublishedNotes(notesUrl, topic)
+      : { sections: [], sources: [] };
 
-    const index = await fetchCognitoPage(notesUrl);
-    if (!index) {
-      throw new Error(
-        "Cognito's notes could not be reached just now. Try again in a moment.",
-      );
-    }
-
-    const pages = topicNotesPages(parseCognitoTopicLinks(index.html), topic);
-    if (pages.length === 0) {
+    if (published.sections.length > 0) {
       await ctx.runMutation(internal.cognitoLibrary.saveTopicNotes, {
         courseId,
         topicId,
-        sections: [],
-        sources: [],
+        sections: published.sections,
+        sources: published.sources,
+        origin: "cognito",
       });
-      return { sections: 0, cached: false };
+      return {
+        sections: published.sections.length,
+        cached: false,
+        origin: "cognito",
+      };
     }
 
-    const read = await inBatches(pages, NOTES_CONCURRENCY, async (page) => {
-      const html = await fetchCognitoPage(page.url);
-      return html ? parseCognitoTopicPage(html.html) : [];
-    });
-
-    const sections: CognitoNoteSection[] = read
-      .flat()
-      .slice(0, MAX_SECTIONS)
-      .map((section) => ({
-        heading: section.heading,
-        blocks: section.blocks,
-      }));
-
-    await ctx.runMutation(internal.cognitoLibrary.saveTopicNotes, {
+    // Nothing published for this topic, so Bluprint writes the notes and stores
+    // them under its own name.
+    const written = await ctx.runAction(internal.ai.writeTopicNotes, {
       courseId,
       topicId,
-      sections,
-      sources: pages.map((page) => ({ title: page.title, url: page.url })),
+      userId,
     });
-    return { sections: sections.length, cached: false };
+    return { sections: written.sections, cached: false, origin: "bluprint" };
   },
 });
 

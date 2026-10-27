@@ -2,7 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { NextStep } from "@/components/NextStep";
 import { SkeletonCoursePage } from "@/components/Skeletons";
 import { CognitoRealPapers } from "@/components/study/CognitoRealPapers";
-import { CognitoTopicNotes } from "@/components/study/CognitoTopicNotes";
+import { TopicNotes } from "@/components/study/TopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
 import {
   PathwaySectionsDialog,
@@ -58,11 +58,15 @@ const PATH_COLORS = [
   { hex: "var(--chrome-7)", soft: "var(--chrome-3)", ring: "var(--chrome-5)" },
 ];
 
-/** Three destinations: the pathway, practice, and the sets built from it. */
-type CourseSection = "pathway" | "practice" | "sets";
+/**
+ * Four destinations: the pathway, the detailed notes for it, practice, and the
+ * sets built from it.
+ */
+type CourseSection = "pathway" | "notes" | "practice" | "sets";
 
 const COURSE_SECTIONS: Array<{ value: CourseSection; label: string }> = [
   { value: "pathway", label: "Pathway" },
+  { value: "notes", label: "Notes" },
   { value: "practice", label: "Practice" },
   { value: "sets", label: "Study sets" },
 ];
@@ -237,11 +241,13 @@ export default function Course() {
   const activeSection: CourseSection =
     requested === "sets"
       ? "sets"
-      : requested === "practice" ||
-          requested === "papers" ||
-          requested === "topic-papers"
-        ? "practice"
-        : "pathway";
+      : requested === "notes"
+        ? "notes"
+        : requested === "practice" ||
+            requested === "papers" ||
+            requested === "topic-papers"
+          ? "practice"
+          : "pathway";
   const [practiceTab, setPracticeTab] = useState<"papers" | "topics">(
     requested === "topic-papers" ? "topics" : "papers",
   );
@@ -322,7 +328,7 @@ export default function Course() {
   const [deleting, setDeleting] = useState(false);
   // null means "follow the next unfinished unit"; -1 means every unit closed.
   const [openUnit, setOpenUnit] = useState<number | null>(null);
-  // The one topic whose published notes are open, so only one is read at once.
+  // The one topic whose notes are open, so only one is read at once.
   const [notesTopic, setNotesTopic] = useState<string | null>(null);
   const openTutor = (unitTitle?: string) => {
     if (!validId) return;
@@ -362,6 +368,18 @@ export default function Course() {
     }
     return null;
   }, [details]);
+
+  // The notes tab opens on the topic being worked through, so the screen shows
+  // notes straight away instead of a list waiting to be tapped.
+  const notesOpened = useRef(false);
+  useEffect(() => {
+    if (activeSection !== "notes" || notesOpened.current) return;
+    const pathway = details?.course.pathway;
+    const first = nextTopic?.topic.id ?? pathway?.units[0]?.topics[0]?.id;
+    if (!first) return;
+    notesOpened.current = true;
+    setNotesTopic((current) => current ?? first);
+  }, [activeSection, details, nextTopic]);
 
   const handleRetry = async () => {
     if (!validId) return;
@@ -1012,28 +1030,29 @@ export default function Course() {
                                         ) : null}
                                         {set ? "Open set" : "Study this topic"}
                                       </Button>
-                                      {pathway.sourceUrl && (
-                                        <button
-                                          type="button"
-                                          aria-expanded={notesTopic === topic.id}
-                                          onClick={() =>
-                                            setNotesTopic(
-                                              notesTopic === topic.id
-                                                ? null
-                                                : topic.id,
-                                            )
-                                          }
-                                          className={cn(
-                                            "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.74rem] font-semibold transition-colors",
+                                      {/* Every topic has notes: published ones
+                                          where the course has them, and Bluprint's
+                                          own where it does not. */}
+                                      <button
+                                        type="button"
+                                        aria-expanded={notesTopic === topic.id}
+                                        onClick={() =>
+                                          setNotesTopic(
                                             notesTopic === topic.id
-                                              ? "bg-brand-panel text-chrome-8"
-                                              : "text-chrome-7 hover:bg-brand-panel",
-                                          )}
-                                        >
-                                          <BookOpen className="size-3.5" aria-hidden />
-                                          Notes
-                                        </button>
-                                      )}
+                                              ? null
+                                              : topic.id,
+                                          )
+                                        }
+                                        className={cn(
+                                          "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.74rem] font-semibold transition-colors",
+                                          notesTopic === topic.id
+                                            ? "bg-brand-panel text-chrome-8"
+                                            : "text-chrome-7 hover:bg-brand-panel",
+                                        )}
+                                      >
+                                        <BookOpen className="size-3.5" aria-hidden />
+                                        Notes
+                                      </button>
                                       <button
                                         type="button"
                                         aria-label={`Remove ${topic.title}`}
@@ -1054,7 +1073,7 @@ export default function Course() {
 
                                     {notesTopic === topic.id && (
                                       <div className="px-4 pb-4">
-                                        <CognitoTopicNotes
+                                        <TopicNotes
                                           courseId={course._id}
                                           topicId={topic.id}
                                           onClose={() => setNotesTopic(null)}
@@ -1079,6 +1098,98 @@ export default function Course() {
                   {course.lastStudiedAt ? relativeDate(course.lastStudiedAt) : "not yet"}
                 </p>
             </>)}
+
+            {currentSection === "notes" && (
+              <motion.section
+                className="mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
+                {...enter(0.05, 10)}
+              >
+                <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
+                  Detailed notes
+                </p>
+                <h2 className="mt-1 font-display text-[1.2rem] font-bold text-brand-ink">
+                  Notes for every topic in this course
+                </h2>
+                <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
+                  Open a topic to read its notes.{" "}
+                  {pathway.sourceUrl
+                    ? "Published notes are shown as published; where the course has none for a topic, Bluprint writes them from the specification."
+                    : "This course has no published notes, so Bluprint writes them from the specification."}{" "}
+                  Each one is prepared once and kept for next time.
+                </p>
+
+                {pathway.units.length === 0 ? (
+                  <p className="mt-5 rounded-2xl border border-dashed border-border px-4 py-8 text-center text-[0.84rem] leading-relaxed text-muted-foreground">
+                    Every part of this pathway has been removed, so there are no
+                    topics to read. Rebuild the pathway to bring them back.
+                  </p>
+                ) : (
+                  <div className="rise-stagger mt-5 space-y-6">
+                    {pathway.units.map((unit, unitIndex) => (
+                      <div key={`${unit.title}-${unitIndex}`}>
+                        <h3 className="font-display text-[0.98rem] font-bold text-brand-ink">
+                          {unit.title}
+                        </h3>
+                        <ul className="mt-2 space-y-2">
+                          {unit.topics.map((topic) => (
+                            <li
+                              key={topic.id}
+                              className="rounded-2xl border border-border bg-white"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-2 px-3.5 py-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[0.86rem] font-semibold text-brand-ink">
+                                    {topic.specReference ? (
+                                      <span className="mr-1.5 text-[0.78rem] text-muted-foreground">
+                                        {topic.specReference}
+                                      </span>
+                                    ) : null}
+                                    {topic.title}
+                                  </p>
+                                  <p className="mt-0.5 text-[0.78rem] leading-relaxed text-muted-foreground">
+                                    {topic.summary}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  aria-expanded={notesTopic === topic.id}
+                                  onClick={() =>
+                                    setNotesTopic(
+                                      notesTopic === topic.id ? null : topic.id,
+                                    )
+                                  }
+                                  className={cn(
+                                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[0.76rem] font-semibold transition-colors",
+                                    notesTopic === topic.id
+                                      ? "border-brand-sky bg-brand-sky text-brand-cream"
+                                      : "border-border bg-white text-brand-ink/75 hover:border-brand-sky/30 hover:bg-brand-sky/10",
+                                  )}
+                                >
+                                  <BookOpen className="size-3.5" aria-hidden />
+                                  {notesTopic === topic.id
+                                    ? "Hide notes"
+                                    : "Read notes"}
+                                </button>
+                              </div>
+
+                              {notesTopic === topic.id && (
+                                <div className="px-3.5 pb-3.5">
+                                  <TopicNotes
+                                    courseId={course._id}
+                                    topicId={topic.id}
+                                    onClose={() => setNotesTopic(null)}
+                                  />
+                                </div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.section>
+            )}
 
             {currentSection === "practice" && (
               <div

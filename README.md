@@ -298,8 +298,12 @@ session*, so the loop closes without going back to the menu. All top-level scree
 one header frame (eyebrow, title, one-line description, single primary action), and each
 route's content rises into place with the same short entrance.
 
-Each course has three sections: **Pathway**, **Practice** (past papers and topic papers
-behind one toggle) and **Study sets**. A study set opens on its **Overview**, with tabs for
+Each course has four sections: **Pathway**, **Notes**, **Practice** (past papers and topic
+papers behind one toggle) and **Study sets**. **Notes** reads each topic's notes in place,
+and it is the one place a course cannot be missing: where the subject publishes notes they
+are shown as published, and where it does not — Edexcel GCSE Religious Studies, AQA GCSE
+Spanish, and any topic whose note pages do not line up — Bluprint writes detailed notes
+from the specification and the panel says so. A study set opens on its **Overview**, with tabs for
 **Flashcards**, **Quiz**, **Exam practice** and **Needs work** (when there is any). A
 single **Continue studying** button picks the recommended mode — due cards first, then the
 quiz if it has never been taken — and *Edit set* and *Ask the tutor* sit in the `⋯` menu.

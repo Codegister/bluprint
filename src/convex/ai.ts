@@ -22,6 +22,11 @@ import {
 import { isSelfContained } from "./lib/paperData";
 import { normalizeAnswer } from "./lib/recall";
 import { parseSummary, type Summary } from "./lib/summary";
+import {
+  parseTopicNotes,
+  type TopicNoteSection,
+  type TopicNoteSource,
+} from "./lib/topicNotes";
 import { cleanTopicTitle } from "./lib/titles";
 import {
   awardCriterion,
@@ -2222,6 +2227,126 @@ export const syncCognitoLinks = action({
       syncedAt: Date.now(),
     });
     return { updated: true };
+  },
+});
+
+/**
+ * How detailed notes are written when a course has no published ones.
+ *
+ * The topic block handed to the model is a specification scope rather than
+ * teaching material, so the syllabus rule applies here too: the notes must
+ * teach the subject, never describe the qualification.
+ */
+const TOPIC_NOTES_RULES =
+  "Write revision notes a student can learn from, section by section. Every sentence must carry real content: a named example, a date, a figure, a definition, a formula, a quotation, a target-language word or phrase with its meaning, or a rule with a worked example, whichever suits this subject. " +
+  "Give the detail at the depth and command words of this qualification, and include the specific cases, exceptions and common confusions that exam questions turn on. " +
+  "Write in plain prose under a heading; no questions, no exercises, no bullet symbols inside a paragraph, and no advice about how to revise. " +
+  "If you are not certain of a fact, leave it out rather than guessing.";
+
+/** Writes the notes for one topic: sections of prose, ready to render. */
+async function generateTopicNotes(
+  apiKeys: string[],
+  topic: TopicNoteSource,
+  context: { qualification: string; unitTitle: string; reference?: string },
+): Promise<TopicNoteSection[]> {
+  const raw = await nvidiaChat(apiKeys, {
+    model: NVIDIA_TEXT_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          (context.qualification
+            ? `<qualification>${context.qualification}</qualification>\n`
+            : "") +
+          `<unit>${context.unitTitle}</unit>\n` +
+          `<topic${context.reference ? ` reference="${context.reference}"` : ""}>${topic.title}</topic>\n` +
+          `<topic_scope>\n${topic.summary}\n${topic.keyPoints.join("\n")}\n</topic_scope>\n\n` +
+          `${PATHWAY_MATERIAL_RULES}\n` +
+          `${TOPIC_NOTES_RULES}\n\n` +
+          "Write the full set of notes for this topic. Return JSON shaped exactly like:\n" +
+          '{"sections":[{"heading":"4-8 word heading","blocks":["one or two sentences of notes"]}]}\n' +
+          "Use 5 to 8 sections, in the order a student would learn them, and 3 to 6 blocks in each. " +
+          "Vary the headings for this subject: definitions and key terms, the main processes or rules, worked examples or named cases, and what examiners look for. No markdown inside the values.",
+      },
+    ],
+    // A whole topic's notes is the longest text this app asks for in one call.
+    maxTokens: 4000,
+    temperature: 0.3,
+    topP: 1.0,
+    disableThinking: true,
+    timeoutMs: 180_000,
+  });
+  return parseTopicNotes(raw, topic);
+}
+
+/** Finds one topic in a stored pathway, with the unit it belongs to. */
+function findPathwayTopic(
+  pathway: CoursePathway | undefined,
+  topicId: string,
+): { topic: PathwayTopic; unitTitle: string } | null {
+  for (const unit of pathway?.units ?? []) {
+    for (const topic of unit.topics) {
+      if (topic.id === topicId) return { topic, unitTitle: unit.title };
+    }
+  }
+  return null;
+}
+
+/**
+ * Writes the detailed notes for one topic and stores them.
+ *
+ * Called by the notes reader only when the course has nothing published for
+ * that topic, so a subject Cognito does not cover still has a notes tab. The
+ * stored copy is marked as Bluprint's own, and the reader says so.
+ */
+export const writeTopicNotes = internalAction({
+  args: {
+    courseId: v.id("courses"),
+    topicId: v.string(),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, { courseId, topicId, userId }) => {
+    const course = await ctx.runQuery(internal.courses.getForBuild, { courseId });
+    // The caller has already been checked; this is the second gate, so one
+    // account can never write notes onto another account's course.
+    if (!course || course.userId !== userId) {
+      throw new Error("That course was not found.");
+    }
+
+    const found = findPathwayTopic(course.pathway, topicId);
+    if (!found) throw new Error("That topic is not part of this pathway.");
+
+    const topic: TopicNoteSource = {
+      title: found.topic.title,
+      summary: found.topic.summary,
+      keyPoints: found.topic.keyPoints,
+      ...(found.topic.examSkill ? { examSkill: found.topic.examSkill } : {}),
+    };
+
+    const apiKeys = resolveNvidiaKeys();
+    const sections = await generateTopicNotes(apiKeys, topic, {
+      qualification:
+        qualificationText({
+          course: course.subject,
+          examBoard: course.examBoard,
+          level: course.level,
+        }) + (course.tier ? ` · ${course.tier}` : ""),
+      unitTitle: found.unitTitle,
+      ...(found.topic.specReference
+        ? { reference: found.topic.specReference }
+        : {}),
+    });
+
+    await ctx.runMutation(internal.cognitoLibrary.saveTopicNotes, {
+      courseId,
+      topicId,
+      sections,
+      // Bluprint wrote these, so there is no page to cite.
+      sources: [],
+      origin: "bluprint",
+    });
+    return { sections: sections.length };
   },
 });
 
