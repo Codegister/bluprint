@@ -122,11 +122,6 @@ export function ExamPractice({
                 <span className="rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70">
                   {exam.marks} marks
                 </span>
-                {graded && (
-                  <span className="rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#0B6B45]">
-                    {score}/{exam.marks}
-                  </span>
-                )}
               </div>
             </div>
 
@@ -191,18 +186,13 @@ export function ExamPractice({
                 transition={{ duration: 0.45, ease: EASE }}
                 className="mt-4 rounded-2xl bg-[#F3FBF7] p-4 sm:p-5"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-[#0B6B45]">
-                      AI grading
-                    </p>
-                    <p className="mt-1 font-display text-lg font-bold text-brand-ink">
-                      {score} / {exam.marks} marks
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#0B6B45]">
-                    {scorePercent}%
-                  </span>
+                <div>
+                  <p className="text-xs font-semibold text-[#0B6B45]">
+                    AI grading
+                  </p>
+                  <p className="mt-1 font-display text-lg font-bold text-brand-ink">
+                    {score} of {exam.marks} marks
+                  </p>
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#D7F0E3]">
                   <motion.div
@@ -212,9 +202,13 @@ export function ExamPractice({
                     transition={{ duration: 0.9, ease: EASE, delay: 0.15 }}
                   />
                 </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-brand-ink/80">
-                  {feedbackSummary(exam.feedback ?? "")}
-                </p>
+                {/* The score is in the header and every criterion is a row
+                    below, so the old summary paragraph only repeated them. */}
+                {(exam.checklist?.length ?? 0) === 0 && (
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-brand-ink/80">
+                    {feedbackSummary(exam.feedback ?? "")}
+                  </p>
+                )}
 
                 {/* The mark as a checklist against the guide: one row per
                     criterion, its full text, and the student's quoted words. */}
@@ -261,11 +255,11 @@ export function ExamPractice({
                               <p className="mt-1 text-muted-foreground">
                                 {awarded > 0
                                   ? evidence && evidence !== "absent"
-                                    ? `Your words: “${evidence}”`
+                                    ? `“${evidence}”`
                                     : "Credited from your answer."
                                   : evidence && evidence !== "absent"
-                                    ? `You wrote “${evidence}”, which is not a creditable statement of this point.`
-                                    : "Absent: nothing in your answer states this point."}
+                                    ? `You wrote “${evidence}”, which does not state this point.`
+                                    : "Absent"}
                               </p>
                             </div>
                           </div>

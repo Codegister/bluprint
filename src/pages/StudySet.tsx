@@ -12,7 +12,7 @@ import { WeakSpots } from "@/components/study/WeakSpots";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
+import { BUILD_DEFAULTS } from "@/convex/lib/buildDefaults";
 import { buildErrorMessage, readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
@@ -259,7 +259,7 @@ function BuildingPanel({
         <Mascot size={104} className="shrink-0" />
 
         <div className="min-w-0 flex-1">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FFF6E5] px-2.5 py-1 text-[0.72rem] font-semibold text-[#96650A]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-2.5 py-1 text-[0.72rem] font-semibold text-brand-ink/70">
             <Loader2 className="size-3 animate-spin" />
             Building
           </span>
@@ -301,8 +301,8 @@ function BuildingPanel({
           </div>
 
           {stale && (
-            <div className="mt-4 flex flex-col items-start gap-2 rounded-2xl bg-[#FFF6E5] p-4">
-              <p className="text-[0.85rem] leading-relaxed text-[#7A5306]">
+            <div className="mt-4 flex flex-col items-start gap-2 rounded-2xl bg-brand-panel p-4">
+              <p className="text-[0.85rem] leading-relaxed text-brand-ink/80">
                 This run is taking longer than expected. NVIDIA may be slow, or the
                 run was interrupted.
               </p>
@@ -310,7 +310,7 @@ function BuildingPanel({
                 onClick={onRetry}
                 disabled={retrying}
                 variant="outline"
-                className="h-9 rounded-full border-[#EBD9B4] bg-white text-[0.82rem] font-semibold text-[#7A5306] hover:bg-[#FFFBF2]"
+                className="h-9 rounded-full border-border bg-card text-[0.82rem] font-semibold text-brand-ink hover:bg-brand-panel"
               >
                 {retrying ? (
                   <Loader2 className="size-3.5 animate-spin" />
@@ -420,7 +420,7 @@ function SummaryView({
       </div>
 
       <aside className="space-y-3">
-        <section className="rounded-[2rem] border border-border bg-[#FFFBEC] p-6">
+        <section className="rounded-[2rem] border border-border bg-card p-6">
           <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
             Exam focus
           </h2>
@@ -430,7 +430,7 @@ function SummaryView({
                 key={point}
                 className="flex items-start gap-2 text-[0.9rem] leading-relaxed text-brand-ink/75"
               >
-                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#E8A317]" />
+                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-sky" />
                 {point}
               </li>
             ))}
@@ -856,14 +856,41 @@ export default function StudySet() {
               ))}
             </motion.dl>
 
-            {/* One banner, written by the build itself: it carries the same
-                "Built X of Y" sentence the generator used, so the page never
-                shows two explanations of the same shortfall. */}
-            {set.generationNote && (
-              <div className="mt-3 rounded-2xl border border-border bg-[#FFFBEC] px-4 py-3 text-[0.82rem] leading-relaxed text-[#7A5306]">
-                {normaliseCapacityNote(set.generationNote)}
-              </div>
-            )}
+            {/* One compact build summary: three counts, never three sentences. */}
+            {(() => {
+              const rows = [
+                {
+                  label: "Cards",
+                  built: set.cardCount,
+                  target: set.targetCardCount ?? BUILD_DEFAULTS.cards,
+                },
+                {
+                  label: "Quiz",
+                  built: set.quizCount,
+                  target: set.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+                },
+                {
+                  label: "Exam",
+                  built: set.examCount,
+                  target: set.targetExamCount ?? BUILD_DEFAULTS.exam,
+                },
+              ];
+              return (
+                <div
+                  className="mt-3 flex flex-wrap items-center gap-2"
+                  aria-label="What this set was built with"
+                >
+                  {rows.map((row) => (
+                    <span
+                      key={row.label}
+                      className="rounded-full border border-border bg-brand-panel px-3 py-1 text-[0.76rem] font-semibold tabular-nums text-brand-ink/75"
+                    >
+                      {row.label} {row.built}/{row.target}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* One line that defines the percentage, right under the number. */}
             <p className="mt-2 text-[0.72rem] leading-relaxed text-muted-foreground">

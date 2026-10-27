@@ -373,7 +373,8 @@ export default function Today() {
         </p>
         {study?.goalReason && (
           <p className="text-[0.72rem] text-muted-foreground sm:ml-auto">
-            Daily goal: {study.goal} questions · {study.goalReason}
+            Daily goal: {study.goal} of {items.total} available questions ·{" "}
+            {study.goalReason}
           </p>
         )}
       </motion.section>

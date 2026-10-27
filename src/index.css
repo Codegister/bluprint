@@ -153,28 +153,29 @@
   --brand-panel-2: #f8fafc;
   --brand-void: #111318;
 
-  /* Anodised tints. Light enough for graphite type, dark enough to read as a
-     separate surface from the white card they sit on. */
-  --gizmo-lime: #cfe4ff; /* ice */
-  --gizmo-lilac: #dde2ea; /* pearl */
-  --gizmo-sky: #cfe8f7; /* steel blue */
-  --gizmo-peach: #e9dfcc; /* bronze */
-  --gizmo-mint: #d2e7de; /* verdigris */
-  --gizmo-cream: #f1f4f8; /* light steel */
+  /* One accent, plus neutral. Every tint below is either the action blue's
+     surface or a step on the neutral ramp — no tan badges, no purple dots. */
+  --gizmo-lime: #e3edf9; /* accent tint */
+  --gizmo-lilac: #e8ecf1; /* neutral tint */
+  --gizmo-sky: #e3edf9; /* accent tint */
+  --gizmo-peach: #e8ecf1; /* neutral tint */
+  --gizmo-mint: #e3edf9; /* accent tint */
+  --gizmo-cream: #f1f4f8; /* light neutral */
 
-  /* "pink" is the app's single action accent slot. */
+  /* Every control hue resolves to the single action accent; secondary marks
+     use the neutral ink. */
   --brand-pink: #0b57d0;
   --brand-pink-deep: #0842a0;
-  --brand-mint: #14633f;
-  --brand-lime: #35610c;
-  --brand-sky: #0f5387;
-  --brand-peach: #8f3f18;
-  --brand-teal: #12605a;
-  --brand-pink2: #5132c4;
-  --brand-orange: #8a4412;
-  --brand-violet: #5132c4;
-  --brand-butter: #ffd66b;
-  --brand-blush: #ffc9d6;
+  --brand-mint: #0b57d0;
+  --brand-lime: #2c3641;
+  --brand-sky: #0b57d0;
+  --brand-peach: #4b5866;
+  --brand-teal: #0b57d0;
+  --brand-pink2: #2c3641;
+  --brand-orange: #4b5866;
+  --brand-violet: #4b5866;
+  --brand-butter: #d8dee6;
+  --brand-blush: #e3edf9;
 
   --background: #f5f7f8;
   --foreground: #111318;

@@ -26,7 +26,7 @@ import {
   goalFromExam,
 } from "./lib/studyMetrics";
 import { gradeShortAnswer } from "./lib/recall";
-import { toCriteria } from "./lib/markingCriteria";
+import { alignCriteria, toCriteria } from "./lib/markingCriteria";
 import { summaryValidator } from "./lib/summary";
 
 const sourceType = v.union(
@@ -443,9 +443,14 @@ export const studyStats = query({
     items.correct =
       items.cards.correct + items.quiz.correct + items.exam.correct;
 
+    // A daily goal larger than the whole workspace is not a goal. It is capped
+    // at the items that exist, and the page labels it against that total.
+    const dailyGoal =
+      items.total > 0 ? Math.min(goal.goal, items.total) : goal.goal;
+
     return {
       ...streak,
-      goal: goal.goal,
+      goal: dailyGoal,
       goalReason: goal.reason,
       examInDays: nearestExam?.daysLeft ?? null,
       examTitle: nearestExam?.title ?? null,
@@ -1258,8 +1263,12 @@ export const completeGeneration = internalMutation({
         marks: question.marks,
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
-        // Stored as discrete criteria so each award can render as its own row.
-        criteria: question.criteria ?? toCriteria(question.markingGuide),
+        // Stored as discrete criteria, scaled to the question's marks, so a
+        // six-mark answer can score 3 and each award is its own row.
+        criteria:
+          question.criteria ?
+            alignCriteria(question.criteria, question.marks)
+          : alignCriteria(toCriteria(question.markingGuide), question.marks),
         order: index,
       });
     }

@@ -42,11 +42,10 @@ type Palette = {
 const PALETTES: Record<Theme, Palette> = {
   light: {
     key: "light",
-    // One accent only. The light theme is a flat neutral page, so the plumes
-    // are a single chrome-blue tint rather than lime, lilac, sky, teal and
-    // peach at once.
-    strength: 1.15,
-    pigments: [{ rgb: "91, 138, 196", weight: 1 }],
+    // A flat neutral page: the plumes are a single graphite tint, so the
+    // background stays near-solid instead of carrying a blue gradient.
+    strength: 0.9,
+    pigments: [{ rgb: "122, 135, 148", weight: 1 }],
   },
   dark: {
     key: "dark",

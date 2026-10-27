@@ -22,6 +22,12 @@ import {
 import { normalizeAnswer } from "./lib/recall";
 import { parseSummary, type Summary } from "./lib/summary";
 import { cleanTopicTitle } from "./lib/titles";
+import {
+  awardCriterion,
+  criteriaFor,
+  distinctiveTermsFor,
+  guideFromCriteria,
+} from "./lib/markingCriteria";
 import { requireUserId } from "./lib/requireUser";
 import {
   fetchCognitoOutline,
@@ -2506,7 +2512,9 @@ async function markByLevels(
 function bulletMarks(point: string): number {
   const match = /(\d{1,2})\s*marks?\b/i.exec(point);
   const value = match ? Number(match[1]) : 1;
-  return Math.max(1, Math.min(4, value));
+  // Long essay questions can carry a large share per level descriptor; the
+  // cap only guards against a stray number in the guide text.
+  return Math.max(1, Math.min(60, value));
 }
 
 /** Meaningful words of a text, with number spellings and accents folded. */
@@ -2603,8 +2611,13 @@ function buildChecks(
   guide: string[],
   verdicts: unknown,
   answer: string,
+  // Every bullet in the question, not just the ones being checked, so the
+  // guard knows which words are shared by the whole guide and which belong to
+  // this criterion alone.
+  referencePoints: string[] = guide,
 ): MarkCheck[] {
   const rows = Array.isArray(verdicts) ? verdicts : [];
+  const distinctive = distinctiveTermsFor(referencePoints);
   return guide.map((point, index) => {
     const marks = bulletMarks(point);
     const row = rows[index] as { awarded?: unknown; evidence?: unknown } | undefined;
@@ -2615,7 +2628,15 @@ function buildChecks(
     const evidence = asText(row?.evidence, 400);
     const verifiable = quoteIsInAnswer(evidence, answer) ? evidence : "absent";
     if (claimed > 0 && verifiable !== "absent") {
-      return { point, marks, awarded: claimed, evidence: verifiable };
+      // The model proposes; the answer decides. A criterion whose own key
+      // terms appear nowhere in the answer is never credited, and one that
+      // asks for several ideas can only take the share it covers. This is
+      // what stops a temperature-only answer taking six marks for
+      // "temperature and pH".
+      const referenceIndex = referencePoints.indexOf(point);
+      const terms = distinctive[referenceIndex] ?? distinctive[index] ?? [];
+      const awarded = awardCriterion(marks, claimed, terms, answer);
+      return { point, marks, awarded, evidence: verifiable };
     }
     // Uncredited. When the answer does refer to the bullet's idea, the sentence
     // it was judged against is shown in place of the missing evidence, so the
@@ -2642,17 +2663,13 @@ function buildChecks(
  * what produced "Credited: - 1/1 · 1 mark: …" twice on the same card.
  */
 function checklistFeedback(
-  checks: MarkCheck[],
+  _checks: MarkCheck[],
   awardedMarks: number,
   marksAvailable: number,
 ): string {
-  const credited = checks.filter((check) => check.awarded > 0).length;
-  const lead = `${awardedMarks} of ${marksAvailable} marks.`;
-  if (checks.length === 0) return lead;
-  if (credited === checks.length) {
-    return `${lead} Every point in the guide was credited from your answer.`;
-  }
-  return `${lead} ${credited} of ${checks.length} guide points were credited. Each point and the line it was judged against is below.`;
+  // The header already carries the score and the checklist carries every
+  // criterion; a sentence here only repeated both.
+  return `${awardedMarks} of ${marksAvailable} marks.`;
 }
 
 /** One examiner pass over the guide, returning a verdict for every bullet. */
@@ -2734,6 +2751,7 @@ async function recheckUncredited(
     contested.map((check) => check.point),
     parsed.pointChecks,
     response,
+    checks.map((check) => check.point),
   );
   const recovered = new Map(rebuilt.map((check) => [check.point, check]));
   return checks.map((check) => {
@@ -2756,6 +2774,7 @@ async function markExamAnswer(
     marks: number;
     modelAnswer: string;
     markingGuide: string[];
+    criteria?: Array<{ id: string; marks: number; text: string }>;
   },
   response: string,
   context?: StudyContext,
@@ -2767,12 +2786,19 @@ async function markExamAnswer(
     return await markByLevels(apiKeys, exam, response, qualification);
   }
 
-  // A guide can be missing on very old rows. The model answer then carries the
-  // marks, so the answer is still marked against something the page can show.
-  const guide =
-    exam.markingGuide.length > 0
-      ? exam.markingGuide
-      : [`${exam.marks} marks: the answer states what the model answer states`];
+  // The guide is rebuilt as discrete criteria scaled to the question's marks,
+  // so a six-mark question is six one-mark verdicts (or two three-mark ones)
+  // rather than one all-or-nothing row. A guide can be missing on very old
+  // rows; the model answer then carries the marks.
+  const criteria = criteriaFor({
+    criteria: exam.criteria,
+    markingGuide:
+      exam.markingGuide.length > 0
+        ? exam.markingGuide
+        : [`${exam.marks} marks: the answer states what the model answer states`],
+    marks: exam.marks,
+  });
+  const guide = guideFromCriteria(criteria);
 
   if (matchesModelAnswer(response, exam.modelAnswer)) {
     const fallbackQuote = response.trim().slice(0, 300);

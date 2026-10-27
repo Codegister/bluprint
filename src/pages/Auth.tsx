@@ -49,10 +49,19 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsLoading(true);
     setError(null);
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") ?? "").trim();
+    // Validate here, not through the browser tooltip: the message has to stay
+    // on the page, under the field, where it can be read and corrected.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      setError("Enter a valid email address, like you@school.uk.");
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
       setStep({ email: formData.get("email") as string });
       setIsLoading(false);
@@ -192,7 +201,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     creates your account.
                   </p>
 
-                <form onSubmit={handleEmailSubmit} className="mt-6">
+                <form onSubmit={handleEmailSubmit} className="mt-6" noValidate>
                   <label
                     htmlFor="email"
                     className="text-[0.82rem] font-semibold text-brand-ink"

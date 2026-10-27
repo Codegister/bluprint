@@ -186,11 +186,6 @@ export function PastPaperPractice({
                     Question {position} of {questions.length}
                   </span>
                   <div className="flex items-center gap-2">
-                    {graded && (
-                      <span className="rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#0B6B45]">
-                        {score}/{question.marks}
-                      </span>
-                    )}
                     <span className="rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70">
                       {markNotation(family, question.marks)}
                     </span>
@@ -202,7 +197,7 @@ export function PastPaperPractice({
                 <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-4">
                   <span
                     aria-hidden
-                    className="mt-0.5 grid h-8 w-14 place-items-center rounded-lg bg-[#F4F2FF] font-display text-[0.82rem] font-bold text-chrome-7"
+                    className="mt-0.5 grid h-8 w-14 place-items-center rounded-lg bg-brand-panel font-display text-[0.82rem] font-bold text-chrome-7"
                   >
                     {question.label?.trim() || position}
                   </span>
@@ -318,18 +313,13 @@ export function PastPaperPractice({
                     transition={{ duration: 0.45, ease: EASE }}
                     className="mt-4 rounded-2xl bg-[#F3FBF7] p-4 sm:p-5"
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold text-[#0B6B45]">
-                          Examiner marking
-                        </p>
-                        <p className="mt-1 font-display text-lg font-bold text-brand-ink">
-                          {score} / {question.marks} marks
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#0B6B45]">
-                        {scorePercent}%
-                      </span>
+                    <div>
+                      <p className="text-xs font-semibold text-[#0B6B45]">
+                        Examiner marking
+                      </p>
+                      <p className="mt-1 font-display text-lg font-bold text-brand-ink">
+                        {score} of {question.marks} marks
+                      </p>
                     </div>
                     <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#D7F0E3]">
                       <motion.div
@@ -339,9 +329,11 @@ export function PastPaperPractice({
                         transition={{ duration: 0.9, ease: EASE, delay: 0.15 }}
                       />
                     </div>
-                    <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-brand-ink/80">
-                      {feedbackSummary(question.feedback ?? "")}
-                    </p>
+                    {(question.checklist?.length ?? 0) === 0 && (
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-brand-ink/80">
+                        {feedbackSummary(question.feedback ?? "")}
+                      </p>
+                    )}
 
                     {/* The mark as a checklist: one row per criterion, its full
                         text, and the quoted words that earned it. */}
@@ -388,11 +380,11 @@ export function PastPaperPractice({
                                   <p className="mt-1 text-muted-foreground">
                                     {awarded > 0
                                       ? evidence && evidence !== "absent"
-                                        ? `Your words: “${evidence}”`
+                                        ? `“${evidence}”`
                                         : "Credited from your answer."
                                       : evidence && evidence !== "absent"
-                                        ? `You wrote “${evidence}”, which is not a creditable statement of this point.`
-                                        : "Absent: nothing in your answer states this point."}
+                                        ? `You wrote “${evidence}”, which does not state this point.`
+                                        : "Absent"}
                                   </p>
                                 </div>
                               </div>

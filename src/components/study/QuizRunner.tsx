@@ -57,7 +57,7 @@ function ScoreRing({
           <p className="font-display text-3xl font-bold leading-none tabular-nums text-brand-ink">
             {score}/{total}
           </p>
-          <p className="mt-1 text-sm font-semibold tabular-nums text-[#0B6B45]">
+          <p className="mt-1 text-[0.7rem] font-semibold tabular-nums text-muted-foreground">
             {Math.round(shown)}%
           </p>
         </div>
@@ -141,7 +141,12 @@ export function QuizRunner({
   }
 
   if (result) {
-    const pct = result.total ? Math.round((result.score / result.total) * 100) : 0;
+    // A full score is exactly 100%, never a rounded 99.
+    const pct = result.total
+      ? result.score >= result.total
+        ? 100
+        : Math.round((result.score / result.total) * 100)
+      : 0;
     return (
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -150,18 +155,13 @@ export function QuizRunner({
       >
         <ScoreRing score={result.score} total={result.total} percent={pct} />
 
-        {/* Both numbers are labelled: a bare percentage above a fraction read
-            as two scores with no explanation. */}
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[0.82rem] font-semibold text-brand-ink">
-          <span className="rounded-full bg-brand-panel px-3 py-1 tabular-nums">
-            Score {result.score}/{result.total}
-          </span>
-          {readiness !== undefined && (
-            <span className="rounded-full bg-brand-panel px-3 py-1 tabular-nums">
-              Exam ready {readiness}%
-            </span>
-          )}
-        </div>
+        {/* The ring carries the one score; this line labels the other figure
+            so the two numbers are never mistaken for each other. */}
+        {readiness !== undefined && (
+          <p className="mt-4 inline-flex items-center justify-center rounded-full bg-brand-panel px-4 py-1.5 text-[0.82rem] font-semibold tabular-nums text-brand-ink">
+            Exam ready {readiness}%
+          </p>
+        )}
 
         <h3 className="mt-5 font-display text-2xl font-bold text-brand-ink">
           {pct >= 80 ? "Strong recall." : pct >= 50 ? "Useful baseline." : "Run it again."}

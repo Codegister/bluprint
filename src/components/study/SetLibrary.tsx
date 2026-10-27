@@ -20,7 +20,7 @@ type SetSummary = FunctionReturnType<typeof api.studySets.listMine>[number];
 function StatusText({ set }: { set: SetSummary }) {
   if (set.status === "processing" || set.status === "queued") {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[0.72rem] font-semibold text-[#96650A]">
+      <span className="inline-flex items-center gap-1.5 text-[0.72rem] font-semibold text-muted-foreground">
         <Loader2 className="size-3 animate-spin" />
         Building
       </span>
@@ -33,7 +33,7 @@ function StatusText({ set }: { set: SetSummary }) {
       </span>
     );
   }
-  return <span className="text-[0.72rem] font-medium text-[#0B6B45]">Ready</span>;
+  return <span className="text-[0.72rem] font-medium text-brand-sky">Ready</span>;
 }
 
 /** One saved set, shown as a single scannable row. */
@@ -56,7 +56,7 @@ function SetRow({ set }: { set: SetSummary }) {
           </h3>
           <StatusText set={set} />
           {set.status === "ready" && set.dueCount > 0 && (
-            <span className="text-[0.72rem] font-semibold text-[#C2660F]">
+            <span className="text-[0.72rem] font-semibold text-brand-ink/70">
               {set.dueCount} due
             </span>
           )}
@@ -66,7 +66,7 @@ function SetRow({ set }: { set: SetSummary }) {
           {set.cardCount} cards · {set.quizCount} quiz · {set.examCount} exam
         </p>
         {processing ? (
-          <p className="mt-1.5 text-[0.72rem] text-[#96650A]">
+          <p className="mt-1.5 text-[0.72rem] text-muted-foreground">
             {set.progress || "Waiting to start"}
           </p>
         ) : set.status === "error" ? (

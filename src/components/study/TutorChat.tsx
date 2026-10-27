@@ -8,7 +8,7 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Check, Globe, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const SUGGESTIONS = [
@@ -129,6 +129,9 @@ export function TutorChat({
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Web grounding is opt-in per question: the tutor answers from the notes
+  // first, and this lets the student ask it to check the wider web too.
+  const [useWeb, setUseWeb] = useState(false);
   // The last tier the student used, so a suggested question uses the same one.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -164,8 +167,7 @@ export function TutorChat({
         await askTutor({
           setId: scope.setId,
           question,
-          // Web search is off for now; the chip that offered it is gone.
-          useWeb: false,
+          useWeb,
           tier: chosenTier,
         });
       } else {
@@ -173,7 +175,7 @@ export function TutorChat({
           courseId: scope.courseId,
           unitTitle: scope.unitTitle,
           question,
-          useWeb: false,
+          useWeb,
           tier: chosenTier,
         });
       }
@@ -207,6 +209,22 @@ export function TutorChat({
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
             {scopeControl}
+            <button
+              type="button"
+              aria-pressed={useWeb}
+              onClick={() => setUseWeb((value) => !value)}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
+                useWeb
+                  ? "border-brand-sky/40 bg-brand-sky/10 text-brand-ink"
+                  : "border-border bg-white text-muted-foreground hover:bg-brand-panel",
+              )}
+              title="Let the tutor search the web for this question"
+            >
+              <Globe className="size-3.5" aria-hidden />
+              Web
+              {useWeb && <Check className="size-3" aria-hidden />}
+            </button>
           </div>
         </header>
 
@@ -278,7 +296,9 @@ export function TutorChat({
                         <TypingDots />
                         {message.sources.length > 0
                           ? "Reading the web…"
-                          : "Thinking…"}
+                          : useWeb
+                            ? "Searching the web…"
+                            : "Thinking…"}
                       </span>
                     )}
                   </div>
@@ -339,8 +359,10 @@ export function TutorChat({
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            Use Enter inside the prompt to send · Shift + Enter for a new line ·
-            answers come from your material and the model only.{" "}
+            Use Enter inside the prompt to send · Shift + Enter for a new line ·{" "}
+            {useWeb
+              ? "web search is on, so recent and specification details can be checked online."
+              : "web search is off, so answers come from your material and the model only."}{" "}
             Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>

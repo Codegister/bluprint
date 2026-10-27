@@ -26,7 +26,7 @@ import {
   Target,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, useLocation } from "react-router";
 import { toast } from "sonner";
 
 /**
@@ -124,7 +124,6 @@ function DeckRow({
 
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const sets = useQuery(api.studySets.listMine);
 
@@ -140,7 +139,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     try {
       await signOut();
       onNavigate?.();
-      navigate("/");
+      // A full navigation, not a router push: signing out while on a protected
+      // route otherwise races RequireAuth, which sends the now-guest to
+      // /auth?returnTo=/tutor. This always lands on the marketing homepage.
+      window.location.replace(import.meta.env.BASE_URL || "/");
     } catch (error) {
       toast.error(readableError(error, "Could not sign out. Please try again."));
     }

@@ -9,7 +9,7 @@ import {
 } from "./_generated/server";
 import { requireOwner } from "./lib/authorization";
 import { requireUserId } from "./lib/requireUser";
-import { toCriteria } from "./lib/markingCriteria";
+import { alignCriteria, toCriteria } from "./lib/markingCriteria";
 
 /**
  * Past papers.
@@ -326,9 +326,10 @@ export const completeBuild = internalMutation({
         marking: question.marking,
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
-        // The guide stored as discrete criteria, so the marked page can render
-        // one row per mark with its own text and evidence.
-        criteria: toCriteria(question.markingGuide),
+        // The guide stored as discrete criteria, scaled to the question's
+        // marks, so the marked page renders one row per mark and partial marks
+        // are possible.
+        criteria: alignCriteria(toCriteria(question.markingGuide), question.marks),
         order: index,
         label: question.label,
         section: question.section,

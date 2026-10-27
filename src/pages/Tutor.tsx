@@ -25,7 +25,7 @@ import { subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowRight, GraduationCap, Play, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Globe, GraduationCap, Play, Sparkles } from "lucide-react";
 
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
@@ -179,6 +179,8 @@ export default function TutorPage() {
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Web grounding is opted into per question, exactly as on the home tutor.
+  const [useWeb, setUseWeb] = useState(false);
   // Last tier used, so a suggested question keeps the same answer style.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -224,8 +226,7 @@ export default function TutorPage() {
         await askTutor({
           setId: setId as Id<"studySets">,
           question,
-          // Web search is disabled in the UI until it is available by default.
-          useWeb: false,
+          useWeb,
           tier: chosenTier,
         });
       } else if (validCourseId && courseId) {
@@ -233,7 +234,7 @@ export default function TutorPage() {
           courseId: courseId as Id<"courses">,
           unitTitle: unitTitle ?? undefined,
           question,
-          useWeb: false,
+          useWeb,
           tier: chosenTier,
         });
       }
@@ -604,6 +605,22 @@ export default function TutorPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={useWeb}
+              onClick={() => setUseWeb((value) => !value)}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
+                useWeb
+                  ? "border-brand-sky/40 bg-brand-sky/10 text-brand-ink"
+                  : "border-border bg-white text-muted-foreground hover:bg-brand-panel",
+              )}
+              title="Let the tutor search the web for this question"
+            >
+              <Globe className="size-3.5" aria-hidden />
+              Web
+              {useWeb && <Check className="size-3" aria-hidden />}
+            </button>
             <Button
               type="button"
               variant="ghost"
@@ -695,7 +712,9 @@ export default function TutorPage() {
                         <TypingDots />
                         {message.sources.length > 0
                           ? "Reading the web…"
-                          : "Thinking…"}
+                          : useWeb
+                            ? "Searching the web…"
+                            : "Thinking…"}
                       </span>
                     )}
                   </div>
@@ -755,8 +774,10 @@ export default function TutorPage() {
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            Use Enter inside the prompt to send · Shift + Enter for a new line ·
-            answers come from your material and the model only.{" "}
+            Use Enter inside the prompt to send · Shift + Enter for a new line ·{" "}
+            {useWeb
+              ? "web search is on, so recent and specification details can be checked online."
+              : "web search is off, so answers come from your material and the model only."}{" "}
             Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>
