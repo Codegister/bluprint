@@ -4,11 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { gradeRecall } from "@/convex/lib/recall";
+import { gradeRecall, normalizeAnswer } from "@/convex/lib/recall";
 import { useDictation } from "@/hooks/use-dictation";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { useMutation } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
 import { Check, Keyboard, Mic, MicOff, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -63,9 +63,11 @@ const RATINGS: Array<{
 
 /**
  * Typed recall is the default flashcard mode. The student says the answer out
- * loud (the browser turns it into text) or types it, then Bluprint compares the
- * words with the model answer. The self-mark toggle skips the automatic
- * comparison for when speaking or listening is not possible.
+ * loud (the browser turns it into text) or types it, then Bluprint checks that
+ * the answer means the same as the model answer rather than matching its words.
+ * A word comparison is used when the answer is already exact, and as the
+ * fallback when the meaning check cannot be reached. The self-mark toggle skips
+ * the automatic comparison for when speaking or listening is not possible.
  *
  * Every finished card is scheduled by FSRS with one of four ratings, so the
  * next review date follows the memory rather than a fixed interval.
@@ -81,13 +83,20 @@ export function FlashcardReview({
   sprint?: boolean;
 }) {
   const reviewCard = useMutation(api.studySets.reviewCard);
+  const checkByMeaning = useAction(api.ai.gradeRecallAnswer);
   const [selfMark, setSelfMark] = useState(false);
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
   const [checked, setChecked] = useState(false);
-  const [grade, setGrade] = useState<{ correct: boolean; score: number } | null>(
-    null,
-  );
+  const [grade, setGrade] = useState<{
+    correct: boolean;
+    score: number;
+    /** The meaning check's one-line explanation, or why it was not used. */
+    note?: string;
+  } | null>(null);
+  // True while the answer is with the model, so the student sees that the card
+  // is being marked instead of a rating row they might tap too early.
+  const [grading, setGrading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [finished, setFinished] = useState(false);
   const [session, setSession] = useState<Record<Rating, number>>({
@@ -140,9 +149,10 @@ export function FlashcardReview({
     setTyped("");
     setChecked(false);
     setGrade(null);
+    setGrading(false);
   };
 
-  const handleCheck = () => {
+  const handleCheck = async () => {
     if (!current || checked) return;
     // Automatic marking needs an answer; self-mark only needs the answer shown.
     if (!selfMark && typed.trim().length === 0) return;
@@ -153,7 +163,36 @@ export function FlashcardReview({
       setGrade(null);
       return;
     }
-    setGrade(gradeRecall(current.back, typed));
+
+    const card = current;
+    const answer = typed;
+    // An answer that matches the model answer word for word needs no model
+    // call. Everything else goes to the meaning check, including answers the
+    // word comparison already likes, because precision can look like recall.
+    if (normalizeAnswer(answer) === normalizeAnswer(card.back)) {
+      setGrade({ correct: true, score: 1, note: "Matches the model answer." });
+      return;
+    }
+
+    setGrading(true);
+    try {
+      const result = await checkByMeaning({ cardId: card._id, answer });
+      setGrade({ correct: result.correct, score: result.score, note: result.note });
+    } catch (error) {
+      // No key, a rate limit, or no connection: mark on words rather than
+      // blocking the session, and say that is what happened.
+      const local = gradeRecall(card.back, answer);
+      const reason = readableError(error, "");
+      setGrade({
+        correct: local.correct,
+        score: local.score,
+        note: `Checked on words only — ${
+          (reason || "the meaning check could not be reached.").slice(0, 140)
+        }`,
+      });
+    } finally {
+      setGrading(false);
+    }
   };
 
   const rate = async (rating: Rating) => {
@@ -385,7 +424,7 @@ export function FlashcardReview({
               {dictation.supported ? (
                 <Button
                   type="button"
-                  onClick={dictation.toggle}
+                  onClick={() => dictation.toggle(typed)}
                   variant="outline"
                   className={cn(
                     "h-9 rounded-full px-3 text-[0.78rem] font-semibold shadow-none",
@@ -428,7 +467,7 @@ export function FlashcardReview({
             <p className="mt-2 text-center text-[0.7rem] font-medium text-muted-foreground">
               {selfMark
                 ? "Self-mark is on: compare with the answer, then rate yourself."
-                : "Bluprint compares your words with the model answer."}
+                : "Bluprint checks that your answer means the same as the model answer."}
             </p>
           </>
         ) : (
@@ -446,8 +485,21 @@ export function FlashcardReview({
               </p>
             </div>
 
+            {grading && (
+              <div className="mt-3 flex items-center gap-2 rounded-2xl bg-brand-panel p-3 text-[0.8rem] font-medium text-chrome-7">
+                <span
+                  aria-hidden
+                  className="size-3.5 animate-spin rounded-full border-2 border-chrome-6/35 border-t-chrome-7"
+                />
+                Checking what your answer means…
+              </div>
+            )}
+
             {grade && (
-              <div
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
                 className={cn(
                   "mt-3 flex items-start gap-2 rounded-2xl p-3 text-[0.8rem] leading-relaxed",
                   grade.correct
@@ -460,21 +512,29 @@ export function FlashcardReview({
                 ) : (
                   <X className="mt-0.5 size-4 shrink-0" />
                 )}
-                <p>
-                  {grade.correct
-                    ? "That matches the answer. Say it once more in your own words to lock it in."
-                    : `Not quite — you recalled ${Math.round(grade.score * 100)}% of the key words. Read the model answer, then rate how it felt.`}
-                </p>
-              </div>
+                <div>
+                  <p className="font-semibold">
+                    {grade.correct ? "That means the same" : "Not quite"}
+                  </p>
+                  <p className="mt-0.5">
+                    {grade.note?.trim() ||
+                      (grade.correct
+                        ? "Say it once more in your own words to lock it in."
+                        : `You recalled ${Math.round(grade.score * 100)}% of the key words. Read the model answer, then rate how it felt.`)}
+                  </p>
+                </div>
+              </motion.div>
             )}
 
             <div className="mt-4">
               <p className="text-[0.72rem] font-semibold text-brand-ink/60">
-                {grade
-                  ? grade.correct
-                    ? "Bluprint suggests Good. Rate how it actually felt."
-                    : "Not quite. Rate how it felt, then the model answer comes back sooner."
-                  : "Compare with the answer, then rate yourself."}
+                {grading
+                  ? "Rate how it felt once the check finishes."
+                  : grade
+                    ? grade.correct
+                      ? "Bluprint suggests Good. Rate how it actually felt."
+                      : "Rate how it felt, then the model answer comes back sooner."
+                    : "Compare with the answer, then rate yourself."}
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {RATINGS.map((entry) => {
@@ -485,7 +545,7 @@ export function FlashcardReview({
                     <button
                       key={entry.rating}
                       type="button"
-                      disabled={saving}
+                      disabled={saving || grading}
                       onClick={() => void rate(entry.rating)}
                       aria-label={`${entry.label}: ${entry.hint}`}
                       className={cn(

@@ -2554,6 +2554,113 @@ export const gradeExamAnswer = action({
 });
 
 // ---------------------------------------------------------------------------
+// Flashcard recall marking
+// ---------------------------------------------------------------------------
+
+/**
+ * Recall marking judges meaning, not wording. The word-overlap comparison in
+ * lib/recall.ts is instant but literal: a student who says "six" for an answer
+ * key of "6", or who paraphrases a definition correctly, was marked wrong, and
+ * the same answer could score differently run to run. The model decides whether
+ * the answer carries the same meaning; the word comparison stays as the
+ * fallback for when the call cannot be made.
+ */
+const RECALL_MARKER_SYSTEM_PROMPT =
+  "You mark one flashcard answer. You are strict about the fact being recalled and generous about how it is worded: a student who has remembered the answer must be credited whatever words they used. " +
+  "Answer with strict JSON only, no markdown fences, no commentary.";
+
+const RECALL_MARKER_RULES =
+  "How to mark:\n" +
+  "1. Compare the student's answer with the model answer for meaning, not for wording. Accept synonyms, paraphrases, another word order, a different grammatical person, abbreviations the material defines, and singular or plural forms.\n" +
+  "2. Numbers, units and symbols are equivalent however they are written or spoken: 6 and six, 3.5 and three point five, 1,000 and a thousand, 25% and 25 per cent. A different value (16 for 6) is incorrect.\n" +
+  "3. Accept a shorter answer that still gives the fact the question asks for, and a longer one that includes it. Extra correct detail is not a mistake.\n" +
+  "4. Ignore accents and the small spelling slips a dictation engine makes, and accept a name written with different capitalisation.\n" +
+  "5. Incorrect when the answer contradicts the model answer, gives a different fact or value, names an unrelated thing, or is only on topic and vague without actually answering. Restating the question is never an answer.\n" +
+  "6. Where the model answer makes several points and the question does not demand all of them, a correct answer needs the point the question asks for; for anything else, credit the share that is present in score.\n" +
+  "7. Never reward length, confidence or effort, and never mark down an answer for being brief.";
+
+const RECALL_MARKER_OUTPUT_SHAPE =
+  'Return JSON exactly like: {"correct":true,"score":0.9,"note":"one short sentence naming what was accepted or what was missing"}. ' +
+  "score is the share of the model answer's meaning the student produced, from 0 to 1. " +
+  "The note is at most 20 words: no praise, no encouragement, no restating the model answer.";
+
+/**
+ * Marks one spoken or typed flashcard answer by meaning. The mark is returned to
+ * the card screen, which shows the note and suggests a rating; nothing is stored
+ * here, because the FSRS rating the student picks is the record of the review.
+ */
+export const gradeRecallAnswer = action({
+  args: { cardId: v.id("flashcards"), answer: v.string() },
+  handler: async (
+    ctx,
+    { cardId, answer },
+  ): Promise<{ correct: boolean; score: number; note: string }> => {
+    const userId = await requireUserId(ctx);
+    const response = answer.trim();
+    if (response.length === 0) {
+      throw new Error("Say or type an answer before checking it.");
+    }
+
+    const data = await ctx.runQuery(internal.studySets.getCardForGrading, {
+      cardId,
+    });
+    if (!data || data.card.userId !== userId || data.set.userId !== userId) {
+      throw new Error("Flashcard not found.");
+    }
+
+    const { card, set } = data;
+    const qualification = qualificationText({
+      course: set.course,
+      examBoard: set.examBoard,
+      level: set.level,
+    });
+    const apiKeys = resolveNvidiaKeys();
+    const raw = await nvidiaChat(apiKeys, {
+      model: NVIDIA_TEXT_MODEL,
+      messages: [
+        { role: "system", content: RECALL_MARKER_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content:
+            (qualification ? `<qualification>${qualification}</qualification>\n` : "") +
+            `<question>${card.front}</question>\n` +
+            `<model_answer>${card.back}</model_answer>\n` +
+            `<student_answer>${response.slice(0, 3000)}</student_answer>\n\n` +
+            `${RECALL_MARKER_RULES}\n\n` +
+            RECALL_MARKER_OUTPUT_SHAPE,
+        },
+      ],
+      // A verdict plus a one-line note; a decisive temperature keeps the same
+      // answer marking the same way twice.
+      maxTokens: 400,
+      temperature: 0,
+      disableThinking: true,
+    });
+
+    const parsed = parseModelJson<{
+      correct?: unknown;
+      score?: unknown;
+      note?: unknown;
+    }>(raw);
+    const correct = parsed.correct === true;
+    const claimed = Number(parsed.score);
+    const score = Number.isFinite(claimed)
+      ? Math.max(0, Math.min(1, claimed))
+      : correct
+        ? 1
+        : 0;
+    const note = asText(parsed.note, 300);
+    if (typeof parsed.correct !== "boolean" || !note) {
+      throw new Error(
+        "The meaning check did not return a usable mark. Try again, or use self-mark.",
+      );
+    }
+
+    return { correct, score, note };
+  },
+});
+
+// ---------------------------------------------------------------------------
 // AI tutor
 // ---------------------------------------------------------------------------
 

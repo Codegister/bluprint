@@ -186,11 +186,17 @@ earned. Four practice papers per course is the cap; remove one to build another.
    the middle of the deck, and a batch that comes back malformed is retried rather than
    ending the run.
 3. **Study** — recall cards by **speaking the answer** (the browser's own dictation
-   engine turns speech into text; typing works too), which is compared with the model
-   answer before you rate it. A **Self-mark** switch skips the comparison for when
-   speaking is not possible. The quiz mixes multiple choice, cloze (fill the gap) and
-   short typed answers, all marked on key words with explanations. Exam questions are
-   marked against the guide with feedback and a model answer.
+   engine turns speech into text; typing works too), which is marked on meaning rather
+   than wording before you rate it: the model is asked whether the answer carries the
+   same fact, so a paraphrase, a synonym or a number said as a word ("six" for "6")
+   is credited. An answer that matches word for word is marked instantly without a
+   call, and if the meaning check cannot be reached the answer is marked on words with
+   a note saying so. Dictation survives an engine dropping out mid-answer and says so
+   when the microphone cannot start. A **Self-mark** switch skips the comparison for
+   when speaking is not possible. The quiz mixes multiple choice, cloze (fill the gap)
+   and short typed answers, all marked on key words with explanations, the same number
+   and accent folding included. Exam questions are marked against the guide with
+   feedback and a model answer.
 4. **Tag the exam context afterwards** — a set opens with its settings button, where it can
    be renamed and tagged with a course, an exam board (AQA, Pearson Edexcel, OCR, WJEC /
    Eduqas, Cambridge International, IB, SQA, College Board AP), and a level (GCSE, A-Level,
@@ -618,10 +624,19 @@ Reopening the set shows the saved result.
   computes the recall probability at that moment, then the next stability and interval.
   There is no client-side scheduling and no model call: a review is one database write.
 - **Typed recall with dictation.** The card is shown, the student speaks (or types) the
-  answer, then the answer is compared with the model answer using the same word-overlap
-  rules as a typed quiz question (`convex/lib/recall.ts`). The student still chooses the
-  FSRS rating once the answer is visible, because only they know how effortful the recall
-  felt. With **Self-mark** on, the comparison is skipped and the answer is simply revealed.
+  answer, and the answer is marked on meaning: `ai.gradeRecallAnswer` asks the model
+  whether the answer carries the same fact as the model answer, and returns a verdict plus
+  a one-line note. An answer that matches the model answer word for word is marked without
+  a call. If the meaning check cannot be reached, the same word-overlap rules as a typed
+  quiz question (`convex/lib/recall.ts`) mark the answer and the note says that is what
+  happened. Those rules fold number spellings and accents, so a dictated "six" matches an
+  answer key of "6" in the quiz too. The student still chooses the FSRS rating once the
+  answer is visible, because only they know how effortful the recall felt. With
+  **Self-mark** on, the comparison is skipped and the answer is simply revealed.
+- **Dictation that recovers.** `hooks/use-dictation.ts` keeps whatever was typed, retries a
+  start the speech engine refused while the previous session was still ending (the usual
+  reason the microphone appeared to do nothing between cards), resumes listening when a
+  continuous session ends by itself, and reports every failure instead of swallowing it.
 - **Daily counts.** `studyDays` holds one row per person per UTC day with cards reviewed
   and questions answered. Cards and quiz questions both increment `questionsAnswered`, so a
   quiz-only session still moves the tiered streak.
@@ -849,7 +864,9 @@ src/
     settings.ts          environment key-pool status for the UI
     lib/fsrs.ts          pure FSRS scheduler (stability, difficulty, four ratings)
     lib/studyMetrics.ts  exam readiness, projected readiness, pace plan, daily goal
-    lib/recall.ts        shared word-overlap marking for typed and cloze answers
+    lib/recall.ts        shared word-overlap marking for typed and cloze answers, with
+                         number spellings and accents folded; fallback for flashcard
+                         meaning checks
     lib/poetryAnthologies.ts  saved AQA clusters and duplicate-free anthologised units
     lib/nvidiaConfig.ts  NVIDIA URL, model IDs, key parsing, notes limit
     lib/cognito.ts       reads a course's published topic outline

@@ -1119,6 +1119,22 @@ export const failGeneration = internalMutation({
   },
 });
 
+/**
+ * One flashcard plus its set, for meaning-based recall marking. The set carries
+ * the course and board, which the prompt uses to keep the judgement in the
+ * student's own subject.
+ */
+export const getCardForGrading = internalQuery({
+  args: { cardId: v.id("flashcards") },
+  handler: async (ctx, { cardId }) => {
+    const card = await ctx.db.get(cardId);
+    if (!card) return null;
+    const set = await ctx.db.get(card.setId);
+    if (!set) return null;
+    return { card, set };
+  },
+});
+
 export const getExamForGrading = internalQuery({
   args: { examId: v.id("examQuestions") },
   handler: async (ctx, { examId }) => {
