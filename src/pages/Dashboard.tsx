@@ -3,6 +3,7 @@ import { CreateSetDialog } from "@/components/CreateSetDialog";
 import { DeckGlyph, Mascot } from "@/components/Mascot";
 import { CoursePicker } from "@/components/study/CoursePicker";
 import { QuickSprint } from "@/components/study/QuickSprint";
+import { StreakBanner } from "@/components/study/StreakBanner";
 import { TutorLauncher } from "@/components/study/TutorLauncher";
 import { SkeletonRows } from "@/components/Skeletons";
 import { Meter, enter } from "@/components/motion/Motion";
@@ -375,7 +376,11 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* 4. Quick sprint, the short end to a session. */}
+      {/* 4. Streak banner, then the quick sprint: habit first, then the
+             shortest way to move it today. */}
+      <div className="mt-4">
+        <StreakBanner />
+      </div>
       <QuickSprint />
 
       <CreateSetDialog open={dialogOpen} onOpenChange={setDialogOpen} />

@@ -20,7 +20,6 @@ import {
   CalendarDays,
   Flame,
   GraduationCap,
-  LayoutDashboard,
   Menu,
   Sparkles,
   Target,
@@ -38,11 +37,13 @@ import { toast } from "sonner";
  */
 const navItems = [
   {
+    // The AI tutor is the first thing on the dashboard, so the two share one
+    // destination. There is no second "dashboard" tab to tell apart from it.
     to: "/dashboard",
     label: "Dashboard",
-    icon: LayoutDashboard,
-    active: "bg-gizmo-lime text-brand-ink ring-1 ring-chrome-8/30",
-    tile: "bg-brand-ink text-gizmo-lime",
+    icon: Sparkles,
+    active: "bg-gizmo-sky text-brand-ink ring-1 ring-chrome-8/30",
+    tile: "bg-brand-ink text-gizmo-sky",
     soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
@@ -51,14 +52,6 @@ const navItems = [
     icon: GraduationCap,
     active: "bg-gizmo-lilac text-brand-ink ring-1 ring-chrome-8/30",
     tile: "bg-brand-ink text-gizmo-lilac",
-    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
-  },
-  {
-    to: "/tutor",
-    label: "AI tutor",
-    icon: Sparkles,
-    active: "bg-gizmo-sky text-brand-ink ring-1 ring-chrome-8/30",
-    tile: "bg-brand-ink text-gizmo-sky",
     soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
@@ -196,10 +189,14 @@ function Sidebar({
 
       <nav className="relative flex flex-col gap-1 px-3">
         {navItems.map((item) => {
+          // Everything reached from the dashboard — a saved set, the full
+          // tutor — keeps the dashboard tab lit, because that is the screen the
+          // student started from.
           const active =
             item.to === "/dashboard"
               ? location.pathname === "/dashboard" ||
-                location.pathname.startsWith("/sets/")
+                location.pathname.startsWith("/sets/") ||
+                location.pathname.startsWith("/tutor")
               : location.pathname.startsWith(item.to);
           const Icon = item.icon;
           return (

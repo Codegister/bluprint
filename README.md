@@ -197,8 +197,9 @@ earned. Four practice papers per course is the cap; remove one to build another.
    cover by the days left (clamped to 10–80 questions), so it tightens as a real paper
    approaches. Without an exam date it falls back to 20.
 7. **Today, but second** — the **dashboard** is the home screen: tutor panel, course rail,
-   saved sets, then a **quick sprint** card with today's goal, streak and one-tap sprints of
-   5, 10, 15 or 25 cards. The full **Today** screen (sidebar) holds the cross-set due queue
+   saved sets, a **streak banner**, then a **quick sprint** card with today's goal, streak
+   and one-tap sprints of 5, 10, 15 or 25 cards. The banner repeats the streak in one line
+   and lists your ready courses, each linking straight to that course's practice papers. The full **Today** screen (sidebar) holds the cross-set due queue
    and the sets with weak spots. A sprint takes the most useful cards first: everything
    overdue, then the shakiest memories.
 8. **Mastery is exam readiness** — the percentage on each set is no longer "cards known".
@@ -255,13 +256,16 @@ earned. Four practice papers per course is the cap; remove one to build another.
 15. **Start on the dashboard** — signing in, and opening `/`, both land on `/dashboard`.
     The dashboard is ordered as one study loop: the **AI tutor panel** at the top (its
     question is carried into the tutor screen), the **course selection** next, the saved
-    **study sets** below it, and a **quick sprint** picker at the bottom. Choosing a course
-    scopes the tutor question and filters the set list; **Add course** opens the pathway.
+    **study sets** below it, a **streak banner** with practice links for each course, and a
+    **quick sprint** picker at the bottom. Choosing a course scopes the tutor question and
+    filters the set list; **Add course** opens the pathway.
 
-**My courses** is a separate screen with topic progress, material counts and **Add
-courses**. The saved **Revision timetable**, **Today** queue and the full **AI tutor** each
-have their own sidebar destination. The tutor's own first screen asks which course or set
-to discuss when it is opened without a scope.
+The sidebar has one home tab, **Dashboard**, which is where the tutor lives; there is no
+separate dashboard item to confuse it with. **My courses** is a separate screen with topic
+progress, material counts and **Add courses**. The saved **Revision timetable** and
+**Today** queue have their own sidebar destinations. The full tutor opens from the
+dashboard panel, and its first screen asks which course or set to discuss when it is
+opened without a scope.
 
 Each course opens on its **Pathway**, and **Past papers**, **Topic papers** and **Study
 sets** are separate screens rather than tabs sharing one page. A study set opens on its
@@ -773,7 +777,8 @@ src/
   pages/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
-    Dashboard.tsx        tutor panel, course rail, saved study sets, quick sprint
+    Dashboard.tsx        tutor panel, course rail, saved study sets, streak banner,
+                         quick sprint
     Today.tsx            due queue, quick sprint picker, streak and daily goal
     Courses.tsx          course library with pathway progress
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
