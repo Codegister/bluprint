@@ -19,7 +19,7 @@ import {
   BUILD_MIN,
   shortfallSentence,
 } from "./lib/buildDefaults";
-import { isSelfContained } from "./lib/paperData";
+import { alignDataReference, isSelfContained } from "./lib/paperData";
 import { normalizeAnswer } from "./lib/recall";
 import { parseSummary, type Summary } from "./lib/summary";
 import {
@@ -878,19 +878,21 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
       marks <= 60 &&
       markingGuide.length > 0
     ) {
-      questions.push({
-        question,
-        marks,
-        modelAnswer,
-        markingGuide,
-        beyondNotes: beyondNotes(row.beyondNotes),
-        label: optionalText(row.label, 24),
-        section: optionalText(row.section, 80),
-        sectionInstruction: optionalText(row.sectionInstruction, 240),
-        commandWord: optionalText(row.commandWord, 40),
-        specReference: optionalText(row.specReference, 40),
-        data: parseQuestionData(row.data),
-      });
+      questions.push(
+        alignDataReference({
+          question,
+          marks,
+          modelAnswer,
+          markingGuide,
+          beyondNotes: beyondNotes(row.beyondNotes),
+          label: optionalText(row.label, 24),
+          section: optionalText(row.section, 80),
+          sectionInstruction: optionalText(row.sectionInstruction, 240),
+          commandWord: optionalText(row.commandWord, 40),
+          specReference: optionalText(row.specReference, 40),
+          data: parseQuestionData(row.data),
+        }),
+      );
     }
   }
   return questions.slice(0, limit);
@@ -1220,7 +1222,7 @@ async function generateQuiz(
             '{"question":"...","type":"mcq","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."},' +
             '{"question":"The process by which water moves across a membrane is ____.","type":"cloze","answer":"osmosis","acceptedAnswers":["osmosis"],"explanation":"..."},' +
             '{"question":"Name the cell organelle where aerobic respiration happens.","type":"typed","answer":"mitochondria","acceptedAnswers":["mitochondrion","the mitochondria"],"explanation":"..."}' +
-            "]}",
+            `]}${BEYOND_NOTES_FIELD}`,
         },
       ],
       // A batch of eight with explanations needs far more room than the old
@@ -1309,7 +1311,7 @@ async function generateExams(
             (previous
               ? `Do not repeat these existing questions:\n${previous}\n`
               : "") +
-            'Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}',
+            `Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}${BEYOND_NOTES_FIELD}`,
         },
       ],
       maxTokens: 9000,
@@ -2831,6 +2833,10 @@ export const processStudySet = action({
       // Leave room inside Convex's action limit for the final writes.
       const deadline = Date.now() + 8 * 60 * 1000;
 
+      // Deleted between reading the notes and the first paid call: stop before
+      // spending anything else on a set nobody can open.
+      if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
+
       // Percentages are stage boundaries; batches report their own progress
       // inside the cards, quiz and exam stages.
       await ctx.runMutation(internal.studySets.setProgress, {
@@ -2861,6 +2867,9 @@ export const processStudySet = action({
         [],
       );
 
+      // A deleted set stops the run at the stage boundary, so the quiz and
+      // exam calls are never made and no orphaned rows are written.
+      if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: `Writing ${targetQuiz} quiz questions…`,
@@ -2879,6 +2888,7 @@ export const processStudySet = action({
         [],
       );
 
+      if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: `Drafting ${targetExam} exam questions…`,
@@ -2905,6 +2915,10 @@ export const processStudySet = action({
           ),
         [],
       );
+
+      // Last chance to stop before writing rows: a set deleted while the exam
+      // questions were being written must not leave cards or questions behind.
+      if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
 
       // A failed stage should not lose the rest of the set. Only a run where
       // nothing at all came back is a real failure, and it gets a clear message.
@@ -3589,6 +3603,9 @@ async function markExamAnswer(
         verdict.share,
         terms[index] ?? [],
         verdict.evidence,
+        // A formula or ratio criterion is allowed to be met in different words;
+        // a prose criterion still has to share one of its own terms.
+        check.point,
       );
       if (award <= 0) return check;
       return { ...check, awarded: award, evidence: verdict.evidence };
@@ -4499,13 +4516,16 @@ export const askTutor = action({
     } catch (error) {
       await ctx.runMutation(internal.tutor.discardTutorAnswer, { messageId });
       await recordProviderIncident(ctx, "tutor", error);
-      // A provider failure reads as the tutor having trouble; a validation
-      // error (an empty question) keeps its own, more useful wording.
-      throw error instanceof ProviderError
-        ? new Error(
-            error.status === 429 ? AI_RATE_LIMIT_MESSAGE : TUTOR_UNAVAILABLE_MESSAGE,
-          )
-        : error;
+      // The question was validated before this block, so anything caught here
+      // is infrastructure. Log it and show one sentence: never a provider's
+      // text, a model id, a status code or an environment variable.
+      if (error instanceof ProviderError) {
+        throw new Error(
+          error.status === 429 ? AI_RATE_LIMIT_MESSAGE : TUTOR_UNAVAILABLE_MESSAGE,
+        );
+      }
+      console.error("Tutor answer failed", error);
+      throw new Error(TUTOR_UNAVAILABLE_MESSAGE);
     }
   },
 });
@@ -4575,11 +4595,12 @@ export const askCourseTutor = action({
     } catch (error) {
       await ctx.runMutation(internal.tutor.discardCourseTutorAnswer, { messageId });
       await recordProviderIncident(ctx, "tutor", error);
-      throw error instanceof ProviderError
-        ? new Error(
-            error.status === 429 ? AI_RATE_LIMIT_MESSAGE : TUTOR_UNAVAILABLE_MESSAGE,
-          )
-        : error;
+      if (!(error instanceof ProviderError)) console.error("Tutor answer failed", error);
+      throw new Error(
+        error instanceof ProviderError && error.status === 429
+          ? AI_RATE_LIMIT_MESSAGE
+          : TUTOR_UNAVAILABLE_MESSAGE,
+      );
     }
   },
 });

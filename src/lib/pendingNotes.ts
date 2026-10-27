@@ -13,8 +13,10 @@ const KEY = "bluprint:pending-notes";
 /** Keeps the pasted notes for this tab only, and only until they are used. */
 export function savePendingNotes(notes: string): void {
   try {
-    // The same limit as the paste box and the server, from one constant.
-    window.sessionStorage.setItem(KEY, notes.slice(0, MAX_NOTE_CHARS));
+    // Keep enough of the paste for the create dialog to show the real length
+    // and its over-limit message. Clipping to the limit here would silently
+    // turn a 30,800-character paste into an accepted 20,000-character one.
+    window.sessionStorage.setItem(KEY, notes.slice(0, MAX_NOTE_CHARS * 2));
   } catch {
     // Private mode or a full store: the visitor can paste again on the
     // dashboard, so this must never break navigation.

@@ -8,7 +8,6 @@ import {
   query,
 } from "./_generated/server";
 import {
-  MAX_NOTE_CHARS,
   clipNote,
   noteLimitMessage,
   withinNoteLimit,
@@ -682,19 +681,21 @@ export const create = mutation({
     const userId = await requireUserId(ctx);
     await requireVerifiedUser(ctx, userId);
 
-    // Rate limit before anything is written or generated: a guest can otherwise
-    // start build after build and burn the deployment's AI tokens.
-    await consumeBuildAllowance(ctx, userId, "set");
-
     const notes = normalizeStudyText(args.notes);
     if (args.sourceType === "text" && notes.length < 40) {
       throw new Error("Paste at least a few sentences so Bluprint has source material.");
     }
-    // The same limit the dialog shows. Checked here, before the set exists, so
-    // an oversized paste can never start a build (and never bill a build).
+    // The same limit the dialog shows. Checked before the allowance is spent, so
+    // an oversized paste fails with a clear message and does not consume one of
+    // the student's builds (nothing was generated, so nothing should count).
     if (!withinNoteLimit(notes)) {
       throw new Error(noteLimitMessage(notes.length));
     }
+
+    // Rate limit before anything is written or generated: a guest can otherwise
+    // start build after build and burn the deployment's AI tokens. An invalid
+    // request above returns before this point, so only a real build counts.
+    await consumeBuildAllowance(ctx, userId, "set");
 
     const now = Date.now();
     const title =
@@ -752,10 +753,11 @@ export const create = mutation({
  * degenerate whitespace, but it does not change the content.
  */
 function normalizeStudyText(value: string): string {
+  // Deliberately does not slice: the length check must see how long the note
+  // really is. Slicing here quietly turned a 30,800-character paste into a
+  // 20,000-character build instead of failing it, which is exactly the
+  // silent-billing bug this limit exists to prevent.
   return value
-    // The mutation rejects anything longer, so this is only a guard for text
-    // that arrives from somewhere other than the paste box.
-    .slice(0, MAX_NOTE_CHARS)
     .replace(/\x00/g, "")
     .replace(/\s+/g, " ")
     .trim();

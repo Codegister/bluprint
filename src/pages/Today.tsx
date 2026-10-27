@@ -199,6 +199,9 @@ export default function Today() {
   const progress = items.total
     ? Math.min(100, Math.round((items.correct / items.total) * 100))
     : 0;
+  // The server caps the goal at what exists; the page still names both numbers
+  // so "20 of 5" can never appear and the target is never unexplained.
+  const dailyGoal = Math.min(study?.goal ?? 0, items.total);
   const breakdown = `${items.cards.correct}/${items.cards.total} cards · ${items.quiz.correct}/${items.quiz.total} quiz · ${items.exam.correct}/${items.exam.total} exam`;
 
   /**
@@ -373,8 +376,9 @@ export default function Today() {
         </p>
         {study?.goalReason && (
           <p className="text-[0.72rem] text-muted-foreground sm:ml-auto">
-            Daily goal: {study.goal} of {items.total} available questions ·{" "}
-            {study.goalReason}
+            {items.total > 0
+              ? `Daily goal: ${dailyGoal} of ${items.total} available question${items.total === 1 ? "" : "s"} · ${study.goalReason}`
+              : "Your daily goal appears once a set has questions in it."}
           </p>
         )}
       </motion.section>

@@ -2,7 +2,6 @@ import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import {
   DEFAULT_TUTOR_TIER_LABEL,
-  NVIDIA_KEY_NAME,
   TUTOR_TIER_DETAILS,
   TUTOR_TIER_LABELS,
   readNvidiaKeys,
@@ -28,9 +27,8 @@ export const aiStatus = query({
     // describes the AI used to build study sets, marking and tutoring.
     return {
       configured: keys.length > 0,
-      // Do not expose how many keys are loaded. That leaks operational detail
-      // that is useful only to an attacker trying keys against the endpoint.
-      keyName: NVIDIA_KEY_NAME,
+      // Neither the number of keys nor the environment variable name is
+      // returned: both are operational detail, and the UI has no use for them.
       // Exactly three levels, in order: Fast, Balanced, Deep. The NVIDIA model
       // behind each one stays on the server.
       tutorTiers: TUTOR_TIER_LABELS,

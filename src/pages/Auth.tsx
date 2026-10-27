@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/input-otp";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
+import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -110,10 +111,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       setError(null);
       return true;
     } catch (signInError) {
+      // The provider's own error can name an HTTP status or a mail endpoint.
+      // The page shows a readable sentence and logs the rest.
       setError(
-        signInError instanceof Error
-          ? signInError.message
-          : "Could not send the code. Try again.",
+        readableError(signInError, "Could not send the code. Try again."),
       );
       return false;
     }
@@ -253,9 +254,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       navigate(redirect);
     } catch (guestError) {
       setError(
-        guestError instanceof Error
-          ? `Could not start a guest session: ${guestError.message}`
-          : "Could not start a guest session. Try again.",
+        readableError(
+          guestError,
+          "Could not start a guest session. Try again.",
+        ),
       );
       setIsLoading(false);
     }

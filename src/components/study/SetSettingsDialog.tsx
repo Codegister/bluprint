@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -75,6 +75,9 @@ export function SetSettingsDialog({
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // A rebuild started here is fire-and-forget. If the set is deleted while it
+  // is still running, its rejection must not pop an error beside "Set deleted."
+  const deletedRef = useRef(false);
 
   // Re-sync every time the dialog opens so a cancelled edit is discarded.
   useEffect(() => {
@@ -88,6 +91,7 @@ export function SetSettingsDialog({
     setExamCount(set.targetExamCount ?? BUILD_DEFAULTS.exam);
     setExamDate(set.examDate ?? "");
     setError(null);
+    deletedRef.current = false;
   }, [
     open,
     set.title,
@@ -130,6 +134,7 @@ export function SetSettingsDialog({
         // The rebuild is a long action. Start it, close the dialog, and let the
         // set page show live progress and any error panel.
         void processSet({ setId: set._id }).catch((rebuildError) => {
+          if (deletedRef.current) return;
           toast.error(
             readableError(rebuildError, "The rebuild stopped. Open the set to retry."),
           );
@@ -154,11 +159,13 @@ export function SetSettingsDialog({
     setDeleting(true);
     try {
       await removeSet({ setId: set._id });
+      deletedRef.current = true;
       toast.success("Set deleted.");
       setConfirmingDelete(false);
       onOpenChange(false);
       navigate("/tutor");
     } catch (deleteError) {
+      deletedRef.current = false;
       notifyError(deleteError, "Could not delete that set.");
     } finally {
       setDeleting(false);

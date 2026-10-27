@@ -248,13 +248,11 @@ earned. Four practice papers per course is the cap; remove one to build another.
    used are listed under the answer and saved with the thread. With web off it answers from
    your material alone. Suggested first questions get you started; exam practice is one
    question at a time.
-   The **power picker** under the prompt chooses how hard the tutor works: **Balanced**
-   (default), **Ultra**, **Fast**, **Powerful**, or **Max**. **Ultra** is the ultra-fast
-   option — the lowest-latency model with a short answer budget — while **Max** gives
-   maximum strength, the largest reasoning model with the longest budget and the lowest
-   temperature, so it deliberates deeply over a full derivation or a marked essay plan.
-   Tiers are named by feel rather than by model — each one maps to a different NVIDIA
-   model on the server, so the browser never sees a model id.
+   The **level picker** under the prompt chooses how much work the tutor does: **Fast**
+   (a quick, short answer), **Balanced** (the default everyday answer) and **Deep** (the
+   longest answer budget and a worked explanation, for a full derivation or a marked essay
+   plan). Levels are named by feel rather than by model — each one maps to a different
+   NVIDIA model on the server, so the browser never sees a model id.
 11. **Edit and rebuild** — **Edit set** in the set's `⋯` menu changes its name, course,
    board, level, or exam date, and its three build sliders (1–100 flashcards, quiz questions
    and exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and
@@ -552,18 +550,45 @@ endpoints:
 | Purpose | Environment variable | Default |
 | --- | --- | --- |
 | Summaries, cards, quizzes, exams | `NVIDIA_TEXT_MODEL` | `nvidia/nemotron-3.5-lightning-30b-a3b` |
-| Reading photos / video frames | `NVIDIA_VISION_MODEL` | `meta/llama-3.2-90b-vision-instruct` |
-| Tutor tier: Fast | `NVIDIA_TUTOR_FAST_MODEL` | `meta/llama-3.1-8b-instruct` |
+| Reading photos / video frames | `NVIDIA_VISION_MODEL` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
+| Tutor tier: Fast | `NVIDIA_TUTOR_FAST_MODEL` | `nvidia/nemotron-3.5-bolt-e4b` |
 | Tutor tier: Balanced (default) | `NVIDIA_TUTOR_BALANCED_MODEL` | `NVIDIA_TEXT_MODEL`'s model |
-| Tutor tier: Powerful | `NVIDIA_TUTOR_POWERFUL_MODEL` | `meta/llama-3.3-70b-instruct` |
-| Tutor tier: Ultra (ultra fast) | `NVIDIA_TUTOR_ULTRA_MODEL` | `nvidia/nemotron-3.5-lightning-30b-a3b` |
-| Tutor tier: Max (deep deliberation) | `NVIDIA_TUTOR_MAX_MODEL` | `nvidia/llama-3.1-nemotron-ultra-253b-v1` |
+| Tutor tier: Deep | `NVIDIA_TUTOR_DEEP_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` |
 | Tutor answers with web access | `OPENROUTER_TUTOR_MODEL` | `meta-llama/llama-3.3-70b-instruct` |
 | Tutor dictation through OpenRouter | `OPENROUTER_STT_MODELS` | `nvidia/parakeet-tdt-0.6b-v3`, then `openai/whisper-large-v3-turbo` |
 
-Set overrides on the Convex deployment the same way as `NVIDIA_API_KEY`. If a model is
-retired, the set shows a clear "model not available" message and the environment variable
-is the fix.
+The three tutor levels are Fast, Balanced and Deep; `NVIDIA_TUTOR_POWERFUL_MODEL` and the
+older extra tier names are still read where present, but new deployments only need the
+three above.
+
+Set overrides on the Convex deployment the same way as `NVIDIA_API_KEY`. A retired model id
+is skipped before a request is made: `/src/convex/lib/nvidiaConfig.ts` keeps a short list of
+withdrawn ids and replaces them with a checked fallback. If NVIDIA withdraws a model that
+is not on that list, the transport sees HTTP 404/410, logs the failing id, and retries the
+same prompt on `nvidia/nemotron-3.5-bolt-e4b` and then
+`nvidia/nemotron-3-ultra-550b-a55b`. The student sees a friendly "the tutor is having
+trouble" message, never the provider's text.
+
+### AI provider health alerts
+
+Every failed NVIDIA call is recorded in `aiIncidents` (feature, model id, HTTP status —
+never a key, prompt or answer). A scheduled sweep runs every ten minutes over a
+thirty-minute window:
+
+- A retired model (404/410), a rejected key (401/403) or an account with no credit (402)
+  alerts on the **first** failure, because none of those fix themselves.
+- Rate limits, network failures and 5xx replies alert after three in the window.
+- One outage sends one message per hour, so the alert does not spam.
+
+Set `ALERT_WEBHOOK_URL` on the deployment to a Slack, Discord or generic JSON webhook and
+the alert is posted there. `ALERT_EMAIL` is included in the payload as a hint for a routing
+service. With no webhook, the sweep writes a loud
+`⚠️ AI PROVIDER ALERT — …` line to the deployment log, which is the alert for a log-based
+monitor. To read the current health by hand:
+
+```bash
+npx convex run incidents:health
+```
 
 ### Dictation in the tutor
 
@@ -942,8 +967,9 @@ src/
 - **Web answers come from a second provider on purpose.** No NVIDIA-hosted model can
   search the internet, so the tutor's optional web switch uses OpenRouter's web plugin and
   saves the pages it cited. Turn the switch off to keep an answer entirely on NVIDIA.
-- **English prompts and defaults**, with at most 60,000 characters of pasted notes stored
-  (12,000 characters sent to the model per generation call).
+- **English prompts and defaults**, with at most 20,000 characters of pasted notes stored
+  and generated from (12,000 characters of the longest notes are sent per model call, with
+  a note saying the material was shortened).
 
 
 ## Troubleshooting
@@ -952,8 +978,11 @@ src/
 - **401 / 403** — every key in the pool was rejected. Replace `NVIDIA_API_KEY` on the
   deployment.
 - **429** — the whole pool is cooling down. Wait about a minute, then retry the set.
-- **404 / 410 model not available** — NVIDIA retired that model. Set
-  `NVIDIA_TEXT_MODEL` / `NVIDIA_VISION_MODEL` to a model currently listed on NVIDIA Build.
+- **AI says it is having trouble** — the provider failed after every key and fallback was
+  tried. Details are in the deployment log and in `aiIncidents`; the health sweep posts an
+  alert on the first retired model, rejected key or empty-credit account. If the cause is a
+  retired model, set `NVIDIA_TEXT_MODEL` / `NVIDIA_VISION_MODEL` to a model currently
+  listed on NVIDIA Build.
 - **A pathway is generic** — there is no published page for that qualification yet, so the
   starter map is used. Rebuild the pathway later to pick up the published outline. Your
   board's own specification is always the source of truth.

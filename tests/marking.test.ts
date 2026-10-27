@@ -6,6 +6,8 @@ import {
   distinctiveCoverage,
   distinctiveTermsFor,
   guideFromCriteria,
+  isSymbolicCriterion,
+  meaningAward,
   toCriteria,
 } from "../src/convex/lib/markingCriteria";
 
@@ -98,6 +100,33 @@ describe("partial marks", () => {
       credit(criteria, TEMPERATURE_ONLY),
     );
     expect(credit(criteria, FULL_ANSWER)).toEqual(credit(criteria, FULL_ANSWER));
+  });
+
+  test("a ratio written in a different notation earns its mark", () => {
+    const criterion = "1 mark: the ratio of carbon to oxygen atoms is 3:1";
+    const terms = distinctiveTermsFor([criterion])[0] ?? [];
+    const answer = "The ratio of carbon to oxygen atoms is 3 to 1.";
+    expect(awardCriterion(1, 1, terms, answer)).toBe(1);
+  });
+
+  test("an equation stated in words is credited through the meaning pass", () => {
+    const criterion = "1 mark: E = mc²";
+    const terms = distinctiveTermsFor([criterion])[0] ?? [];
+    const paraphrase = "Energy equals mass times the speed of light squared.";
+
+    expect(isSymbolicCriterion(criterion)).toBe(true);
+    expect(distinctiveCoverage(terms, paraphrase)).toBe(0);
+    expect(meaningAward(1, 1, terms, paraphrase, criterion)).toBe(1);
+  });
+
+  test("a prose criterion with none of its own terms is still refused", () => {
+    const criterion = "1 mark: each enzyme has an optimum pH";
+    const terms = distinctiveTermsFor([criterion])[0] ?? [];
+    const temperature =
+      "A higher temperature increases the rate because molecules collide more often.";
+
+    expect(isSymbolicCriterion(criterion)).toBe(false);
+    expect(meaningAward(1, 1, terms, temperature, criterion)).toBe(0);
   });
 
   test("six one-mark criteria allow a literal sum, not all or nothing", () => {

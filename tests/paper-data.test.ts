@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  alignDataReference,
   hasData,
   isSelfContained,
   referencesData,
@@ -45,6 +46,21 @@ describe("self-contained paper questions", () => {
   test("the same question with its table is accepted", () => {
     expect(hasData(TABLE)).toBe(true);
     expect(isSelfContained({ question: TABLE_QUESTION, data: TABLE })).toBe(true);
+  });
+
+  test("a figure reference is renamed to the table that is actually rendered", () => {
+    const aligned = alignDataReference({
+      question: "Use Figure 2 and the graph to describe the trend.",
+      data: TABLE,
+    });
+    expect(aligned.question).toBe("Use Table 2 and the table to describe the trend.");
+    expect(isSelfContained(aligned)).toBe(true);
+  });
+
+  test("without data the wording is left alone so the question is still rejected", () => {
+    const question = "Use Figure 2 to describe the trend.";
+    expect(alignDataReference({ question }).question).toBe(question);
+    expect(isSelfContained({ question })).toBe(false);
   });
 
   test("an empty or one-column table does not count as data", () => {

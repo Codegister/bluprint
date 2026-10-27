@@ -143,9 +143,10 @@ export function CreateSetDialog({
     if (initialText && initialText.trim().length >= 40) {
       openedRef.current = true;
       setMode("text");
-      // Text handed over from the landing hero is capped like anything typed:
-      // the box, the counter and the server all use the same limit.
-      setText(initialText.slice(0, MAX_NOTE_CHARS));
+      // Text handed over from the landing hero keeps its full length, so an
+      // oversized paste shows the over-limit message and can be trimmed rather
+      // than being silently cut to the limit before the student sees it.
+      setText(initialText);
       if (initialText.length > MAX_NOTE_CHARS) {
         setError(noteLimitMessage(initialText.length));
       }
@@ -253,7 +254,9 @@ export function CreateSetDialog({
     }
 
     if (ai?.configured === false) {
-      setError("NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace owner to add it before compiling a set.");
+      setError(
+        "AI building isn't set up for this workspace yet. Ask the owner to connect the AI service, then try again — your notes can still be saved.",
+      );
       return;
     }
     if (ai === undefined) {
@@ -414,7 +417,7 @@ export function CreateSetDialog({
               className="mb-4 rounded-2xl bg-[#FFF6E5] px-3.5 py-3"
             >
               <p className="text-xs leading-relaxed text-[#8A5D00]">
-                NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace
+                AI building isn't set up for this workspace yet. Ask the owner to connect the AI service.
                 owner to add it before compiling a set.
               </p>
             </motion.div>
@@ -685,18 +688,24 @@ export function CreateSetDialog({
             </TabsContent>
 
             <TabsContent value="text" className="mt-0">
+              {/* The value is not clipped: pasting too much must show the
+                  over-limit message and stop the submit, not silently build
+                  from the first 20,000 characters. */}
               <Textarea
                 value={text}
-                onChange={(event) => setText(event.target.value.slice(0, MAX_NOTE_CHARS))}
+                onChange={(event) => setText(event.target.value)}
                 placeholder="Paste lecture notes, a textbook section or your own writing…"
-                maxLength={MAX_NOTE_CHARS}
                 rows={8}
                 disabled={isLoading}
                 className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
               />
               <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
                 <span>A few sentences is enough to start</span>
-                <span>
+                <span
+                  className={cn(
+                    text.length > MAX_NOTE_CHARS && "font-semibold text-[#A81F28]",
+                  )}
+                >
                   {text.length.toLocaleString()} / {MAX_NOTE_CHARS_LABEL}
                 </span>
               </div>

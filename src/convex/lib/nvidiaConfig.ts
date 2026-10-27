@@ -13,21 +13,28 @@
  */
 export const NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 
-// These are the defaults checked against NVIDIA's live model catalog. NVIDIA
-// retires models periodically — override with the env vars below (or edit
-// here) if one reaches end of life, as shown by a 410 response.
-//
-// Last verified live against https://integrate.api.nvidia.com/v1/models and a
-// real completion on 2026-10-27. `meta/llama-3.1-8b-instruct` and
-// `meta/llama-3.3-70b-instruct` both reached end of life on 2026-08-26 and
-// answered HTTP 410, which is why they are no longer referenced anywhere.
-export const NVIDIA_TEXT_MODEL =
-  process.env.NVIDIA_TEXT_MODEL?.trim() ||
-  "nvidia/nemotron-3.5-lightning-30b-a3b";
+/**
+ * Models NVIDIA has already retired.
+ *
+ * A deployment can still have an old id in `NVIDIA_TEXT_MODEL` (or in a
+ * tier-specific override) after NVIDIA withdraws it. The transport handles a
+ * 404/410 by trying the next model, but that costs a failed request on every
+ * prompt and leaves the first paint of the tutor exposed to a provider error.
+ * Skipping these ids when the candidates are built means a stale environment
+ * variable cannot reintroduce a dead model at all.
+ *
+ * Only ids confirmed dead are listed. A model that is merely slow belongs in
+ * the fallback list, not here.
+ */
+export const RETIRED_MODEL_IDS: ReadonlySet<string> = new Set([
+  "meta/llama-3.1-8b-instruct",
+  "meta/llama-3.3-70b-instruct",
+]);
 
-export const NVIDIA_VISION_MODEL =
-  process.env.NVIDIA_VISION_MODEL?.trim() ||
-  "nvidia/nemotron-3.5-super-vl-120b-a12b";
+/** Whether NVIDIA has withdrawn this model. */
+export function isRetiredModel(model: string): boolean {
+  return RETIRED_MODEL_IDS.has(model.trim().toLowerCase());
+}
 
 /**
  * Every model the text prompts may fall back to, best first.
@@ -44,15 +51,49 @@ export const NVIDIA_TEXT_FALLBACK_MODELS = [
 ];
 
 export const NVIDIA_VISION_FALLBACK_MODELS = [
-  "meta/llama-3.2-90b-vision-instruct",
+  "nvidia/nemotron-3.5-super-vl-120b-a12b",
+  // A live multimodal model, used only when the primary vision model stops
+  // answering. The previous fallback (meta/llama-3.2-90b-vision-instruct)
+  // timed out on every probe, so it was not a real fallback.
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
 ];
+
+/**
+ * Picks a model, replacing a retired id with the first live alternative.
+ * Used for every default and every environment override, so a stale value
+ * cannot reach the transport. A retired list with nothing live left keeps the
+ * preferred id rather than returning an empty model name.
+ */
+export function liveModel(preferred: string, fallbacks: string[]): string {
+  const value = preferred.trim();
+  if (value && !isRetiredModel(value)) return value;
+  return fallbacks.find((model) => !isRetiredModel(model)) ?? value;
+}
+
+/**
+ * The current default text model.
+ *
+ * Verified on 2026-10-27 against NVIDIA's live model catalogue and with a real
+ * completion from this deployment. Override with NVIDIA_TEXT_MODEL; the
+ * fallbacks take over if NVIDIA retires it later. `meta/llama-3.1-8b-instruct`
+ * and `meta/llama-3.3-70b-instruct` reached end of life on 2026-08-26.
+ */
+export const NVIDIA_TEXT_MODEL = liveModel(
+  process.env.NVIDIA_TEXT_MODEL?.trim() || "nvidia/nemotron-3.5-lightning-30b-a3b",
+  NVIDIA_TEXT_FALLBACK_MODELS,
+);
+
+export const NVIDIA_VISION_MODEL = liveModel(
+  process.env.NVIDIA_VISION_MODEL?.trim() || "nvidia/nemotron-3.5-super-vl-120b-a12b",
+  NVIDIA_VISION_FALLBACK_MODELS,
+);
 
 /** Reads a comma- or newline-separated model list from the environment. */
 function modelList(envName: string, fallback: string[]): string[] {
   const raw = process.env[envName];
   const values = (raw ? raw.split(/[\n,]+/) : fallback)
     .map((value) => value.trim())
-    .filter(Boolean);
+    .filter((value) => value.length > 0 && !isRetiredModel(value));
   return [...new Set(values)];
 }
 
@@ -112,9 +153,15 @@ export type TutorTier = {
   temperature: number;
 };
 
-/** Reads a per-tier model override, falling back to the checked default. */
+/**
+ * Reads a per-tier model override, falling back to the checked default.
+ *
+ * The override goes through the same retired-model guard as the default: a
+ * deployment that pinned a tutor level years ago cannot keep that level broken
+ * after NVIDIA withdraws the model.
+ */
 function tierModel(envName: string, fallback: string): string {
-  return process.env[envName]?.trim() || fallback;
+  return liveModel(process.env[envName]?.trim() || fallback, NVIDIA_TEXT_FALLBACK_MODELS);
 }
 
 export const TUTOR_TIERS: TutorTier[] = [

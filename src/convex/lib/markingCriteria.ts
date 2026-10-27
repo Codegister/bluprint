@@ -461,10 +461,33 @@ export function meaningAward(
   share: number,
   terms: string[],
   quote: string,
+  criterion = "",
 ): number {
   if (!(share > 0)) return 0;
-  if (distinctiveCoverage(terms, quote) <= 0) return 0;
+  // A correct answer to an equation or a ratio can share none of the
+  // criterion's words: "energy equals mass times the speed of light squared"
+  // is E = mc², and "3 to 1" is 3:1. For those criteria the examiner's
+  // meaning verdict is the evidence, because the quote itself is already
+  // checked against the answer and the criterion is not prose to paraphrase.
+  // Prose criteria still need at least one of their own terms, which is what
+  // stops a temperature answer taking a pH mark.
+  const shared = distinctiveCoverage(terms, quote) > 0;
+  if (!shared && !isSymbolicCriterion(criterion)) return 0;
   return Math.min(marks, Math.max(1, Math.ceil(marks * share)));
+}
+
+/**
+ * Whether a criterion is a formula, a ratio or a short numerical answer rather
+ * than prose. These are the cases where a correct answer is expected to use
+ * none of the criterion's vocabulary.
+ */
+export function isSymbolicCriterion(criterion: string): boolean {
+  const text = criterionText(criterion);
+  if (text.trim().length === 0) return false;
+  if (/[=<>≤≥→⇌]/.test(text)) return true;
+  if (/\d+\s*[:/]\s*\d+/.test(text)) return true;
+  const words = text.split(/\s+/).filter(Boolean);
+  return words.length <= 6 && /\d/.test(text);
 }
 
 /**

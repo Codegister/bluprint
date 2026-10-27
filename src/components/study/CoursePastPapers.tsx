@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { notifyError } from "@/lib/errors";
+import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -279,7 +279,7 @@ export function CoursePastPapers({
                     {ready
                       ? `${paper.questionCount} question${paper.questionCount === 1 ? "" : "s"} · ${paper.totalMarks} marks · about ${paper.durationMinutes} minutes${outdated ? " · rebuild to use the current question types and marks" : ""}`
                       : paper.status === "error"
-                        ? paper.errorMessage ?? "This paper could not be built."
+                        ? buildErrorMessage(paper.errorMessage).message
                         : paper.progress ?? "Waiting to start"}
                   </p>
                   {ready && paper.questionCount > 0 && (

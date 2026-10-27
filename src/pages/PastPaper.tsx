@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
-import { notifyError } from "@/lib/errors";
+import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { courseSubtitle } from "@/lib/subjects";
 import { useMutation, useQuery } from "convex/react";
@@ -212,8 +212,7 @@ export default function PastPaper() {
               This paper could not be built
             </h2>
             <p className="mt-2 text-[0.85rem] leading-relaxed text-[#C23B49]">
-              {paper.errorMessage ??
-                "NVIDIA did not return a usable paper. Try building it again."}
+              {buildErrorMessage(paper.errorMessage).message}
             </p>
             <Button
               type="button"
@@ -258,7 +257,7 @@ export default function PastPaper() {
                   This one is taking longer than usual.
                 </p>
                 <p className="mt-1 text-[0.78rem] leading-relaxed text-muted-foreground">
-                  NVIDIA can be slow on a whole paper. It keeps building in the
+                  The AI can be slow on a whole paper. It keeps building in the
                   background, so you can come back to it. If it never finishes,
                   start it again here — that replaces this paper and clears any
                   answers on it.

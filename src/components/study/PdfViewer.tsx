@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { readableError } from "@/lib/errors";
 import { TriangleAlert } from "lucide-react";
 import {
   GlobalWorkerOptions,
@@ -42,11 +43,9 @@ export function PdfViewer({ url, title }: { url: string; title: string }) {
         if (!cancelled) setPdf(loaded);
       } catch (cause) {
         if (cancelled) return;
-        setError(
-          cause instanceof Error && cause.message
-            ? cause.message
-            : "This paper could not be opened.",
-        );
+        // PDF.js reports its own parser errors ("Invalid PDF structure",
+        // worker paths). They are logged and replaced with a sentence.
+        setError(readableError(cause, "This paper could not be opened."));
       }
     })();
     return () => {

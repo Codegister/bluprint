@@ -35,3 +35,29 @@ export function isSelfContained(question: {
 }): boolean {
   return !referencesData(question.question) || hasData(question.data);
 }
+
+/**
+ * Makes a question's wording match what the page renders.
+ *
+ * Papers can only render tables, not diagrams or photographs. A model that
+ * supplies the data as a table but still writes "the graph shows…" would leave
+ * the student looking for a graph that is not there. When a table is present,
+ * the reference is renamed to "table"; when no table is present the question is
+ * still rejected by `isSelfContained`, so this never hides missing data.
+ */
+export function alignDataReference<T extends { question: string; data?: QuestionData }>(
+  question: T,
+): T {
+  if (!hasData(question.data)) return question;
+  const aligned = question.question
+    .replace(
+      /\b(the|this)\s+(graph|chart|figure|diagram|photograph|photo|image)\b/gi,
+      "$1 table",
+    )
+    .replace(
+      /\b(graph|chart|figure|diagram|photograph|photo|image)\s+(\d+)\b/gi,
+      (match, word: string, number: string) =>
+        `${word[0] === word[0]?.toUpperCase() ? "Table" : "table"} ${number}`,
+    );
+  return aligned === question.question ? question : { ...question, question: aligned };
+}

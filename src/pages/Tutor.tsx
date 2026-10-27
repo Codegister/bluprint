@@ -376,8 +376,9 @@ export default function TutorPage() {
 
           {aiStatus && !aiStatus.configured && (
             <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.8rem] font-medium text-[#96650A]">
-              AI is not connected on this deployment. Add NVIDIA_API_KEY to use
-              the tutor and build new study sets. Saved material still works.
+              AI isn't connected for this workspace yet. Ask the owner to connect
+              it to use the tutor and build new study sets. Saved material still
+              works.
             </p>
           )}
 

@@ -303,7 +303,7 @@ function BuildingPanel({
           {stale && (
             <div className="mt-4 flex flex-col items-start gap-2 rounded-2xl bg-brand-panel p-4">
               <p className="text-[0.85rem] leading-relaxed text-brand-ink/80">
-                This run is taking longer than expected. NVIDIA may be slow, or the
+                This run is taking longer than expected. The AI may be slow, or the
                 run was interrupted.
               </p>
               <Button

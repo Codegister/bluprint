@@ -9,6 +9,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { BUILD_DEFAULTS } from "./lib/buildDefaults";
+import { consumeBuildAllowance } from "./buildUsage";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner, requireVerifiedUser } from "./lib/authorization";
 import {
@@ -533,6 +534,12 @@ export const createTopicSet = mutation({
       return sections === undefined && covered.includes(topicId);
     });
     if (match) return { setId: match._id, created: false, sections: chosen.length };
+
+    // A set built from a course topic is a full AI build, so it spends the same
+    // allowance as pasting notes. Without this, the course path was an
+    // unlimited way to start builds while the paste dialog was rate-limited.
+    await requireVerifiedUser(ctx, userId);
+    await consumeBuildAllowance(ctx, userId, "set");
 
     const notes = buildTopicNotes(course, chosen);
     const first = chosen[0]!.topic;
