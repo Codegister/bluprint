@@ -392,26 +392,92 @@ function freeWindows(
 }
 
 /**
- * Meal windows that fall inside this day's study window. A meal that is
- * already blocked out by the student is not listed twice, and a meal only
- * counts when there is real study time on both sides of it - otherwise an
- * 18:00 start would lose its whole evening to an automatic dinner.
+ * Meal windows that fall inside this day's study window. A meal only counts
+ * when there is real study time on both sides of it - otherwise an 18:00 start
+ * would lose its whole evening to an automatic dinner.
+ *
+ * A blocked period that lands on a meal does not delete it. Lunch and dinner
+ * keep their length and move to the next free quarter-hour after the block, or
+ * to the slot before it when the rest of the day is full. Blocking 12:00-14:00
+ * therefore moves lunch to 14:00 instead of silently overwriting it.
  */
 function mealsForDay(start: number, blocked: BlockedPeriod[]) {
-  return MEALS.filter(
-    (meal) =>
-      meal.startMinutes >= start + MIN_TOPIC_MINUTES &&
-      meal.endMinutes <= LATEST_END_MINUTES - MIN_TOPIC_MINUTES,
-  )
-    .filter(
-      (meal) =>
-        !blocked.some(
+  const busy = blocked.map((period) => ({
+    start: period.startMinutes,
+    end: period.endMinutes,
+  }));
+  const placed: Array<{ label: string; startMinutes: number; endMinutes: number }> =
+    [];
+
+  /** The first period (block or already moved meal) in the way of a slot. */
+  const blockerFor = (slotStart: number, length: number) =>
+    [
+      ...busy,
+      ...placed.map((meal) => ({
+        start: meal.startMinutes,
+        end: meal.endMinutes,
+      })),
+    ]
+      .filter((period) => slotStart < period.end && slotStart + length > period.start)
+      .sort((a, b) => a.end - b.end)[0];
+
+  for (const meal of MEALS) {
+    if (
+      meal.startMinutes < start + MIN_TOPIC_MINUTES ||
+      meal.endMinutes > LATEST_END_MINUTES - MIN_TOPIC_MINUTES
+    ) {
+      continue;
+    }
+    const length = meal.endMinutes - meal.startMinutes;
+
+    if (!blockerFor(meal.startMinutes, length)) {
+      placed.push({ ...meal });
+      continue;
+    }
+
+    // Moved later first: eating after the thing that took the time is more
+    // natural than being pushed to eat early.
+    let moved: number | null = null;
+    let cursor = meal.startMinutes;
+    for (let guard = 0; guard < 24; guard += 1) {
+      const blocker = blockerFor(cursor, length);
+      if (!blocker) {
+        moved = cursor;
+        break;
+      }
+      cursor =
+        Math.ceil(blocker.end / START_GRANULARITY_MINUTES) *
+        START_GRANULARITY_MINUTES;
+      if (cursor + length > 24 * 60) break;
+    }
+
+    if (moved === null) {
+      // No room left in the day: take the quarter-hour before the clash.
+      const first = busy
+        .filter(
           (period) =>
-            period.startMinutes < meal.endMinutes &&
-            period.endMinutes > meal.startMinutes,
-        ),
-    )
-    .map((meal) => ({ ...meal }));
+            period.start < meal.endMinutes && period.end > meal.startMinutes,
+        )
+        .sort((a, b) => a.start - b.start)[0];
+      if (first) {
+        const before =
+          Math.floor(first.start / START_GRANULARITY_MINUTES) *
+            START_GRANULARITY_MINUTES -
+          length;
+        if (before >= start && !blockerFor(before, length)) moved = before;
+      }
+    }
+
+    if (moved !== null) {
+      placed.push({
+        label: meal.label,
+        startMinutes: moved,
+        endMinutes: moved + length,
+      });
+    }
+  }
+
+  return placed;
 }
 
 /**

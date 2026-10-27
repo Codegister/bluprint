@@ -35,6 +35,7 @@ import {
   BookOpen,
   ChevronDown,
   Loader2,
+  RotateCcw,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -545,57 +546,64 @@ export default function Course() {
                 </Button>
               )}
 
-            {/* Secondary and destructive course actions live in one menu. */}
-            <details className="relative">
-              <summary
-                aria-label="More course actions"
-                className="grid size-9 cursor-pointer list-none place-items-center rounded-full border border-border bg-card text-[1rem] font-bold text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink [&::-webkit-details-marker]:hidden"
+            {/* Rebuilding and removing are course-level actions, so they stay
+                visible instead of hiding behind a menu. */}
+            {currentSection === "pathway" && course.status === "ready" && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleRetry()}
+                disabled={retrying}
+                aria-label="Rebuild pathway"
+                className="h-9 rounded-full border-border bg-card px-3 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
               >
-                ⋯
-              </summary>
-              <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-border bg-card p-1 shadow-lg">
-                {[
-                  ...(pathway
-                    ? [{ label: "Ask the tutor", onClick: () => openTutor() }]
-                    : []),
-                  ...(currentSection === "pathway" && course.status === "ready"
-                    ? [
-                        {
-                          label: retrying ? "Rebuilding…" : "Rebuild pathway",
-                          onClick: () => void handleRetry(),
-                        },
-                      ]
-                    : []),
-                  ...(currentSection === "pathway"
-                    ? [
-                        {
-                          label: "Remove course",
-                          onClick: () => setConfirmingDelete(true),
-                          destructive: true,
-                        },
-                      ]
-                    : []),
-                ].map((action) => (
+                <RotateCcw
+                  className={cn("size-3.5", retrying && "animate-spin")}
+                  aria-hidden
+                />
+                <span className="hidden sm:inline">
+                  {retrying ? "Rebuilding…" : "Rebuild pathway"}
+                </span>
+              </Button>
+            )}
+            {currentSection === "pathway" && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirmingDelete(true)}
+                disabled={deleting}
+                aria-label="Remove course"
+                className="h-9 rounded-full border-destructive/30 bg-card px-3 text-[0.8rem] font-semibold text-destructive shadow-none hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="size-3.5" aria-hidden />
+                <span className="hidden sm:inline">Remove course</span>
+              </Button>
+            )}
+
+            {/* Everything else needs a home, but the tutor is the only one. */}
+            {pathway && (
+              <details className="relative">
+                <summary
+                  aria-label="More course actions"
+                  className="grid size-9 cursor-pointer list-none place-items-center rounded-full border border-border bg-card text-[1rem] font-bold text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink [&::-webkit-details-marker]:hidden"
+                >
+                  ⋯
+                </summary>
+                <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-border bg-card p-1 shadow-lg">
                   <button
-                    key={action.label}
                     type="button"
                     onClick={(event) => {
                       const menu = event.currentTarget.closest("details");
                       if (menu instanceof HTMLDetailsElement) menu.open = false;
-                      action.onClick();
+                      openTutor();
                     }}
-                    className={cn(
-                      "block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium hover:bg-brand-panel",
-                      "destructive" in action && action.destructive
-                        ? "text-destructive"
-                        : "text-brand-ink",
-                    )}
+                    className="block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel"
                   >
-                    {action.label}
+                    Ask the tutor
                   </button>
-                ))}
-              </div>
-            </details>
+                </div>
+              </details>
+            )}
           </div>
         </div>
 
