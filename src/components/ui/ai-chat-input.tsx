@@ -12,6 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { readableError } from "@/lib/errors";
+import { applyTranscript, emptyTranscript } from "@/lib/speechTranscript";
 import { cn } from "@/lib/utils";
 
 // ----------------------------------------------------------------------
@@ -606,7 +607,9 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
     const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
     const liveBaselineRef = useRef("");
     const liveTextRef = useRef("");
-    const liveInterimRef = useRef("");
+    // Slotted transcript: a phrase the engine re-delivers is written once, not
+    // appended again (see src/lib/speechTranscript.ts).
+    const liveTranscriptRef = useRef(emptyTranscript());
     const liveAttemptedRef = useRef(false);
     const liveFailedRef = useRef(false);
     const stoppedRef = useRef(false);
@@ -743,9 +746,8 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
         recognitionRef.current = null;
       }
 
-      // Keep the phrase that was still in flight when the student stopped.
-      liveTextRef.current = `${liveTextRef.current} ${liveInterimRef.current}`.trim();
-      liveInterimRef.current = "";
+      // The phrase still in flight is already in liveTextRef: every result
+      // event updated the prompt before it reached the box.
 
       const recorder = recorderRef.current;
       // Stopping the recorder fires its onstop handler, which keeps the spoken
@@ -829,11 +831,11 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
         releaseMicrophone();
 
         // Live dictation already wrote the words into the prompt, so there is
-        // nothing to upload and no waiting around.
+        // nothing to upload and no waiting around. liveTextRef holds the whole
+        // prompt (baseline included); only dictated words count as speech.
         const spoken = liveTextRef.current.trim();
-        if (spoken) {
-          const base = liveBaselineRef.current;
-          handleValueChange([base, spoken].filter(Boolean).join(" "));
+        if (spoken && spoken !== liveBaselineRef.current.trim()) {
+          handleValueChange(spoken);
           setDictationError(null);
           return;
         }
@@ -869,9 +871,9 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
       // is unsupported or gives up the audio is still there to transcribe.
       liveAttemptedRef.current = false;
       liveFailedRef.current = false;
-      liveTextRef.current = "";
-      liveInterimRef.current = "";
       liveBaselineRef.current = valueRef.current.trimEnd();
+      liveTranscriptRef.current = emptyTranscript(liveBaselineRef.current);
+      liveTextRef.current = liveBaselineRef.current;
 
       const Recognition = getSpeechRecognition();
       if (Recognition) {
@@ -882,22 +884,26 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
           recognition.lang = navigator.language || "en-GB";
 
           recognition.onresult = (event) => {
-            let interim = "";
-            for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            // Re-shape the event for the transcript helper.
+            const results: {
+              length: number;
+              [index: number]: { transcript?: string; isFinal: boolean };
+            } = { length: event.results.length };
+            for (let index = 0; index < event.results.length; index += 1) {
               const result = event.results[index];
-              const transcript = result?.[0]?.transcript ?? "";
-              if (!transcript) continue;
-              if (result?.isFinal) {
-                liveTextRef.current = `${liveTextRef.current} ${transcript}`.trim();
-              } else {
-                interim += transcript;
-              }
+              results[index] = {
+                transcript: result?.[0]?.transcript,
+                isFinal: Boolean(result?.isFinal),
+              };
             }
-            liveInterimRef.current = interim;
 
-            const base = liveBaselineRef.current;
-            const spoken = `${liveTextRef.current} ${interim}`.trim();
-            handleValueChange([base, spoken].filter(Boolean).join(" "));
+            const next = applyTranscript(liveTranscriptRef.current, {
+              resultIndex: event.resultIndex,
+              results,
+            });
+            liveTranscriptRef.current = next.state;
+            liveTextRef.current = next.text;
+            handleValueChange(next.text);
           };
 
           recognition.onerror = (event) => {

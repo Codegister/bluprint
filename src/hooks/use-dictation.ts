@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import {
+  applyTranscript,
+  commitTranscript,
+  emptyTranscript,
+  type TranscriptState,
+} from "@/lib/speechTranscript";
+
 /**
  * Dictation for typed recall.
  *
@@ -85,7 +92,11 @@ export function useDictation(onText: (text: string) => void) {
   const [error, setError] = useState<string | null>(null);
 
   const recognition = useRef<SpeechRecognitionLike | null>(null);
-  const settled = useRef("");
+  // Results are kept in slots rather than appended, so a re-delivered phrase
+  // is written once (see src/lib/speechTranscript.ts).
+  const transcript = useRef<TranscriptState>(emptyTranscript());
+  // The composed text last sent to the box; a restarted session continues it.
+  const spoken = useRef("");
   const callback = useRef(onText);
   // True between the student tapping the microphone and tapping it again, so an
   // engine that ends by itself can be told apart from the student stopping.
@@ -116,18 +127,26 @@ export function useDictation(onText: (text: string) => void) {
         : "en-GB";
 
     instance.onresult = (event) => {
-      let interim = "";
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      // A result can arrive after the student stopped, or after the card moved
+      // on; it must not write words into the next answer.
+      if (!wantsToListen.current) return;
+      // Re-shape the event for the transcript helper.
+      const results: { length: number; [index: number]: { transcript?: string; isFinal: boolean } } =
+        { length: event.results.length };
+      for (let index = 0; index < event.results.length; index += 1) {
         const result = event.results[index];
-        const text = result?.[0]?.transcript ?? "";
-        if (!text) continue;
-        if (result?.isFinal) {
-          settled.current = `${settled.current} ${text}`.trim();
-        } else {
-          interim += ` ${text}`;
-        }
+        results[index] = {
+          transcript: result?.[0]?.transcript,
+          isFinal: Boolean(result?.isFinal),
+        };
       }
-      callback.current(`${settled.current}${interim}`.trim());
+      const next = applyTranscript(transcript.current, {
+        resultIndex: event.resultIndex,
+        results,
+      });
+      transcript.current = next.state;
+      spoken.current = next.text;
+      callback.current(next.text);
     };
 
     instance.onerror = (event) => {
@@ -146,6 +165,9 @@ export function useDictation(onText: (text: string) => void) {
       // connection, with no error at all. Resume it so the student can keep
       // talking instead of finding a dead microphone.
       clearRestart();
+      // The new session numbers its results from zero, so the words heard so
+      // far are committed before it starts.
+      transcript.current = commitTranscript(transcript.current, spoken.current);
       restartTimer.current = window.setTimeout(() => {
         restartTimer.current = null;
         if (!wantsToListen.current) return;
@@ -186,7 +208,8 @@ export function useDictation(onText: (text: string) => void) {
       if (!instance) return;
       setError(null);
       clearRestart();
-      settled.current = base.trim();
+      transcript.current = emptyTranscript(base);
+      spoken.current = base.trim();
       wantsToListen.current = true;
 
       const attempt = (isRetry: boolean) => {
@@ -235,7 +258,8 @@ export function useDictation(onText: (text: string) => void) {
 
   const clear = useCallback(() => {
     clearRestart();
-    settled.current = "";
+    transcript.current = emptyTranscript();
+    spoken.current = "";
     setError(null);
   }, [clearRestart]);
 
