@@ -6,7 +6,7 @@
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#f7f3fd" />
+  <meta name="theme-color" content="#eef2f6" />
   <meta name="color-scheme" content="light dark" />
   <meta
     name="description"
@@ -15,36 +15,36 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=DM+Sans:opsz,wght@9..40,400..700&family=JetBrains+Mono:wght@400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
   <title>Bluprint: notes in, revision out</title>
   <!--
-    Applies the saved theme before the first paint. Without this, a reload in
-    dark mode would flash a warm-paper white page until React mounted.
-    Keep the storage key in sync with src/components/ThemeProvider.tsx.
+    Apply the stored theme before React mounts so the first paint is already
+    light or dark. Until the student picks a side, the OS preference wins.
+    ThemeProvider in src/components/ThemeProvider.tsx owns every later change.
   -->
   <script>
     (function () {
       try {
-        var saved = localStorage.getItem("bluprint.theme");
+        var stored = window.localStorage.getItem("bluprint.theme");
         var dark =
-          saved === "dark" ||
-          (saved !== "light" &&
+          stored === "dark" ||
+          (stored !== "light" &&
             window.matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.classList.toggle("dark", dark);
         document.documentElement.style.colorScheme = dark ? "dark" : "light";
       } catch (error) {
-        /* Storage unavailable: the light theme still renders fine. */
+        /* Storage can be blocked; the light sheet is the safe default. */
       }
     })();
   </script>
-  <script type="module" crossorigin src="/assets/index-CuEh758n.js"></script>
+  <script type="module" crossorigin src="/assets/index-Cl7dmfBa.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/react-vendor-DzeyujRg.js">
   <link rel="modulepreload" crossorigin href="/assets/framer-motion-8LdQ7a12.js">
-  <link rel="modulepreload" crossorigin href="/assets/radix-ui-Dha705xX.js">
-  <link rel="modulepreload" crossorigin href="/assets/charts-BmA9tU5Q.js">
-  <link rel="stylesheet" crossorigin href="/assets/index-DqY5eEe1.css">
+  <link rel="modulepreload" crossorigin href="/assets/radix-ui-C71IlOJC.js">
+  <link rel="modulepreload" crossorigin href="/assets/charts-C1ckgCBe.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-Bi72YdGi.css">
 </head>
 
 <body>
