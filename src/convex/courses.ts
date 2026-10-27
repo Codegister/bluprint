@@ -577,9 +577,10 @@ export const createTopicSet = mutation({
 });
 
 /**
- * Builds the source text for a pathway set from the stored pathway. This text is
- * later sent to NVIDIA, so avoid copying raw user-facing HTML and keep the
- * structure predictable.
+ * Builds the brief for a pathway set from the stored pathway: what the set must
+ * cover, not the content itself. The generator writes the subject content from
+ * this scope (see PATHWAY_MATERIAL_RULES in ai.ts), so the brief deliberately
+ * leaves out exam technique and commentary about the course.
  *
  * More than one section is written under numbered headings, so the generated
  * material keeps each topic distinct instead of blending them together.
@@ -592,8 +593,12 @@ function buildTopicNotes(
     `Course: ${course.level} ${course.subject}`,
     `Exam board: ${course.examBoard}${course.variant ? ` · ${course.variant}` : ""}${course.tier ? ` · ${course.tier}` : ""}`,
     course.poetryTheme ? `Poetry theme: ${course.poetryTheme}` : "",
+    "",
+    "Syllabus scope for this set:",
   ];
 
+  // The topic's exam skill is technique, not subject content: sending it to the
+  // generator produces cards about exam craft instead of the topic.
   sections.forEach(({ unit, topic }, index) => {
     const heading =
       sections.length === 1
@@ -603,21 +608,11 @@ function buildTopicNotes(
       "",
       `${heading}${topic.specReference ? ` (specification ${topic.specReference})` : ""}`,
       `Unit: ${unit.title}`,
-      unit.summary ? `Unit overview: ${unit.summary}` : "",
       topic.summary,
-      "",
-      "Key points:",
+      ...(topic.keyPoints.length > 0 ? ["Covers:"] : []),
       ...topic.keyPoints.map((point) => `- ${point}`),
-      topic.examSkill ? `\nExam skill: ${topic.examSkill}` : "",
     );
   });
-
-  parts.push(
-    course.pathway ? `\nCourse context: ${course.pathway.overview}` : "",
-    sections.length === 1
-      ? "\nWrite revision material for this topic at the depth and command-word style of this qualification. Stay within the specification for this course, cover every key point above, and use the listed subtopics as the depth guide."
-      : `\nWrite revision material for all ${sections.length} sections above at the depth and command-word style of this qualification. Stay within the specification for this course, cover every key point in every section, and keep each section's material separate so cards and questions map back to the right topic.`,
-  );
 
   return parts.filter((line) => line !== "").join("\n");
 }

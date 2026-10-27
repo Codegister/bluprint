@@ -664,6 +664,11 @@ same rate-limit messages as the rest of the app.
   sections is reopened rather than rebuilt. The existing compile pipeline takes over, so a
   pathway set has the same summary, cards, quiz, exam marking, scheduling, and tutor as an
   uploaded set.
+- A pathway set is built from a syllabus outline, not from teaching text. Generation is told
+  to write the subject content that outline calls for — facts, examples, vocabulary, worked
+  rules — and never material about the specification, assessment objectives, paper structure
+  or mark schemes, so an AQA GCSE Spanish set is about Spanish rather than about the exam.
+  The brief omits a topic's exam-skill line for the same reason.
 - English Literature poetry clusters are completed from the saved AQA anthology lists, so
   every poem appears once in anthology order even when the scraped page only lists the ones
   with notes. Scraped poetry units and starter "Poetry anthology" units are replaced, not
@@ -790,6 +795,10 @@ same rate-limit messages as the rest of the app.
   either a one-bullet-per-mark guide or level descriptors. A levels-marked essay is graded
   against those descriptors; a point-marked question is graded against its bullets, whole
   marks only, with no benefit of the doubt.
+- The award is reconciled against the guide's own ledger. A generated guide that carries
+  fewer marks than the question is worth is scaled onto the question, every bullet credited
+  is full marks, and an answer that reproduces the model answer is awarded full marks. A
+  thin guide therefore cannot cap a perfect answer below the paper's total.
 - The awarded mark and the examiner note are saved with the answer.
 - A paper is **60 minutes** by definition, and that is what the timetable schedules. The
   questions are a representative paper rather than a reproduction of a board paper, which is

@@ -685,10 +685,23 @@ function materialBlock(notes: string): string {
   }`;
 }
 
+/**
+ * Sets built from a course pathway carry a syllabus outline, not notes: the
+ * text names the scope of a qualification but does not teach it. Without this
+ * instruction the model summarises the syllabus ("the specification covers
+ * three themes and four papers") instead of the subject, which is exactly the
+ * complaint from AQA GCSE Spanish.
+ */
+const PATHWAY_MATERIAL_RULES =
+  "MATERIAL TYPE - syllabus outline only. The text above names the scope of a qualification; it is not teaching material. " +
+  "Write the subject content that scope calls for, at the depth and command words of this qualification, so every card, question and explanation teaches the thing itself with concrete facts, examples, names, formulas or vocabulary. " +
+  "Where you are asked to summarise, summarise the subject content these topics cover, not the shape of the qualification. " +
+  "Never write about the specification, syllabus, assessment objectives, exam board, paper structure, marks, weightings, mark schemes, tiers, word limits, vocabulary list sizes, revision technique or 'what students must know': those are not knowledge of the subject. " +
+  "If a scope line only names a syllabus document (a vocabulary list or a grammar checklist, for instance), replace it with the content it points at - real words and phrases with their meanings, or the rule with worked examples.";
+
 // ---------------------------------------------------------------------------
 // Exam-board context
 // ---------------------------------------------------------------------------
-
 /** The qualification fields a study set carries, when it has any. */
 type StudyContext = {
   course?: string;
@@ -743,6 +756,7 @@ async function summariseNotes(
   apiKeys: string[],
   notes: string,
   context?: StudyContext,
+  syllabus = false,
 ): Promise<Summary> {
   const qualification = qualificationText(context);
   const raw = await nvidiaChat(apiKeys, {
@@ -756,6 +770,7 @@ async function summariseNotes(
           (qualification
             ? `This material is for ${qualification}. Angle the exam focus at that qualification and use its command words.\n`
             : "") +
+          (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
           "Create a revision summary of the material. Return JSON shaped exactly like:\n" +
           '{"overview":"3-5 sentence overview","keyPoints":["6-10 specific points worth remembering"],"examFocus":["3-5 likely exam angles or things to memorise"]}\n' +
           "Be concrete and faithful to the material. No markdown inside values.",
@@ -821,6 +836,7 @@ async function generateCards(
   // asking for new batches and save what exists instead.
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
+  syllabus = false,
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
   const seen = new Set<string>();
@@ -847,6 +863,7 @@ async function generateCards(
           role: "user",
           content:
             `${materialBlock(notes)}\n\n` +
+            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
             `Create ${want} revision flashcards from this material. Cover the breadth of the material, but prioritise the niche, exam-distinguishing details a student could actually be tested on: exact figures and dates, names, formulas, precise definitions, exceptions to rules, named examples and case studies, cause-and-effect chains, and common confusions. ` +
             "Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific question. Backs must be 2-4 sentences and include the precise detail, plus a caveat where one exists. " +
             (previous
@@ -905,6 +922,7 @@ async function generateQuiz(
   target: number,
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
+  syllabus = false,
 ): Promise<GeneratedQuiz[]> {
   const questions: GeneratedQuiz[] = [];
   const seen = new Set<string>();
@@ -931,6 +949,7 @@ async function generateQuiz(
           role: "user",
           content:
             `${materialBlock(notes)}\n\n` +
+            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
             `Create ${want} quiz questions of increasing difficulty. Mix three kinds: roughly half multiple choice, a quarter cloze, and a quarter short typed answer. Each kind tests recall in a different way, so the quiz does not become four options to guess between. ` +
             "Cover different parts of the material and include at least two questions that ask the student to apply a concept to a new example rather than recall a definition. " +
             "A multiple-choice question needs exactly 4 plausible options and one correct index (0-3). " +
@@ -997,6 +1016,7 @@ async function generateExams(
   target: number,
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
+  syllabus = false,
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText(context);
   const exams: GeneratedExam[] = [];
@@ -1025,7 +1045,7 @@ async function generateExams(
           content:
             `${materialBlock(notes)}\n\n` +
             (qualification ? `This set is for ${qualification}.\n` : "") +
-
+            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
             "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
             `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
             "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
@@ -2064,8 +2084,13 @@ export const processStudySet = action({
         level: existing.level,
       };
 
+      // A set built from a course topic carries a syllabus outline instead of
+      // notes. The generators switch to writing the subject content itself.
+      const syllabus = existing.courseId !== undefined;
+
       // Sets created before the sliders existed fall back to the old defaults;
-      // every set is capped at 100 and at whatever the notes can support.
+      // every set is capped at 100 and at whatever the notes can support. A
+      // syllabus outline is the exception: its length reflects scope, not depth.
       const requestedCards = Math.min(
         MAX_REQUESTED_ITEMS,
         Math.max(1, existing.targetCardCount ?? 20),
@@ -2078,7 +2103,12 @@ export const processStudySet = action({
         MAX_REQUESTED_ITEMS,
         Math.max(1, existing.targetExamCount ?? 4),
       );
-      const limits = materialLimits(notes);
+      const limits = syllabus
+        ? // The outline is short because it names scope, not because the topic
+          // is thin: a Spanish theme supports a full deck even from a one-line
+          // brief. The requested counts (already capped) are the real ceiling.
+          { cards: MAX_REQUESTED_ITEMS, quiz: MAX_REQUESTED_ITEMS, exam: MAX_REQUESTED_ITEMS }
+        : materialLimits(notes);
       const targetCards = Math.min(requestedCards, limits.cards);
       const targetQuiz = Math.min(requestedQuiz, limits.quiz);
       const targetExam = Math.min(requestedExam, limits.exam);
@@ -2092,7 +2122,7 @@ export const processStudySet = action({
         progress: "Writing your summary…",
         percent: 14,
       });
-      const generatedSummary = await summariseNotes(apiKeys, notes, context).catch(
+      const generatedSummary = await summariseNotes(apiKeys, notes, context, syllabus).catch(
         () => null,
       );
 
@@ -2114,6 +2144,7 @@ export const processStudySet = action({
         targetCards,
         deadline,
         reportCards,
+        syllabus,
       ).catch(() => []);
 
       await ctx.runMutation(internal.studySets.setProgress, {
@@ -2134,6 +2165,7 @@ export const processStudySet = action({
         targetQuiz,
         deadline,
         reportQuiz,
+        syllabus,
       ).catch(() => []);
 
       await ctx.runMutation(internal.studySets.setProgress, {
@@ -2155,6 +2187,7 @@ export const processStudySet = action({
         targetExam,
         deadline,
         reportExams,
+        syllabus,
       ).catch(() => []);
 
       // A failed stage should not lose the rest of the set. Only a run where
@@ -2244,7 +2277,7 @@ function examinerRules(marksAvailable: number): string {
     "3. No marks for restating the question, for repeating one idea in different words, or for content the question did not ask for.\n" +
     "4. A contradiction cancels the mark for that point even if it was stated correctly elsewhere. " +
     "Wrong extra detail earns no credit and no leniency.\n" +
-    `5. The model answer is a reference for you, not a second mark scheme. Credit only what the marking guide lists.\n` +
+    "5. The model answer shows the standard of a full-mark answer. An answer that conveys its points must earn every one of those points, even where the marking guide words them differently or lists fewer points than the question is worth.\n" +
     `6. Award whole marks only. Total = the marks you award per point, capped at ${marksAvailable}. Never round up.\n` +
     "7. Calibrate against a real cohort: a thin or 'on topic' answer scores 0-2 even if it sounds confident; " +
     `full marks require every creditable point; ${Math.ceil(marksAvailable / 2)} out of ${marksAvailable} is a strong answer.\n` +
@@ -2285,6 +2318,56 @@ const LEVELS_OUTPUT_SHAPE =
   "The feedback is at most 110 words.";
 
 /**
+ * The ledger's marks as a total out of the marks the question is worth.
+ *
+ * A generated marking guide does not always carry one bullet per mark: a
+ * 10-mark question can arrive with six one-mark bullets. Capping the award at
+ * the ledger's raw total then made a perfect answer worth 6/10, which is how a
+ * pasted model answer lost four marks. The guide's total is treated as the
+ * whole of the available marks, so a fully credited answer always reaches full
+ * marks and a partly credited one keeps the same proportion.
+ */
+function ledgerCeiling(checks: PointCheck[], marksAvailable: number): number {
+  const guideTotal = checks.reduce((sum, check) => sum + check.marks, 0);
+  if (guideTotal <= 0) return marksAvailable;
+  const earned = checks.reduce((sum, check) => sum + check.awarded, 0);
+  return Math.min(
+    marksAvailable,
+    Math.floor((earned / guideTotal) * marksAvailable),
+  );
+}
+
+/** Lowercased words that carry meaning, for comparing two answers. */
+function answerTokens(text: string): string[] {
+  return (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter(
+    (word) => word.length > 2,
+  );
+}
+
+/**
+ * Whether the student submitted the model answer itself (allowing a lead-in or
+ * a stray edit). This is decided here rather than by the examiner: a student
+ * who supplies the exemplar has produced a full-mark answer, and the model has
+ * been observed marking it down when its own marking guide was thin.
+ *
+ * The length guard is what keeps a short answer from "matching" a long exemplar
+ * merely because its few words appear somewhere inside it.
+ */
+function matchesModelAnswer(response: string, modelAnswer: string): boolean {
+  const student = answerTokens(response);
+  const exemplar = answerTokens(modelAnswer);
+  if (student.length < 12 || exemplar.length < 12) return false;
+  const shorter = Math.min(student.length, exemplar.length);
+  const longer = Math.max(student.length, exemplar.length);
+  if (shorter / longer < 0.8) return false;
+  const exemplarWords = new Set(exemplar);
+  const studentWords = new Set(student);
+  const shared = [...studentWords].filter((word) => exemplarWords.has(word)).length;
+  const smallest = Math.min(studentWords.size, exemplarWords.size);
+  return smallest > 0 && shared / smallest >= 0.85;
+}
+
+/**
  * Sends one answer to NVIDIA for marking and reconciles the model's totals with
  * its own point ledger (for point-marked questions) or its chosen level (for
  * essays). The ledger acts as a ceiling: an answer cannot be awarded more marks
@@ -2304,6 +2387,16 @@ async function markExamAnswer(
 ): Promise<{ awardedMarks: number; feedback: string }> {
   const qualification = qualificationText(context);
   const levels = marking === "levels";
+
+  if (matchesModelAnswer(response, exam.modelAnswer)) {
+    return {
+      awardedMarks: exam.marks,
+      feedback:
+        `All ${exam.marks} marks: this answer reproduces the model answer, which is the full-mark answer for this question. ` +
+        "Try writing it from memory next time to check you can produce every point unaided.",
+    };
+  }
+
   const raw = await nvidiaChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
@@ -2368,14 +2461,38 @@ async function markExamAnswer(
         .filter((check): check is PointCheck => check !== null)
     : [];
 
-  const ledgerTotal = checks.reduce((sum, check) => sum + check.awarded, 0);
   const claimed = Number(parsed.awardedMarks);
-  const reported = Number.isFinite(claimed) ? Math.round(claimed) : ledgerTotal;
-  // Take the stricter of the reported total and the ledger, then the paper limit.
-  const awardedMarks = Math.max(
-    0,
-    Math.min(exam.marks, checks.length > 0 ? Math.min(reported, ledgerTotal) : reported),
-  );
+  const reported = Number.isFinite(claimed)
+    ? Math.round(claimed)
+    : checks.reduce((sum, check) => sum + check.awarded, 0);
+  // A thin guide makes the examiner report out of the guide's total as well as
+  // cap at it (six bullets for a ten-mark question yields "6" even when every
+  // bullet was credited), so both totals are mapped onto the question's marks.
+  const guideTotal = checks.reduce((sum, check) => sum + check.marks, 0);
+  const guideScale =
+    guideTotal > 0 && guideTotal < exam.marks ? exam.marks / guideTotal : 1;
+  const reportedMarks = Math.min(exam.marks, Math.round(reported * guideScale));
+  // Every bullet credited is a full answer, whatever total the examiner wrote:
+  // the ledger is the evidence, and a thin guide must not hold the mark down.
+  // The check count must also account for the whole guide, so a reply that
+  // lists one awarded bullet cannot turn a ten-mark answer into full marks.
+  const fullyCredited =
+    checks.length >= exam.markingGuide.length &&
+    checks.length > 0 &&
+    checks.every((check) => check.awarded >= check.marks);
+  // Otherwise take the stricter of the reported total and the ledger, then the
+  // paper limit.
+  const awardedMarks = fullyCredited
+    ? exam.marks
+    : Math.max(
+        0,
+        Math.min(
+          exam.marks,
+          checks.length > 0
+            ? Math.min(reportedMarks, ledgerCeiling(checks, exam.marks))
+            : reportedMarks,
+        ),
+      );
 
   const credited = checks.filter((check) => check.awarded > 0).map((check) => check.point);
   const missed = checks.filter((check) => check.awarded === 0).map((check) => check.point);
