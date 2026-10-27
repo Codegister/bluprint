@@ -16,13 +16,13 @@ import { compressImage, extractVideoFrames } from "@/lib/media";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, X } from "lucide-react";
+import { GraduationCap, Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type ImageDraft = { file: File; preview: string };
-type Mode = "photos" | "video" | "text";
+type Mode = "photos" | "video" | "text" | "course";
 
 const MAX_PHOTOS = 8;
 
@@ -49,6 +49,10 @@ export function CreateSetDialog({
   const ai = useQuery(api.settings.aiStatus);
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   const createSet = useMutation(api.studySets.create);
+  // A set can also come straight from a course topic, using the specification
+  // notes Bluprint already mapped instead of a fresh upload.
+  const courseRows = useQuery(api.courses.listMine);
+  const createTopicSet = useMutation(api.courses.createTopicSet);
 
   const [mode, setMode] = useState<Mode>("photos");
   const [images, setImages] = useState<ImageDraft[]>([]);
@@ -60,7 +64,31 @@ export function CreateSetDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [courseId, setCourseId] = useState("");
+  const [topicId, setTopicId] = useState("");
   const previewsRef = useRef<string[]>([]);
+  const openedRef = useRef(false);
+
+  const readyCourses = (courseRows ?? []).filter(
+    (course) => course.status === "ready",
+  );
+  const selectedCourseId = courseId || readyCourses[0]?._id || "";
+  const courseDetails = useQuery(
+    api.courses.getDetails,
+    selectedCourseId ? { courseId: selectedCourseId as Id<"courses"> } : "skip",
+  );
+  const units = courseDetails?.course.pathway?.units ?? [];
+  const topics = units.flatMap((unit) =>
+    unit.topics.map((topic) => ({ ...topic, unit: unit.title })),
+  );
+  const completedTopics = new Set(courseDetails?.course.completedTopics ?? []);
+  // Default to the next unfinished topic, so the common case is one click.
+  const suggestedTopic =
+    topics.find((topic) => !completedTopics.has(topic.id)) ?? topics[0];
+  const selectedTopic =
+    topics.find((topic) => topic.id === topicId) ?? suggestedTopic;
+  const courseReady =
+    selectedCourseId !== "" && selectedTopic !== undefined && !isLoading;
 
   useEffect(() => {
     return () => {
@@ -68,6 +96,21 @@ export function CreateSetDialog({
       previewsRef.current = [];
     };
   }, []);
+
+  // With courses already set up, a course topic is the fastest route to a set:
+  // open there, with photos and paste one tab away. This runs once per opening,
+  // so it never pulls the student back off a tab they picked.
+  useEffect(() => {
+    if (!open) {
+      openedRef.current = false;
+      return;
+    }
+    if (openedRef.current || courseRows === undefined) return;
+    openedRef.current = true;
+    if (courseRows.some((course) => course.status === "ready")) {
+      setMode("course");
+    }
+  }, [open, courseRows]);
 
   const clearMedia = () => {
     previewsRef.current.forEach((preview) => URL.revokeObjectURL(preview));
@@ -85,6 +128,8 @@ export function CreateSetDialog({
     setMode("photos");
     setStep("");
     setError(null);
+    setCourseId("");
+    setTopicId("");
   };
 
   const handleClose = (next: boolean) => {
@@ -151,6 +196,15 @@ export function CreateSetDialog({
   const handleSubmit = async () => {
     setError(null);
 
+    if (mode === "course" && (selectedCourseId === "" || !selectedTopic)) {
+      setError(
+        readyCourses.length === 0
+          ? "Set up a course first, then build a set from one of its topics."
+          : "Choose a course and a topic to build from.",
+      );
+      return;
+    }
+
     if (ai?.configured === false) {
       setError("NVIDIA_API_KEY isn't configured on this deployment. Ask the workspace owner to add it before compiling a set.");
       return;
@@ -173,11 +227,41 @@ export function CreateSetDialog({
     }
 
     setIsLoading(true);
+
+    if (mode === "course" && selectedTopic) {
+      try {
+        const result = await createTopicSet({
+          courseId: selectedCourseId as Id<"courses">,
+          topicId: selectedTopic.id,
+          sections: 1,
+        });
+        toast.success(
+          result.created
+            ? "Set created from your course. Bluprint is compiling it now."
+            : "Opening the set you already have for that topic.",
+        );
+        reset();
+        onOpenChange(false);
+        navigate(`/sets/${result.setId}`);
+      } catch (submitError) {
+        const message = readableError(
+          submitError,
+          "Could not build a set from that topic. Try again.",
+        );
+        setError(message);
+        toast.error(message);
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     try {
       let sourceImageIds: Id<"_storage">[] = [];
       let sourceLabel = "";
       let notes = "";
-      const sourceType: Mode = mode;
+      // The course path returns earlier, so only upload types reach here.
+      const sourceType = mode as Exclude<Mode, "course">;
 
       if (mode === "photos") {
         const ids: Id<"_storage">[] = [];
@@ -256,8 +340,9 @@ export function CreateSetDialog({
               Add study material
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-              One upload. Bluprint reads it, then builds a summary, flashcards, a quiz
-              and exam practice.
+              Build from a course topic, or upload photos and notes. Bluprint reads
+              the material, then writes a summary, flashcards, a quiz and exam
+              practice.
             </DialogDescription>
           </DialogHeader>
           </motion.div>
@@ -286,8 +371,9 @@ export function CreateSetDialog({
             }}
             className="mt-5 gap-4"
           >
-            <TabsList className="rise-stagger grid h-auto w-full grid-cols-3 gap-1 rounded-full bg-brand-panel p-1">
+            <TabsList className="rise-stagger grid h-auto w-full grid-cols-4 gap-1 rounded-full bg-brand-panel p-1">
               {[
+                { value: "course", label: "Course" },
                 { value: "photos", label: "Photos" },
                 { value: "video", label: "Video" },
                 { value: "text", label: "Paste" },
@@ -296,12 +382,110 @@ export function CreateSetDialog({
                   key={tab.value}
                   value={tab.value}
                   disabled={isLoading}
-                  className="h-9 gap-2 rounded-full text-sm font-semibold text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm"
+                  className="h-9 gap-2 rounded-full px-1 text-[0.8rem] font-semibold text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm sm:text-sm"
                 >
                 {tab.label}
                 </TabsTrigger>
               ))}
             </TabsList>
+
+            <TabsContent value="course" className="mt-0">
+              {courseRows === undefined ? (
+                <div className="flex items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-border bg-background px-5 py-9 text-xs font-medium text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                  Loading your courses…
+                </div>
+              ) : readyCourses.length === 0 ? (
+                <div className="rounded-3xl border-2 border-dashed border-border bg-background px-5 py-7 text-center">
+                  <GraduationCap
+                    className="mx-auto size-6 text-chrome-7"
+                    aria-hidden
+                  />
+                  <p className="mt-2 font-display text-base font-bold text-brand-ink">
+                    No courses ready yet
+                  </p>
+                  <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+                    A course turns your specification into topics, and every topic
+                    becomes a set here. Choose your subjects first.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      handleClose(false);
+                      navigate("/courses/new");
+                    }}
+                    className="mt-3 h-9 rounded-full border-border bg-card px-4 text-xs font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                  >
+                    Choose courses
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <label className="block">
+                    <span className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-chrome-7">
+                      Course
+                    </span>
+                    <select
+                      value={selectedCourseId}
+                      onChange={(event) => {
+                        setCourseId(event.target.value);
+                        setTopicId("");
+                        setError(null);
+                      }}
+                      disabled={isLoading}
+                      className="mt-1 h-10 w-full rounded-xl border border-border bg-card px-3 text-sm font-medium text-brand-ink outline-none focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/15"
+                    >
+                      {readyCourses.map((course) => (
+                        <option key={course._id} value={course._id}>
+                          {course.subject} · {course.examBoard} {course.level}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="mt-3 block">
+                    <span className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-chrome-7">
+                      Topic
+                    </span>
+                    <select
+                      value={selectedTopic?.id ?? ""}
+                      onChange={(event) => {
+                        setTopicId(event.target.value);
+                        setError(null);
+                      }}
+                      disabled={isLoading || topics.length === 0}
+                      className="mt-1 h-10 w-full rounded-xl border border-border bg-card px-3 text-sm font-medium text-brand-ink outline-none focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/15 disabled:opacity-60"
+                    >
+                      {topics.length === 0 ? (
+                        <option value="">
+                          {courseDetails === undefined
+                            ? "Loading topics…"
+                            : "No topics mapped yet"}
+                        </option>
+                      ) : (
+                        units.map((unit) => (
+                          <optgroup key={unit.title} label={unit.title}>
+                            {unit.topics.map((topic) => (
+                              <option key={topic.id} value={topic.id}>
+                                {topic.title}
+                                {completedTopics.has(topic.id) ? " (done)" : ""}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))
+                      )}
+                    </select>
+                  </label>
+
+                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                    Bluprint writes the set from this topic's place in the
+                    specification. Need a longer set? Build across several topics
+                    from the course page.
+                  </p>
+                </>
+              )}
+            </TabsContent>
 
             <TabsContent value="photos" className="mt-0">
               <label className={cn(dropzoneClass, isLoading && "pointer-events-none opacity-60")}>
@@ -415,7 +599,10 @@ export function CreateSetDialog({
             </TabsContent>
           </Tabs>
 
-          {/* Sensible defaults build a full set; only tune them on request. */}
+          {/* Sensible defaults build a full set; only tune them on request.
+              Course sets take their size from the pathway, so the sliders do
+              not apply there. */}
+          {mode !== "course" && (
           <details className="mt-5 rounded-3xl border border-border bg-[#FCFCFD] p-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
               <span className="text-xs font-semibold text-brand-ink">
@@ -483,6 +670,7 @@ export function CreateSetDialog({
               Exam-style questions are written at 5–10 marks each.
             </p>
           </details>
+          )}
 
           <AnimatePresence initial={false}>
             {error && (
@@ -521,11 +709,13 @@ export function CreateSetDialog({
 
           <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-relaxed text-muted-foreground">
-              {mode === "photos"
-                ? "Clear, straight-on photos transcribe best"
-                : mode === "video"
-                  ? "Slides and printed pages work best"
-                  : "Pasted notes are saved with the set"}
+              {mode === "course"
+                ? "Covered by your course pathway"
+                : mode === "photos"
+                  ? "Clear, straight-on photos transcribe best"
+                  : mode === "video"
+                    ? "Slides and printed pages work best"
+                    : "Pasted notes are saved with the set"}
             </p>
             <div className="flex gap-2 sm:justify-end">
               <Button
@@ -540,7 +730,9 @@ export function CreateSetDialog({
               <Button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isLoading}
+                disabled={
+                  isLoading || (mode === "course" && !courseReady)
+                }
                 className="h-11 flex-1 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E] sm:flex-none"
               >
                 {isLoading ? (
@@ -548,6 +740,8 @@ export function CreateSetDialog({
                     <Loader2 className="size-4 animate-spin" />
                     Working…
                   </>
+                ) : mode === "course" ? (
+                  "Build from course"
                 ) : (
                   "Build study set"
                 )}

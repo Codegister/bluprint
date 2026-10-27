@@ -83,7 +83,7 @@ export function GettingStarted({
     },
     {
       title: "Build a study set",
-      body: "Add photos or paste notes; Bluprint writes the cards.",
+      body: "Use a course topic, or add photos and notes; Bluprint writes the cards.",
       done: sets.length > 0,
       action: (
         <button
@@ -91,7 +91,7 @@ export function GettingStarted({
           onClick={onAddMaterial}
           className="font-semibold text-brand-ink underline-offset-2 hover:underline"
         >
-          Add material
+          Build set
         </button>
       ),
     },

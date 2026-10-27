@@ -2,7 +2,8 @@
 
 Bluprint is a private revision workspace with two ways in. Choose your courses once and it
 maps each specification into units and topics, then builds study material for any topic — or
-upload photos of your notes, sample a video, or paste text and compile a study set directly.
+upload photos of your notes, sample a video, paste text, or build from a mapped course topic
+and compile a study set directly.
 Every set gets a summary, flashcards, a multiple-choice quiz, and exam-style questions with
 AI marking, plus an AI tutor that knows the material. Each course also keeps up to four
 **saved practice papers**, written from the specification in that subject's real question
@@ -139,16 +140,21 @@ summary and key points are assembled from its own subtopics. No model is consult
 slow or rate-limited AI provider can never leave a course half-mapped or invent a topic. A
 course never lands in a "needs a retry" state.
 
-### 2. Upload your own material
+### 2. Build a set, from a course or your own material
 
-Use **Upload material** to add up to eight photos, a short video, or pasted notes. This keeps
-the upload compile flow and is the right path for a single handout, a textbook page, or
-notes that do not follow a specification. The dialog asks for two things only: the material
-itself, and how much to build. Three sliders choose the length separately: flashcards,
-quiz questions and exam-style questions, each from 1 to 100. The set is named after the
-source file or the first line of the notes, and can be renamed afterwards. If the notes
-cannot realistically support the number asked for, Bluprint builds the maximum it can and
-says so on the set page; it never silently pretends the request was met.
+**Add material** opens four sources on one dialog. **Course** builds from a topic you have
+already mapped, defaulting to the next unfinished topic and using that topic's specification
+notes, so the set is grounded without another upload; building the same topic twice opens
+the set you already have instead of duplicating it. When courses are ready this is the tab
+the dialog opens on. **Photos** takes up to eight pages, **Video** samples six frames in the
+browser, and **Paste** takes up to 20,000 characters of notes — the right path for a single
+handout or material that does not follow a specification. For those three, the dialog asks
+for the material and how much to build: three sliders choose flashcards, quiz questions and
+exam-style questions separately, each from 1 to 100. A course set takes its size from the
+pathway instead. Uploaded sets are named after the source file or the first line of the
+notes, and any set can be renamed afterwards. If notes cannot realistically support the
+number asked for, Bluprint builds the maximum it can and says so on the set page; it never
+silently pretends the request was met.
 
 ### 3. Practise a paper in your subject's format
 
@@ -812,7 +818,7 @@ src/
     AppShell.tsx         sidebar / mobile navigation for signed-in pages
     ThemeProvider.tsx    persisted light / dark theme, following the OS until chosen
     ThemeToggle.tsx      the light / dark switch used in the shell and public pages
-    CreateSetDialog.tsx  photo, video, and pasted-text upload flow
+    CreateSetDialog.tsx  course, photo, video and pasted-text sources for a study set
     Brand.tsx            Bluprint wordmark
     BlueprintMark.tsx    geometric mark and drafting-grid hero glyph
     ChromeBackdrop.tsx   steel sheet, dot grid, moving specular ribbons and reflections
