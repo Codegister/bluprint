@@ -305,7 +305,7 @@ export default function Landing() {
             )}
             <Button asChild className="group h-10 px-5 text-[0.88rem]">
               <Link to={startHref}>
-                {isAuthenticated ? "Dashboard" : "Get started"}
+                {isAuthenticated ? "Home" : "Get started"}
                 {/* Dropped on the narrowest phones so the header (and the theme
                     button beside it) never wraps. */}
                 <ArrowRight className="hidden size-4 transition-transform duration-300 group-hover:translate-x-1 sm:block" />
@@ -807,7 +807,7 @@ export default function Landing() {
               Your workspace
             </a>
             <Link to={startHref} className="hover:text-brand-ink">
-              {isAuthenticated ? "Dashboard" : "Sign in"}
+              {isAuthenticated ? "Home" : "Sign in"}
             </Link>
           </div>
           <p className="text-[0.78rem] text-muted-foreground">Built for a small group</p>

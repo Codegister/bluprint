@@ -14,6 +14,7 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
@@ -38,7 +39,7 @@ const SECTION_LABEL: Record<SetSection, string> = {
   cards: "Flashcards",
   quiz: "Quiz",
   exam: "Exam practice",
-  weak: "Weak spots",
+  weak: "Needs work",
 };
 
 function MissingCard() {
@@ -311,15 +312,6 @@ function SummaryView({
       <div className="space-y-3">
         <section className="rounded-[2rem] border border-border bg-card p-6">
           <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-            Overview
-          </h2>
-          <p className="mt-3 whitespace-pre-wrap text-[0.94rem] leading-relaxed text-brand-ink/80">
-            {summary.overview}
-          </p>
-        </section>
-
-        <section className="rounded-[2rem] border border-border bg-card p-6">
-          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
             Key points
           </h2>
           <ol className="mt-4 space-y-3">
@@ -332,6 +324,15 @@ function SummaryView({
               </li>
             ))}
           </ol>
+        </section>
+
+        <section className="rounded-[2rem] border border-border bg-card p-6">
+          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
+            Overview
+          </h2>
+          <p className="mt-3 whitespace-pre-wrap text-[0.94rem] leading-relaxed text-brand-ink/80">
+            {summary.overview}
+          </p>
         </section>
       </div>
 
@@ -398,10 +399,19 @@ function SummaryView({
 }
 
 /** Three destinations, each a whole screen of its own. */
-function StudyActions({ setId, set }: { setId: string; set: Doc<"studySets"> }) {
+function StudyActions({
+  setId,
+  set,
+  recommended,
+}: {
+  setId: string;
+  set: Doc<"studySets">;
+  recommended: SetSection;
+}) {
   const mastery = percent(set.knownCount, set.cardCount);
   const items = [
     {
+      value: "cards",
       to: `/sets/${setId}/cards`,
       label: "Flashcards",
       count: set.cardCount,
@@ -410,6 +420,7 @@ function StudyActions({ setId, set }: { setId: string; set: Doc<"studySets"> }) 
       tint: "bg-brand-panel text-chrome-7",
     },
     {
+      value: "quiz",
       to: `/sets/${setId}/quiz`,
       label: "Quiz",
       count: set.quizCount,
@@ -420,6 +431,7 @@ function StudyActions({ setId, set }: { setId: string; set: Doc<"studySets"> }) 
       tint: "bg-[#E6F7EF] text-[#128A4C]",
     },
     {
+      value: "exam",
       to: `/sets/${setId}/exam`,
       label: "Exam practice",
       count: set.examCount,
@@ -431,23 +443,35 @@ function StudyActions({ setId, set }: { setId: string; set: Doc<"studySets"> }) 
 
   return (
     <section className="grid gap-2.5 sm:grid-cols-3">
-      {items.map((item) => (
+      {items.map((item) => {
+        const isRecommended = item.value === recommended;
+        return (
         <Link
           key={item.label}
           to={item.to}
-          className="group flex items-center gap-3 rounded-2xl border border-border bg-white p-4 transition-colors hover:border-chrome-4 hover:bg-[#FBF9FF]"
+          className={cn(
+            "group flex items-center gap-3 rounded-2xl border bg-white p-4 transition-colors hover:border-chrome-4 hover:bg-[#FBF9FF]",
+            isRecommended
+              ? "border-brand-ink/35 ring-1 ring-brand-ink/10"
+              : "border-border",
+          )}
         >
           <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.tint}`}>
             <item.icon className="size-[18px]" aria-hidden />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="flex items-baseline gap-1.5">
+            <span className="flex flex-wrap items-baseline gap-1.5">
               <span className="font-display text-[0.95rem] font-bold text-brand-ink">
                 {item.label}
               </span>
               <span className="text-[0.72rem] font-semibold tabular-nums text-muted-foreground">
                 {item.count}
               </span>
+              {isRecommended && (
+                <span className="rounded-full bg-brand-ink px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-[0.06em] text-white">
+                  Start here
+                </span>
+              )}
             </span>
             <span className="mt-0.5 block truncate text-[0.72rem] text-muted-foreground">
               {item.note}
@@ -455,7 +479,8 @@ function StudyActions({ setId, set }: { setId: string; set: Doc<"studySets"> }) 
           </span>
           <ArrowRight className="size-4 shrink-0 text-brand-ink/30 transition-transform group-hover:translate-x-0.5" />
         </Link>
-      ))}
+        );
+      })}
     </section>
   );
 }
@@ -529,9 +554,22 @@ export default function StudySet() {
         ["exam-style questions", set.targetExamCount, set.examCount],
       ] as Array<[string, number | undefined, number]>
     ).filter(([, asked, built]) => asked !== undefined && asked > built);
-    const backTo = set.courseId ? `/courses/${set.courseId}` : "/tutor";
+    const backTo = set.courseId ? `/courses/${set.courseId}` : "/tutor#sets";
     const backLabel = set.courseId ? "Back to course" : "Back to my sets";
     const isMode = activeSection !== "summary";
+    // One recommended way in: due cards first, then the quiz if it has never
+    // been taken, otherwise flashcards.
+    const recommendedSection: SetSection = details.dueCount > 0
+      ? "cards"
+      : !set.lastQuizTotal && set.quizCount > 0
+        ? "quiz"
+        : "cards";
+    const recommendedLabel =
+      recommendedSection === "quiz"
+        ? "Start the quiz"
+        : details.dueCount > 0
+          ? "Review due cards"
+          : "Start studying";
 
     return (
       <>
@@ -543,27 +581,53 @@ export default function StudySet() {
             <ArrowLeft className="size-3.5" aria-hidden />
             {isMode ? "Back to set" : backLabel}
           </Link>
-          {!isMode && (
-            <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
+            {!isMode && set.status === "ready" && (
               <Button
-                variant="outline"
-                size="sm"
-                onClick={openTutor}
-                className="h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                asChild
+                className="h-9 shrink-0 rounded-full px-4 text-[0.8rem] font-semibold"
               >
-                <Sparkles className="size-3.5 text-chrome-7" aria-hidden />
-                Ask the tutor
+                <Link to={`/sets/${set._id}/${recommendedSection}`}>
+                  {details.dueCount > 0 && (
+                    <span className="rounded-full bg-white/15 px-1.5 text-[0.7rem] tabular-nums">
+                      {details.dueCount}
+                    </span>
+                  )}
+                  {recommendedLabel}
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </Link>
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSettingsOpen(true)}
-                className="h-8 shrink-0 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+            )}
+            {/* Low-frequency actions live together instead of competing with
+                the study button. A plain details element keeps it dependency-free. */}
+            <details className="relative">
+              <summary
+                aria-label="More set actions"
+                className="grid size-9 cursor-pointer list-none place-items-center rounded-full border border-border bg-card text-[1rem] font-bold text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink [&::-webkit-details-marker]:hidden"
               >
-                Set settings
-              </Button>
-            </div>
-          )}
+                ⋯
+              </summary>
+              <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-border bg-card p-1 shadow-lg">
+                {[
+                  { label: "Ask the tutor", onClick: openTutor },
+                  { label: "Edit set", onClick: () => setSettingsOpen(true) },
+                ].map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={(event) => {
+                      const menu = event.currentTarget.closest("details");
+                      if (menu instanceof HTMLDetailsElement) menu.open = false;
+                      action.onClick();
+                    }}
+                    className="block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel"
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </details>
+          </div>
         </div>
 
         <div className="chrome-plate mt-2 min-w-0 rounded-[1.6rem] px-4 py-4">
@@ -583,16 +647,51 @@ export default function StudySet() {
             {...enter(0.1)}
           >
             <span>{set.sourceLabel || sourceLabel(set.sourceType)}</span>
-            <span className="text-brand-ink/20">•</span>
-            <span>{set.cardCount} cards</span>
-            <span className="text-brand-ink/20">•</span>
-            <span>{set.quizCount} quiz</span>
-            <span className="text-brand-ink/20">•</span>
-            <span>{set.examCount} exam</span>
+            {qualification && (
+              <>
+                <span className="text-brand-ink/20">•</span>
+                <span>{qualification}</span>
+              </>
+            )}
             <span className="text-brand-ink/20">•</span>
             <span>Updated {relativeDate(set.updatedAt)}</span>
           </motion.p>
         </div>
+
+        {set.status === "ready" && (
+          <nav
+            aria-label="Set sections"
+            className="no-scrollbar mt-3 flex gap-1 overflow-x-auto"
+          >
+            {(
+              [
+                ["summary", "Overview"],
+                ["cards", "Flashcards"],
+                ["quiz", "Quiz"],
+                ["exam", "Exam practice"],
+                ...(details.weakCardCount > 0 || details.weakQuizCount > 0
+                  ? [["weak", "Needs work"]]
+                  : []),
+              ] as Array<[SetSection, string]>
+            ).map(([value, label]) => {
+              const active = value === activeSection;
+              return (
+                <Link
+                  key={value}
+                  to={value === "summary" ? `/sets/${set._id}` : `/sets/${set._id}/${value}`}
+                  aria-current={active ? "page" : undefined}
+                  className={
+                    active
+                      ? "shrink-0 rounded-full bg-brand-ink px-3 py-1.5 text-[0.78rem] font-semibold text-white"
+                      : "shrink-0 rounded-full px-3 py-1.5 text-[0.78rem] font-semibold text-brand-ink/60 transition-colors hover:bg-brand-panel hover:text-brand-ink"
+                  }
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+        )}
 
         {set.status === "error" ? (
           <ErrorPanel set={set} onRetry={retry} retrying={retrying} />
@@ -634,31 +733,42 @@ export default function StudySet() {
           </div>
         ) : (
           <>
-            <motion.div
-              className="mt-5 flex flex-wrap items-center gap-2"
+            <motion.dl
+              className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4"
               {...enter(0.12)}
             >
-              {qualification && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-3 py-1.5 text-[0.75rem] font-semibold text-chrome-7">
-                  {qualification}
-                </span>
-              )}
-              <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
-                {details.readiness.score}% exam-ready
-              </span>
-              {details.pace && (
-                <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
-                  {details.pace.daysLeft} day
-                  {details.pace.daysLeft === 1 ? "" : "s"} to exam ·{" "}
-                  {details.pace.perDay}/day
-                </span>
-              )}
-              {set.lastStudiedAt && (
-                <span className="rounded-full border border-border bg-white px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground">
-                  Studied {relativeDate(set.lastStudiedAt)}
-                </span>
-              )}
-            </motion.div>
+              {[
+                {
+                  label: "Ready for the exam",
+                  value: `${details.readiness.score}%`,
+                },
+                { label: "Cards due", value: String(details.dueCount) },
+                {
+                  label: "Last quiz",
+                  value: set.lastQuizTotal
+                    ? `${set.lastQuizScore}/${set.lastQuizTotal}`
+                    : "Not yet",
+                },
+                {
+                  label: "Exam date",
+                  value: details.pace
+                    ? `${details.pace.daysLeft} day${details.pace.daysLeft === 1 ? "" : "s"}`
+                    : "Not set",
+                },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  className="rounded-2xl border border-border bg-card px-3.5 py-2.5"
+                >
+                  <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    {stat.label}
+                  </dt>
+                  <dd className="mt-0.5 font-display text-[1.15rem] font-bold tabular-nums text-brand-ink">
+                    {stat.value}
+                  </dd>
+                </div>
+              ))}
+            </motion.dl>
 
             {(set.generationNote || shortfall.length > 0) && (
               <div className="mt-3 rounded-2xl border border-border bg-[#FFFBEC] px-4 py-3 text-[0.82rem] leading-relaxed text-[#7A5306]">
@@ -680,24 +790,35 @@ export default function StudySet() {
             )}
 
             <div className="mt-5">
-              <StudyActions setId={set._id} set={set} />
-            </div>
-
-            <div className="mt-5">
-              <ReadinessPanel
+              <StudyActions
                 setId={set._id}
-                readiness={details.readiness}
-                projected={details.projected}
-                pace={details.pace}
-                weakCardCount={details.weakCardCount}
-                weakQuizCount={details.weakQuizCount}
-                dueCount={details.dueCount}
+                set={set}
+                recommended={recommendedSection}
               />
             </div>
 
             <div className="mt-6">
               <SummaryView set={set} sourceImages={details.sourceImages} />
             </div>
+
+            {/* Pacing detail is useful, but it should not sit between the
+                student and the set. It is one expansion away. */}
+            <details className="mt-6 rounded-2xl border border-border bg-card p-4">
+              <summary className="cursor-pointer text-[0.86rem] font-semibold text-brand-ink">
+                How readiness and exam pace work
+              </summary>
+              <div className="mt-3">
+                <ReadinessPanel
+                  setId={set._id}
+                  readiness={details.readiness}
+                  projected={details.projected}
+                  pace={details.pace}
+                  weakCardCount={details.weakCardCount}
+                  weakQuizCount={details.weakQuizCount}
+                  dueCount={details.dueCount}
+                />
+              </div>
+            </details>
           </>
         )}
 

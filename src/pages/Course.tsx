@@ -29,7 +29,14 @@ import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { BookOpen, ChevronDown, Loader2, Sparkles, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  ChevronDown,
+  Loader2,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -49,13 +56,12 @@ const PATH_COLORS = [
   { hex: "var(--chrome-7)", soft: "var(--chrome-3)", ring: "var(--chrome-5)" },
 ];
 
-/** Each course destination is its own screen, so no screen carries the others. */
-type CourseSection = "pathway" | "papers" | "topic-papers" | "sets";
+/** Three destinations: the pathway, practice, and the sets built from it. */
+type CourseSection = "pathway" | "practice" | "sets";
 
 const COURSE_SECTIONS: Array<{ value: CourseSection; label: string }> = [
   { value: "pathway", label: "Pathway" },
-  { value: "papers", label: "Past papers" },
-  { value: "topic-papers", label: "Topic papers" },
+  { value: "practice", label: "Practice" },
   { value: "sets", label: "Study sets" },
 ];
 
@@ -223,13 +229,25 @@ export default function Course() {
   // the matching screen, but all new navigation uses the path.
   const [searchParams] = useSearchParams();
   const legacyTab = searchParams.get("tab");
-  const isSection = (value: string | null | undefined): value is CourseSection =>
-    value === "papers" || value === "topic-papers" || value === "sets";
-  const activeSection: CourseSection = isSection(section)
-    ? section
-    : isSection(legacyTab)
-      ? legacyTab
-      : "pathway";
+  // Two old destinations (past papers, topic papers) now share one Practice
+  // screen; their URLs still land on the right sub-tab.
+  const requested = section ?? legacyTab;
+  const activeSection: CourseSection =
+    requested === "sets"
+      ? "sets"
+      : requested === "practice" ||
+          requested === "papers" ||
+          requested === "topic-papers"
+        ? "practice"
+        : "pathway";
+  const [practiceTab, setPracticeTab] = useState<"papers" | "topics">(
+    requested === "topic-papers" ? "topics" : "papers",
+  );
+  // A deep link to either old destination still selects the matching sub-tab.
+  useEffect(() => {
+    if (requested === "papers") setPracticeTab("papers");
+    if (requested === "topic-papers") setPracticeTab("topics");
+  }, [requested]);
   const sectionPath = (value: CourseSection) =>
     value === "pathway" ? `/courses/${courseId}` : `/courses/${courseId}/${value}`;
   const details = useQuery(
@@ -480,17 +498,13 @@ export default function Course() {
       }
     }
     // A topic paper is a topic's own exam-style questions, saved with its study
-    // set. The tab only exists when the course has at least one.
+    // set. Practice groups them with the whole-course papers behind one tab.
     const topicPapers = sets.filter((set) => set.examCount > 0);
-    // A course with no exam-style topic questions has no topic-papers screen.
-    const currentSection: CourseSection =
-      activeSection === "topic-papers" && topicPapers.length === 0
-        ? "pathway"
-        : activeSection;
+    const currentSection: CourseSection = activeSection;
 
     return (
       <>
-        <div className="chrome-plate flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4">
+        <div className="chrome-plate relative z-20 flex flex-wrap items-center gap-3 overflow-visible rounded-[1.6rem] px-4 py-4">
           <Link
             to="/courses"
             className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
@@ -512,37 +526,75 @@ export default function Course() {
             </motion.p>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {pathway && (
-              <Button
-                type="button"
-                onClick={() => openTutor()}
-                className="h-9 rounded-full bg-brand-panel px-4 text-[0.8rem] font-semibold text-chrome-8 hover:bg-chrome-3"
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {currentSection === "pathway" &&
+              course.status === "ready" &&
+              nextTopic && (
+                <Button
+                  type="button"
+                  onClick={() => handleTopic(nextTopic.topic.id)}
+                  disabled={busyTopic !== null}
+                  className="h-9 rounded-full px-4 text-[0.8rem] font-semibold"
+                >
+                  {busyTopic === nextTopic.topic.id && (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  )}
+                  Continue
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </Button>
+              )}
+
+            {/* Secondary and destructive course actions live in one menu. */}
+            <details className="relative">
+              <summary
+                aria-label="More course actions"
+                className="grid size-9 cursor-pointer list-none place-items-center rounded-full border border-border bg-card text-[1rem] font-bold text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink [&::-webkit-details-marker]:hidden"
               >
-                <Sparkles className="size-3.5" aria-hidden />
-                Ask the tutor
-              </Button>
-            )}
-            {currentSection === "pathway" && course.status === "ready" && (
-              <Button
-                variant="outline"
-                onClick={() => void handleRetry()}
-                disabled={retrying}
-                className="h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-              >
-                {retrying ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                Rebuild pathway
-              </Button>
-            )}
-            {currentSection === "pathway" && (
-              <button
-                type="button"
-                onClick={() => setConfirmingDelete(true)}
-                className="px-2 text-[0.78rem] font-semibold text-destructive underline-offset-2 hover:underline"
-              >
-                Remove
-              </button>
-            )}
+                ⋯
+              </summary>
+              <div className="absolute right-0 z-20 mt-1 w-48 rounded-xl border border-border bg-card p-1 shadow-lg">
+                {[
+                  ...(pathway
+                    ? [{ label: "Ask the tutor", onClick: () => openTutor() }]
+                    : []),
+                  ...(currentSection === "pathway" && course.status === "ready"
+                    ? [
+                        {
+                          label: retrying ? "Rebuilding…" : "Rebuild pathway",
+                          onClick: () => void handleRetry(),
+                        },
+                      ]
+                    : []),
+                  ...(currentSection === "pathway"
+                    ? [
+                        {
+                          label: "Remove course",
+                          onClick: () => setConfirmingDelete(true),
+                          destructive: true,
+                        },
+                      ]
+                    : []),
+                ].map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={(event) => {
+                      const menu = event.currentTarget.closest("details");
+                      if (menu instanceof HTMLDetailsElement) menu.open = false;
+                      action.onClick();
+                    }}
+                    className={cn(
+                      "block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium hover:bg-brand-panel",
+                      "destructive" in action && action.destructive
+                        ? "text-destructive"
+                        : "text-brand-ink",
+                    )}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </details>
           </div>
         </div>
 
@@ -610,9 +662,7 @@ export default function Course() {
               aria-label="Course sections"
               className="mt-5 flex flex-wrap gap-1.5"
             >
-              {COURSE_SECTIONS.filter(
-                (item) => item.value !== "topic-papers" || topicPapers.length > 0,
-              ).map((item) => {
+              {COURSE_SECTIONS.map((item) => {
                 const active = currentSection === item.value;
                 return (
                   <Link
@@ -627,11 +677,6 @@ export default function Course() {
                     )}
                   >
                     {item.label}
-                    {item.value === "topic-papers" && (
-                      <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
-                        {topicPapers.length}
-                      </span>
-                    )}
                     {item.value === "sets" && (
                       <span className="rounded-full bg-brand-panel px-1.5 py-0.5 text-[0.65rem] font-semibold text-brand-ink/60">
                         {sets.length}
@@ -1025,7 +1070,37 @@ export default function Course() {
                 </p>
             </>)}
 
-            {currentSection === "papers" && (<>
+            {currentSection === "practice" && (
+              <div
+                role="group"
+                aria-label="Practice type"
+                className="mt-4 inline-flex rounded-full border border-border bg-card p-1"
+              >
+                {(
+                  [
+                    ["papers", "Past papers"],
+                    ["topics", "By topic"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={practiceTab === value}
+                    onClick={() => setPracticeTab(value)}
+                    className={cn(
+                      "h-8 rounded-full px-3.5 text-[0.8rem] font-semibold transition-colors",
+                      practiceTab === value
+                        ? "bg-brand-ink text-white"
+                        : "text-brand-ink/65 hover:bg-brand-panel hover:text-brand-ink",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {currentSection === "practice" && practiceTab === "papers" && (<>
                 <CoursePastPapers
                   courseId={course._id}
                   formatId={buildPaperBlueprint(course).id}
@@ -1039,7 +1114,7 @@ export default function Course() {
                 />
             </>)}
 
-            {currentSection === "topic-papers" && topicPapers.length > 0 && (<>
+            {currentSection === "practice" && practiceTab === "topics" && (<>
                   <section className="rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1060,6 +1135,13 @@ export default function Course() {
                         {topicPapers.length === 1 ? "" : "s"}
                       </span>
                     </div>
+
+                    {topicPapers.length === 0 && (
+                      <p className="mt-4 rounded-2xl border border-dashed border-border bg-brand-panel px-4 py-4 text-[0.82rem] leading-relaxed text-muted-foreground">
+                        No topic questions yet. Build a study set from a topic on
+                        the pathway and its exam practice appears here.
+                      </p>
+                    )}
 
                     <ul className="rise-stagger mt-4 grid gap-2.5">
                       {topicPapers.map((set) => (

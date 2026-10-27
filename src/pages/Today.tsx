@@ -17,12 +17,11 @@ import {
   Play,
   RotateCcw,
   Target,
-  Timer,
   TriangleAlert,
-  Trophy,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const SPRINT_LENGTHS = [5, 10, 15, 25] as const;
@@ -210,6 +209,9 @@ export default function Today() {
   )
     ? requested
     : null;
+  // The header owns the length choice; the session panel only starts it.
+  const [chosenLength, setChosenLength] = useState(10);
+  const activeLength = sprintLength ?? chosenLength;
 
   const study = useQuery(api.studySets.studyStats);
   const sets = useQuery(api.studySets.listMine);
@@ -312,29 +314,51 @@ export default function Today() {
                 : "A little every day beats a panic the night before"}
             </h1>
             <p className="mt-2 max-w-lg text-[0.9rem] leading-relaxed text-brand-ink/65">
-              Your tutor, courses and sets are on the{" "}
-              <Link
-                to="/tutor"
-                className="font-semibold underline underline-offset-2"
-              >
-                tutor home
-              </Link>
-              . This page is the short answer to “what now?”.
+              Everything due today, in one place. Pick a length, then start.
             </p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="mt-4 flex flex-wrap items-center gap-2.5">
               <Button
-                onClick={() => startSprint(10)}
+                onClick={() => startSprint(activeLength)}
                 className="h-11 rounded-full px-5 text-sm font-semibold"
               >
                 <Play className="size-4" aria-hidden />
-                Quick sprint
+                Start today&apos;s session
               </Button>
-              <p className="text-[0.78rem] font-medium text-brand-ink/65">
-                {totalDue} due · {weakSets.length} set
-                {weakSets.length === 1 ? "" : "s"} with weak spots
-              </p>
+              <div
+                role="group"
+                aria-label="Session length in cards"
+                className="inline-flex items-center rounded-full border border-border bg-card p-1"
+              >
+                {SPRINT_LENGTHS.map((length) => (
+                  <button
+                    key={length}
+                    type="button"
+                    aria-pressed={activeLength === length}
+                    onClick={() => {
+                      setChosenLength(length);
+                      if (sprintLength) startSprint(length);
+                    }}
+                    className={cn(
+                      "h-8 min-w-8 rounded-full px-2 text-[0.78rem] font-semibold tabular-nums transition-colors",
+                      activeLength === length
+                        ? "bg-brand-ink text-white"
+                        : "text-brand-ink/65 hover:bg-brand-panel hover:text-brand-ink",
+                    )}
+                  >
+                    {length}
+                  </button>
+                ))}
+                <span className="px-2 text-[0.7rem] font-medium text-muted-foreground">
+                  cards
+                </span>
+              </div>
             </div>
+            <p className="mt-2 text-[0.78rem] font-medium text-brand-ink/65">
+              {totalDue} due · {weakSets.length} set
+              {weakSets.length === 1 ? "" : "s"} need work · about{" "}
+              {Math.max(2, Math.round(activeLength / 2))} min
+            </p>
           </div>
 
           <motion.div
@@ -348,105 +372,33 @@ export default function Today() {
         </div>
       </motion.header>
 
-      {/* Goal + streak + sprint picker */}
-      <section className="mt-5 grid gap-3 lg:grid-cols-[1.1fr_1fr]">
-        <motion.div className="gizmo-card p-5" {...enter(0.08)}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="mono-label text-chrome-7">Daily goal</p>
-              <p className="mt-1 font-display text-[1.6rem] font-bold tabular-nums text-brand-ink">
-                {today}
-                <span className="text-[0.95rem] font-semibold text-muted-foreground">
-                  {" "}
-                  / {goal} questions
-                </span>
-              </p>
-            </div>
-            <div className="grid size-12 place-items-center rounded-2xl border border-[#8a6b2a] bg-[#f4e3bd] text-[#5b3d00]">
-              <Trophy className="size-5" aria-hidden />
-            </div>
-          </div>
+      {/* One compact progress strip; the sprint picker lives in the header. */}
+      <motion.section
+        className="gizmo-card mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3"
+        aria-label="Today's progress"
+        {...enter(0.08)}
+      >
+        <div className="flex min-w-[200px] flex-1 items-center gap-2.5">
+          <p className="shrink-0 text-[0.76rem] font-semibold tabular-nums text-brand-ink">
+            {today}/{goal} questions
+          </p>
           <Meter
             value={progress}
-            className="mt-3 h-2 bg-brand-panel"
+            className="h-1.5 max-w-[220px] flex-1 bg-brand-panel"
             barClassName="bg-chrome-8"
             label="Questions answered today"
           />
-          <p className="mt-2 text-[0.78rem] leading-relaxed text-muted-foreground">
-            {study?.goalReason ?? "Your goal follows your nearest exam date."}
+        </div>
+        <p className="flex items-center gap-1.5 text-[0.76rem] font-medium text-brand-ink/75">
+          <Flame className="size-3.5 text-brand-pink-deep" aria-hidden />
+          {study?.streak ?? 0} day{(study?.streak ?? 0) === 1 ? "" : "s"} streak
+        </p>
+        {study?.goalReason && (
+          <p className="text-[0.72rem] text-muted-foreground sm:ml-auto">
+            {study.goalReason}
           </p>
-
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {(study?.tiers ?? []).map((tier) => (
-              <span
-                key={tier.key}
-                className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold ${
-                  tier.reached
-                    ? "border border-[#1d6b45] bg-[#d2e7de] text-[#0d4a2e]"
-                    : "border border-border bg-white text-brand-ink"
-                }`}
-              >
-                {tier.label} · {tier.questions}
-              </span>
-            ))}
-          </div>
-
-          <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
-            <Flame className="size-4 text-chrome-6" aria-hidden />
-            <p className="text-[0.8rem] font-medium text-brand-ink/80">
-              {study?.streak
-                ? `${study.streak} day streak`
-                : "No streak yet — hit the Starter tier to begin"}
-            </p>
-            {study?.tier && (
-              <span className="ml-auto rounded-full border border-border bg-brand-panel px-2 py-0.5 text-[0.66rem] font-semibold text-chrome-7">
-                {study.tier} tier
-              </span>
-            )}
-          </div>
-        </motion.div>
-
-        <motion.div className="gizmo-card p-5" {...enter(0.12)}>
-          <p className="mono-label text-chrome-7">Quick sprint</p>
-          <h2 className="mt-1 font-display text-[1.15rem] font-bold text-brand-ink">
-            Pick your length
-          </h2>
-          <p className="mt-1 text-[0.78rem] leading-relaxed text-muted-foreground">
-            The most useful cards first: everything overdue, then the shakiest
-            memories.
-          </p>
-
-          <div className="mt-3 grid grid-cols-4 gap-1.5">
-            {SPRINT_LENGTHS.map((length) => (
-              <button
-                key={length}
-                type="button"
-                onClick={() => startSprint(length)}
-                title={`Start a ${length}-card sprint`}
-                className={`rounded-2xl border px-2 py-2.5 text-[0.85rem] font-bold tabular-nums transition-colors ${
-                  sprintLength === length
-                    ? "border-chrome-8 bg-gizmo-lime text-brand-ink"
-                    : "border-border bg-white text-brand-ink hover:border-chrome-8 hover:bg-brand-panel"
-                }`}
-              >
-                {length}
-                <span className="mt-0.5 block text-[0.62rem] font-medium uppercase tracking-[0.08em]">
-                  cards
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-3 flex items-center gap-2">
-            <Timer className="size-3.5 text-chrome-7" aria-hidden />
-            <p className="text-[0.74rem] text-muted-foreground">
-              {sprintLength
-                ? `A ${sprintLength}-card sprint is ready below.`
-                : "Roughly a minute per five cards."}
-            </p>
-          </div>
-        </motion.div>
-      </section>
+        )}
+      </motion.section>
 
       {/* Sprint session */}
       {sprintLength && (
@@ -461,7 +413,7 @@ export default function Today() {
               className="h-9 rounded-full px-3 text-[0.78rem] font-semibold shadow-none"
             >
               <RotateCcw className="size-3.5" aria-hidden />
-              Change length
+              End session
             </Button>
           </div>
 
@@ -553,7 +505,7 @@ export default function Today() {
         <div className="gizmo-card overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-3.5">
             <h2 className="font-display text-[1rem] font-bold text-brand-ink">
-              Weak spots
+              Needs work
             </h2>
             <TriangleAlert className="size-4 text-[#8f1d26]" aria-hidden />
           </div>

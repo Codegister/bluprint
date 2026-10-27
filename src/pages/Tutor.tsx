@@ -3,27 +3,29 @@ import { CreateSetDialog } from "@/components/CreateSetDialog";
 import { SkeletonChat } from "@/components/Skeletons";
 import { Mascot } from "@/components/Mascot";
 import { SetLibrary } from "@/components/study/SetLibrary";
-import { StreakBanner } from "@/components/study/StreakBanner";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { EASE, TypingDots, enter } from "@/components/motion/Motion";
+import { DeckGlyph } from "@/components/Mascot";
+import { EASE, Meter, TypingDots, enter } from "@/components/motion/Motion";
+import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
-import { courseSubtitle } from "@/lib/subjects";
+import { displayName, percent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
   Check,
-  ChevronRight,
+  Flame,
   GraduationCap,
+  Play,
   Sparkles,
 } from "lucide-react";
 
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 const SUGGESTIONS = [
   "Explain this topic like I'm new to it",
@@ -98,13 +100,34 @@ export default function TutorPage() {
   const messages =
     validSetId && setId ? setMessages : courseMessages;
 
-  // With no scope in the URL, the screen asks which material to use. Both
-  // lists load up front so the choice is ready immediately.
+  // With no scope in the URL, the screen is Home: a tutor question box, what to
+  // continue, the saved library, then courses.
   const scoped = validSetId || validCourseId;
   const myCourses = useQuery(api.courses.listMine);
+  const mySets = useQuery(api.studySets.listMine);
+  const study = useQuery(api.studySets.studyStats);
+  const { user } = useAuth();
+  // Home asks one question, about one thing. The scope defaults to the last set
+  // the student touched, so the Ask button works on the first visit to the page
+  // without a second chooser step.
+  const [homeScope, setHomeScope] = useState("");
+  const [homeQuestion, setHomeQuestion] = useState(questionParam);
+  const { hash } = useLocation();
 
-  // "New study set" is a URL flag so the sidebar's + and the empty state can
-  // open it from anywhere, exactly as the old dashboard did.
+  // `/tutor#sets` arrives from the sidebar and from a set's back link, so the
+  // library is brought into view instead of opening at the top.
+  useEffect(() => {
+    if (scoped || !hash) return;
+    const node = document.getElementById(hash.slice(1));
+    if (!node) return;
+    const frame = requestAnimationFrame(() =>
+      node.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [hash, scoped]);
+
+  // "New material" is a URL flag, so the empty state and any saved link can
+  // open the upload dialog from anywhere.
   const newSetOpen = searchParams.get("new") === "1";
   const setNewSetOpen = (open: boolean) => {
     const next = new URLSearchParams(searchParams);
@@ -210,58 +233,90 @@ export default function TutorPage() {
 
   const empty = messages !== undefined && messages.length === 0 && !sending;
 
-  // No scope chosen yet: this is the home screen. It asks what to work on,
-  // opens the saved library, and keeps the streak in view.
+  // No scope chosen yet: this is the home screen. It leads with the tutor, then
+  // what to continue, then the library. One primary action: add material.
   if (!scoped) {
-    // A question from a set or course panel stays attached to whichever scope
-    // is chosen next.
-    const qSuffix = questionParam ? `&q=${encodeURIComponent(questionParam)}` : "";
     const readyCourses = (myCourses ?? []).filter(
       (course) => course.status === "ready",
     );
-    const loadingCourses = myCourses === undefined;
+    const readySets = (mySets ?? []).filter((set) => set.status === "ready");
+    const recentSets = [...readySets].sort(
+      (a, b) =>
+        (b.lastStudiedAt ?? b.updatedAt) - (a.lastStudiedAt ?? a.updatedAt),
+    );
+    const continueSets = (() => {
+      const picks = recentSets.slice(0, 1);
+      const mostDue = [...readySets].sort((a, b) => b.dueCount - a.dueCount)[0];
+      if (mostDue && !picks.some((set) => set._id === mostDue._id)) {
+        picks.push(mostDue);
+      }
+      return picks;
+    })();
+
+    const scopeOptions = [
+      ...recentSets.slice(0, 8).map((set) => ({
+        value: `set:${set._id}`,
+        label: `Set · ${set.title}`,
+      })),
+      ...readyCourses.map((course) => ({
+        value: `course:${course._id}`,
+        label: `Course · ${course.subject}`,
+      })),
+    ];
+    const activeScope =
+      scopeOptions.find((option) => option.value === homeScope) ??
+      scopeOptions[0] ??
+      null;
+    const totalDue = (mySets ?? []).reduce(
+      (sum, set) => sum + (set.dueCount ?? 0),
+      0,
+    );
+    const firstName = displayName(user?.name, user?.email)
+      .split(" ")[0]
+      .split("@")[0];
+
+    const openTutorWith = (question: string) => {
+      const text = question.trim();
+      if (!text || !activeScope) return;
+      const [kind, id] = activeScope.value.split(":");
+      const params = new URLSearchParams({ [kind]: id, q: text });
+      navigate(`/tutor?${params.toString()}`);
+    };
 
     return (
       <AppShell>
         <div className="mx-auto w-full max-w-4xl">
           <motion.header
-            className="chrome-plate rounded-[1.6rem] px-5 py-6 text-center"
-            {...enter(0.04, 12)}
+            className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
+            {...enter(0.04, 10)}
           >
-            <span className="sticker mx-auto bg-white/85 text-chrome-7">
-              <Sparkles className="size-3" aria-hidden />
-              AI tutor
-            </span>
-            <h1 className="mt-3 font-display text-[1.6rem] font-bold tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
-              What are you working on?
-            </h1>
-            <p className="mx-auto mt-2 max-w-md text-[0.88rem] leading-relaxed text-muted-foreground">
-              Pick a course to ask about the whole specification, or a saved set
-              to ask about one piece of material. Answers stay grounded in what
-              you choose.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-              <Button
-                type="button"
-                onClick={() => setNewSetOpen(true)}
-                className="h-10 rounded-full px-5 text-[0.84rem] font-semibold"
-              >
-                New study set
-                <ArrowRight className="size-4" aria-hidden />
-              </Button>
-              <Link
-                to="/courses/new"
-                className="text-[0.8rem] font-semibold text-brand-ink/70 underline-offset-4 hover:text-brand-ink hover:underline"
-              >
-                or add a course
-              </Link>
-            </div>
-            {questionParam && (
-              <p className="mx-auto mt-3 max-w-md rounded-2xl border border-border bg-brand-panel px-3 py-2 text-[0.78rem] leading-relaxed text-brand-ink/75">
-                “{questionParam}” is ready — choose a course or set below and it
-                will be waiting in the prompt.
+            <div className="min-w-0">
+              <p className="mono-label text-chrome-7">Home</p>
+              <h1 className="mt-1 truncate font-display text-[1.7rem] font-extrabold leading-tight tracking-[-0.035em] text-brand-ink sm:text-[2.1rem]">
+                Hi, {firstName}
+              </h1>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.86rem] text-brand-ink/65">
+                <span>
+                  {totalDue > 0
+                    ? `${totalDue} card${totalDue === 1 ? "" : "s"} due`
+                    : "No cards due"}
+                </span>
+                <span className="text-brand-ink/25">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <Flame className="size-3.5 text-brand-pink-deep" aria-hidden />
+                  {study?.streak ?? 0} day
+                  {(study?.streak ?? 0) === 1 ? "" : "s"} streak
+                </span>
               </p>
-            )}
+            </div>
+            <Button
+              type="button"
+              onClick={() => setNewSetOpen(true)}
+              className="h-11 shrink-0 rounded-full px-5 text-sm font-semibold"
+            >
+              Add material
+              <ArrowRight className="size-4" aria-hidden />
+            </Button>
           </motion.header>
 
           {aiStatus && !aiStatus.configured && (
@@ -271,62 +326,196 @@ export default function TutorPage() {
             </p>
           )}
 
-          <section className="mt-6">
-            <div className="flex items-center gap-2.5">
-              <span className="grid size-7 place-items-center rounded-lg bg-[#E6F7EF] text-[#128A4C]">
-                <GraduationCap className="size-4" aria-hidden />
-              </span>
-              <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-                Ask about a course
+          {/* The tutor is the page's main tool, not a link to another screen. */}
+          <motion.section
+            aria-labelledby="home-tutor-heading"
+            className="chrome-hero mt-4 rounded-[1.6rem] px-4 py-4 sm:px-5 sm:py-5"
+            {...enter(0.08, 10)}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <Sparkles className="size-4 text-chrome-7" aria-hidden />
+              <h2
+                id="home-tutor-heading"
+                className="font-display text-[1.05rem] font-bold text-brand-ink"
+              >
+                Ask the tutor
               </h2>
-              <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
-            </div>
-
-            <div className="mt-3 overflow-hidden rounded-3xl border border-border bg-white">
-              {loadingCourses ? (
-                <p className="px-5 py-5 text-[0.82rem] text-muted-foreground">
-                  Loading your courses…
-                </p>
-              ) : readyCourses.length === 0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-5">
-                  <p className="text-[0.82rem] text-muted-foreground">
-                    No ready courses yet. Set one up to ask the tutor about a
-                    whole specification.
-                  </p>
-                  <Button asChild variant="outline" className="h-8 rounded-full border-border bg-white px-3 text-[0.76rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel">
-                    <Link to="/courses/new">Set up courses</Link>
-                  </Button>
-                </div>
-              ) : (
-                readyCourses.map((course) => (
-                  <Link
-                    key={course._id}
-                    to={`/tutor?course=${course._id}${qSuffix}`}
-                    className="group flex items-center gap-3 border-b border-border/70 px-4 py-4 last:border-b-0 transition-colors hover:bg-[#F7FCFA] sm:px-5"
+              {scopeOptions.length > 0 && (
+                <label className="ml-auto flex min-w-0 items-center gap-1.5 text-[0.76rem] text-muted-foreground">
+                  <span className="shrink-0">About</span>
+                  <select
+                    value={activeScope?.value ?? ""}
+                    onChange={(event) => setHomeScope(event.target.value)}
+                    className="h-8 max-w-[220px] min-w-0 rounded-full border border-border bg-card px-2.5 text-[0.76rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
                   >
-                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#E6F7EF] text-[#128A4C]">
-                      <GraduationCap className="size-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-display text-[0.95rem] font-bold text-brand-ink">
-                        {course.subject}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[0.74rem] text-muted-foreground">
-                        {courseSubtitle(course)}
-                      </span>
-                    </span>
-                    <ChevronRight className="size-4 shrink-0 text-brand-ink/30 transition-transform group-hover:translate-x-0.5" />
-                  </Link>
-                ))
+                    {scopeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
             </div>
-          </section>
+
+            <form
+              className="mt-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                openTutorWith(homeQuestion);
+              }}
+            >
+              <div className="relative">
+                <input
+                  value={homeQuestion}
+                  onChange={(event) => setHomeQuestion(event.target.value)}
+                  disabled={!activeScope}
+                  placeholder={
+                    activeScope
+                      ? "Ask about your notes, a course or a set…"
+                      : "Add your notes to ask the tutor"
+                  }
+                  aria-label="Question for the AI tutor"
+                  className="h-12 w-full rounded-full border border-border bg-card pl-4 pr-[5rem] text-[0.9rem] text-brand-ink outline-none placeholder:text-muted-foreground/80 focus-visible:border-ring/50 focus-visible:ring-2 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <Button
+                  type="submit"
+                  disabled={!activeScope || !homeQuestion.trim()}
+                  className="absolute right-1 top-1 h-10 rounded-full px-4 text-[0.82rem] font-semibold"
+                >
+                  Ask
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </Button>
+              </div>
+            </form>
+
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {SUGGESTIONS.slice(0, 3).map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  disabled={!activeScope}
+                  onClick={() => openTutorWith(suggestion)}
+                  className="rounded-full border border-border bg-card px-2.5 py-1 text-[0.72rem] font-medium text-brand-ink/75 transition-colors hover:border-chrome-4 hover:bg-brand-panel hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </motion.section>
+
+          {continueSets.length > 0 && (
+            <section className="mt-7" aria-labelledby="continue-heading">
+              <div className="flex items-center gap-3">
+                <h2
+                  id="continue-heading"
+                  className="font-display text-[1.1rem] font-bold text-brand-ink"
+                >
+                  Continue
+                </h2>
+                <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
+              </div>
+              <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                {continueSets.map((set) => (
+                  <Link
+                    key={set._id}
+                    to={`/sets/${set._id}`}
+                    className="group flex items-center gap-3.5 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-chrome-4 hover:bg-brand-panel"
+                  >
+                    <DeckGlyph className="size-10 shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate font-display text-[0.95rem] font-bold text-brand-ink">
+                          {set.title}
+                        </span>
+                        <span className="shrink-0 text-[0.7rem] font-semibold text-muted-foreground">
+                          {set.dueCount > 0 ? `${set.dueCount} due` : `${set.readiness}% ready`}
+                        </span>
+                      </span>
+                      <Meter
+                        value={set.readiness}
+                        className="mt-2 h-1.5 bg-brand-panel"
+                        barClassName="bg-brand-ink/60"
+                        label={`${set.title} readiness`}
+                      />
+                      <span className="mt-1.5 flex items-center gap-1 text-[0.74rem] font-semibold text-brand-ink/70">
+                        <Play className="size-3" aria-hidden />
+                        Continue studying
+                      </span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           <SetLibrary onCreate={() => setNewSetOpen(true)} />
 
-          <div className="mt-4">
-            <StreakBanner />
-          </div>
+          {/* Courses stay reachable without competing with the sets list. */}
+          <section className="mt-7" aria-labelledby="home-courses-heading">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2
+                id="home-courses-heading"
+                className="font-display text-[1.1rem] font-bold text-brand-ink"
+              >
+                Courses
+              </h2>
+              <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
+              <Link
+                to="/courses"
+                className="text-[0.76rem] font-semibold text-brand-ink/70 underline-offset-2 hover:text-brand-ink hover:underline"
+              >
+                {readyCourses.length > 0 ? "Manage courses" : "Add a course"}
+              </Link>
+            </div>
+
+            {readyCourses.length === 0 ? (
+              <p className="mt-2 text-[0.82rem] leading-relaxed text-muted-foreground">
+                Choose your subjects to get a topic-by-topic pathway and ask the
+                tutor about the whole specification.{" "}
+                <Link
+                  to="/courses/new"
+                  className="font-semibold text-brand-ink underline-offset-2 hover:underline"
+                >
+                  Choose courses
+                </Link>
+              </p>
+            ) : (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {readyCourses.slice(0, 4).map((course) => {
+                  const done = percent(
+                    course.completedCount,
+                    Math.max(1, course.topicCount),
+                  );
+                  return (
+                    <div
+                      key={course._id}
+                      className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-3"
+                    >
+                      <GraduationCap className="size-4 shrink-0 text-chrome-7" aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          to={`/courses/${course._id}`}
+                          className="block truncate text-[0.88rem] font-semibold text-brand-ink hover:underline"
+                        >
+                          {course.subject}
+                        </Link>
+                        <p className="text-[0.72rem] text-muted-foreground">
+                          {done}% of topics done
+                        </p>
+                      </div>
+                      <Link
+                        to={`/courses/${course._id}/papers`}
+                        className="shrink-0 text-[0.74rem] font-semibold text-brand-ink/70 underline-offset-2 hover:text-brand-ink hover:underline"
+                      >
+                        Practise
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
 
         <CreateSetDialog open={newSetOpen} onOpenChange={setNewSetOpen} />

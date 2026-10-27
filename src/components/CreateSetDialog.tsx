@@ -415,17 +415,21 @@ export function CreateSetDialog({
             </TabsContent>
           </Tabs>
 
-          <div className="mt-5 rounded-3xl border border-border bg-[#FCFCFD] p-4">
-            <div>
-              <p className="text-xs font-semibold text-brand-ink">
-                How much to build
-              </p>
-              <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-                Choose anything from 1 to 100 of each. If your notes cannot support
-                the number, Bluprint builds the maximum it can and explains why on
-                the set page.
-              </p>
-            </div>
+          {/* Sensible defaults build a full set; only tune them on request. */}
+          <details className="mt-5 rounded-3xl border border-border bg-[#FCFCFD] p-4">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-brand-ink">
+                Build options
+              </span>
+              <span className="text-[0.7rem] text-muted-foreground">
+                {cardCount} cards · {quizCount} quiz · {examCount} exam
+              </span>
+            </summary>
+            <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+              Choose anything from 1 to 100 of each. If your notes cannot support
+              the number, Bluprint builds the maximum it can and explains why on
+              the set page.
+            </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               {[
@@ -478,7 +482,7 @@ export function CreateSetDialog({
               Longer sets are generated in batches and take more time to compile.
               Exam-style questions are written at 5–10 marks each.
             </p>
-          </div>
+          </details>
 
           <AnimatePresence initial={false}>
             {error && (

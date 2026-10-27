@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { motion } from "framer-motion";
-import { ChevronRight, GraduationCap, Loader2, Plus } from "lucide-react";
+import { ChevronRight, Loader2, Plus } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 
@@ -26,7 +26,7 @@ function CourseRow({ course }: { course: CourseSummary }) {
   return (
     <Link
       to={`/courses/${course._id}`}
-      className="group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel sm:grid-cols-[minmax(0,1fr)_170px_160px_16px] sm:items-center sm:px-5"
+      className="group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel sm:grid-cols-[minmax(0,1fr)_170px_16px] sm:items-center sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3">
         <span
@@ -81,25 +81,6 @@ function CourseRow({ course }: { course: CourseSummary }) {
         )}
       </div>
 
-      <div>
-        {course.status === "ready" ? (
-          <div className="flex items-center gap-2 text-[0.76rem] text-muted-foreground">
-            <span className="font-semibold text-brand-ink">
-              {course.setCount} {course.setCount === 1 ? "set" : "sets"}
-            </span>
-            {course.cardCount > 0 && (
-              <span className="text-[0.72rem]">
-                {percent(course.knownCount, course.cardCount)}% known
-              </span>
-            )}
-          </div>
-        ) : (
-          <p className="text-[0.76rem] text-muted-foreground">
-            {course.status === "error" ? "Preparing pathway" : "Mapping specification"}
-          </p>
-        )}
-      </div>
-
       <ChevronRight className="hidden size-4 text-brand-ink/30 transition-transform group-hover:translate-x-0.5 sm:block" />
     </Link>
   );
@@ -147,13 +128,11 @@ export default function Courses() {
         {...enter(0.04, 12)}
       >
         <div className="min-w-0">
-          <p className="mono-label text-[#128A4C]">Revision pathways</p>
-          <h1 className="mt-1 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
-            Your courses
+          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
+            Courses
           </h1>
           <p className="mt-1.5 max-w-lg text-[0.88rem] leading-relaxed text-muted-foreground">
-            Each course maps its published specification into topics you can
-            revise, track and build study material from.
+            Each course turns your specification into topics you can revise.
           </p>
         </div>
         <Button
@@ -167,21 +146,8 @@ export default function Courses() {
         </Button>
       </motion.header>
 
-      <section className="mt-6">
-        <div className="flex items-center gap-2.5">
-          <span className="grid size-7 place-items-center rounded-lg bg-[#E3F8F0] text-[#128A4C]">
-            <GraduationCap className="size-4" aria-hidden />
-          </span>
-          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-            Course list
-          </h2>
-          <span className="text-[0.74rem] font-semibold tabular-nums text-muted-foreground">
-            {count}
-          </span>
-          <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
-        </div>
-
-        <div className="mt-3 overflow-hidden rounded-3xl border border-border bg-white">
+      <section className="mt-5">
+        <div className="overflow-hidden rounded-3xl border border-border bg-card">
           {courseRows === undefined ? (
             <div role="status" aria-busy="true" aria-live="polite">
               <span className="sr-only">Loading your courses</span>
@@ -189,7 +155,7 @@ export default function Courses() {
                 <div
                   key={index}
                   aria-hidden="true"
-                  className="grid grid-cols-1 items-center gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_170px_160px_16px]"
+                  className="grid grid-cols-1 items-center gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_170px_16px]"
                 >
                   <div className="flex items-center gap-3">
                     <Skeleton className="size-11 shrink-0 rounded-2xl" />
@@ -202,7 +168,6 @@ export default function Courses() {
                     <Skeleton className="h-2.5 w-24" />
                     <Skeleton className="h-1.5 w-full max-w-[130px] rounded-full" />
                   </div>
-                  <Skeleton className="h-3 w-20" />
                   <Skeleton className="size-4 rounded" />
                 </div>
               ))}
@@ -232,12 +197,6 @@ export default function Courses() {
             </div>
           ) : (
             <>
-              <div className="hidden grid-cols-[minmax(0,1fr)_170px_160px_16px] gap-3 border-b border-border bg-background px-5 py-2 text-[0.6rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground sm:grid">
-                <span>Subject</span>
-                <span>Pathway</span>
-                <span>Materials</span>
-                <span />
-              </div>
               <div className="rise-stagger">
                 {courseRows.map((course) => (
                   <CourseRow key={course._id} course={course} />

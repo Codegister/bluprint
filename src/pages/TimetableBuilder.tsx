@@ -51,11 +51,10 @@ const START_HOURS = [9, 10, 14, 16, 17, 18, 19];
 // to land before it. Kept in step with the planner's LATEST_END_MINUTES.
 const LATEST_END = 20 * 60;
 const MAX_COURSES = 12;
-/** The builder runs as four pages; each has its own URL and one decision. */
+/** The builder runs as three pages; each has its own URL and one decision. */
 const STEPS = [
   { title: "Subjects" },
-  { title: "Length and papers" },
-  { title: "Daily plan" },
+  { title: "Study time" },
   { title: "Exam dates" },
 ] as const;
 
@@ -159,7 +158,7 @@ export default function TimetableBuilder() {
   const stepSegment = pathname.split("/").filter(Boolean)[2];
   const parsedStep = Number(stepSegment ?? "1");
   const step = Number.isInteger(parsedStep)
-    ? Math.min(4, Math.max(1, parsedStep))
+    ? Math.min(3, Math.max(1, parsedStep))
     : 1;
   const courses = useQuery(api.courses.listMine);
   const existing = useQuery(api.timetable.getMine);
@@ -320,7 +319,7 @@ export default function TimetableBuilder() {
     "Topics";
 
   const goToStep = (next: number) => {
-    const target = Math.min(4, Math.max(1, next));
+    const target = Math.min(3, Math.max(1, next));
     navigate(target === 1 ? "/timetable/new" : `/timetable/new/${target}`);
   };
 
@@ -344,18 +343,18 @@ export default function TimetableBuilder() {
     }
     if (!startDate || !examDate) {
       return {
-        step: 4,
+        step: 3,
         message: "Choose both a start date and an exam date.",
       };
     }
     if (datesInvalid) {
       return {
-        step: 4,
+        step: 3,
         message: "Your first exam needs to be after your start date.",
       };
     }
     if (daysLeft <= 0) {
-      return { step: 4, message: "Choose an exam date in the future." };
+      return { step: 3, message: "Choose an exam date in the future." };
     }
     return null;
   };
@@ -440,15 +439,15 @@ export default function TimetableBuilder() {
           className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground"
           {...enter(0.08)}
         >
-          Four short steps. You choose the time you have, and when revision
-          starts, on school days and on days off. Bluprint spreads that time
-          across the day with 10-minute breaks and space for meals, and every
-          session links to its study set.
+          Three short steps. Choose your subjects, the time you have on school
+          days and days off, then your first exam date. Bluprint spreads that
+          time across the day with breaks and space for meals, and every session
+          links to its study set.
         </motion.p>
       </header>
 
       {/* A quiet stepper: one accent marks where you are, mint marks what is
-          done. The four steps used to each carry their own colour, which made
+          done. The steps used to each carry their own colour, which made
           navigation compete with the form itself. */}
       <nav aria-label="Timetable steps" className="mt-5">
         <ol className="flex items-center gap-1 overflow-x-auto no-scrollbar">
@@ -547,7 +546,7 @@ export default function TimetableBuilder() {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="mono-label text-muted-foreground">
-                  Step 1 of 4
+                  Step 1 of 3
                 </p>
                 <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
                   Which subjects are you revising?
@@ -618,7 +617,7 @@ export default function TimetableBuilder() {
             className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
             <p className="mono-label text-muted-foreground">
-              Step 2 of 4
+              Step 2 of 3
             </p>
             <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
               How do you want to study?
@@ -761,12 +760,10 @@ export default function TimetableBuilder() {
           </section>
 
           <section
-            hidden={step !== 3}
+            hidden={step !== 2}
             className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
-            <p className="mono-label text-muted-foreground">
-              Step 3 of 4
-            </p>
+            <p className="mono-label text-muted-foreground">Daily plan</p>
             <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
               How much time do you have each day?
             </h2>
@@ -943,11 +940,11 @@ export default function TimetableBuilder() {
           </section>
 
           <section
-            hidden={step !== 4}
+            hidden={step !== 3}
             className="rounded-[2rem] border border-border bg-white p-5 sm:p-6"
           >
             <p className="mono-label text-muted-foreground">
-              Step 4 of 4
+              Step 3 of 3
             </p>
             <h2 className="mt-1 font-display text-[1.22rem] font-bold text-brand-ink">
               When does revision start, and when is the first exam?
@@ -1018,11 +1015,11 @@ export default function TimetableBuilder() {
           <div className="chrome-bar sticky bottom-3 z-20 rounded-[1.4rem] border px-4 py-3 shadow-[0_18px_38px_-30px_rgba(22,24,31,0.55)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
-                <p className="mono-label text-chrome-7">Step {step} of 4</p>
+                <p className="mono-label text-chrome-7">Step {step} of 3</p>
                 <p className="mt-0.5 truncate text-[0.8rem] text-muted-foreground">
-                  {step === 4 && settings.length === 0
+                  {step === 3 && settings.length === 0
                     ? "No subjects chosen yet."
-                    : step === 4
+                    : step === 3
                       ? `${settings.length} subject${settings.length === 1 ? "" : "s"} · ${methodLabel} · ${
                           studyMethod === "papers"
                         ? "60 min papers"
@@ -1047,7 +1044,7 @@ export default function TimetableBuilder() {
                     Back
                   </Button>
                 )}
-                {step < 4 ? (
+                {step < 3 ? (
                   <Button
                     type="button"
                     onClick={nextStep}

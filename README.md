@@ -204,22 +204,24 @@ earned. Four practice papers per course is the cap; remove one to build another.
    goal is **derived from your nearest exam date**: Bluprint divides the material still to
    cover by the days left (clamped to 10–80 questions), so it tightens as a real paper
    approaches. Without an exam date it falls back to 20.
-7. **Home is the tutor** — signing in opens the **AI tutor** screen: a course list to ask
-   about, your saved **study sets**, and a **streak banner** below them. The banner shows
-   today's questions, the streak and the next daily tier, and lists your ready courses,
-   each linking straight to that course's practice papers. The full **Today** screen
-   (sidebar) holds the cross-set due queue, the quick sprint picker and the sets with weak
-   spots. A sprint takes the most useful cards first: everything overdue, then the
-   shakiest memories.
+7. **Home is the tutor** — signing in opens a screen led by one question box: *Ask the
+   tutor*. A scope chip beside it defaults to the most recent set, so the first question
+   works without a second chooser. Below that are **Continue** (the last set and the most
+   due), the searchable **study sets** library, and compact **Courses** rows with a
+   *Practise* link per course. The header keeps the day's streak and due count in one
+   line. The full **Today** screen holds the due queue, one session button with a length
+   control, and the sets that need work. A session takes the most useful cards first:
+   everything overdue, then the shakiest memories.
 8. **Mastery is exam readiness** — the percentage on each set is no longer "cards known".
    It weighs **card recall** (from FSRS) at 60%, **last quiz accuracy** at 25% and **written
    exam marks** at 15%, dropping any part the set does not have. It also projects readiness
-   forward to exam day, so a high score with a distant exam date reads honestly.
-9. **Pace the exam** — add an exam date in **Set settings** and the set gets a per-day pace
+   forward to exam day, so a high score with a distant exam date reads honestly. On a set,
+   the four headline numbers sit in one strip and the full breakdown is one expansion away.
+9. **Pace the exam** — add an exam date in **Edit set** and the set gets a per-day pace
    plan: days left, cards per day, quiz questions per week, an on-track / tight / behind
    status, and projected readiness on the day. The daily goal uses the nearest exam across
    all ready sets.
-10. **Weak spots** — a dedicated session per set collects cards that were rated Again, have
+10. **Needs work** — a dedicated session per set collects cards that were rated Again, have
    lapsed, or never reached a stable memory, plus the quiz questions you keep missing. It
    starts with the worst material rather than replaying the whole deck.
 7. **Ask the tutor** — the tutor can be pointed at a study set, a whole course, or one
@@ -240,7 +242,7 @@ earned. Four practice papers per course is the cap; remove one to build another.
    temperature, so it deliberates deeply over a full derivation or a marked essay plan.
    Tiers are named by feel rather than by model — each one maps to a different NVIDIA
    model on the server, so the browser never sees a model id.
-11. **Edit and rebuild** — **Set settings** next to a set's title changes its name, course,
+11. **Edit and rebuild** — **Edit set** in the set's `⋯` menu changes its name, course,
    board, level, or exam date, and its three build sliders (1–100 flashcards, quiz questions
    and exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and
    exam questions with those counts and the new board conventions; your notes and uploads
@@ -262,25 +264,22 @@ earned. Four practice papers per course is the cap; remove one to build another.
     written from its specification in that subject's real question format (RS 3/4/5/12,
     English essays, maths calculations, and so on) and marked question by question against
     their own mark schemes. Progress and marks per paper are kept alongside the course.
-15. **Start on the tutor** — signing in, and opening `/`, both land on `/tutor`.
-    That screen *is* the tutor, and it is the one labelled **Dashboard** in the sidebar: a
-    hero that asks what you are working on, the **course list** to start a conversation
-    about, the saved **study sets** library (searchable, with due counts and readiness),
-    and a **streak banner** with practice links for each course underneath. **New study
-    set** opens the upload dialog from the hero; **Add course** is beside it. `/dashboard`
-    still redirects here, carrying `?new=1` with it, so old links keep working.
+15. **Start on Home** — signing in, and opening `/`, both land on `/tutor`, the tab
+    labelled **Home**. The screen leads with **Add material**, then the tutor question box
+    (scope chip defaults to your most recent set), then **Continue**, your **study sets**,
+    and compact **Courses** rows with practice links. `/dashboard` still redirects here,
+    carrying `?new=1` with it, so old links keep working.
 
-The sidebar has one home tab, **Dashboard**, and it is the AI tutor — there is no second
-tutor or dashboard item. **My courses** is a separate screen with topic progress, material
-counts and **Add courses**. The saved **Revision timetable** and **Today** queue have their
-own sidebar destinations. Opening a set or a course and choosing **Ask the tutor** scopes
-the same screen to that material, and a question handed over from a set or course arrives
-waiting in the prompt.
+The sidebar has four destinations — **Home**, **Courses**, **Today** and **Timetable** —
+plus your four most recent sets, a compact theme switch beside the account, and no
+separate goal card. Opening a set or a course and choosing **Ask the tutor** scopes the
+same tutor to that material, with a question carried in the prompt.
 
-Each course opens on its **Pathway**, and **Past papers**, **Topic papers** and **Study
-sets** are separate screens rather than tabs sharing one page. A study set opens on its
-**Summary**, with three clear ways onward — **Flashcards**, **Quiz** and **Exam practice** —
-each at its own URL, plus **Set settings** for renaming, rebuilding, or deleting the set.
+Each course has three sections: **Pathway**, **Practice** (past papers and topic papers
+behind one toggle) and **Study sets**. A study set opens on its **Overview**, with tabs for
+**Flashcards**, **Quiz**, **Exam practice** and **Needs work** (when there is any). A
+single **Continue studying** button picks the recommended mode — due cards first, then the
+quiz if it has never been taken — and *Edit set* and *Ask the tutor* sit in the `⋯` menu.
 Sets built from a course topic link back to that course.
 
 ## Assumptions
@@ -787,13 +786,12 @@ src/
   pages/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
-    Tutor.tsx            the home screen: AI tutor, course list, saved study sets
-                         library, streak banner, new-set upload dialog
+    Tutor.tsx            the home screen: tutor question box, continue cards,
+                         saved study sets library, course rows, upload dialog
     Today.tsx            due queue, quick sprint picker, streak and daily goal
     Courses.tsx          course library with pathway progress
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
-    Course.tsx           course pathway, past papers, topic papers, and study sets,
-                         each at its own URL
+    Course.tsx           course pathway, practice (past and topic papers), and sets
     PastPaper.tsx        one saved practice paper: its cover, build progress, and
                          AI-marked questions
     StudySet.tsx         set overview and summary, plus flashcards, quiz and exam
@@ -810,8 +808,8 @@ src/
     ChromeBackdrop.tsx   steel sheet, dot grid, moving specular ribbons and reflections
     InkInWater.tsx       canvas ink-in-water plumes for the landing hero
     study/               flashcard review (dictation + FSRS), quiz runner, exam practice,
-                         practice papers, readiness/pacing panel, weak spots, set
-                         library, streak banner, tutor chat, set settings
+                         practice papers, readiness/pacing panel, needs-work session,
+                         set library, tutor chat, edit-set dialog
   convex/
     schema.ts            users, courses, studySets, cards, quiz, exam, practice papers,
                          tutor, study days, plans

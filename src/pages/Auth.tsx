@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowLeft, ArrowRight, Ghost, Loader2, Mail } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Loader2, Mail } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -187,11 +187,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               >
                 <h2 className="text-[1.55rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
                   Sign in to your workspace
-                </h2>
-                <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
-                  Enter your email and we'll send a six-digit code. New here? The same
-                  form creates your account.
-                </p>
+                </h2>                  <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
+                    We&apos;ll email you a six-digit code. New here? The same form
+                    creates your account.
+                  </p>
 
                 <form onSubmit={handleEmailSubmit} className="mt-6">
                   <label
@@ -242,19 +241,16 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <span className="h-px flex-1 bg-border" />
                   </div>
 
-                  <Button
+                  <button
                     type="button"
-                    variant="outline"
-                    className="h-11 w-full rounded-full border-border bg-white text-[0.9rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                     onClick={handleGuestLogin}
                     disabled={isLoading}
+                    className="mx-auto block text-[0.82rem] font-semibold text-brand-ink/70 underline-offset-4 hover:text-brand-ink hover:underline disabled:opacity-50"
                   >
-                    <Ghost className="size-4" />
                     Continue as guest
-                  </Button>
-                  <p className="mt-2.5 text-center text-[0.8rem] leading-relaxed text-muted-foreground">
-                    Guest sessions are tied to this browser. Use email to keep your sets
-                    recoverable.
+                  </button>
+                  <p className="mt-1.5 text-center text-[0.74rem] leading-relaxed text-muted-foreground">
+                    Guest sessions stay on this browser.
                   </p>
                 </form>
               </motion.div>

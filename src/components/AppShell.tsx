@@ -2,7 +2,7 @@ import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { PageInk } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Meter, SPRING } from "@/components/motion/Motion";
+import { SPRING } from "@/components/motion/Motion";
 import {
   Sheet,
   SheetContent,
@@ -19,7 +19,6 @@ import { useQuery } from "convex/react";
 import { motion, useScroll } from "framer-motion";
 import {
   CalendarDays,
-  Flame,
   GraduationCap,
   Menu,
   Sparkles,
@@ -38,10 +37,9 @@ import { toast } from "sonner";
  */
 const navItems = [
   {
-    // The home screen is the AI tutor: course list, saved sets and streak. It
-    // keeps the Dashboard label and there is no second tab to tell apart.
+    // Home is the tutor: ask a question, continue a set, open the library.
     to: "/tutor",
-    label: "Dashboard",
+    label: "Home",
     icon: Sparkles,
     active: "bg-gizmo-sky text-brand-ink ring-1 ring-chrome-8/30",
     tile: "bg-brand-ink text-gizmo-sky",
@@ -49,18 +47,10 @@ const navItems = [
   },
   {
     to: "/courses",
-    label: "My courses",
+    label: "Courses",
     icon: GraduationCap,
     active: "bg-gizmo-lilac text-brand-ink ring-1 ring-chrome-8/30",
     tile: "bg-brand-ink text-gizmo-lilac",
-    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
-  },
-  {
-    to: "/timetable",
-    label: "Revision timetable",
-    icon: CalendarDays,
-    active: "bg-gizmo-peach text-brand-ink ring-1 ring-chrome-8/30",
-    tile: "bg-brand-ink text-gizmo-peach",
     soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
   {
@@ -69,6 +59,14 @@ const navItems = [
     icon: Target,
     active: "bg-gizmo-mint text-brand-ink ring-1 ring-chrome-8/30",
     tile: "bg-brand-ink text-gizmo-mint",
+    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
+  },
+  {
+    to: "/timetable",
+    label: "Timetable",
+    icon: CalendarDays,
+    active: "bg-gizmo-peach text-brand-ink ring-1 ring-chrome-8/30",
+    tile: "bg-brand-ink text-gizmo-peach",
     soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
   },
 ] as const;
@@ -103,48 +101,6 @@ function DeckRow({
           {due} due
         </span>
       )}
-    </Link>
-  );
-}
-
-/** Today's question goal, shown as a small progress card above the set list. */
-function GoalCard() {
-  const study = useQuery(api.studySets.studyStats);
-  const today = study?.todayCount ?? 0;
-  const goal = study?.goal ?? 20;
-  const streak = study?.streak ?? 0;
-  const progress = Math.min(100, Math.round((today / Math.max(goal, 1)) * 100));
-
-  return (
-    <Link
-      to="/today"
-      className="mx-3 mb-4 block rounded-2xl border border-border bg-white/80 p-3 shadow-[0_2px_0_rgba(28,26,20,0.05)] transition-colors hover:bg-white"
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="mono-label text-chrome-7">Today</p>
-        <p className="text-[0.7rem] font-semibold tabular-nums text-brand-ink/55">
-          {study ? `${today}/${goal} questions` : "—"}
-        </p>
-      </div>
-      <Meter
-        value={progress}
-        className="mt-2 h-1.5 bg-brand-ink/10"
-        barClassName="bg-brand-pink-deep"
-        label="Questions answered today"
-      />
-      <p className="mt-2 flex items-center gap-1.5 text-[0.72rem] leading-snug text-brand-ink/60">
-        {streak > 0 ? (
-          <>
-            <Flame className="size-3.5 text-brand-pink-deep" aria-hidden />
-            <span className="font-semibold text-brand-ink/80">
-              {streak} day{streak === 1 ? "" : "s"}
-            </span>
-            {study?.tier ? `· ${study.tier} tier` : "on the bounce"}
-          </>
-        ) : (
-          (study ? "Reach 10 questions to start a streak" : "Every question counts")
-        )}
-      </p>
     </Link>
   );
 }
@@ -191,7 +147,7 @@ function Sidebar({
       <nav className="relative flex flex-col gap-1 px-3">
         {navItems.map((item) => {
           // Everything reached from the tutor home — a saved set, a scoped
-          // conversation — keeps the Dashboard tab lit, because that is the
+          // conversation — keeps the Home tab lit, because that is the
           // screen the student started from.
           const active =
             item.to === "/tutor"
@@ -236,25 +192,16 @@ function Sidebar({
         })}
       </nav>
 
-      <div className="relative mt-2 px-3">
-        <ThemeToggle withLabel />
-      </div>
-
-      <div className="relative mt-4">
-        <GoalCard />
-      </div>
-
-      <div className="relative flex items-center justify-between px-4 pb-2">
+      <div className="relative mt-5 flex items-center justify-between px-4 pb-2">
         <p className="px-1 text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           Your sets
         </p>
         <Link
-          to="/tutor?new=1"
+          to="/tutor#sets"
           onClick={onNavigate}
-          aria-label="New study set"
-          className="grid size-6 place-items-center rounded-full border border-chrome-8 bg-brand-ink text-[0.9rem] font-bold text-white shadow-[0_2px_0_rgba(10,15,21,0.4)] transition-transform hover:-rotate-6"
+          className="text-[0.72rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
         >
-          +
+          All sets
         </Link>
       </div>
 
@@ -272,7 +219,7 @@ function Sidebar({
             first set.
           </p>
         ) : (
-          decks.map((deck) => (
+          decks.slice(0, 4).map((deck) => (
             <DeckRow
               key={deck._id}
               to={`/sets/${deck._id}`}
@@ -298,6 +245,8 @@ function Sidebar({
               {user?.email ?? "Private account"}
             </p>
           </div>
+          {/* A preference, not a destination: it belongs with the account. */}
+          <ThemeToggle />
         </div>
         <button
           type="button"

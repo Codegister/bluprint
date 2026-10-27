@@ -146,8 +146,8 @@ const BASE_PATH = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
 
 /**
  * The root is the AI tutor for anyone signed in — the same screen as the
- * sidebar's Dashboard tab — so opening the app lands on the tutor, the course
- * list, the saved sets and the streak. Signed-out visitors still get the
+ * sidebar's Home tab — so opening the app lands on the tutor, the course list,
+ * the saved sets and the streak. Signed-out visitors still get the
  * landing page, which is the only place the product is introduced.
  */
 function HomeRoute() {

@@ -228,8 +228,8 @@ export function ReadinessPanel({
               follows the date.
             </p>
             <p className="mt-2 text-[0.74rem] font-medium text-muted-foreground">
-              Open <span className="font-semibold text-brand-ink">Set settings</span>{" "}
-              to add it.
+              Open <span className="font-semibold text-brand-ink">Edit set</span>{" "}
+              from the set&apos;s menu to add it.
             </p>
           </div>
         )}
@@ -245,7 +245,7 @@ export function ReadinessPanel({
             )}
           >
             <TriangleAlert className="size-3.5" aria-hidden />
-            Weak spots
+            Needs work
             <span className="tabular-nums">
               {weakCardCount + weakQuizCount}
             </span>

@@ -137,7 +137,11 @@ export function SetLibrary({ onCreate }: { onCreate: () => void }) {
   }, [sets, search]);
 
   return (
-    <section aria-labelledby="sets-heading" className="mt-7">
+    <section
+      id="sets"
+      aria-labelledby="sets-heading"
+      className="mt-7 scroll-mt-6"
+    >
       <motion.div
         className="flex flex-wrap items-end gap-x-3 gap-y-2"
         {...enter(0.14)}

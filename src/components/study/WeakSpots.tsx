@@ -40,7 +40,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
             onClick={() => setStarted(false)}
             className="h-8 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
           >
-            <ArrowLeft className="size-3.5" /> Back to weak spots
+            <ArrowLeft className="size-3.5" /> Back to the set
           </Button>
         </div>
         <FlashcardReview key={setId} cards={data.cards} />
@@ -59,7 +59,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
           <div>
             <p className="mono-label text-[#C93C49]">Second pass</p>
             <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
-              Weak spots in “{data.setTitle}”
+              Needs work in “{data.setTitle}”
             </h2>
             <p className="mt-1 max-w-md text-[0.85rem] leading-relaxed text-muted-foreground">
               Cards you rated Again, or that have never reached a stable memory,
