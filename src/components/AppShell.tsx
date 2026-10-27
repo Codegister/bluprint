@@ -2,7 +2,7 @@ import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { PageInk } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { SPRING, enter } from "@/components/motion/Motion";
+import { enter } from "@/components/motion/Motion";
 import {
   Sheet,
   SheetContent,
@@ -105,15 +105,7 @@ function DeckRow({
   );
 }
 
-function Sidebar({
-  onNavigate,
-  idPrefix,
-}: {
-  onNavigate?: () => void;
-  /** Desktop and mobile mount two copies; the layout animation needs a
-   *  unique id per copy or the pill would fly between them. */
-  idPrefix: string;
-}) {
+function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -167,15 +159,14 @@ function Sidebar({
                   : "text-brand-ink hover:bg-white/80",
               )}
             >
-              {/* One shared bar slides between destinations, so the nav reads
-                  as a single moving object rather than five separate states. */}
+              {/* A plain marker, not a shared layout animation: the sidebar is
+                  re-rendered by every page, and a projection-driven bar drifted
+                  whenever the page underneath changed height (for example while
+                  picking an exam board). */}
               {active && (
-                <motion.span
-                  layoutId={`${idPrefix}-nav-active`}
+                <span
                   aria-hidden
-                  className="absolute left-0 top-1/2 h-5 w-[3px] rounded-full bg-current"
-                  style={{ marginTop: -10 }}
-                  transition={SPRING}
+                  className="nav-active-bar absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-current"
                 />
               )}
               <span
@@ -280,7 +271,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         style={{ scaleX: scrollYProgress }}
       />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[292px] border-r border-border lg:block">
-        <Sidebar idPrefix="desktop" />
+        <Sidebar />
       </aside>
 
       <header className="chrome-bar sticky top-0 z-30 flex items-center justify-between border-b px-4 py-3 lg:hidden">
@@ -303,7 +294,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SheetHeader className="sr-only">
             <SheetTitle>Bluprint menu</SheetTitle>
           </SheetHeader>
-          <Sidebar idPrefix="mobile" onNavigate={() => setMobileOpen(false)} />
+          <Sidebar onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 

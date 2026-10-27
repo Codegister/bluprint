@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SkeletonChat } from "@/components/Skeletons";
 import { Mascot } from "@/components/Mascot";
 import { SetLibrary } from "@/components/study/SetLibrary";
+import { TutorChat, type TutorScope } from "@/components/study/TutorChat";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -113,7 +114,6 @@ export default function TutorPage() {
   // the student touched, so the Ask button works on the first visit to the page
   // without a second chooser step.
   const [homeScope, setHomeScope] = useState("");
-  const [homeQuestion, setHomeQuestion] = useState(questionParam);
   const { hash } = useLocation();
 
   // `/tutor#sets` arrives from the sidebar and from a set's back link, so the
@@ -278,14 +278,29 @@ export default function TutorPage() {
       .split(" ")[0]
       .split("@")[0];
 
-    const openTutorWith = (question: string) => {
-      const text = question.trim();
-      if (!text || !activeScope) return;
-      markTutorUsed();
-      const [kind, id] = activeScope.value.split(":");
-      const params = new URLSearchParams({ [kind]: id, q: text });
-      navigate(`/tutor?${params.toString()}`);
-    };
+    // The scope chip stores "set:<id>" or "course:<id>"; the chat needs the
+    // typed scope object, and the header needs the label and qualification.
+    const [scopeKind, scopeValue] = activeScope?.value.split(":") ?? [];
+    const tutorScope: TutorScope | null =
+      scopeKind === "set" && scopeValue
+        ? { kind: "set", setId: scopeValue as Id<"studySets"> }
+        : scopeKind === "course" && scopeValue
+          ? { kind: "course", courseId: scopeValue as Id<"courses"> }
+          : null;
+    const tutorSet =
+      scopeKind === "set"
+        ? recentSets.find((set) => set._id === scopeValue)
+        : undefined;
+    const tutorCourse =
+      scopeKind === "course"
+        ? readyCourses.find((course) => course._id === scopeValue)
+        : undefined;
+    const tutorTitle = tutorSet?.title ?? tutorCourse?.subject ?? "your material";
+    const tutorQualification = tutorSet
+      ? [tutorSet.course, tutorSet.examBoard].filter(Boolean).join(" · ")
+      : tutorCourse
+        ? `${tutorCourse.examBoard} ${tutorCourse.level}`
+        : undefined;
 
     // The guide's tutor step brings the composer into view instead of leaving
     // the page, so the next action is literally under the cursor.
@@ -293,8 +308,9 @@ export default function TutorPage() {
       document
         .getElementById("home-tutor")
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
-      const input = document.getElementById("home-tutor-input");
-      if (input instanceof HTMLInputElement) input.focus({ preventScroll: true });
+      document
+        .querySelector<HTMLTextAreaElement>("#home-tutor textarea")
+        ?.focus({ preventScroll: true });
     };
 
     return (
@@ -336,84 +352,69 @@ export default function TutorPage() {
             onExploreTutor={focusTutor}
           />
 
-          {/* The tutor is the page's main tool, not a link to another screen. */}
+          {/* The tutor is the page's main tool: the full chat with model tiers,
+              effort, dictation and streaming answers, not a link elsewhere. */}
           <motion.section
             id="home-tutor"
-            aria-labelledby="home-tutor-heading"
-            className="chrome-hero mt-4 rounded-[1.6rem] px-4 py-4 sm:px-5 sm:py-5"
+            aria-label="Ask the tutor"
+            className="mt-4 scroll-mt-24"
             {...enter(0.08, 10)}
           >
-            <div className="flex flex-wrap items-center gap-2">
-              <Sparkles className="size-4 text-chrome-7" aria-hidden />
-              <h2
-                id="home-tutor-heading"
-                className="font-display text-[1.05rem] font-bold text-brand-ink"
-              >
-                Ask the tutor
-              </h2>
-              {scopeOptions.length > 0 && (
-                <label className="ml-auto flex min-w-0 items-center gap-1.5 text-[0.76rem] text-muted-foreground">
-                  <span className="shrink-0">About</span>
-                  <select
-                    value={activeScope?.value ?? ""}
-                    onChange={(event) => setHomeScope(event.target.value)}
-                    className="h-8 max-w-[220px] min-w-0 rounded-full border border-border bg-card px-2.5 text-[0.76rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
+            {tutorScope ? (
+              <TutorChat
+                scope={tutorScope}
+                title={tutorTitle}
+                qualification={tutorQualification}
+                onAsk={markTutorUsed}
+                scopeControl={
+                  scopeOptions.length > 0 ? (
+                    <label className="flex min-w-0 items-center gap-1.5 text-[0.72rem] text-muted-foreground">
+                      <span className="shrink-0">About</span>
+                      <select
+                        value={activeScope?.value ?? ""}
+                        onChange={(event) => setHomeScope(event.target.value)}
+                        className="h-7 max-w-[180px] min-w-0 rounded-full border border-border bg-card px-2 text-[0.72rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
+                      >
+                        {scopeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <div className="gizmo-card flex flex-col items-center gap-3 px-5 py-8 text-center">
+                <Mascot size={84} float={false} />
+                <div className="max-w-sm">
+                  <p className="font-display text-[1.05rem] font-bold text-brand-ink">
+                    The tutor needs something to read
+                  </p>
+                  <p className="mt-1 text-[0.85rem] leading-relaxed text-muted-foreground">
+                    Add a page of notes, or map a course, and the tutor can explain,
+                    quiz and mark answers from your own material.
+                  </p>
+                </div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => setNewSetOpen(true)}
+                    className="h-10 rounded-full px-4 text-[0.82rem] font-semibold"
                   >
-                    {scopeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-
-            <form
-              className="mt-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                openTutorWith(homeQuestion);
-              }}
-            >
-              <div className="relative">
-                <input
-                  id="home-tutor-input"
-                  value={homeQuestion}
-                  onChange={(event) => setHomeQuestion(event.target.value)}
-                  disabled={!activeScope}
-                  placeholder={
-                    activeScope
-                      ? "Ask about your notes, a course or a set…"
-                      : "Add your notes to ask the tutor"
-                  }
-                  aria-label="Question for the AI tutor"
-                  className="h-12 w-full rounded-full border border-border bg-card pl-4 pr-[5rem] text-[0.9rem] text-brand-ink outline-none placeholder:text-muted-foreground/80 focus-visible:border-ring/50 focus-visible:ring-2 focus-visible:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-                <Button
-                  type="submit"
-                  disabled={!activeScope || !homeQuestion.trim()}
-                  className="absolute right-1 top-1 h-10 rounded-full px-4 text-[0.82rem] font-semibold"
-                >
-                  Ask
-                  <ArrowRight className="size-3.5" aria-hidden />
-                </Button>
+                    Add material
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="h-10 rounded-full px-4 text-[0.82rem] font-semibold shadow-none"
+                  >
+                    <Link to="/courses/new">Choose courses</Link>
+                  </Button>
+                </div>
               </div>
-            </form>
-
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {SUGGESTIONS.slice(0, 3).map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  disabled={!activeScope}
-                  onClick={() => openTutorWith(suggestion)}
-                  className="rounded-full border border-border bg-card px-2.5 py-1 text-[0.72rem] font-medium text-brand-ink/75 transition-colors hover:border-chrome-4 hover:bg-brand-panel hover:text-brand-ink disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
+            )}
           </motion.section>
 
           {continueSets.length > 0 && (

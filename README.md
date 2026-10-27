@@ -210,14 +210,15 @@ earned. Four practice papers per course is the cap; remove one to build another.
    goal is **derived from your nearest exam date**: Bluprint divides the material still to
    cover by the days left (clamped to 10–80 questions), so it tightens as a real paper
    approaches. Without an exam date it falls back to 20.
-7. **Home is the tutor** — signing in opens a screen led by one question box: *Ask the
-   tutor*. A scope chip beside it defaults to the most recent set, so the first question
-   works without a second chooser. Below that are **Continue** (the last set and the most
-   due), the searchable **study sets** library, and compact **Courses** rows with a
-   *Practise* link per course. The header keeps the day's streak and due count in one
-   line. The full **Today** screen holds the due queue, one session button with a length
-   control, and the sets that need work. A session takes the most useful cards first:
-   everything overdue, then the shakiest memories.
+7. **Home is the tutor** — signing in opens the full tutor panel, not a link to one:
+   model tiers, the effort bar, dictation, **Web** search and streamed answers all work
+   inline. An **About** chip in the panel header defaults to the most recent set, so the
+   first question works without a second chooser. Below the panel are **Continue** (the
+   last set and the most due), the searchable **study sets** library, and compact
+   **Courses** rows with a *Practise* link per course. The header keeps the day's streak
+   and due count in one line. The full **Today** screen holds the due queue, one session
+   button with a length control, and the sets that need work. A session takes the most
+   useful cards first: everything overdue, then the shakiest memories.
 8. **Mastery is exam readiness** — the percentage on each set is no longer "cards known".
    It weighs **card recall** (from FSRS) at 60%, **last quiz accuracy** at 25% and **written
    exam marks** at 15%, dropping any part the set does not have. It also projects readiness
@@ -271,10 +272,10 @@ earned. Four practice papers per course is the cap; remove one to build another.
     English essays, maths calculations, and so on) and marked question by question against
     their own mark schemes. Progress and marks per paper are kept alongside the course.
 15. **Start on Home** — signing in, and opening `/`, both land on `/tutor`, the tab
-    labelled **Home**. The screen leads with **Add material**, then the tutor question box
-    (scope chip defaults to your most recent set), then **Continue**, your **study sets**,
-    and compact **Courses** rows with practice links. `/dashboard` still redirects here,
-    carrying `?new=1` with it, so old links keep working.
+    labelled **Home**. The screen leads with **Add material**, then the full tutor panel
+    (the *About* chip in its header defaults to your most recent set), then **Continue**,
+    your **study sets**, and compact **Courses** rows with practice links. `/dashboard`
+    still redirects here, carrying `?new=1` with it, so old links keep working.
 
 The sidebar has four destinations — **Home**, **Courses**, **Today** and **Timetable** —
 plus your four most recent sets, a compact theme switch beside the account, and no
@@ -802,7 +803,7 @@ src/
   pages/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
-    Tutor.tsx            the home screen: tutor question box, continue cards,
+    Tutor.tsx            the home screen: full tutor chat, continue cards,
                          saved study sets library, course rows, upload dialog
     Today.tsx            due queue, quick sprint picker, streak and daily goal
     Courses.tsx          course library with pathway progress

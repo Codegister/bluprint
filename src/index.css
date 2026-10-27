@@ -1692,6 +1692,21 @@
   animation: caret-blink 1.2s steps(1) infinite;
 }
 
+/* The active destination marker only fades in. It used to be a shared layout
+   animation, which drifted whenever the page underneath changed height. */
+.nav-active-bar {
+  animation: nav-bar-in 0.2s ease-out both;
+}
+
+@keyframes nav-bar-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* The revision timetable fits its container at every width. */
 .week-columns {
   display: grid;
@@ -1704,6 +1719,7 @@
   .animate-soft-pop,
   .progress-live,
   .animate-rise,
+  .nav-active-bar,
   .pulse-ring::after,
   .gizmo-blob,
   .gizmo-ribbon,
