@@ -43,7 +43,7 @@ type Palette = {
 const PALETTES: Record<Theme, Palette> = {
   light: {
     key: "light",
-    strength: 1.5,
+    strength: 2.1,
     pigments: [
       { rgb: "164, 206, 74", weight: 3 }, // pale lime
       { rgb: "158, 132, 235", weight: 2 }, // pale lilac
@@ -54,7 +54,7 @@ const PALETTES: Record<Theme, Palette> = {
   },
   dark: {
     key: "dark",
-    strength: 1.45,
+    strength: 2.2,
     pigments: [
       { rgb: "26, 92, 58", weight: 3 }, // deep forest
       { rgb: "54, 40, 120", weight: 2 }, // deep indigo
@@ -71,7 +71,7 @@ function currentTheme(): Theme {
     : "light";
 }
 
-const MAX_PUFFS = 220;
+const MAX_PUFFS = 260;
 
 type Puff = {
   x: number;
@@ -149,16 +149,16 @@ function makePuff(
     y,
     vx: (Math.random() - 0.5) * 0.5,
     vy: (Math.random() - 0.5) * 0.4,
-    // Larger blooms than before: the plumes should be readable as ink from
-    // across the page, not only as a faint tint under the headline.
-    radius: 32 + Math.random() * 66,
-    grow: 0.11 + Math.random() * 0.2,
+    // Large blooms that stay readable from across the page: the pigment should
+    // be seen moving, not inferred from a faint tint under the headline.
+    radius: 40 + Math.random() * 88,
+    grow: 0.14 + Math.random() * 0.24,
     // Pre-seeded plumes start part-way through their life so the first frame
     // already shows a developed bloom.
     life: initial ? Math.random() * maxLife : 0,
     maxLife,
     seed: Math.random() * Math.PI * 2,
-    alpha: 0.07 + Math.random() * 0.09,
+    alpha: 0.12 + Math.random() * 0.14,
     sprite: pickPigment(palette.pigments),
   };
 }
@@ -268,11 +268,11 @@ export function InkInWater({
         // slightly different directions, which is what makes the ink fold and
         // swirl instead of drifting in straight lines.
         let flowX =
-          Math.sin(puff.y * 0.0045 + t * 3.4 + puff.seed) * 26 +
-          Math.cos(puff.y * 0.0018 - t * 1.7) * 12;
+          Math.sin(puff.y * 0.0045 + t * 3.4 + puff.seed) * 32 +
+          Math.cos(puff.y * 0.0018 - t * 1.7) * 14;
         let flowY =
-          Math.cos(puff.x * 0.0038 - t * 2.6 + puff.seed * 1.6) * 22 +
-          Math.sin(puff.x * 0.0015 + t * 1.2) * 10;
+          Math.cos(puff.x * 0.0038 - t * 2.6 + puff.seed * 1.6) * 28 +
+          Math.sin(puff.x * 0.0015 + t * 1.2) * 12;
 
         // Tangential pull around the moving vortex, strongest near its centre
         // and fading out with distance. This is the part that makes the ink
@@ -281,8 +281,8 @@ export function InkInWater({
         const dy = puff.y - vortexY;
         const distance = Math.hypot(dx, dy) + 1;
         const pull = Math.min(1, 320 / distance);
-        flowX += (-dy / distance) * 40 * pull;
-        flowY += (dx / distance) * 40 * pull;
+        flowX += (-dy / distance) * 46 * pull;
+        flowY += (dx / distance) * 46 * pull;
 
         puff.vx = puff.vx * 0.986 + flowX * speed * 0.02;
         puff.vy = puff.vy * 0.986 + flowY * speed * 0.02;
@@ -290,8 +290,8 @@ export function InkInWater({
 
         // A firm multiplier: the plumes should be seen crossing the glass, not
         // inferred from a tint that barely changes.
-        puff.x += puff.vx * speed * 30;
-        puff.y += puff.vy * speed * 30;
+        puff.x += puff.vx * speed * 38;
+        puff.y += puff.vy * speed * 38;
       }
 
       render();
@@ -327,8 +327,8 @@ export function InkInWater({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const target = Math.round(
-        Math.min(MAX_PUFFS, Math.max(80, (width * height) / 9000)) *
-          Math.max(0.35, Math.min(1.4, intensity)),
+        Math.min(MAX_PUFFS, Math.max(90, (width * height) / 7200)) *
+          Math.max(0.35, Math.min(1.5, intensity)),
       );
       if (puffs.length > target) puffs = puffs.slice(0, target);
       while (puffs.length < target) {
@@ -414,7 +414,7 @@ export function InkInWater({
  * click. Signed-in screens mount it beside the backdrop in the app shell; the
  * public screens mount it next to their own backdrop.
  */
-export function PageInk({ intensity = 0.9 }: { intensity?: number }) {
+export function PageInk({ intensity = 1.1 }: { intensity?: number }) {
   return (
     <div aria-hidden className="ink-page">
       <InkInWater intensity={intensity} />

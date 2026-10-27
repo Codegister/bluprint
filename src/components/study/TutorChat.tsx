@@ -8,7 +8,7 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { Check, Globe } from "lucide-react";
+import { Check, Globe, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const SUGGESTIONS = [
@@ -205,7 +205,8 @@ export function TutorChat({
       <section className="gizmo-card overflow-hidden">
         <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-4 sm:px-5">
           <div className="min-w-0">
-            <p className="font-display text-[0.98rem] font-bold text-brand-ink">
+            <p className="flex items-center gap-1.5 font-display text-[0.98rem] font-bold text-brand-ink">
+              <Sparkles className="size-4 text-brand-violet" aria-hidden />
               AI tutor
             </p>
             <p className="truncate text-[0.74rem] text-muted-foreground">
@@ -291,7 +292,7 @@ export function TutorChat({
                       "max-w-[86%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-[0.9rem] leading-relaxed",
                       message.role === "user"
                         ? "rounded-br-md bg-[#191B27] text-white"
-                        : "rounded-bl-md bg-brand-panel text-brand-ink/85",
+                        : "rounded-bl-md border border-brand-sky/15 bg-brand-sky/10 text-brand-ink/90",
                     )}
                   >
                     {message.content}

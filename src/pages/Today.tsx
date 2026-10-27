@@ -110,20 +110,28 @@ function FirstRunOptions() {
               step: "1",
               title: "Capture",
               body: "Photos, a video, pasted notes, or a topic from a course you have mapped.",
+              tone: "border-brand-peach/30 bg-brand-peach/15 text-brand-peach",
             },
             {
               step: "2",
               title: "Build",
               body: "NVIDIA writes the summary, flashcards, quiz and exam questions.",
+              tone: "border-brand-violet/30 bg-brand-violet/15 text-brand-violet",
             },
             {
               step: "3",
               title: "Revise",
               body: "Cards come back here when they are due. Sprints are one tap.",
+              tone: "border-brand-mint/30 bg-brand-mint/15 text-brand-mint",
             },
           ].map((item) => (
             <li key={item.step} className="flex gap-3">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full border border-chrome-8 bg-brand-ink text-[0.72rem] font-bold text-white">
+              <span
+                className={cn(
+                  "grid size-7 shrink-0 place-items-center rounded-full border text-[0.72rem] font-bold",
+                  item.tone,
+                )}
+              >
                 {item.step}
               </span>
               <div>
@@ -280,8 +288,8 @@ export default function Today() {
                   className={cn(
                     "h-8 min-w-8 rounded-full px-2 text-[0.78rem] font-semibold tabular-nums transition-colors",
                     activeLength === length
-                      ? "bg-brand-ink text-white"
-                      : "text-brand-ink/65 hover:bg-brand-panel hover:text-brand-ink",
+                      ? "bg-brand-sky text-brand-cream"
+                      : "text-brand-ink/65 hover:bg-brand-sky/10 hover:text-brand-ink",
                   )}
                 >
                   {length}
@@ -314,12 +322,12 @@ export default function Today() {
           <Meter
             value={progress}
             className="h-1.5 max-w-[220px] flex-1 bg-brand-panel"
-            barClassName="bg-chrome-8"
+            barClassName="bg-brand-sky"
             label="Questions answered today"
           />
         </div>
         <p className="flex items-center gap-1.5 text-[0.76rem] font-medium text-brand-ink/75">
-          <Flame className="size-3.5 text-brand-pink-deep" aria-hidden />
+          <Flame className="size-3.5 text-brand-peach" aria-hidden />
           {study?.streak ?? 0} day{(study?.streak ?? 0) === 1 ? "" : "s"} streak
         </p>
         {study?.goalReason && (
@@ -415,7 +423,7 @@ export default function Today() {
                     className="flex items-center gap-3 border-b border-border px-5 py-3 last:border-b-0 hover:bg-brand-panel"
                   >
                     <Layers3
-                      className="size-4 shrink-0 text-chrome-7"
+                      className="size-4 shrink-0 text-brand-sky"
                       aria-hidden
                     />
                     <span className="min-w-0 flex-1 truncate text-[0.85rem] font-medium text-brand-ink">

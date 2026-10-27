@@ -24,11 +24,11 @@ export function NextStep({
     <Link
       to={to}
       className={cn(
-        "mt-6 flex items-center gap-3 rounded-2xl border border-dashed border-border bg-card px-4 py-3 transition-colors hover:border-chrome-4 hover:bg-brand-panel",
+        "mt-6 flex items-center gap-3 rounded-2xl border border-dashed border-brand-sky/30 bg-brand-sky/5 px-4 py-3 transition-colors hover:border-brand-sky/50 hover:bg-brand-sky/10",
         className,
       )}
     >
-      <span className="shrink-0 text-[0.64rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+      <span className="shrink-0 text-[0.64rem] font-bold uppercase tracking-[0.12em] text-brand-sky">
         Next
       </span>
       <span className="min-w-0 flex-1">
@@ -41,7 +41,7 @@ export function NextStep({
           </span>
         )}
       </span>
-      <ArrowRight className="size-4 shrink-0 text-brand-ink/40" aria-hidden />
+      <ArrowRight className="size-4 shrink-0 text-brand-sky" aria-hidden />
     </Link>
   );
 }

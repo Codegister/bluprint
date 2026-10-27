@@ -14,6 +14,7 @@ import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { displayName, initialFor } from "@/lib/format";
+import { subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { motion, useScroll } from "framer-motion";
@@ -30,10 +31,10 @@ import { toast } from "sonner";
 
 /**
  * The sidebar is a page of the same notebook as the rest of the app. Each
- * destination gets one of the pastel highlighters when it is active, while
- * the icon tile stays ink so the rail keeps a single strong vertical rhythm.
- * `tile` is the icon chip; `soft` is the quiet version used when the row is
- * not active.
+ * destination owns a colour: the icon is tinted in its hue, the active row
+ * gets a wash of it, and the marker bar uses it, so the rail reads as four
+ * coloured places rather than four grey ones. `tile` is the active icon chip;
+ * `soft` is the quiet version used when the row is not active.
  */
 const navItems = [
   {
@@ -41,33 +42,37 @@ const navItems = [
     to: "/tutor",
     label: "Home",
     icon: Sparkles,
-    active: "bg-gizmo-sky text-brand-ink ring-1 ring-chrome-8/30",
-    tile: "bg-brand-ink text-gizmo-sky",
-    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
+    accent: "bg-brand-sky",
+    active: "bg-brand-sky/15 text-brand-ink ring-1 ring-brand-sky/25",
+    tile: "bg-brand-sky/20 text-brand-sky",
+    soft: "bg-brand-sky/10 text-brand-sky",
   },
   {
     to: "/courses",
     label: "Courses",
     icon: GraduationCap,
-    active: "bg-gizmo-lilac text-brand-ink ring-1 ring-chrome-8/30",
-    tile: "bg-brand-ink text-gizmo-lilac",
-    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
+    accent: "bg-brand-violet",
+    active: "bg-brand-violet/15 text-brand-ink ring-1 ring-brand-violet/25",
+    tile: "bg-brand-violet/20 text-brand-violet",
+    soft: "bg-brand-violet/10 text-brand-violet",
   },
   {
     to: "/today",
     label: "Today",
     icon: Target,
-    active: "bg-gizmo-mint text-brand-ink ring-1 ring-chrome-8/30",
-    tile: "bg-brand-ink text-gizmo-mint",
-    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
+    accent: "bg-brand-mint",
+    active: "bg-brand-mint/15 text-brand-ink ring-1 ring-brand-mint/25",
+    tile: "bg-brand-mint/20 text-brand-mint",
+    soft: "bg-brand-mint/10 text-brand-mint",
   },
   {
     to: "/timetable",
     label: "Timetable",
     icon: CalendarDays,
-    active: "bg-gizmo-peach text-brand-ink ring-1 ring-chrome-8/30",
-    tile: "bg-brand-ink text-gizmo-peach",
-    soft: "bg-brand-panel text-brand-ink ring-1 ring-border/70",
+    accent: "bg-brand-peach",
+    active: "bg-brand-peach/15 text-brand-ink ring-1 ring-brand-peach/25",
+    tile: "bg-brand-peach/20 text-brand-peach",
+    soft: "bg-brand-peach/10 text-brand-peach",
   },
 ] as const;
 
@@ -75,12 +80,15 @@ function DeckRow({
   to,
   title,
   due,
+  accent,
   active,
   onNavigate,
 }: {
   to: string;
   title: string;
   due: number;
+  /** The set's subject colour, so the deck list has the same language. */
+  accent: string;
   active: boolean;
   onNavigate?: () => void;
 }) {
@@ -91,13 +99,20 @@ function DeckRow({
       className={cn(
         "flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-[0.92rem] transition-colors",
         active
-          ? "bg-gizmo-lime font-semibold text-brand-ink ring-1 ring-chrome-8/25"
+          ? "bg-brand-sky/15 font-semibold text-brand-ink ring-1 ring-brand-sky/25"
           : "text-brand-ink hover:bg-white/80",
       )}
     >
-      <span className="truncate">{title}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <span
+          aria-hidden
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: accent }}
+        />
+        <span className="truncate">{title}</span>
+      </span>
       {due > 0 && (
-        <span className="shrink-0 rounded-full bg-brand-ink px-2 py-0.5 text-[0.65rem] font-semibold text-brand-cream">
+        <span className="shrink-0 rounded-full bg-brand-peach/20 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-peach">
           {due} due
         </span>
       )}
@@ -166,7 +181,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               {active && (
                 <span
                   aria-hidden
-                  className="nav-active-bar absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-current"
+                  className={cn(
+                    "nav-active-bar absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full",
+                    item.accent,
+                  )}
                 />
               )}
               <span
@@ -216,6 +234,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               to={`/sets/${deck._id}`}
               title={deck.title}
               due={deck.dueCount}
+              accent={subjectMeta(deck.course ?? "").color}
               active={location.pathname.startsWith(`/sets/${deck._id}`)}
               onNavigate={onNavigate}
             />
@@ -225,7 +244,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="relative border-t border-border px-4 py-4">
         <div className="flex items-center gap-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-chrome-8 bg-brand-ink text-[0.85rem] font-bold text-white">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full border border-brand-violet/30 bg-brand-violet/15 text-[0.85rem] font-bold text-brand-violet">
             {initialFor(user?.name, user?.email)}
           </span>
           <div className="min-w-0 flex-1">
@@ -264,7 +283,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* The paper wash, then the ink that moves through it, behind every
           signed-in screen. */}
       <ChromeBackdrop intensity={0.55} />
-      <PageInk intensity={0.8} />
+      <PageInk intensity={1.15} />
       <motion.div
         aria-hidden
         className="chrome-progress fixed inset-x-0 top-0 z-40 h-[2px] origin-left"
@@ -284,7 +303,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => setMobileOpen(true)}
             className="grid size-9 place-items-center rounded-full bg-white text-brand-ink ring-1 ring-border transition-colors hover:bg-brand-panel"
           >
-            <Menu className="size-5" />
+            <Menu className="size-5 text-brand-sky" />
           </button>
         </div>
       </header>

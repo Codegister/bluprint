@@ -16,6 +16,7 @@ import { EASE, Meter, TypingDots, enter } from "@/components/motion/Motion";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { displayName, percent } from "@/lib/format";
+import { subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -422,20 +423,23 @@ export default function TutorPage() {
               <div className="flex items-center gap-3">
                 <h2
                   id="continue-heading"
-                  className="font-display text-[1.1rem] font-bold text-brand-ink"
+                  className="flex items-center gap-2 font-display text-[1.1rem] font-bold text-brand-ink"
                 >
+                  <Play className="size-4 text-brand-mint" aria-hidden />
                   Continue
                 </h2>
                 <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
               </div>
               <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-                {continueSets.map((set) => (
+                {continueSets.map((set) => {
+                  const accent = subjectMeta(set.course ?? "").color;
+                  return (
                   <Link
                     key={set._id}
                     to={`/sets/${set._id}`}
-                    className="group flex items-center gap-3.5 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-chrome-4 hover:bg-brand-panel"
+                    className="group flex items-center gap-3.5 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-brand-sky/40 hover:bg-brand-sky/5"
                   >
-                    <DeckGlyph className="size-10 shrink-0" />
+                    <DeckGlyph className="size-10 shrink-0" color={accent} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
                         <span className="truncate font-display text-[0.95rem] font-bold text-brand-ink">
@@ -448,16 +452,20 @@ export default function TutorPage() {
                       <Meter
                         value={set.readiness}
                         className="mt-2 h-1.5 bg-brand-panel"
-                        barClassName="bg-brand-ink/60"
+                        barStyle={{ backgroundColor: accent }}
                         label={`${set.title} readiness`}
                       />
-                      <span className="mt-1.5 flex items-center gap-1 text-[0.74rem] font-semibold text-brand-ink/70">
+                      <span
+                        className="mt-1.5 flex items-center gap-1 text-[0.74rem] font-semibold"
+                        style={{ color: accent }}
+                      >
                         <Play className="size-3" aria-hidden />
                         Continue studying
                       </span>
                     </span>
                   </Link>
-                ))}
+                  );
+                })}
               </div>
             </section>
           )}
@@ -469,8 +477,9 @@ export default function TutorPage() {
             <div className="flex flex-wrap items-center gap-3">
               <h2
                 id="home-courses-heading"
-                className="font-display text-[1.1rem] font-bold text-brand-ink"
+                className="flex items-center gap-2 font-display text-[1.1rem] font-bold text-brand-ink"
               >
+                <GraduationCap className="size-4 text-brand-violet" aria-hidden />
                 Courses
               </h2>
               <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
@@ -500,12 +509,22 @@ export default function TutorPage() {
                     course.completedCount,
                     Math.max(1, course.topicCount),
                   );
+                  const meta = subjectMeta(course.subject);
+                  const CourseIcon = meta.icon;
                   return (
                     <div
                       key={course._id}
                       className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-3"
                     >
-                      <GraduationCap className="size-4 shrink-0 text-chrome-7" aria-hidden />
+                      <span
+                        className={cn(
+                          "grid size-7 shrink-0 place-items-center rounded-lg",
+                          meta.tint,
+                        )}
+                        style={{ color: meta.color }}
+                      >
+                        <CourseIcon className="size-3.5" aria-hidden />
+                      </span>
                       <div className="min-w-0 flex-1">
                         <Link
                           to={`/courses/${course._id}`}
@@ -555,7 +574,8 @@ export default function TutorPage() {
           {...enter(0.04, 10)}
         >
           <div className="min-w-0">
-            <p className="font-display text-[0.98rem] font-bold text-brand-ink">
+            <p className="flex items-center gap-1.5 font-display text-[0.98rem] font-bold text-brand-ink">
+              <Sparkles className="size-4 text-brand-violet" aria-hidden />
               AI tutor
             </p>
             <p className="truncate text-[0.74rem] text-muted-foreground">
@@ -659,7 +679,7 @@ export default function TutorPage() {
                       "max-w-[86%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-[0.9rem] leading-relaxed",
                       message.role === "user"
                         ? "rounded-br-md bg-[#191B27] text-white"
-                        : "rounded-bl-md bg-brand-panel text-brand-ink/85",
+                        : "rounded-bl-md border border-brand-sky/15 bg-brand-sky/10 text-brand-ink/90",
                     )}
                   >
                     {message.content}

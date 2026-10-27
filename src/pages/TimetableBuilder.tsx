@@ -462,10 +462,10 @@ export default function TimetableBuilder() {
                     className={cn(
                       "grid size-5 shrink-0 place-items-center rounded-full text-[0.6rem] font-bold transition-colors",
                       done
-                        ? "bg-[#E4F6F2] text-[#0A655C]"
+                        ? "bg-brand-mint/20 text-brand-mint"
                         : active
-                          ? "bg-[#191B27] text-white"
-                          : "bg-[#EDE9DF] text-brand-ink/45",
+                          ? "bg-brand-sky text-brand-cream"
+                          : "bg-brand-sky/10 text-brand-sky/70",
                     )}
                   >
                     {done ? <Check className="size-3" aria-hidden /> : value}
@@ -496,7 +496,7 @@ export default function TimetableBuilder() {
           <motion.div
             animate={{ width: `${(step / STEPS.length) * 100}%` }}
             transition={{ duration: 0.45, ease: EASE }}
-            className="h-full rounded-full bg-chrome-6"
+            className="h-full rounded-full bg-brand-sky"
           />
         </div>
       </nav>

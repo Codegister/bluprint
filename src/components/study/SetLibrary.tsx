@@ -10,7 +10,7 @@ import { subjectMeta } from "@/lib/subjects";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { motion } from "framer-motion";
-import { ArrowRight, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowRight, ChevronRight, Layers3, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 
@@ -148,8 +148,9 @@ export function SetLibrary({ onCreate }: { onCreate: () => void }) {
       >
         <h2
           id="sets-heading"
-          className="font-display text-[1.15rem] font-bold text-brand-ink"
+          className="flex items-center gap-2 font-display text-[1.15rem] font-bold text-brand-ink"
         >
+          <Layers3 className="size-4 text-brand-sky" aria-hidden />
           Your study sets
         </h2>
         <span className="text-[0.74rem] font-semibold tabular-nums text-muted-foreground">

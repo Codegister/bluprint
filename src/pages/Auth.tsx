@@ -102,7 +102,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       {/* The paper wash, then the ink moving through it. The aside carries a
           heavier plate of its own. */}
       <ChromeBackdrop intensity={0.8} />
-      <PageInk intensity={0.75} />
+      <PageInk intensity={1.05} />
       {/* Context panel */}
       <aside className="chrome-rail relative hidden flex-col justify-between overflow-hidden border-r border-border p-10 lg:flex xl:p-14">
         <motion.div className="relative flex items-center justify-between gap-3" {...enter(0.05)}>

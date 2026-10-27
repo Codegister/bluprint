@@ -418,7 +418,7 @@ function StudyActions({
       count: set.cardCount,
       note: `${mastery}% known · spaced review`,
       icon: Layers3,
-      tint: "bg-brand-panel text-chrome-7",
+      tint: "bg-brand-sky/15 text-brand-sky",
     },
     {
       value: "quiz",
@@ -451,9 +451,9 @@ function StudyActions({
           key={item.label}
           to={item.to}
           className={cn(
-            "group flex items-center gap-3 rounded-2xl border bg-white p-4 transition-colors hover:border-chrome-4 hover:bg-[#FBF9FF]",
+            "group flex items-center gap-3 rounded-2xl border bg-white p-4 transition-colors hover:border-brand-sky/40 hover:bg-brand-sky/5",
             isRecommended
-              ? "border-brand-ink/35 ring-1 ring-brand-ink/10"
+              ? "border-brand-sky/40 ring-1 ring-brand-sky/20"
               : "border-border",
           )}
         >
@@ -469,7 +469,7 @@ function StudyActions({
                 {item.count}
               </span>
               {isRecommended && (
-                <span className="rounded-full bg-brand-ink px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-[0.06em] text-white">
+                <span className="rounded-full bg-brand-sky px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-[0.06em] text-brand-cream">
                   Start here
                 </span>
               )}
@@ -478,7 +478,7 @@ function StudyActions({
               {item.note}
             </span>
           </span>
-          <ArrowRight className="size-4 shrink-0 text-brand-ink/30 transition-transform group-hover:translate-x-0.5" />
+          <ArrowRight className="size-4 shrink-0 text-brand-sky transition-transform group-hover:translate-x-0.5" />
         </Link>
         );
       })}
@@ -683,8 +683,8 @@ export default function StudySet() {
                   aria-current={active ? "page" : undefined}
                   className={
                     active
-                      ? "shrink-0 rounded-full bg-brand-ink px-3 py-1.5 text-[0.78rem] font-semibold text-white"
-                      : "shrink-0 rounded-full px-3 py-1.5 text-[0.78rem] font-semibold text-brand-ink/60 transition-colors hover:bg-brand-panel hover:text-brand-ink"
+                      ? "shrink-0 rounded-full bg-brand-sky px-3 py-1.5 text-[0.78rem] font-semibold text-brand-cream"
+                      : "shrink-0 rounded-full px-3 py-1.5 text-[0.78rem] font-semibold text-brand-ink/60 transition-colors hover:bg-brand-sky/10 hover:text-brand-ink"
                   }
                 >
                   {label}
@@ -742,29 +742,39 @@ export default function StudySet() {
                 {
                   label: "Ready for the exam",
                   value: `${details.readiness.score}%`,
+                  tone: "border-l-brand-mint text-brand-mint",
                 },
-                { label: "Cards due", value: String(details.dueCount) },
+                {
+                  label: "Cards due",
+                  value: String(details.dueCount),
+                  tone: "border-l-brand-peach text-brand-peach",
+                },
                 {
                   label: "Last quiz",
                   value: set.lastQuizTotal
                     ? `${set.lastQuizScore}/${set.lastQuizTotal}`
                     : "Not yet",
+                  tone: "border-l-brand-sky text-brand-sky",
                 },
                 {
                   label: "Exam date",
                   value: details.pace
                     ? `${details.pace.daysLeft} day${details.pace.daysLeft === 1 ? "" : "s"}`
                     : "Not set",
+                  tone: "border-l-brand-violet text-brand-violet",
                 },
               ].map((stat) => (
                 <div
                   key={stat.label}
-                  className="rounded-2xl border border-border bg-card px-3.5 py-2.5"
+                  className={cn(
+                    "rounded-2xl border border-l-2 border-border bg-card px-3.5 py-2.5",
+                    stat.tone,
+                  )}
                 >
                   <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     {stat.label}
                   </dt>
-                  <dd className="mt-0.5 font-display text-[1.15rem] font-bold tabular-nums text-brand-ink">
+                  <dd className="mt-0.5 font-display text-[1.15rem] font-bold tabular-nums">
                     {stat.value}
                   </dd>
                 </div>

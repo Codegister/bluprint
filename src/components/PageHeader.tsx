@@ -35,7 +35,12 @@ export function PageHeader({
       {...enter(0.04, 10)}
     >
       <div className="min-w-0 flex-1">
-        {eyebrow && <p className="mono-label text-chrome-7">{eyebrow}</p>}
+        {eyebrow && (
+          <p className="mono-label flex items-center gap-1.5 text-brand-sky">
+            <span aria-hidden className="size-1.5 rounded-full bg-brand-sky" />
+            {eyebrow}
+          </p>
+        )}
         <h1 className="mt-1 font-display text-[1.65rem] font-extrabold leading-tight tracking-[-0.035em] text-brand-ink sm:text-[2rem]">
           {title}
         </h1>

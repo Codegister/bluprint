@@ -673,8 +673,8 @@ export default function Course() {
                     className={cn(
                       SECTION_LINK_CLASS,
                       active
-                        ? "border-brand-ink bg-brand-ink text-brand-cream"
-                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
+                        ? "border-brand-sky bg-brand-sky text-brand-cream"
+                        : "border-border bg-white text-brand-ink/70 hover:border-brand-sky/30 hover:bg-brand-sky/10",
                     )}
                   >
                     {item.label}

@@ -1485,7 +1485,9 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                 aria-label={`Answer effort. Current: ${efforts[effortIndex]}. Click to change.`}
                 className="group flex items-center gap-1 rounded-full px-2 py-1 text-foreground/50 transition-all duration-200 hover:bg-accent/60 hover:text-foreground outline-none cursor-default"
               >
-                <DynamicBarsIcon level={efforts[effortIndex]} />
+                <span className="text-brand-mint">
+                  <DynamicBarsIcon level={efforts[effortIndex]} />
+                </span>
                 <span className="text-xs font-semibold select-none transition-colors">
                   <MorphingText text={efforts[effortIndex]} />
                 </span>

@@ -70,6 +70,7 @@ export function GettingStarted({
     {
       title: "Set up your courses",
       body: "Pick your subjects so every topic has a pathway.",
+      tone: "border-brand-violet/30 bg-brand-violet/15 text-brand-violet",
       done: courses.length > 0,
       action: courses.length > 0 ? (
         <Link to="/courses" className="font-semibold text-brand-ink underline-offset-2 hover:underline">
@@ -84,6 +85,7 @@ export function GettingStarted({
     {
       title: "Build a study set",
       body: "Use a course topic, or add photos and notes; Bluprint writes the cards.",
+      tone: "border-brand-sky/30 bg-brand-sky/15 text-brand-sky",
       done: sets.length > 0,
       action: (
         <button
@@ -98,6 +100,7 @@ export function GettingStarted({
     {
       title: "Explore the tutor",
       body: "Ask about a course, a set or a card you keep missing.",
+      tone: "border-brand-mint/30 bg-brand-mint/15 text-brand-mint",
       done: tutorUsed,
       action: (
         <button
@@ -112,6 +115,7 @@ export function GettingStarted({
     {
       title: "Plan your week",
       body: "Turn your topics into a timetable that ends at your exam.",
+      tone: "border-brand-peach/30 bg-brand-peach/15 text-brand-peach",
       done: plan !== null,
       action: (
         <Link
@@ -153,7 +157,7 @@ export function GettingStarted({
       <Meter
         value={(done / steps.length) * 100}
         className="mt-3 h-1.5 max-w-[240px] bg-brand-panel"
-        barClassName="bg-brand-ink/70"
+        barClassName="bg-brand-sky"
         label="Getting started progress"
       />
 
@@ -168,11 +172,10 @@ export function GettingStarted({
             )}
           >
             <span
-              className={
-                step.done
-                  ? "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-gizmo-mint text-brand-ink"
-                  : "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border border-border text-brand-ink/35"
-              }
+              className={cn(
+                "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border",
+                step.tone,
+              )}
               aria-hidden
             >
               {step.done ? (

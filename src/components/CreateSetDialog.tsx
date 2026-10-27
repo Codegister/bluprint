@@ -16,7 +16,14 @@ import { compressImage, extractVideoFrames } from "@/lib/media";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { GraduationCap, Loader2, X } from "lucide-react";
+import {
+  FileText,
+  GraduationCap,
+  Image as ImageIcon,
+  Loader2,
+  Video,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -373,20 +380,44 @@ export function CreateSetDialog({
           >
             <TabsList className="rise-stagger grid h-auto w-full grid-cols-4 gap-1 rounded-full bg-brand-panel p-1">
               {[
-                { value: "course", label: "Course" },
-                { value: "photos", label: "Photos" },
-                { value: "video", label: "Video" },
-                { value: "text", label: "Paste" },
-              ].map((tab) => (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  disabled={isLoading}
-                  className="h-9 gap-2 rounded-full px-1 text-[0.8rem] font-semibold text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm sm:text-sm"
-                >
-                {tab.label}
-                </TabsTrigger>
-              ))}
+                {
+                  value: "course",
+                  label: "Course",
+                  icon: GraduationCap,
+                  tone: "text-brand-violet",
+                },
+                {
+                  value: "photos",
+                  label: "Photos",
+                  icon: ImageIcon,
+                  tone: "text-brand-sky",
+                },
+                {
+                  value: "video",
+                  label: "Video",
+                  icon: Video,
+                  tone: "text-brand-peach",
+                },
+                {
+                  value: "text",
+                  label: "Paste",
+                  icon: FileText,
+                  tone: "text-brand-mint",
+                },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    disabled={isLoading}
+                    className="h-9 gap-1 rounded-full px-1 text-[0.8rem] font-semibold text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm sm:gap-1.5 sm:text-sm"
+                  >
+                    <Icon className={cn("size-3.5 shrink-0", tab.tone)} aria-hidden />
+                    {tab.label}
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
 
             <TabsContent value="course" className="mt-0">

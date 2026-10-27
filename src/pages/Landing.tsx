@@ -325,7 +325,7 @@ export default function Landing() {
         {/* Ink dropped into water: pigment plumes drift across the hero behind
             the copy and the preview card. Decorative, so it is silent to
             screen readers and pauses itself when it leaves the viewport. */}
-        <InkInWater intensity={1} />
+        <InkInWater intensity={1.2} />
         <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:px-8 lg:pb-20">
           <div>
             <motion.div className="flex flex-wrap gap-2" {...enter(0.04)}>

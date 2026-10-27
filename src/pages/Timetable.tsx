@@ -154,15 +154,15 @@ function DayChip({
       className={cn(
         "group flex min-w-[86px] flex-1 flex-col items-start gap-1 rounded-2xl border px-3 py-2.5 text-left transition-colors",
         selected
-          ? "border-[#191B27] bg-[#191B27] text-white"
-          : "border-border bg-white text-brand-ink hover:border-chrome-4 hover:bg-brand-panel",
+          ? "border-brand-sky bg-brand-sky text-brand-cream"
+          : "border-border bg-white text-brand-ink hover:border-brand-sky/30 hover:bg-brand-sky/10",
       )}
     >
       <span className="flex w-full items-center justify-between gap-1">
         <span
           className={cn(
             "text-[0.62rem] font-semibold uppercase tracking-[0.08em]",
-            selected ? "text-white/60" : "text-muted-foreground",
+            selected ? "text-brand-cream/70" : "text-muted-foreground",
           )}
         >
           {weekday}
@@ -171,7 +171,7 @@ function DayChip({
           <span
             className={cn(
               "size-1.5 rounded-full",
-              selected ? "bg-white" : "bg-chrome-6",
+              selected ? "bg-brand-cream" : "bg-chrome-6",
             )}
             aria-label="Today"
           />
@@ -184,7 +184,7 @@ function DayChip({
         className={cn(
           "truncate text-[0.6rem] font-medium",
           selected
-            ? "text-white/70"
+            ? "text-brand-cream/70"
             : isExam
               ? "text-[#B23A55]"
               : isRest
@@ -350,7 +350,7 @@ function BlockedRow({ period }: { period: Blocked }) {
         <span className="block">{formatTime24(period.endMinutes)}</span>
       </span>
       <span className="flex min-w-0 flex-1 items-center gap-2">
-        <Ban className="size-3.5 shrink-0 text-muted-foreground" />
+        <Ban className="size-3.5 shrink-0 text-brand-peach" />
         <span className="truncate text-[0.78rem] font-medium text-brand-ink/70">
           {period.label?.trim() || "Blocked out"}
         </span>
@@ -989,7 +989,7 @@ export default function Timetable() {
           >
             <div className="flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 font-display text-[0.98rem] font-bold text-brand-ink">
-                <Ban className="size-3.5 text-muted-foreground" />
+                <Ban className="size-3.5 text-brand-peach" />
                 Blocked time
               </h2>
               <Button
@@ -1050,7 +1050,7 @@ export default function Timetable() {
             {...reveal(0.22)}
           >
             <h2 className="flex items-center gap-2 font-display text-[0.98rem] font-bold text-brand-ink">
-              <Clock3 className="size-3.5 text-muted-foreground" />
+              <Clock3 className="size-3.5 text-brand-sky" />
               This plan
             </h2>
             <dl className="mt-3 space-y-2 text-[0.76rem]">

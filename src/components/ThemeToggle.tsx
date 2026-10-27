@@ -34,9 +34,9 @@ export function ThemeToggle({
       >
         <span className="grid size-7 shrink-0 place-items-center rounded-[0.6rem] bg-brand-panel text-brand-ink ring-1 ring-border/70 transition-colors group-hover:bg-card">
           {dark ? (
-            <Moon className="size-[15px]" aria-hidden />
+            <Moon className="size-[15px] text-brand-violet" aria-hidden />
           ) : (
-            <Sun className="size-[15px]" aria-hidden />
+            <Sun className="size-[15px] text-brand-peach" aria-hidden />
           )}
         </span>
         {dark ? "Dark mode" : "Light mode"}
@@ -60,9 +60,9 @@ export function ThemeToggle({
     >
       {/* Icon-only buttons show the mode a click will switch to. */}
       {dark ? (
-        <Sun className="size-[17px]" aria-hidden />
+        <Sun className="size-[17px] text-brand-peach" aria-hidden />
       ) : (
-        <Moon className="size-[17px]" aria-hidden />
+        <Moon className="size-[17px] text-brand-violet" aria-hidden />
       )}
     </button>
   );
