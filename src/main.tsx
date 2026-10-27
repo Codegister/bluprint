@@ -32,7 +32,6 @@ installResizeObserverGuard();
 // Lazy load route components for better code splitting
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
-const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const Today = lazy(() => import("./pages/Today.tsx"));
 const CourseSetup = lazy(() => import("./pages/CourseSetup.tsx"));
 const CoursesPage = lazy(() => import("./pages/Courses.tsx"));
@@ -145,20 +144,30 @@ const convex = new ConvexReactClient(CONVEX_URL);
 const BASE_PATH = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
 
 /**
- * The root is the dashboard for anyone signed in, so opening the app lands
- * directly on the saved library. Signed-out visitors still get the landing
- * page, which is the only place the product is introduced.
+ * The root is the AI tutor for anyone signed in — the same screen as the
+ * sidebar's Dashboard tab — so opening the app lands on the tutor, the course
+ * list, the saved sets and the streak. Signed-out visitors still get the
+ * landing page, which is the only place the product is introduced.
  */
 function HomeRoute() {
   const { isLoading, isAuthenticated } = useAuth();
   if (isLoading) return <RouteLoading />;
-  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <Landing />;
+  return isAuthenticated ? <Navigate to="/tutor" replace /> : <Landing />;
+}
+
+/**
+ * The old dashboard route now points at the tutor home. The search string is
+ * carried over so `?new=1` still opens the upload dialog.
+ */
+function DashboardRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/tutor${search}`} replace />;
 }
 
 function RouteSyncer() {
   const location = useLocation();
 
-  // A new screen starts at the top. Hash links (e.g. /dashboard#courses) keep
+  // A new screen starts at the top. Hash links (e.g. /tutor#courses) keep
   // their smooth in-page scroll, so they are left alone.
   useLayoutEffect(() => {
     if (location.hash) return;
@@ -231,22 +240,12 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/" element={<HomeRoute />} />
               <Route
                 path="/auth"
-                element={<AuthPage redirectAfterAuth="/dashboard" />}
+                element={<AuthPage redirectAfterAuth="/tutor" />}
               />
-              <Route
-                path="/dashboard"
-                element={
-                  <RequireAuth
-                    title="Sign in to see your study sets"
-                    description="Your sets, progress and quiz scores live in your account."
-                  >
-                    <Dashboard />
-                  </RequireAuth>
-                }
-              />
-              {/* The old action hub now lives on the dashboard itself. This
-                  redirect keeps any saved link from dead-ending. */}
-              <Route path="/actions" element={<Navigate to="/dashboard" replace />} />
+              {/* The old dashboard screen is now the tutor home. Both legacy
+                  links keep working rather than dead-ending. */}
+              <Route path="/dashboard" element={<DashboardRedirect />} />
+              <Route path="/actions" element={<Navigate to="/tutor" replace />} />
               <Route
                 path="/today"
                 element={

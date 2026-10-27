@@ -38,7 +38,7 @@ const SPRINT_LENGTHS = [5, 10, 15, 25] as const;
 function FirstRunOptions() {
   const options = [
     {
-      to: "/dashboard?new=1",
+      to: "/tutor?new=1",
       icon: Camera,
       title: "Add notes from your phone",
       body: "Photograph up to eight pages, pick a short video, or paste text. Bluprint reads it and writes the whole set.",
@@ -52,11 +52,11 @@ function FirstRunOptions() {
       action: "Choose courses",
     },
     {
-      to: "/dashboard",
+      to: "/tutor",
       icon: LayoutGrid,
-      title: "Your dashboard",
-      body: "Ask the tutor, pick a course, open a saved set or start a quick sprint — all on one screen.",
-      action: "Open dashboard",
+      title: "Your AI tutor",
+      body: "Ask the tutor about a course, open a saved set and keep your streak going — all on one screen.",
+      action: "Open the tutor",
     },
   ] as const;
 
@@ -85,7 +85,7 @@ function FirstRunOptions() {
                 asChild
                 className="h-11 rounded-full px-5 text-sm font-semibold"
               >
-                <Link to="/dashboard?new=1">
+                <Link to="/tutor?new=1">
                   <Camera className="size-4" aria-hidden />
                   Add your notes
                   <ArrowRight className="size-4" aria-hidden />
@@ -246,7 +246,7 @@ export default function Today() {
     if (sets.length === 0) {
       toast.error("There is nothing to sprint through yet", {
         description: "Add some notes and Bluprint will build the cards first.",
-        action: { label: "Add notes", onClick: () => navigate("/dashboard?new=1") },
+        action: { label: "Add notes", onClick: () => navigate("/tutor?new=1") },
       });
       return;
     }
@@ -267,7 +267,7 @@ export default function Today() {
               navigate(
                 buildingSets.length > 0 && sets?.[0]
                   ? `/sets/${sets[0]._id}`
-                  : "/dashboard?new=1",
+                  : "/tutor?new=1",
               ),
           },
         },
@@ -314,10 +314,10 @@ export default function Today() {
             <p className="mt-2 max-w-lg text-[0.9rem] leading-relaxed text-brand-ink/65">
               Your tutor, courses and sets are on the{" "}
               <Link
-                to="/dashboard"
+                to="/tutor"
                 className="font-semibold underline underline-offset-2"
               >
-                dashboard
+                tutor home
               </Link>
               . This page is the short answer to “what now?”.
             </p>
@@ -489,7 +489,7 @@ export default function Today() {
                     to={
                       buildingSets.length > 0 && sets?.[0]
                         ? `/sets/${sets[0]._id}`
-                        : "/dashboard?new=1"
+                        : "/tutor?new=1"
                     }
                   >
                     {buildingSets.length > 0 ? "Open your sets" : "Add notes"}

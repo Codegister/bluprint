@@ -58,7 +58,7 @@ function MissingCard() {
         asChild
         className="mt-5 h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
       >
-        <Link to="/dashboard">Back to my sets</Link>
+        <Link to="/tutor">Back to my sets</Link>
       </Button>
     </div>
   );
@@ -529,7 +529,7 @@ export default function StudySet() {
         ["exam-style questions", set.targetExamCount, set.examCount],
       ] as Array<[string, number | undefined, number]>
     ).filter(([, asked, built]) => asked !== undefined && asked > built);
-    const backTo = set.courseId ? `/courses/${set.courseId}` : "/dashboard";
+    const backTo = set.courseId ? `/courses/${set.courseId}` : "/tutor";
     const backLabel = set.courseId ? "Back to course" : "Back to my sets";
     const isMode = activeSection !== "summary";
 

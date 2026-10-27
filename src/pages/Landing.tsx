@@ -259,7 +259,7 @@ function OutputCard({
 
 export default function Landing() {
   const { isAuthenticated } = useAuth();
-  const startHref = isAuthenticated ? "/dashboard" : "/auth?returnTo=%2Fdashboard";
+  const startHref = isAuthenticated ? "/tutor" : "/auth?returnTo=%2Ftutor";
   const startLabel = isAuthenticated ? "Open dashboard" : "Start a study set";
   // Reading progress drawn along the bottom edge of the sticky header.
   const { scrollYProgress } = useScroll();
@@ -297,7 +297,7 @@ export default function Landing() {
             <ThemeToggle />
             {!isAuthenticated && (
               <Link
-                to="/auth?returnTo=/dashboard"
+                to="/auth?returnTo=/tutor"
                 className="hidden rounded-full px-4 py-2 text-[0.88rem] font-semibold text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink sm:inline-flex"
               >
                 Sign in
@@ -606,7 +606,7 @@ export default function Landing() {
               className="max-w-lg text-[1.9rem] font-extrabold leading-tight tracking-[-0.03em] sm:text-[2.4rem]"
               {...reveal()}
             >
-              Your saved sets, waiting on the dashboard.
+              Your saved sets, waiting on your tutor home.
             </motion.h2>
             <motion.p
               className="mt-3 max-w-lg text-[1rem] leading-relaxed text-muted-foreground"
@@ -618,7 +618,7 @@ export default function Landing() {
 
             <dl className="rise-stagger mt-7 border-t border-border">
               {[
-                ["Sets", "The newest set sits at the top of the dashboard."],
+                ["Sets", "The newest set sits at the top of your home screen."],
                 ["Progress", "Known cards, last quiz score and the date you studied."],
                 ["Courses", "Pick your exam board and subjects for a topic-by-topic pathway."],
                 ["Tutor", "Ask about any course you have set up."],
@@ -773,7 +773,7 @@ export default function Landing() {
                   variant="outline"
                   className="h-12 bg-card px-6 text-[0.95rem] text-brand-ink"
                 >
-                  <Link to="/auth?returnTo=/dashboard">I already have an account</Link>
+                  <Link to="/auth?returnTo=/tutor">I already have an account</Link>
                 </Button>
               </div>
             </div>

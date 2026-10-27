@@ -1,6 +1,9 @@
 import { AppShell } from "@/components/AppShell";
+import { CreateSetDialog } from "@/components/CreateSetDialog";
 import { SkeletonChat } from "@/components/Skeletons";
 import { Mascot } from "@/components/Mascot";
+import { SetLibrary } from "@/components/study/SetLibrary";
+import { StreakBanner } from "@/components/study/StreakBanner";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -12,10 +15,10 @@ import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
+  ArrowRight,
   Check,
   ChevronRight,
   GraduationCap,
-  Layers3,
   Sparkles,
 } from "lucide-react";
 
@@ -58,21 +61,22 @@ function SourceList({ sources }: { sources: Array<{ title: string; url: string }
 }
 
 /**
- * Full-screen AI tutor.
+ * Full-screen AI tutor, and the signed-in home.
  *
  * It reads the scope from the URL: `/tutor?set=<id>`, `/tutor?course=<id>`, or
- * `/tutor?course=<id>&unit=<unit title>`. With no scope it opens on a chooser,
- * so the tutor always starts from one clear decision and the chat itself takes
- * the whole page.
+ * `/tutor?course=<id>&unit=<unit title>`. With no scope it is the home screen:
+ * a course list to start from, the saved study-set library, and the streak
+ * banner. Choosing a scope turns the same route into the chat, so there is one
+ * tutor rather than a launcher plus a second conversation screen.
  */
 export default function TutorPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const setId = searchParams.get("set");
   const courseId = searchParams.get("course");
   const unitTitle = searchParams.get("unit");
-  // The dashboard's tutor panel hands its question over in the URL. It is put
+  // A set or course panel hands its question over in the URL. It is put
   // into the composer once a scope is chosen, so the student can edit it before
   // sending rather than firing a question at the wrong material.
   const questionParam = (searchParams.get("q") ?? "").trim();
@@ -98,7 +102,16 @@ export default function TutorPage() {
   // lists load up front so the choice is ready immediately.
   const scoped = validSetId || validCourseId;
   const myCourses = useQuery(api.courses.listMine);
-  const mySets = useQuery(api.studySets.listMine);
+
+  // "New study set" is a URL flag so the sidebar's + and the empty state can
+  // open it from anywhere, exactly as the old dashboard did.
+  const newSetOpen = searchParams.get("new") === "1";
+  const setNewSetOpen = (open: boolean) => {
+    const next = new URLSearchParams(searchParams);
+    if (open) next.set("new", "1");
+    else next.delete("new");
+    setSearchParams(next, { replace: true });
+  };
 
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
@@ -197,20 +210,20 @@ export default function TutorPage() {
 
   const empty = messages !== undefined && messages.length === 0 && !sending;
 
-  // No scope chosen yet: this screen has one job, choosing what to ask about.
+  // No scope chosen yet: this is the home screen. It asks what to work on,
+  // opens the saved library, and keeps the streak in view.
   if (!scoped) {
-    // Keep the dashboard's question attached to whichever scope is chosen next.
+    // A question from a set or course panel stays attached to whichever scope
+    // is chosen next.
     const qSuffix = questionParam ? `&q=${encodeURIComponent(questionParam)}` : "";
     const readyCourses = (myCourses ?? []).filter(
       (course) => course.status === "ready",
     );
-    const readySets = (mySets ?? []).filter((set) => set.status === "ready");
     const loadingCourses = myCourses === undefined;
-    const loadingSets = mySets === undefined;
 
     return (
       <AppShell>
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto w-full max-w-4xl">
           <motion.header
             className="chrome-plate rounded-[1.6rem] px-5 py-6 text-center"
             {...enter(0.04, 12)}
@@ -227,6 +240,22 @@ export default function TutorPage() {
               to ask about one piece of material. Answers stay grounded in what
               you choose.
             </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+              <Button
+                type="button"
+                onClick={() => setNewSetOpen(true)}
+                className="h-10 rounded-full px-5 text-[0.84rem] font-semibold"
+              >
+                New study set
+                <ArrowRight className="size-4" aria-hidden />
+              </Button>
+              <Link
+                to="/courses/new"
+                className="text-[0.8rem] font-semibold text-brand-ink/70 underline-offset-4 hover:text-brand-ink hover:underline"
+              >
+                or add a course
+              </Link>
+            </div>
             {questionParam && (
               <p className="mx-auto mt-3 max-w-md rounded-2xl border border-border bg-brand-panel px-3 py-2 text-[0.78rem] leading-relaxed text-brand-ink/75">
                 “{questionParam}” is ready — choose a course or set below and it
@@ -234,6 +263,13 @@ export default function TutorPage() {
               </p>
             )}
           </motion.header>
+
+          {aiStatus && !aiStatus.configured && (
+            <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.8rem] font-medium text-[#96650A]">
+              AI is not connected on this deployment. Add NVIDIA_API_KEY to use
+              the tutor and build new study sets. Saved material still works.
+            </p>
+          )}
 
           <section className="mt-6">
             <div className="flex items-center gap-2.5">
@@ -286,69 +322,14 @@ export default function TutorPage() {
             </div>
           </section>
 
-          <section className="mt-6">
-            <div className="flex items-center gap-2.5">
-              <span className="grid size-7 place-items-center rounded-lg bg-[#FFF1DE] text-[#B4720E]">
-                <Layers3 className="size-4" aria-hidden />
-              </span>
-              <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-                Ask about a study set
-              </h2>
-              <span className="hidden h-px flex-1 border-t border-dashed border-border sm:block" />
-            </div>
+          <SetLibrary onCreate={() => setNewSetOpen(true)} />
 
-            <div className="mt-3 overflow-hidden rounded-3xl border border-border bg-white">
-              {loadingSets ? (
-                <p className="px-5 py-5 text-[0.82rem] text-muted-foreground">
-                  Loading your study sets…
-                </p>
-              ) : readySets.length === 0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-5">
-                  <p className="text-[0.82rem] text-muted-foreground">
-                    No ready study sets yet. Upload notes to make one.
-                  </p>
-                  <Button asChild variant="outline" className="h-8 rounded-full border-border bg-white px-3 text-[0.76rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel">
-                    <Link to="/dashboard?new=1">New study set</Link>
-                  </Button>
-                </div>
-              ) : (
-                readySets.slice(0, 6).map((set) => (
-                  <Link
-                    key={set._id}
-                    to={`/tutor?set=${set._id}${qSuffix}`}
-                    className="group flex items-center gap-3 border-b border-border/70 px-4 py-4 last:border-b-0 transition-colors hover:bg-brand-panel sm:px-5"
-                  >
-                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#FFF1DE] text-[#B4720E]">
-                      <Layers3 className="size-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-display text-[0.95rem] font-bold text-brand-ink">
-                        {set.title}
-                      </span>
-                      <span className="mt-0.5 block truncate text-[0.74rem] text-muted-foreground">
-                        {set.cardCount} cards · {set.quizCount} quiz ·{" "}
-                        {set.examCount} exam
-                      </span>
-                    </span>
-                    <ChevronRight className="size-4 shrink-0 text-brand-ink/30 transition-transform group-hover:translate-x-0.5" />
-                  </Link>
-                ))
-              )}
-            </div>
-
-            {readySets.length > 6 && (
-              <p className="mt-2 text-[0.74rem] text-muted-foreground">
-                Showing your six most recent sets.{" "}
-                <Link
-                  to="/dashboard"
-                  className="font-semibold text-chrome-7 underline-offset-2 hover:underline"
-                >
-                  See all sets
-                </Link>
-              </p>
-            )}
-          </section>
+          <div className="mt-4">
+            <StreakBanner />
+          </div>
         </div>
+
+        <CreateSetDialog open={newSetOpen} onOpenChange={setNewSetOpen} />
       </AppShell>
     );
   }

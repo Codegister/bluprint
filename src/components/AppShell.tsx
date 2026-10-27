@@ -37,9 +37,9 @@ import { toast } from "sonner";
  */
 const navItems = [
   {
-    // The AI tutor is the first thing on the dashboard, so the two share one
-    // destination. There is no second "dashboard" tab to tell apart from it.
-    to: "/dashboard",
+    // The home screen is the AI tutor: course list, saved sets and streak. It
+    // keeps the Dashboard label and there is no second tab to tell apart.
+    to: "/tutor",
     label: "Dashboard",
     icon: Sparkles,
     active: "bg-gizmo-sky text-brand-ink ring-1 ring-chrome-8/30",
@@ -189,14 +189,13 @@ function Sidebar({
 
       <nav className="relative flex flex-col gap-1 px-3">
         {navItems.map((item) => {
-          // Everything reached from the dashboard — a saved set, the full
-          // tutor — keeps the dashboard tab lit, because that is the screen the
-          // student started from.
+          // Everything reached from the tutor home — a saved set, a scoped
+          // conversation — keeps the Dashboard tab lit, because that is the
+          // screen the student started from.
           const active =
-            item.to === "/dashboard"
-              ? location.pathname === "/dashboard" ||
-                location.pathname.startsWith("/sets/") ||
-                location.pathname.startsWith("/tutor")
+            item.to === "/tutor"
+              ? location.pathname.startsWith("/tutor") ||
+                location.pathname.startsWith("/sets/")
               : location.pathname.startsWith(item.to);
           const Icon = item.icon;
           return (
@@ -249,7 +248,7 @@ function Sidebar({
           Your sets
         </p>
         <Link
-          to="/dashboard?new=1"
+          to="/tutor?new=1"
           onClick={onNavigate}
           aria-label="New study set"
           className="grid size-6 place-items-center rounded-full border border-chrome-8 bg-brand-ink text-[0.9rem] font-bold text-white shadow-[0_2px_0_rgba(10,15,21,0.4)] transition-transform hover:-rotate-6"
@@ -332,7 +331,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <header className="chrome-bar sticky top-0 z-30 flex items-center justify-between border-b px-4 py-3 lg:hidden">
-        <Brand to="/dashboard" />
+        <Brand to="/tutor" />
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <button

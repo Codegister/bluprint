@@ -11,7 +11,7 @@ so on — and marked question by question. Courses can be turned into a colour-c
 revision timetable built from topics, from past papers only, or from a mix of the two.
 
 Version 1 is built for a small group of friends. Each person signs in separately and gets
-their own dashboard containing only their courses and study sets.
+their own tutor home containing only their courses and study sets.
 
 ## Stack
 
@@ -182,7 +182,7 @@ earned. Four practice papers per course is the cap; remove one to build another.
    Eduqas, Cambridge International, IB, SQA, College Board AP), and a level (GCSE, A-Level,
    IB, AP, Undergraduate). Board and level steer the summary's exam focus, the phrasing of
    exam questions, and how written answers are marked. Course, board, and level are
-   filterable and searchable on the dashboard. Tagging is not part of the upload because a
+   filterable and searchable on the tutor home. Tagging is not part of the upload because a
    student pasting notes usually wants the set, not a form.
 5. **Review on a full FSRS schedule** — every card carries an FSRS memory state
    (stability and difficulty). Each review is rated **Again / Hard / Good / Easy**; a
@@ -196,12 +196,13 @@ earned. Four practice papers per course is the cap; remove one to build another.
    goal is **derived from your nearest exam date**: Bluprint divides the material still to
    cover by the days left (clamped to 10–80 questions), so it tightens as a real paper
    approaches. Without an exam date it falls back to 20.
-7. **Today, but second** — the **dashboard** is the home screen: tutor panel, course rail,
-   saved sets, a **streak banner**, then a **quick sprint** card with today's goal, streak
-   and one-tap sprints of 5, 10, 15 or 25 cards. The banner repeats the streak in one line
-   and lists your ready courses, each linking straight to that course's practice papers. The full **Today** screen (sidebar) holds the cross-set due queue
-   and the sets with weak spots. A sprint takes the most useful cards first: everything
-   overdue, then the shakiest memories.
+7. **Home is the tutor** — signing in opens the **AI tutor** screen: a course list to ask
+   about, your saved **study sets**, and a **streak banner** below them. The banner shows
+   today's questions, the streak and the next daily tier, and lists your ready courses,
+   each linking straight to that course's practice papers. The full **Today** screen
+   (sidebar) holds the cross-set due queue, the quick sprint picker and the sets with weak
+   spots. A sprint takes the most useful cards first: everything overdue, then the
+   shakiest memories.
 8. **Mastery is exam readiness** — the percentage on each set is no longer "cards known".
    It weighs **card recall** (from FSRS) at 60%, **last quiz accuracy** at 25% and **written
    exam marks** at 15%, dropping any part the set does not have. It also projects readiness
@@ -253,19 +254,20 @@ earned. Four practice papers per course is the cap; remove one to build another.
     written from its specification in that subject's real question format (RS 3/4/5/12,
     English essays, maths calculations, and so on) and marked question by question against
     their own mark schemes. Progress and marks per paper are kept alongside the course.
-15. **Start on the dashboard** — signing in, and opening `/`, both land on `/dashboard`.
-    The dashboard is ordered as one study loop: the **AI tutor panel** at the top (its
-    question is carried into the tutor screen), the **course selection** next, the saved
-    **study sets** below it, a **streak banner** with practice links for each course, and a
-    **quick sprint** picker at the bottom. Choosing a course scopes the tutor question and
-    filters the set list; **Add course** opens the pathway.
+15. **Start on the tutor** — signing in, and opening `/`, both land on `/tutor`.
+    That screen *is* the tutor, and it is the one labelled **Dashboard** in the sidebar: a
+    hero that asks what you are working on, the **course list** to start a conversation
+    about, the saved **study sets** library (searchable, with due counts and readiness),
+    and a **streak banner** with practice links for each course underneath. **New study
+    set** opens the upload dialog from the hero; **Add course** is beside it. `/dashboard`
+    still redirects here, carrying `?new=1` with it, so old links keep working.
 
-The sidebar has one home tab, **Dashboard**, which is where the tutor lives; there is no
-separate dashboard item to confuse it with. **My courses** is a separate screen with topic
-progress, material counts and **Add courses**. The saved **Revision timetable** and
-**Today** queue have their own sidebar destinations. The full tutor opens from the
-dashboard panel, and its first screen asks which course or set to discuss when it is
-opened without a scope.
+The sidebar has one home tab, **Dashboard**, and it is the AI tutor — there is no second
+tutor or dashboard item. **My courses** is a separate screen with topic progress, material
+counts and **Add courses**. The saved **Revision timetable** and **Today** queue have their
+own sidebar destinations. Opening a set or a course and choosing **Ask the tutor** scopes
+the same screen to that material, and a question handed over from a set or course arrives
+waiting in the prompt.
 
 Each course opens on its **Pathway**, and **Past papers**, **Topic papers** and **Study
 sets** are separate screens rather than tabs sharing one page. A study set opens on its
@@ -777,8 +779,8 @@ src/
   pages/
     Landing.tsx          public landing page
     Auth.tsx             email-code sign-in and guest sign-in
-    Dashboard.tsx        tutor panel, course rail, saved study sets, streak banner,
-                         quick sprint
+    Tutor.tsx            the home screen: AI tutor, course list, saved study sets
+                         library, streak banner, new-set upload dialog
     Today.tsx            due queue, quick sprint picker, streak and daily goal
     Courses.tsx          course library with pathway progress
     CourseSetup.tsx      level, board, tier, and multi-subject course picker
@@ -800,8 +802,8 @@ src/
     ChromeBackdrop.tsx   steel sheet, dot grid, moving specular ribbons and reflections
     InkInWater.tsx       canvas ink-in-water plumes for the landing hero
     study/               flashcard review (dictation + FSRS), quiz runner, exam practice,
-                         practice papers, readiness/pacing panel, weak spots, dashboard
-                         tutor / course / sprint panels, tutor chat, set settings
+                         practice papers, readiness/pacing panel, weak spots, set
+                         library, streak banner, tutor chat, set settings
   convex/
     schema.ts            users, courses, studySets, cards, quiz, exam, practice papers,
                          tutor, study days, plans

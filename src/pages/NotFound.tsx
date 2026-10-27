@@ -29,11 +29,11 @@ export default function NotFound() {
             This page went missing
           </h1>
           <p className="mx-auto mt-2 max-w-sm text-[0.9rem] leading-relaxed text-muted-foreground">
-            The link may have moved, or it never existed. Head back to your dashboard
+            The link may have moved, or it never existed. Head back to your tutor
             and pick up where you left off.
           </p>
           <Button asChild className="mt-6 h-11 px-6">
-            <Link to="/dashboard">Back to home</Link>
+            <Link to="/tutor">Back to home</Link>
           </Button>
         </motion.div>
       </main>

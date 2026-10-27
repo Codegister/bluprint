@@ -146,7 +146,7 @@ export function SetSettingsDialog({
       toast.success("Set deleted.");
       setConfirmingDelete(false);
       onOpenChange(false);
-      navigate("/dashboard");
+      navigate("/tutor");
     } catch (deleteError) {
       toast.error(readableError(deleteError, "Could not delete that set."));
     } finally {

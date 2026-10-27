@@ -32,7 +32,7 @@ function MissingCard() {
         asChild
         className="mt-5 h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
       >
-        <Link to="/dashboard">Back to home</Link>
+        <Link to="/tutor">Back to home</Link>
       </Button>
     </div>
   );
@@ -92,7 +92,7 @@ export default function PastPaper() {
       <>
         <div className="chrome-plate flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4">
           <Link
-            to={course ? `/courses/${course._id}/papers` : "/dashboard"}
+            to={course ? `/courses/${course._id}/papers` : "/tutor"}
             className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
           >
             {course ? `Back to ${course.subject} papers` : "Back to my sets"}
