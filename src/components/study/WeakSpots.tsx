@@ -59,7 +59,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
           <div>
             <p className="mono-label text-[#C93C49]">Second pass</p>
             <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
-              Needs work in “{data.setTitle}”
+              Weak spots in “{data.setTitle}”
             </h2>
             <p className="mt-1 max-w-md text-[0.85rem] leading-relaxed text-muted-foreground">
               Cards you rated Again, or that have never reached a stable memory,

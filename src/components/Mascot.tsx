@@ -1,10 +1,18 @@
 import { cn } from "@/lib/utils";
 
 /**
+ * The mascot is decoration, not the subject. Every empty state used to open
+ * with a large Blu, which made the same character the focal point of half the
+ * screens. It is now drawn at this fraction of the size each screen asks for, so
+ * call sites keep their relative scale and none of them ends up dominated by it.
+ */
+const DISPLAY_SCALE = 0.7;
+
+/**
  * Bluprint's study buddy, "Blu": a brushed-steel blob with a graphite outline,
  * drawn in SVG so it stays crisp at any size and needs no image assets. The
- * cool highlights and hard edge are what make it read as machined metal at
- * 90px in a chat as well as 200px on a card. Purely decorative.
+ * cool highlights and hard edge are what make it read as machined metal in a
+ * chat as well as on a card. Purely decorative.
  */
 export function Mascot({
   size = 200,
@@ -15,10 +23,11 @@ export function Mascot({
   className?: string;
   float?: boolean;
 }) {
+  const rendered = Math.round(size * DISPLAY_SCALE);
   return (
     <svg
-      width={size}
-      height={size}
+      width={rendered}
+      height={rendered}
       viewBox="0 0 240 240"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

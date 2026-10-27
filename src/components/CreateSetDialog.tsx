@@ -18,7 +18,7 @@ import {
   BUILD_MIN,
 } from "@/convex/lib/buildDefaults";
 import { Input } from "@/components/ui/input";
-import { titleFromSource } from "@/convex/lib/titles";
+import { shortTitle, titleFromSource } from "@/convex/lib/titles";
 import { compressImage, extractVideoFrames } from "@/lib/media";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -45,8 +45,14 @@ function fileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/**
+ * A name from an uploaded file, cut on a word boundary. The extension goes,
+ * underscores become spaces, and a long file name is shortened with the same
+ * whole-word rule the generator uses, so a title is never cut mid-word.
+ */
 function titleFromFile(name: string): string {
-  return name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").slice(0, 60).trim();
+  const base = name.replace(/\.[^.]+$/, "");
+  return shortTitle(base.replace(/[_-]+/g, " "), 8, 60) || base.trim().slice(0, 60);
 }
 
 const dropzoneClass =

@@ -304,7 +304,7 @@ export default function Today() {
       >
         <p className="mt-2 text-[0.78rem] font-medium text-brand-ink/65">
           {totalDue} due · {weakSets.length} set
-          {weakSets.length === 1 ? "" : "s"} need work · about{" "}
+          {weakSets.length === 1 ? " needs work" : "s need work"} · about{" "}
           {Math.max(2, Math.round(activeLength / 2))} min
         </p>
       </PageHeader>
@@ -442,7 +442,7 @@ export default function Today() {
         <div className="gizmo-card overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-3.5">
             <h2 className="font-display text-[1rem] font-bold text-brand-ink">
-              Needs work
+              Weak spots
             </h2>
             <TriangleAlert className="size-4 text-[#8f1d26]" aria-hidden />
           </div>

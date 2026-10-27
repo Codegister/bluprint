@@ -30,20 +30,23 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 /**
- * The sidebar is a page of the same notebook as the rest of the app. Each
- * destination owns a colour: the icon is tinted in its hue, the active row
- * gets a wash of it, and the marker bar uses it, so the rail reads as four
- * coloured places rather than four grey ones. `tile` is the active icon chip;
- * `soft` is the quiet version used when the row is not active.
+ * The sidebar is a page of the same notebook as the rest of the app. The icon
+ * of each destination keeps its own hue, which is what makes the rail scannable
+ * at a glance. The *selected* row is drawn in the app's single action accent,
+ * so there is one colour that means "you are here" rather than four: the peach
+ * highlight the Timetable row used to carry read as a different state from the
+ * other three. `tile` is the active icon chip; `soft` is the quiet version used
+ * when the row is not active.
  */
+const ACTIVE_ROW = "bg-brand-sky/15 text-brand-ink ring-1 ring-brand-sky/25";
+
 const navItems = [
   {
     // Home is the tutor: ask a question, continue a set, open the library.
     to: "/tutor",
     label: "Home",
     icon: Sparkles,
-    accent: "bg-brand-sky",
-    active: "bg-brand-sky/15 text-brand-ink ring-1 ring-brand-sky/25",
+    active: ACTIVE_ROW,
     tile: "bg-brand-sky/20 text-brand-sky",
     soft: "bg-brand-sky/10 text-brand-sky",
   },
@@ -51,8 +54,7 @@ const navItems = [
     to: "/courses",
     label: "Courses",
     icon: GraduationCap,
-    accent: "bg-brand-violet",
-    active: "bg-brand-violet/15 text-brand-ink ring-1 ring-brand-violet/25",
+    active: ACTIVE_ROW,
     tile: "bg-brand-violet/20 text-brand-violet",
     soft: "bg-brand-violet/10 text-brand-violet",
   },
@@ -60,8 +62,7 @@ const navItems = [
     to: "/today",
     label: "Today",
     icon: Target,
-    accent: "bg-brand-mint",
-    active: "bg-brand-mint/15 text-brand-ink ring-1 ring-brand-mint/25",
+    active: ACTIVE_ROW,
     tile: "bg-brand-mint/20 text-brand-mint",
     soft: "bg-brand-mint/10 text-brand-mint",
   },
@@ -69,10 +70,9 @@ const navItems = [
     to: "/timetable",
     label: "Timetable",
     icon: CalendarDays,
-    accent: "bg-brand-peach",
-    active: "bg-brand-peach/15 text-brand-ink ring-1 ring-brand-peach/25",
-    tile: "bg-brand-peach/20 text-brand-peach",
-    soft: "bg-brand-peach/10 text-brand-peach",
+    active: ACTIVE_ROW,
+    tile: "bg-brand-teal/20 text-brand-teal",
+    soft: "bg-brand-teal/10 text-brand-teal",
   },
 ] as const;
 
@@ -112,7 +112,9 @@ function DeckRow({
         <span className="truncate">{title}</span>
       </span>
       {due > 0 && (
-        <span className="shrink-0 rounded-full bg-brand-peach/20 px-2 py-0.5 text-[0.65rem] font-semibold text-brand-peach">
+        // The same amber every other "due" count uses, so a due badge looks the
+        // same in the rail as it does on Today and in the library.
+        <span className="shrink-0 rounded-full bg-[#f4e3bd] px-2 py-0.5 text-[0.65rem] font-semibold text-[#5b3d00]">
           {due} due
         </span>
       )}
@@ -181,10 +183,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               {active && (
                 <span
                   aria-hidden
-                  className={cn(
-                    "nav-active-bar absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full",
-                    item.accent,
-                  )}
+                  className="nav-active-bar absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand-sky"
                 />
               )}
               <span

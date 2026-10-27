@@ -2,9 +2,9 @@ import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 
 /**
- * Bluprint wordmark. The mark is a lime sticker tile with an ink page-and-spark
- * glyph, and the wordmark is heavy, tight and lowercase. It is the app's one
- * permanent hit of highlighter colour, so it always reads as the same brand.
+ * Bluprint wordmark. The mark is a sticker tile with an ink page-and-spark
+ * glyph and the wordmark is heavy and tight. It is written "Bluprint" here
+ * exactly as it is written in prose everywhere else: one spelling, one brand.
  */
 export function Brand({
   className,
@@ -42,7 +42,7 @@ export function Brand({
       </span>
       {!markOnly && (
         <span className="font-display text-[1.5rem] font-extrabold leading-none tracking-[-0.045em] text-brand-ink">
-          bluprint
+          Bluprint
         </span>
       )}
     </Link>

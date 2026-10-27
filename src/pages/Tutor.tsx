@@ -408,26 +408,15 @@ export default function TutorPage() {
                   <p className="font-display text-[1.05rem] font-bold text-brand-ink">
                     The tutor needs something to read
                   </p>
+                  {/* No button here: "Add material" is the page's one primary
+                      action, two lines above, and the courses section below has
+                      its own. An empty state explains; it does not repeat. */}
                   <p className="mt-1 text-[0.85rem] leading-relaxed text-muted-foreground">
-                    Add a page of notes, or map a course, and the tutor can explain,
-                    quiz and mark answers from your own material.
+                    Use <span className="font-semibold text-brand-ink">Add material</span>{" "}
+                    to paste or upload a page of notes, or pick your subjects in{" "}
+                    Courses below. The tutor then explains, quizzes and marks
+                    answers from your own material.
                   </p>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => setNewSetOpen(true)}
-                    className="h-10 rounded-full px-4 text-[0.82rem] font-semibold"
-                  >
-                    Add material
-                  </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="h-10 rounded-full px-4 text-[0.82rem] font-semibold shadow-none"
-                  >
-                    <Link to="/courses/new">Choose courses</Link>
-                  </Button>
                 </div>
               </div>
             )}
@@ -506,8 +495,7 @@ export default function TutorPage() {
               </Link>
             </div>
 
-            {readyCourses.length === 0 ? (
-              <p className="mt-2 text-[0.82rem] leading-relaxed text-muted-foreground">
+            {readyCourses.length === 0 ? (                <p className="mt-2 text-[0.82rem] leading-relaxed text-muted-foreground">
                 Choose your subjects to get a topic-by-topic pathway and ask the
                 tutor about the whole specification.{" "}
                 <Link

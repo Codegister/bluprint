@@ -118,7 +118,9 @@ const SECTION_LABEL: Record<SetSection, string> = {
   cards: "Flashcards",
   quiz: "Quiz",
   exam: "Exam practice",
-  weak: "Needs work",
+  // Named for what it is: the cards and questions this set keeps losing marks
+  // on. "Needs work" read like a comment on the student.
+  weak: "Weak spots",
 };
 
 function MissingCard() {
@@ -743,7 +745,7 @@ export default function StudySet() {
                 ["quiz", "Quiz"],
                 ["exam", "Exam practice"],
                 ...(details.weakCardCount > 0 || details.weakQuizCount > 0
-                  ? [["weak", "Needs work"]]
+                  ? [["weak", SECTION_LABEL.weak]]
                   : []),
               ] as Array<[SetSection, string]>
             ).map(([value, label]) => {

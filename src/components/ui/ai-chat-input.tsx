@@ -332,11 +332,29 @@ function AttachmentGalleryModal({
     return () => cancelAnimationFrame(raf);
   }, [attachment]);
 
+  // The viewer is the only thing on screen while it is open, so the keyboard
+  // goes to its close button and comes back to whatever had focus before. The
+  // control is the single focusable element inside, which is also what keeps Tab
+  // from wandering into the composer behind the scrim.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus({ preventScroll: true });
+    return () => restoreRef.current?.focus?.({ preventScroll: true });
+  }, []);
+
   const handleClose = useCallback(() => setPhase("closing"), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") handleClose();
+      if (e.key === "Tab") {
+        // One control, so Tab and Shift+Tab both stay on it.
+        e.preventDefault();
+        closeRef.current?.focus({ preventScroll: true });
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -387,7 +405,9 @@ function AttachmentGalleryModal({
       </div>
 
       <button
+        ref={closeRef}
         type="button"
+        aria-label="Close image"
         onClick={handleClose}
         style={{ opacity: isOpen ? 1 : 0, transform: isOpen ? "scale(1)" : "scale(0.7)" }}
         className={cn(

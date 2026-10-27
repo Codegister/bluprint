@@ -204,7 +204,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <Input
                       id="email"
                       name="email"
-                      placeholder="you@university.edu"
+                      placeholder="you@school.uk"
                       type="email"
                       autoComplete="email"
                       className="h-12 rounded-2xl border-border bg-white pl-10 text-[0.95rem] text-brand-ink placeholder:text-muted-foreground/60 focus-visible:border-brand-pink/50 focus-visible:ring-brand-pink/20"

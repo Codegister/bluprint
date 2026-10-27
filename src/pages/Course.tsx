@@ -711,7 +711,8 @@ export default function Course() {
                   </p>
                 </div>
                 <span className="rounded-full bg-[#EAFBF0] px-3 py-1.5 text-[0.72rem] font-semibold text-[#128A4C]">
-                  {details.topicCount} topics · {pathway.units.length} units
+                  {details.topicCount} topic{details.topicCount === 1 ? "" : "s"} ·{" "}
+                  {pathway.units.length} unit{pathway.units.length === 1 ? "" : "s"}
                 </span>
               </div>
               <p className="mt-4 max-w-3xl text-[0.88rem] leading-relaxed text-brand-ink/75">

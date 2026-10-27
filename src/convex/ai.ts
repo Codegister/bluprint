@@ -2606,11 +2606,22 @@ function buildChecks(
     );
     const evidence = asText(row?.evidence, 400);
     const verifiable = quoteIsInAnswer(evidence, answer) ? evidence : "absent";
+    if (claimed > 0 && verifiable !== "absent") {
+      return { point, marks, awarded: claimed, evidence: verifiable };
+    }
+    // Uncredited. When the answer does refer to the bullet's idea, the sentence
+    // it was judged against is shown in place of the missing evidence, so the
+    // page never reports a point as absent without pointing at the answer text.
+    const nearest = bestSentenceFor(point, answer);
+    const refersToOne = nearest.length > 0 && contestedChecks(
+      [{ point, marks, awarded: 0, evidence: "absent" }],
+      answer,
+    ).length > 0;
     return {
       point,
       marks,
-      awarded: claimed > 0 && verifiable !== "absent" ? claimed : 0,
-      evidence: verifiable,
+      awarded: 0,
+      evidence: refersToOne ? nearest : "absent",
     };
   });
 }
@@ -2774,21 +2785,25 @@ async function markExamAnswer(
       : [`${exam.marks} marks: the answer states what the model answer states`];
 
   if (matchesModelAnswer(response, exam.modelAnswer)) {
+    const fallbackQuote = response.trim().slice(0, 300);
     const checklist = guide.map((point) => {
       const marks = bulletMarks(point);
       return {
         point,
         marks,
         awarded: marks,
-        evidence: bestSentenceFor(point, response),
+        // A bullet is always shown with the answer's own words. When no single
+        // sentence maps onto it, the opening of the answer stands in, so a
+        // credited mark is never displayed without its evidence.
+        evidence: bestSentenceFor(point, response) || fallbackQuote,
       };
     });
-    const awardedMarks = ledgerCeiling(checklist, exam.marks);
+    const awardedMarks = awardedFromChecks(checklist, exam.marks);
     return {
       awardedMarks,
       feedback:
         "This answer reproduces the model answer, the full-mark answer for this question.\n\n" +
-        checklistFeedback(checklist, awardedMarks, exam.marks),
+        checklistFeedback(checklist, awardedMarks, exam.marks, response),
       checklist,
     };
   }
@@ -2816,12 +2831,12 @@ async function markExamAnswer(
     );
   }
 
-  // The score is the count of matched marks mapped onto what the question is
-  // worth, so the same verdicts always produce the same mark.
-  const awardedMarks = ledgerCeiling(checks, exam.marks);
+  // The score is counted from the checklist, so the same verdicts always
+  // produce the same mark.
+  const awardedMarks = awardedFromChecks(checks, exam.marks);
   return {
     awardedMarks,
-    feedback: checklistFeedback(checks, awardedMarks, exam.marks),
+    feedback: checklistFeedback(checks, awardedMarks, exam.marks, response),
     checklist: checks,
   };
 }

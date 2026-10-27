@@ -10,6 +10,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { BUILD_DEFAULTS } from "@/convex/lib/buildDefaults";
 import { useAuth } from "@/hooks/use-auth";
 import {
   EASE,
@@ -237,7 +238,9 @@ function HeroArt({
       <HeroChip className="-left-8 top-28 hidden lg:block" delay={0.55}>
         <div className="flex items-center gap-2">
           <span className="pulse-ring size-2 rounded-full bg-brand-pink-deep text-brand-pink-deep" />
-          <p className="text-[0.72rem] font-semibold text-brand-ink">10 cards ready</p>
+          <p className="text-[0.72rem] font-semibold text-brand-ink">
+            {BUILD_DEFAULTS.cards} cards ready
+          </p>
         </div>
         <p className="mt-0.5 text-[0.66rem] text-muted-foreground">From one page of notes</p>
       </HeroChip>
@@ -372,10 +375,12 @@ export default function Landing() {
 
       <section className="relative overflow-hidden border-b border-border">
         {/* A steel band across the hero, layered on the page chrome so it reads
-            as a lit panel rather than a colour wash. */}
+            as a lit panel rather than a colour wash. One accent hue only: the
+            two-tone lime-to-lilac wash that used to sit here pulled the page
+            into greens and violets that belonged to no other screen. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-gizmo-lime/25 via-transparent to-gizmo-lilac/25"
+          className="pointer-events-none absolute inset-0 bg-brand-sky/[0.09]"
         />
         {/* Ink dropped into water: pigment plumes drift across the hero behind
             the copy and the preview card. Decorative, so it is silent to
@@ -405,8 +410,9 @@ export default function Landing() {
               {...enter(0.22)}
             >
               Upload notes, a photo of a textbook page or a short screen recording.
-              Bluprint writes a summary, ten flashcards, five quiz questions and three
-              exam-style questions you can answer for marks.
+              Bluprint writes a summary, {BUILD_DEFAULTS.cards} flashcards,{" "}
+              {BUILD_DEFAULTS.quiz} quiz questions and {BUILD_DEFAULTS.exam} exam-style
+              questions you can answer for marks.
             </motion.p>
 
             <motion.div
@@ -482,7 +488,7 @@ export default function Landing() {
               },
               {
                 title: "Bluprint builds the set",
-                copy: "A vision model reads the source. A text model writes a short summary, ten flashcards, five quiz questions with explanations, and three written exam questions with a marking guide. Every count is yours to change before the build starts.",
+                copy: `A vision model reads the source. A text model writes a short summary, ${BUILD_DEFAULTS.cards} flashcards, ${BUILD_DEFAULTS.quiz} quiz questions with explanations, and ${BUILD_DEFAULTS.exam} written exam questions with a marking guide. Every count is yours to change before the build starts.`,
               },
               {
                 title: "Practise and get marked",
@@ -706,9 +712,21 @@ export default function Landing() {
             </div>
             <div className="rise-stagger space-y-1.5">
               {[
-                { title: "Cell biology", color: "#1C1A14", meta: "10 cards, 5 quiz" },
-                { title: "Organic chemistry", color: "#8FAE18", meta: "10 cards, 5 quiz" },
-                { title: "Macroeconomics", color: "#7D5BD6", meta: "10 cards, 5 quiz" },
+                {
+                  title: "Cell biology",
+                  color: "#1C1A14",
+                  meta: `${BUILD_DEFAULTS.cards} cards, ${BUILD_DEFAULTS.quiz} quiz`,
+                },
+                {
+                  title: "Organic chemistry",
+                  color: "#8FAE18",
+                  meta: `${BUILD_DEFAULTS.cards} cards, ${BUILD_DEFAULTS.quiz} quiz`,
+                },
+                {
+                  title: "Macroeconomics",
+                  color: "#7D5BD6",
+                  meta: `${BUILD_DEFAULTS.cards} cards, ${BUILD_DEFAULTS.quiz} quiz`,
+                },
               ].map((deck) => (
                 <div
                   key={deck.title}
@@ -808,7 +826,7 @@ export default function Landing() {
         <Reveal className="chrome-hero relative overflow-hidden rounded-[2rem] px-6 py-9 sm:px-10 sm:py-11">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-gizmo-lime/30 via-transparent to-gizmo-lilac/25"
+            className="pointer-events-none absolute inset-0 bg-brand-sky/[0.07]"
           />
           <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
             <div>

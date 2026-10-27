@@ -69,7 +69,7 @@ function CourseRow({ course }: { course: CourseSummary }) {
               {course.completedCount}
               <span className="font-normal text-muted-foreground">
                 {" "}
-                / {course.topicCount} topics
+                / {course.topicCount} topic{course.topicCount === 1 ? "" : "s"}
               </span>
             </p>
             <Meter
@@ -174,20 +174,16 @@ export default function Courses() {
                 <p className="font-display text-[1rem] font-bold text-brand-ink">
                   No courses yet
                 </p>
+                {/* The header above already offers the action, so this panel
+                    explains the benefit and stops there. */}
                 <p className="mt-1 max-w-md text-[0.82rem] leading-relaxed text-muted-foreground">
                   Choose your qualification and subjects, and Bluprint maps each
-                  published specification into a revision pathway.
+                  published specification into a revision pathway. Use{" "}
+                  <span className="font-semibold text-brand-ink">
+                    {count > 0 ? "Add courses" : "Choose courses"}
+                  </span>{" "}
+                  above to start.
                 </p>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="mt-3 h-9 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-                >
-                  <Link to="/courses/new">
-                    Choose courses
-                    <ChevronRight className="size-3.5" />
-                  </Link>
-                </Button>
               </div>
             </div>
           ) : (

@@ -245,7 +245,7 @@ export function ReadinessPanel({
             )}
           >
             <TriangleAlert className="size-3.5" aria-hidden />
-            Needs work
+            Weak spots
             <span className="tabular-nums">
               {weakCardCount + weakQuizCount}
             </span>
