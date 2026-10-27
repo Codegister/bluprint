@@ -263,24 +263,32 @@ function SubjectRow({
         <span className="block truncate text-[0.86rem] font-semibold text-brand-ink">
           {name}
         </span>
-        {(detail || rsDetail) && (
-          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[0.68rem] text-muted-foreground">
-            {isDefault && (
-              <>
-                <Star
-                  className="size-2.5 shrink-0 text-chrome-6"
-                  fill="currentColor"
-                  aria-hidden
-                />
-                <span className="sr-only">Default board and tier:</span>
-              </>
-            )}
-            <span className="min-w-0 truncate">
-              {detail}
-              {rsDetail}
+        {/* The detail line is always present, even when empty, so selecting a
+            course fills it in without making the row taller than its neighbours. */}
+        <span className="mt-0.5 flex min-h-4 min-w-0 items-center gap-1 text-[0.68rem] text-muted-foreground">
+          {detail || rsDetail ? (
+            <>
+              {isDefault && (
+                <>
+                  <Star
+                    className="size-2.5 shrink-0 text-chrome-6"
+                    fill="currentColor"
+                    aria-hidden
+                  />
+                  <span className="sr-only">Default board and tier:</span>
+                </>
+              )}
+              <span className="min-w-0 truncate">
+                {detail}
+                {rsDetail}
+              </span>
+            </>
+          ) : (
+            <span aria-hidden className="min-w-0 truncate">
+              &nbsp;
             </span>
-          </span>
-        )}
+          )}
+        </span>
       </span>
       <span
         className={cn(
