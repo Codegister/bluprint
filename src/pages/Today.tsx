@@ -34,34 +34,67 @@ const SPRINT_LENGTHS = [5, 10, 15, 25] as const;
  * it is obvious what happens after the upload.
  */
 function FirstRunOptions() {
+  // "Choose courses first" only makes sense before courses exist. Once they do,
+  // the second action becomes the course route into a set instead of sending the
+  // student back to the picker they already finished.
+  const courses = useQuery(api.courses.listMine);
+  const readyCourses = (courses ?? []).filter(
+    (course) => course.status === "ready",
+  );
+  const hasCourses = (courses?.length ?? 0) > 0;
+
+  const secondaryAction = hasCourses
+    ? { to: "/courses", label: "See your courses" }
+    : { to: "/courses/new", label: "Choose courses first" };
+
+  const description =
+    courses === undefined
+      ? "Today fills up once Bluprint has material to build cards from. The fastest route is one page of notes; courses can come first if you prefer."
+      : readyCourses.length > 0
+        ? "Your courses are mapped, so a topic can become a set straight away. Add your own notes instead if the material is not part of a course."
+        : hasCourses
+          ? "Your courses are still mapping. Add a page of notes now, or check the course list in a moment."
+          : "Today fills up once Bluprint has material to build cards from. The fastest route is one page of notes; courses can come first if you prefer.";
+
   return (
     <AppShell>
       <PageHeader
         eyebrow="Today"
-        title="Nothing to revise yet"
-        description="Today fills up once Bluprint has material to build cards from. The fastest route is one page of notes; courses can come first if you prefer."
+        title={hasCourses ? "No study sets yet" : "Nothing to revise yet"}
+        description={description}
         actions={
           <>
             <Button
               asChild
               className="h-11 rounded-full px-5 text-sm font-semibold"
             >
+              {/* With courses mapped the dialog opens on its Course tab, so
+                  this is the one-tap route into a first set. */}
               <Link to="/tutor?new=1">
-                <Camera className="size-4" aria-hidden />
-                Add your notes
+                {readyCourses.length > 0 ? (
+                  <Layers3 className="size-4" aria-hidden />
+                ) : (
+                  <Camera className="size-4" aria-hidden />
+                )}
+                {readyCourses.length > 0 ? "Build a study set" : "Add your notes"}
                 <ArrowRight className="size-4" aria-hidden />
               </Link>
             </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="h-11 rounded-full px-5 text-sm font-semibold shadow-none"
-            >
-              <Link to="/courses/new">
-                <GraduationCap className="size-4" aria-hidden />
-                Choose courses first
-              </Link>
-            </Button>
+            {/* Wait for the course list before naming this action: showing
+                "Choose courses first" to a student who already has courses is
+                the bug this replaced. */}
+            {courses !== undefined && (
+              <Button
+                asChild
+                variant="outline"
+                className="h-11 rounded-full px-5 text-sm font-semibold shadow-none"
+              >
+                <Link to={secondaryAction.to}>
+                  <GraduationCap className="size-4" aria-hidden />
+                  {secondaryAction.label}
+                </Link>
+              </Button>
+            )}
           </>
         }
       />
@@ -76,7 +109,7 @@ function FirstRunOptions() {
             {
               step: "1",
               title: "Capture",
-              body: "Photos, a video, or pasted notes. Up to eight pages per set.",
+              body: "Photos, a video, pasted notes, or a topic from a course you have mapped.",
             },
             {
               step: "2",
