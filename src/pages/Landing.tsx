@@ -48,6 +48,10 @@ function HeroPreview({
   onGenerate: () => void;
 }) {
   const [revealed, setRevealed] = useState(false);
+  // A few words are not enough to build from. Rather than accepting the click
+  // and quietly dropping the text, the button says why it is waiting.
+  const trimmed = notes.trim().length;
+  const tooShort = trimmed > 0 && trimmed < 40;
 
   return (
     <div className="gizmo-card p-4 sm:p-6">
@@ -81,13 +85,16 @@ function HeroPreview({
         </label>
         <div className="mt-3 flex items-center justify-between gap-3">
           <span className="text-[0.78rem] font-medium text-muted-foreground">
-            {notes.trim().length >= 40
+            {trimmed >= 40
               ? "Ready to build"
-              : "Cell biology, page 42"}
+              : tooShort
+                ? "Add a sentence or two"
+                : "Cell biology, page 42"}
           </span>
           <button
             type="submit"
-            className="rounded-full border border-brand-ink/40 bg-gizmo-lime px-4 py-2 text-[0.82rem] font-semibold text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.16)] transition-transform hover:-translate-y-0.5"
+            disabled={tooShort}
+            className="rounded-full border border-brand-ink/40 bg-gizmo-lime px-4 py-2 text-[0.82rem] font-semibold text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.16)] transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
           >
             Generate
           </button>
@@ -266,7 +273,7 @@ function HeroArt({
         animate={{ opacity: 1 }}
         transition={{ delay: 1.2, duration: 0.6 }}
       >
-        <span className="text-[0.68rem] font-medium text-brand-ink/40">
+        <span className="text-[0.68rem] font-medium text-brand-ink/65">
           Built from your own notes
         </span>
         <motion.span
@@ -316,7 +323,18 @@ export default function Landing() {
   // the create dialog after sign-in, so nothing typed here is discarded.
   const startFromHero = () => {
     const notes = heroNotes.trim();
-    if (notes.length >= 40) savePendingNotes(notes);
+    // An empty box means "start from a photo": open the upload dialog instead
+    // of landing on the page and making the visitor find it.
+    if (notes.length === 0) {
+      navigate(
+        isAuthenticated ? "/tutor?new=1" : "/auth?returnTo=%2Ftutor%3Fnew%3D1",
+      );
+      return;
+    }
+    // Short pastes are blocked by the button itself, so nothing typed here is
+    // ever thrown away.
+    if (notes.length < 40) return;
+    savePendingNotes(notes);
     navigate(startHref);
   };
   // Reading progress drawn along the bottom edge of the sticky header.

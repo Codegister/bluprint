@@ -169,7 +169,9 @@ export default function Courses() {
             </div>
           ) : courseRows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 px-5 py-8 text-center sm:flex-row sm:text-left">
-              <Mascot size={92} float={false} className="shrink-0" />
+              {/* A small stamp, not the centre of the panel: the copy and the
+                  one action are what the student needs to read. */}
+              <Mascot size={64} float={false} className="shrink-0" />
               <div>
                 <p className="font-display text-[1rem] font-bold text-brand-ink">
                   No courses yet

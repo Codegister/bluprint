@@ -862,7 +862,7 @@ export default function Course() {
                               </button>
                               <ChevronDown
                                 className={cn(
-                                  "mt-1 size-4 shrink-0 text-brand-ink/40 transition-transform",
+                                  "mt-1 size-4 shrink-0 text-brand-ink/65 transition-transform",
                                   expanded && "rotate-180",
                                 )}
                                 aria-hidden
@@ -936,7 +936,7 @@ export default function Course() {
                                           className={cn(
                                             "text-[0.9rem] font-semibold",
                                             isDone
-                                              ? "text-brand-ink/50 line-through"
+                                              ? "text-brand-ink/65 line-through"
                                               : "text-brand-ink",
                                           )}
                                         >

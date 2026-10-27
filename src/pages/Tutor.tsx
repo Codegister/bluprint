@@ -3,7 +3,11 @@ import { CreateSetDialog } from "@/components/CreateSetDialog";
 import { GettingStarted, markTutorUsed } from "@/components/GettingStarted";
 import { NextStep } from "@/components/NextStep";
 import { PageHeader } from "@/components/PageHeader";
-import { SkeletonChat } from "@/components/Skeletons";
+import {
+  SkeletonChat,
+  SkeletonPageHeader,
+  SkeletonRows,
+} from "@/components/Skeletons";
 import { Mascot } from "@/components/Mascot";
 import { SetLibrary } from "@/components/study/SetLibrary";
 import { TutorChat, type TutorScope } from "@/components/study/TutorChat";
@@ -46,7 +50,7 @@ function SourceList({ sources }: { sources: Array<{ title: string; url: string }
     <ul className="mt-2 space-y-1">
       {sources.map((source, index) => (
         <li key={source.url} className="flex items-start gap-1.5 text-[0.74rem]">
-          <span className="mt-px shrink-0 rounded bg-white px-1 font-semibold text-brand-ink/45">
+          <span className="mt-px shrink-0 rounded bg-white px-1 font-semibold text-brand-ink/70">
             {index + 1}
           </span>
           <a
@@ -255,6 +259,25 @@ export default function TutorPage() {
   // No scope chosen yet: this is the home screen. It leads with the tutor, then
   // what to continue, then the library. One primary action: add material.
   if (!scoped) {
+    // Until the queries answer, the page would say "No cards due · 0 day
+    // streak" and tell a returning student the tutor has nothing to read.
+    // Draw the page's shape instead of a false empty state.
+    if (mySets === undefined || myCourses === undefined || study === undefined) {
+      return (
+        <AppShell>
+          <div className="mx-auto w-full max-w-4xl">
+            <SkeletonPageHeader />
+            <div className="mt-4 rounded-2xl border border-border bg-card p-4">
+              <SkeletonChat bubbles={2} />
+            </div>
+            <div className="mt-7">
+              <SkeletonRows rows={4} withAvatar />
+            </div>
+          </div>
+        </AppShell>
+      );
+    }
+
     const readyCourses = (myCourses ?? []).filter(
       (course) => course.status === "ready",
     );
@@ -403,7 +426,7 @@ export default function TutorPage() {
               />
             ) : (
               <div className="gizmo-card flex flex-col items-center gap-3 px-5 py-8 text-center">
-                <Mascot size={84} float={false} />
+                <Mascot size={64} float={false} />
                 <div className="max-w-sm">
                   <p className="font-display text-[1.05rem] font-bold text-brand-ink">
                     The tutor needs something to read
@@ -495,15 +518,12 @@ export default function TutorPage() {
               </Link>
             </div>
 
-            {readyCourses.length === 0 ? (                <p className="mt-2 text-[0.82rem] leading-relaxed text-muted-foreground">
+            {readyCourses.length === 0 ? (
+              <p className="mt-2 text-[0.82rem] leading-relaxed text-muted-foreground">
                 Choose your subjects to get a topic-by-topic pathway and ask the
-                tutor about the whole specification.{" "}
-                <Link
-                  to="/courses/new"
-                  className="font-semibold text-brand-ink underline-offset-2 hover:underline"
-                >
-                  Choose courses
-                </Link>
+                tutor about the whole specification. Use{" "}
+                <span className="font-semibold text-brand-ink">Add a course</span>{" "}
+                above to start.
               </p>
             ) : (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">

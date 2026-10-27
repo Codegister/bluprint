@@ -186,7 +186,7 @@ export function SetLibrary({ onCreate }: { onCreate: () => void }) {
           </div>
         ) : sets.length === 0 ? (
           <div className="flex flex-col items-center gap-3 px-5 py-7 text-center sm:flex-row sm:text-left">
-            <Mascot size={92} float={false} className="shrink-0" />
+            <Mascot size={64} float={false} className="shrink-0" />
             <div>
               <p className="font-display text-[1rem] font-bold text-brand-ink">
                 Your first set starts with a page of notes

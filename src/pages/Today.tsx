@@ -246,6 +246,26 @@ export default function Today() {
     sprintRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [sprintLength]);
 
+  // First paint: every number here comes from a query, so an unloaded page
+  // shows its own shape instead of "0/0 questions" and a 0-day streak.
+  if (sets === undefined || study === undefined) {
+    return (
+      <AppShell>
+        <PageHeader
+          eyebrow="Today"
+          title="Today"
+          description="Everything due today, in one place."
+        />
+        <section className="mt-4 rounded-[1.6rem] border border-border bg-card px-4 py-4">
+          <SkeletonRows rows={2} />
+        </section>
+        <section className="mt-6">
+          <SkeletonRows rows={3} withAvatar />
+        </section>
+      </AppShell>
+    );
+  }
+
   // A brand-new account gets the options screen rather than a page of empty
   // panels whose buttons cannot do anything.
   if (sets !== undefined && sets.length === 0) {

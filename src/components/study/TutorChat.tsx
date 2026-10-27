@@ -44,7 +44,7 @@ function SourceList({ sources }: { sources: Source[] }) {
     <ul className="mt-2 space-y-1">
       {sources.map((source, index) => (
         <li key={source.url} className="flex items-start gap-1.5 text-[0.74rem]">
-          <span className="mt-px shrink-0 rounded bg-white px-1 font-semibold text-brand-ink/45">
+          <span className="mt-px shrink-0 rounded bg-white px-1 font-semibold text-brand-ink/70">
             {index + 1}
           </span>
           <a

@@ -190,7 +190,7 @@ export function GettingStarted({
               <p
                 className={
                   step.done
-                    ? "text-[0.84rem] font-semibold text-brand-ink/50 line-through"
+                    ? "text-[0.84rem] font-semibold text-brand-ink/65 line-through"
                     : "text-[0.84rem] font-semibold text-brand-ink"
                 }
               >

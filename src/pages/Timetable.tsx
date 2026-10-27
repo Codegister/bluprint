@@ -188,7 +188,7 @@ function DayChip({
             : isExam
               ? "text-[#B23A55]"
               : isRest
-                ? "text-muted-foreground/60"
+                ? "text-muted-foreground"
                 : "text-muted-foreground",
         )}
       >

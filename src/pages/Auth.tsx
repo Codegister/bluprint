@@ -149,7 +149,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           </motion.p>
         </div>
 
-        <motion.p className="relative text-[0.8rem] text-brand-ink/50" {...enter(0.44)}>
+        <motion.p className="relative text-[0.8rem] text-brand-ink/65" {...enter(0.44)}>
           Your friends keep their own workspace.
         </motion.p>
       </aside>
