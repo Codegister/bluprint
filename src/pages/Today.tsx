@@ -1,8 +1,9 @@
 import { AppShell } from "@/components/AppShell";
-import { Mascot } from "@/components/Mascot";
 import { FlashcardReview } from "@/components/study/FlashcardReview";
+import { NextStep } from "@/components/NextStep";
+import { PageHeader } from "@/components/PageHeader";
 import { SkeletonRows } from "@/components/Skeletons";
-import { EASE, Meter, enter } from "@/components/motion/Motion";
+import { Meter, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
@@ -13,10 +14,8 @@ import {
   Flame,
   GraduationCap,
   Layers3,
-  LayoutGrid,
   Play,
   RotateCcw,
-  Target,
   TriangleAlert,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -27,134 +26,51 @@ import { toast } from "sonner";
 const SPRINT_LENGTHS = [5, 10, 15, 25] as const;
 
 /**
- * First-run options.
+ * Today, before there is anything to revise.
  *
- * A new account has no sets, so every control on Today would be a dead end.
- * Instead the screen becomes a short menu: the three ways to get material into
- * Bluprint, each a link to the screen that does it, followed by the pipeline in
- * one line so it is obvious what happens after the upload.
+ * A new account has no sets, so every queue on this screen would be empty. It
+ * keeps the same header as the working version and offers the two real ways
+ * in — notes now, or courses first — then explains the pipeline in one line so
+ * it is obvious what happens after the upload.
  */
 function FirstRunOptions() {
-  const options = [
-    {
-      to: "/tutor?new=1",
-      icon: Camera,
-      title: "Add notes from your phone",
-      body: "Photograph up to eight pages, pick a short video, or paste text. Bluprint reads it and writes the whole set.",
-      action: "Upload material",
-    },
-    {
-      to: "/courses/new",
-      icon: GraduationCap,
-      title: "Set up your courses",
-      body: "Choose your qualification, board and subjects, and every topic in the specification becomes a study set.",
-      action: "Choose courses",
-    },
-    {
-      to: "/tutor",
-      icon: LayoutGrid,
-      title: "Your AI tutor",
-      body: "Ask the tutor about a course, open a saved set and keep your streak going — all on one screen.",
-      action: "Open the tutor",
-    },
-  ] as const;
-
   return (
     <AppShell>
-      <motion.header
-        className="chrome-hero relative overflow-hidden rounded-[2rem] px-5 pb-6 pt-7 sm:px-7 sm:pb-7"
-        {...enter(0.04, 14)}
-      >
-        <span className="chrome-metal-sheen" aria-hidden />
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <span className="sticker">
-              <Target className="size-3" aria-hidden />
-              Today · first run
-            </span>
-            <h1 className="chrome-title mt-3 font-display text-[1.75rem] font-extrabold leading-[1.05] tracking-[-0.035em] sm:text-[2.2rem]">
-              Nothing to revise yet — add your first page of notes
-            </h1>
-            <p className="mt-2 max-w-lg text-[0.92rem] leading-relaxed text-brand-ink/65">
-              Today fills up with cards once Bluprint has material to build from.
-              Pick one of the options below; each one ends with a ready study set.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button
-                asChild
-                className="h-11 rounded-full px-5 text-sm font-semibold"
-              >
-                <Link to="/tutor?new=1">
-                  <Camera className="size-4" aria-hidden />
-                  Add your notes
-                  <ArrowRight className="size-4" aria-hidden />
-                </Link>
-              </Button>
-              <Link
-                to="/courses/new"
-                className="text-[0.82rem] font-semibold text-brand-ink underline-offset-4 hover:underline"
-              >
-                or choose your courses first
+      <PageHeader
+        eyebrow="Today"
+        title="Nothing to revise yet"
+        description="Today fills up once Bluprint has material to build cards from. The fastest route is one page of notes; courses can come first if you prefer."
+        actions={
+          <>
+            <Button
+              asChild
+              className="h-11 rounded-full px-5 text-sm font-semibold"
+            >
+              <Link to="/tutor?new=1">
+                <Camera className="size-4" aria-hidden />
+                Add your notes
+                <ArrowRight className="size-4" aria-hidden />
               </Link>
-            </div>
-          </div>
-          <motion.div
-            className="hidden shrink-0 sm:block"
-            initial={{ opacity: 0, scale: 0.9, rotate: -4 }}
-            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-            transition={{ duration: 0.8, ease: EASE, delay: 0.2 }}
-          >
-            <Mascot size={126} />
-          </motion.div>
-        </div>
-      </motion.header>
-
-      <section className="mt-6" aria-labelledby="first-run-options">
-        <h2
-          id="first-run-options"
-          className="font-display text-[1.15rem] font-bold text-brand-ink"
-        >
-          Choose where to start
-        </h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {options.map((option, index) => {
-            const Icon = option.icon;
-            return (
-              <motion.div key={option.title} {...enter(0.08 + index * 0.05)}>
-                <Link
-                  to={option.to}
-                  className="lift group flex h-full flex-col gap-3 rounded-3xl border border-border bg-card p-5 shadow-[0_2px_0_rgba(10,15,21,0.12)] hover:border-chrome-8"
-                >
-                  <span className="grid size-12 place-items-center rounded-2xl border border-chrome-8 bg-brand-ink text-gizmo-lime shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
-                    <Icon className="size-5" aria-hidden />
-                  </span>
-                  <div>
-                    <p className="font-display text-[1rem] font-bold leading-snug text-brand-ink">
-                      {option.title}
-                    </p>
-                    <p className="mt-1.5 text-[0.82rem] leading-relaxed text-muted-foreground">
-                      {option.body}
-                    </p>
-                  </div>
-                  <span className="mt-auto inline-flex items-center gap-1.5 pt-1 text-[0.8rem] font-semibold text-brand-pink-deep">
-                    {option.action}
-                    <ArrowRight
-                      className="size-3.5 transition-transform group-hover:translate-x-0.5"
-                      aria-hidden
-                    />
-                  </span>
-                </Link>
-              </motion.div>
-            );
-          })}
-        </div>
-      </section>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="h-11 rounded-full px-5 text-sm font-semibold shadow-none"
+            >
+              <Link to="/courses/new">
+                <GraduationCap className="size-4" aria-hidden />
+                Choose courses first
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       <motion.section
-        className="mt-6 rounded-3xl border border-border bg-card p-5"
-        {...enter(0.24)}
+        className="mt-4 rounded-[1.6rem] border border-border bg-card px-5 py-4"
+        {...enter(0.1)}
       >
-        <p className="mono-label text-chrome-7">What happens next</p>
+        <p className="mono-label text-chrome-7">How a session works</p>
         <ol className="mt-3 grid gap-3 sm:grid-cols-3">
           {[
             {
@@ -297,80 +213,60 @@ export default function Today() {
 
   return (
     <AppShell>
-      <motion.header
-        className="chrome-hero relative overflow-hidden rounded-[2rem] px-5 pb-5 pt-6 sm:px-7 sm:pb-6 sm:pt-7"
-        {...enter(0.04, 14)}
-      >
-        <span className="chrome-metal-sheen" aria-hidden />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <span className="sticker">
-              <Target className="size-3" aria-hidden />
-              Today
-            </span>
-            <h1 className="chrome-title mt-3 font-display text-[1.75rem] font-extrabold leading-[1.05] tracking-[-0.035em] sm:text-[2.2rem]">
-              {study?.examInDays !== null && study?.examInDays !== undefined
-                ? `${study.examInDays} day${study.examInDays === 1 ? "" : "s"} to ${study.examTitle ?? "your exam"}`
-                : "A little every day beats a panic the night before"}
-            </h1>
-            <p className="mt-2 max-w-lg text-[0.9rem] leading-relaxed text-brand-ink/65">
-              Everything due today, in one place. Pick a length, then start.
-            </p>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2.5">
-              <Button
-                onClick={() => startSprint(activeLength)}
-                className="h-11 rounded-full px-5 text-sm font-semibold"
-              >
-                <Play className="size-4" aria-hidden />
-                Start today&apos;s session
-              </Button>
-              <div
-                role="group"
-                aria-label="Session length in cards"
-                className="inline-flex items-center rounded-full border border-border bg-card p-1"
-              >
-                {SPRINT_LENGTHS.map((length) => (
-                  <button
-                    key={length}
-                    type="button"
-                    aria-pressed={activeLength === length}
-                    onClick={() => {
-                      setChosenLength(length);
-                      if (sprintLength) startSprint(length);
-                    }}
-                    className={cn(
-                      "h-8 min-w-8 rounded-full px-2 text-[0.78rem] font-semibold tabular-nums transition-colors",
-                      activeLength === length
-                        ? "bg-brand-ink text-white"
-                        : "text-brand-ink/65 hover:bg-brand-panel hover:text-brand-ink",
-                    )}
-                  >
-                    {length}
-                  </button>
-                ))}
-                <span className="px-2 text-[0.7rem] font-medium text-muted-foreground">
-                  cards
-                </span>
-              </div>
+      <PageHeader
+        eyebrow="Today"
+        title={
+          study?.examInDays !== null && study?.examInDays !== undefined
+            ? `${study.examInDays} day${study.examInDays === 1 ? "" : "s"} to ${study.examTitle ?? "your exam"}`
+            : "A little every day beats a panic the night before"
+        }
+        description="Everything due today, in one place. Pick a length, then start."
+        actions={
+          <>
+            <Button
+              onClick={() => startSprint(activeLength)}
+              className="h-11 rounded-full px-5 text-sm font-semibold"
+            >
+              <Play className="size-4" aria-hidden />
+              Start today&apos;s session
+            </Button>
+            <div
+              role="group"
+              aria-label="Session length in cards"
+              className="inline-flex items-center rounded-full border border-border bg-card p-1"
+            >
+              {SPRINT_LENGTHS.map((length) => (
+                <button
+                  key={length}
+                  type="button"
+                  aria-pressed={activeLength === length}
+                  onClick={() => {
+                    setChosenLength(length);
+                    if (sprintLength) startSprint(length);
+                  }}
+                  className={cn(
+                    "h-8 min-w-8 rounded-full px-2 text-[0.78rem] font-semibold tabular-nums transition-colors",
+                    activeLength === length
+                      ? "bg-brand-ink text-white"
+                      : "text-brand-ink/65 hover:bg-brand-panel hover:text-brand-ink",
+                  )}
+                >
+                  {length}
+                </button>
+              ))}
+              <span className="px-2 text-[0.7rem] font-medium text-muted-foreground">
+                cards
+              </span>
             </div>
-            <p className="mt-2 text-[0.78rem] font-medium text-brand-ink/65">
-              {totalDue} due · {weakSets.length} set
-              {weakSets.length === 1 ? "" : "s"} need work · about{" "}
-              {Math.max(2, Math.round(activeLength / 2))} min
-            </p>
-          </div>
-
-          <motion.div
-            className="hidden shrink-0 sm:block"
-            initial={{ opacity: 0, scale: 0.9, rotate: -4 }}
-            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-            transition={{ duration: 0.8, ease: EASE, delay: 0.2 }}
-          >
-            <Mascot size={126} />
-          </motion.div>
-        </div>
-      </motion.header>
+          </>
+        }
+      >
+        <p className="mt-2 text-[0.78rem] font-medium text-brand-ink/65">
+          {totalDue} due · {weakSets.length} set
+          {weakSets.length === 1 ? "" : "s"} need work · about{" "}
+          {Math.max(2, Math.round(activeLength / 2))} min
+        </p>
+      </PageHeader>
 
       {/* One compact progress strip; the sprint picker lives in the header. */}
       <motion.section
@@ -540,6 +436,12 @@ export default function Today() {
           )}
         </div>
       </section>
+
+      <NextStep
+        to="/timetable"
+        title="See what's planned next"
+        hint="Your week, day by day, all the way to the exam"
+      />
     </AppShell>
   );
 }

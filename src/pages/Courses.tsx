@@ -1,6 +1,8 @@
 import { AppShell } from "@/components/AppShell";
 import { Mascot } from "@/components/Mascot";
-import { Meter, enter } from "@/components/motion/Motion";
+import { NextStep } from "@/components/NextStep";
+import { PageHeader } from "@/components/PageHeader";
+import { Meter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
@@ -9,7 +11,6 @@ import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { motion } from "framer-motion";
 import { ChevronRight, Loader2, Plus } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router";
@@ -123,28 +124,22 @@ export default function Courses() {
 
   return (
     <AppShell>
-      <motion.header
-        className="chrome-plate flex flex-wrap items-end justify-between gap-4 rounded-[1.6rem] px-5 py-5"
-        {...enter(0.04, 12)}
-      >
-        <div className="min-w-0">
-          <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]">
-            Courses
-          </h1>
-          <p className="mt-1.5 max-w-lg text-[0.88rem] leading-relaxed text-muted-foreground">
-            Each course turns your specification into topics you can revise.
-          </p>
-        </div>
-        <Button
-          asChild
-          className="h-10 rounded-full bg-[#191B27] px-4 text-[0.82rem] font-semibold text-white hover:bg-[#2A2D3E]"
-        >
-          <Link to="/courses/new">
-            <Plus className="size-4" />
-            {count > 0 ? "Add courses" : "Choose courses"}
-          </Link>
-        </Button>
-      </motion.header>
+      <PageHeader
+        eyebrow="Step 1 · Your subjects"
+        title="Courses"
+        description="Each course turns your specification into topics you can revise, ask about and practise."
+        actions={
+          <Button
+            asChild
+            className="h-10 rounded-full bg-[#191B27] px-4 text-[0.82rem] font-semibold text-white hover:bg-[#2A2D3E]"
+          >
+            <Link to="/courses/new">
+              <Plus className="size-4" />
+              {count > 0 ? "Add courses" : "Choose courses"}
+            </Link>
+          </Button>
+        }
+      />
 
       <section className="mt-5">
         <div className="overflow-hidden rounded-3xl border border-border bg-card">
@@ -206,6 +201,14 @@ export default function Courses() {
           )}
         </div>
       </section>
+
+      {count > 0 && (
+        <NextStep
+          to="/tutor#sets"
+          title="Build a study set from your notes"
+          hint="Photos or pasted notes become cards, a summary and a quiz"
+        />
+      )}
     </AppShell>
   );
 }

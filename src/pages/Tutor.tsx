@@ -1,5 +1,8 @@
 import { AppShell } from "@/components/AppShell";
 import { CreateSetDialog } from "@/components/CreateSetDialog";
+import { GettingStarted, markTutorUsed } from "@/components/GettingStarted";
+import { NextStep } from "@/components/NextStep";
+import { PageHeader } from "@/components/PageHeader";
 import { SkeletonChat } from "@/components/Skeletons";
 import { Mascot } from "@/components/Mascot";
 import { SetLibrary } from "@/components/study/SetLibrary";
@@ -18,7 +21,6 @@ import { motion } from "framer-motion";
 import {
   ArrowRight,
   Check,
-  Flame,
   GraduationCap,
   Play,
   Sparkles,
@@ -189,6 +191,7 @@ export default function TutorPage() {
   const send = async (value: string, meta: { model: string; effort: string; attachments: File[] }) => {
     const question = value.trim();
     if (!question || sending) return;
+    markTutorUsed();
 
     // The picker reports a tier label; the server maps it to a NVIDIA model.
     const chosenTier = meta.model || tier;
@@ -278,46 +281,48 @@ export default function TutorPage() {
     const openTutorWith = (question: string) => {
       const text = question.trim();
       if (!text || !activeScope) return;
+      markTutorUsed();
       const [kind, id] = activeScope.value.split(":");
       const params = new URLSearchParams({ [kind]: id, q: text });
       navigate(`/tutor?${params.toString()}`);
     };
 
+    // The guide's tutor step brings the composer into view instead of leaving
+    // the page, so the next action is literally under the cursor.
+    const focusTutor = () => {
+      document
+        .getElementById("home-tutor")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const input = document.getElementById("home-tutor-input");
+      if (input instanceof HTMLInputElement) input.focus({ preventScroll: true });
+    };
+
     return (
       <AppShell>
         <div className="mx-auto w-full max-w-4xl">
-          <motion.header
-            className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
-            {...enter(0.04, 10)}
-          >
-            <div className="min-w-0">
-              <p className="mono-label text-chrome-7">Home</p>
-              <h1 className="mt-1 truncate font-display text-[1.7rem] font-extrabold leading-tight tracking-[-0.035em] text-brand-ink sm:text-[2.1rem]">
-                Hi, {firstName}
-              </h1>
-              <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.86rem] text-brand-ink/65">
-                <span>
-                  {totalDue > 0
-                    ? `${totalDue} card${totalDue === 1 ? "" : "s"} due`
-                    : "No cards due"}
-                </span>
-                <span className="text-brand-ink/25">·</span>
-                <span className="inline-flex items-center gap-1">
-                  <Flame className="size-3.5 text-brand-pink-deep" aria-hidden />
-                  {study?.streak ?? 0} day
-                  {(study?.streak ?? 0) === 1 ? "" : "s"} streak
-                </span>
-              </p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => setNewSetOpen(true)}
-              className="h-11 shrink-0 rounded-full px-5 text-sm font-semibold"
-            >
-              Add material
-              <ArrowRight className="size-4" aria-hidden />
-            </Button>
-          </motion.header>
+          <PageHeader
+            eyebrow="Home"
+            title={`Hi, ${firstName}`}
+            description={
+              <>
+                {totalDue > 0
+                  ? `${totalDue} card${totalDue === 1 ? "" : "s"} due`
+                  : "No cards due"}{" "}
+                · {study?.streak ?? 0} day
+                {(study?.streak ?? 0) === 1 ? "" : "s"} streak
+              </>
+            }
+            actions={
+              <Button
+                type="button"
+                onClick={() => setNewSetOpen(true)}
+                className="h-11 shrink-0 rounded-full px-5 text-sm font-semibold"
+              >
+                Add material
+                <ArrowRight className="size-4" aria-hidden />
+              </Button>
+            }
+          />
 
           {aiStatus && !aiStatus.configured && (
             <p className="mt-4 rounded-2xl bg-[#FFF6E5] px-4 py-2.5 text-[0.8rem] font-medium text-[#96650A]">
@@ -326,8 +331,14 @@ export default function TutorPage() {
             </p>
           )}
 
+          <GettingStarted
+            onAddMaterial={() => setNewSetOpen(true)}
+            onExploreTutor={focusTutor}
+          />
+
           {/* The tutor is the page's main tool, not a link to another screen. */}
           <motion.section
+            id="home-tutor"
             aria-labelledby="home-tutor-heading"
             className="chrome-hero mt-4 rounded-[1.6rem] px-4 py-4 sm:px-5 sm:py-5"
             {...enter(0.08, 10)}
@@ -367,6 +378,7 @@ export default function TutorPage() {
             >
               <div className="relative">
                 <input
+                  id="home-tutor-input"
                   value={homeQuestion}
                   onChange={(event) => setHomeQuestion(event.target.value)}
                   disabled={!activeScope}
@@ -516,6 +528,17 @@ export default function TutorPage() {
               </div>
             )}
           </section>
+
+          <NextStep
+            to="/today"
+            title="Start today's session"
+            hint={
+              totalDue > 0
+                ? `${totalDue} card${totalDue === 1 ? "" : "s"} are ready for review`
+                : "One short session keeps the plan moving"
+            }
+            className="mb-1 mt-7"
+          />
         </div>
 
         <CreateSetDialog open={newSetOpen} onOpenChange={setNewSetOpen} />

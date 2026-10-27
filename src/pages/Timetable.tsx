@@ -1,6 +1,8 @@
 import { AppShell } from "@/components/AppShell";
+import { NextStep } from "@/components/NextStep";
+import { PageHeader } from "@/components/PageHeader";
 import { SkeletonTimetablePage } from "@/components/Skeletons";
-import { EASE, Meter, enter, reveal } from "@/components/motion/Motion";
+import { EASE, Meter, reveal } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -703,40 +705,42 @@ export default function Timetable() {
   if (plan === null || view === null) {
     return (
       <AppShell>
-        <header className="chrome-plate rounded-[1.6rem] px-5 py-5">
-          <motion.h1
-            className="chrome-title font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] sm:text-[2rem]"
-            {...enter(0.02)}
-          >
-            Your revision timetable
-          </motion.h1>
-          <motion.p
-            className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground"
-            {...enter(0.08)}
-          >
-            Tell Bluprint what you are studying and when your first exam is.
-            From then on, each day's work is planned when you open it.
-          </motion.p>
-        </header>
+        <PageHeader
+          eyebrow="Step 4 · Timetable"
+          title="Your revision timetable"
+          description="Tell Bluprint what you are studying and when your first exam is. From then on, each day's work is planned when you open it."
+          actions={
+            <Button
+              asChild
+              className="h-11 rounded-full bg-[#191B27] px-6 font-semibold text-white hover:bg-[#2A2D3E]"
+            >
+              <Link to="/timetable/new">Build revision timetable</Link>
+            </Button>
+          }
+        />
 
         <motion.section
-          className="mt-6 rounded-[2rem] border border-dashed border-border bg-white p-7 sm:p-9"
+          className="mt-4 rounded-[1.6rem] border border-dashed border-border bg-card px-5 py-5"
           {...reveal(0.14)}
         >
-          <h2 className="font-display text-[1.2rem] font-bold text-brand-ink">
+          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
             No timetable yet
           </h2>
-          <p className="mt-2 max-w-xl text-[0.88rem] leading-relaxed text-muted-foreground">
+          <p className="mt-1.5 max-w-xl text-[0.86rem] leading-relaxed text-muted-foreground">
             Pick your subjects, how long you can study on a school day and on a
             day off, and your first exam date. Your timetable will appear here a
             day at a time, and you can block out time on any day that changes.
           </p>
-          <Button
-            asChild
-            className="mt-5 h-11 rounded-full bg-[#191B27] px-6 font-semibold text-white hover:bg-[#2A2D3E]"
-          >
-            <Link to="/timetable/new">Build revision timetable</Link>
-          </Button>
+          <p className="mt-2 text-[0.8rem] text-muted-foreground">
+            The plan is built from your courses, so{" "}
+            <Link
+              to="/courses/new"
+              className="font-semibold text-brand-ink underline-offset-2 hover:underline"
+            >
+              choose your courses first
+            </Link>{" "}
+            if you have not already.
+          </p>
         </motion.section>
       </AppShell>
     );
@@ -759,36 +763,30 @@ export default function Timetable() {
 
   return (
     <AppShell>
-      <header className="chrome-plate flex flex-wrap items-end justify-between gap-4 rounded-[1.6rem] px-5 py-5">
-        <div>
-          <p className="mono-label text-chrome-7">{dayLabel}</p>
-          <motion.h1
-            className="mt-1 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink sm:text-[2rem]"
-            {...enter(0.02)}
-          >
-            {isToday ? "Today's revision" : formatLongDate(activeDate)}
-          </motion.h1>
-          <motion.p
-            className="mt-1.5 text-[0.9rem] text-muted-foreground"
-            {...enter(0.08)}
-          >
+      <PageHeader
+        eyebrow={dayLabel}
+        title={isToday ? "Today's revision" : formatLongDate(activeDate)}
+        description={
+          <>
             First exam {formatLongDate(view.plan.examDate)} ·{" "}
             {daysLeft > 0
               ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} to go`
               : "exam date has passed"}
-          </motion.p>
-        </div>
-        <Button
-          asChild
-          variant="outline"
-          className="h-10 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-        >
-          <Link to="/timetable/new">
-            <CalendarPlus className="size-3.5" />
-            Rebuild plan
-          </Link>
-        </Button>
-      </header>
+          </>
+        }
+        actions={
+          <Button
+            asChild
+            variant="outline"
+            className="h-10 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+          >
+            <Link to="/timetable/new">
+              <CalendarPlus className="size-3.5" />
+              Rebuild plan
+            </Link>
+          </Button>
+        }
+      />
 
       {/* One day at a time. The strip only chooses which day to generate and
           show; the week grid is gone. */}
@@ -1132,6 +1130,12 @@ export default function Timetable() {
         date={activeDate}
         blocked={blockedByTime}
         onSaved={saveBlocks}
+      />
+
+      <NextStep
+        to="/today"
+        title="Start today's session"
+        hint="Your plan's next step, in one short card sprint"
       />
     </AppShell>
   );

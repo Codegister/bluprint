@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { NextStep } from "@/components/NextStep";
 import { SkeletonCoursePage } from "@/components/Skeletons";
 import { CognitoRealPapers } from "@/components/study/CognitoRealPapers";
 import { CognitoTopicNotes } from "@/components/study/CognitoTopicNotes";
@@ -1290,6 +1291,15 @@ export default function Course() {
                 </section>
             </>)}
           </>
+        )}
+
+        {course.status === "ready" && (
+          <NextStep
+            to="/today"
+            title="Revise what you've mapped"
+            hint="Today pulls the due cards from every course into one session"
+            className="mt-6"
+          />
         )}
 
         <PathwaySectionsDialog

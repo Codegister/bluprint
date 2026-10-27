@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/PageHeader";
 import { SkeletonBuilderPage } from "@/components/Skeletons";
 import { EASE, enter, reveal } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
@@ -428,23 +429,12 @@ export default function TimetableBuilder() {
         Back to timetable
       </Link>
 
-      <header className="chrome-plate mt-4 rounded-[1.6rem] px-5 py-5">
-        <motion.h1
-          className="chrome-title font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] sm:text-[2rem]"
-          {...enter(0.02)}
-        >
-          Build a plan you can actually follow
-        </motion.h1>
-        <motion.p
-          className="mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-muted-foreground"
-          {...enter(0.08)}
-        >
-          Three short steps. Choose your subjects, the time you have on school
-          days and days off, then your first exam date. Bluprint spreads that
-          time across the day with breaks and space for meals, and every session
-          links to its study set.
-        </motion.p>
-      </header>
+      <PageHeader
+        className="mt-4"
+        eyebrow="Step 4 · Timetable"
+        title="Build a plan you can actually follow"
+        description="Three short steps. Choose your subjects, the time you have on school days and days off, then your first exam date. Bluprint spreads that time across the day with breaks and space for meals, and every session links to its study set."
+      />
 
       {/* A quiet stepper: one accent marks where you are, mint marks what is
           done. The steps used to each carry their own colour, which made

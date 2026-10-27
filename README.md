@@ -275,6 +275,16 @@ plus your four most recent sets, a compact theme switch beside the account, and 
 separate goal card. Opening a set or a course and choosing **Ask the tutor** scopes the
 same tutor to that material, with a question carried in the prompt.
 
+Home opens with a **Getting started** guide that names the four moves in the order they
+build on each other — set up courses, build a study set, explore the tutor, build a
+timetable — and ticks each one off as it is done. It removes itself when all four are
+complete, and **Hide this guide** dismisses it early. Every screen then ends with the next
+step: Courses offers *Build a study set*, a set offers *Add these cards to today's
+session*, Today offers *See what's planned next*, and the timetable offers *Start today's
+session*, so the loop closes without going back to the menu. All top-level screens share
+one header frame (eyebrow, title, one-line description, single primary action), and each
+route's content rises into place with the same short entrance.
+
 Each course has three sections: **Pathway**, **Practice** (past papers and topic papers
 behind one toggle) and **Study sets**. A study set opens on its **Overview**, with tabs for
 **Flashcards**, **Quiz**, **Exam practice** and **Needs work** (when there is any). A

@@ -2,7 +2,7 @@ import { Brand } from "@/components/Brand";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { PageInk } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { SPRING } from "@/components/motion/Motion";
+import { SPRING, enter } from "@/components/motion/Motion";
 import {
   Sheet,
   SheetContent,
@@ -266,6 +266,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // A single accent rule that fills as the page scrolls. It replaces the
   // decorative colour wash as the thing that makes a long screen feel alive.
   const { scrollYProgress } = useScroll();
+  const { pathname } = useLocation();
 
   return (
     <div className="min-h-screen">
@@ -307,9 +308,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Sheet>
 
       <main className="relative lg:pl-[292px]">
-        <div className="relative mx-auto w-full max-w-[1080px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
+        {/* Every destination enters the same way, so moving between screens
+            reads as one surface changing rather than a new page loading. The
+            key is the path, so set tabs animate too. */}
+        <motion.div
+          key={pathname}
+          className="relative mx-auto w-full max-w-[1080px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10"
+          {...enter(0.02, 8)}
+        >
           {children}
-        </div>
+        </motion.div>
       </main>
     </div>
   );

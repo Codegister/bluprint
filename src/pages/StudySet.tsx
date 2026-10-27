@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { Mascot } from "@/components/Mascot";
+import { NextStep } from "@/components/NextStep";
 import { SkeletonStudySetPage } from "@/components/Skeletons";
 import { enter } from "@/components/motion/Motion";
 import { ExamPractice } from "@/components/study/ExamPractice";
@@ -820,6 +821,14 @@ export default function StudySet() {
               </div>
             </details>
           </>
+        )}
+
+        {!isMode && set.status === "ready" && (
+          <NextStep
+            to="/today"
+            title="Add these cards to today's session"
+            hint="Due cards from every set, in one short sprint"
+          />
         )}
 
         <SetSettingsDialog
