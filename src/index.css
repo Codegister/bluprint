@@ -138,20 +138,20 @@
 
   /* The metal ramp: highlight, page, raised plate, two rules, three inks. */
   --chrome-0: #ffffff; /* polished highlight */
-  --chrome-1: #eef2f6; /* page base */
+  --chrome-1: #f5f7f8; /* page base: flat neutral, no colour wash */
   --chrome-2: #e0e6ed; /* raised panel */
   --chrome-3: #c8d1db; /* soft rule */
   --chrome-4: #8d9aa9; /* strong rule */
   --chrome-5: #6f7d8c; /* quiet icons / hint text */
   --chrome-6: #4b5866; /* secondary copy */
   --chrome-7: #2c3641; /* strong secondary copy */
-  --chrome-8: #0a0f15; /* graphite ink */
+  --chrome-8: #111318; /* graphite ink */
 
-  --brand-ink: #0a0f15;
+  --brand-ink: #111318;
   --brand-cream: #ffffff;
-  --brand-panel: #d7e0ea;
+  --brand-panel: #e8ecf1;
   --brand-panel-2: #f8fafc;
-  --brand-void: #0a0f15;
+  --brand-void: #111318;
 
   /* Anodised tints. Light enough for graphite type, dark enough to read as a
      separate surface from the white card they sit on. */
@@ -176,20 +176,20 @@
   --brand-butter: #ffd66b;
   --brand-blush: #ffc9d6;
 
-  --background: #eef2f6;
-  --foreground: #0a0f15;
+  --background: #f5f7f8;
+  --foreground: #111318;
   --card: #ffffff;
-  --card-foreground: #0a0f15;
+  --card-foreground: #111318;
   --popover: #ffffff;
-  --popover-foreground: #0a0f15;
-  --primary: #0a0f15;
+  --popover-foreground: #111318;
+  --primary: #111318;
   --primary-foreground: #ffffff;
-  --secondary: #e0e6ed;
-  --secondary-foreground: #0a0f15;
-  --muted: #e4e9ef;
+  --secondary: #e6eaee;
+  --secondary-foreground: #111318;
+  --muted: #eaedf1;
   --muted-foreground: #4b5866;
-  --accent: #d7e7f8;
-  --accent-foreground: #0a0f15;
+  --accent: #e3edf9;
+  --accent-foreground: #111318;
   --destructive: #b3261e;
   --border: #7e8c9b;
   --input: #5c6a7a;
@@ -217,27 +217,15 @@
   --chrome-shadow: rgba(9, 16, 24, 0.55);
   --chrome-edge: #7e8c9b;
 
-  /* A steel sheet: a broad white specular sweep across graduated grey bands. */
-  --chrome-page:
-    radial-gradient(120% 78% at 50% -22%, #ffffff 0%, rgba(255, 255, 255, 0) 60%),
-    linear-gradient(
-      112deg,
-      #e3e9ef 0%,
-      #d6dee6 13%,
-      #f3f6f9 29%,
-      #dae2ea 45%,
-      #edf1f5 61%,
-      #d2dae3 79%,
-      #e9eef3 100%
-    );
+  /* A flat neutral page. The old steel sweep read as a blue/grey wash behind
+     every card; this is one colour, #f5f7f8, and nothing else. `none` keeps
+     the colour from `--chrome-1` rather than an invalid colour in the image
+     slot. */
+  --chrome-page: none;
 
-  /* Panels carry a soft top-down light, like a brushed plate. */
-  --chrome-panel:
-    linear-gradient(157deg, #ffffff 0%, #f6f9fb 46%, #e7edf3 100%);
-
-  /* Card wash: near-white with a cool reflection at the top edge. */
-  --chrome-surface:
-    linear-gradient(160deg, #ffffff 0%, #fcfdfe 56%, #f1f5f9 100%);
+  /* Panels are plain white plates: no gradient, no second hue. */
+  --chrome-panel: none;
+  --chrome-surface: none;
 
   /* Ink fills: graphite with a lit top edge, like a machined button. */
   --chrome-ink:
@@ -256,10 +244,10 @@
   );
 
   /* Headings are solid graphite: a gradient inside type would cost contrast. */
-  --chrome-type: linear-gradient(180deg, #0a0f15 0%, #0a0f15 100%);
+  --chrome-type: linear-gradient(180deg, #111318 0%, #111318 100%);
 
   /* A very quiet brushed grain layered over panels. */
-  --chrome-brush: rgba(10, 15, 21, 0.05);
+  --chrome-brush: rgba(17, 19, 24, 0.04);
 
   color-scheme: light;
 }
@@ -610,6 +598,15 @@
     pointer-events: none;
   }
 
+  /* Light mode is one flat neutral sheet. The moving ribbons, soft blobs and
+     dot grid were a multicolour wash behind every card, so they are removed
+     here; the dark theme keeps them. */
+  html:not(.dark) .chrome-backdrop .gizmo-flow,
+  html:not(.dark) .chrome-backdrop .gizmo-blob,
+  html:not(.dark) .chrome-backdrop .gizmo-dots {
+    display: none;
+  }
+
   /* A fine engineering grid: reads as the surface of a machined plate. */
   .gizmo-dots {
     position: absolute;
@@ -667,6 +664,14 @@
       #9fc0dc 62%,
       #0b57d0 100%
     );
+  }
+
+  /* Light mode keeps the bar and rail flat too: a neutral sheet with one
+     accent, not a second gradient. */
+  html:not(.dark) .chrome-bar,
+  html:not(.dark) .chrome-rail {
+    background-color: #f5f7f8;
+    background-image: none;
   }
 
   /* Sticky bars: frosted steel, so content slides under it. */
@@ -1371,7 +1376,7 @@
   ) {
     background-color: #2a2440;
   }
-  .dark [class~="bg-[#128A4C]"] {
+  .dark [class~="bg-[#0B6B45]"] {
     background-color: #1f6b4a;
   }
   .dark :is([class~="bg-[#D24350]"], [class~="bg-[#a32a38]"]):hover {
@@ -1402,7 +1407,7 @@
 
   /* Semantic type: lifted to the light end of each family. */
   .dark :is(
-    [class~="text-[#C93C49]"],
+    [class~="text-[#A81F28]"],
     [class~="text-[#C23B49]"],
     [class~="text-[#D24350]"],
     [class~="text-[#B23A55]"],
@@ -1416,7 +1421,7 @@
     [class~="text-[#8A5D00]"],
     [class~="text-[#8A5A12]"],
     [class~="text-[#B7791F]"],
-    [class~="text-[#B4720E]"],
+    [class~="text-[#8A5410]"],
     [class~="text-[#7A5306]"],
     [class~="text-[#A66A0A]"],
     [class~="text-[#7A5410]"],
@@ -1427,8 +1432,8 @@
     color: #f0c674;
   }
   .dark :is(
-    [class~="text-[#128A5B]"],
-    [class~="text-[#128A4C]"],
+    [class~="text-[#0B6B45]"],
+    [class~="text-[#0B6B45]"],
     [class~="text-[#0F7A50]"],
     [class~="text-[#0A655C]"],
     [class~="text-[#0d4a2e]"],
@@ -1451,7 +1456,7 @@
   .dark [class~="text-[#1C1A14]/65"] {
     color: rgba(234, 240, 248, 0.72);
   }
-  .dark [class~="text-[#C93C49]/80"] {
+  .dark [class~="text-[#A81F28]/80"] {
     color: #ffb0b8;
   }
   .dark [class~="text-[#96650A]/80"] {

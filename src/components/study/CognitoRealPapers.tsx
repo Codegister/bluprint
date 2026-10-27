@@ -196,7 +196,7 @@ export function CognitoRealPapers({
                                 url: paper.markSchemeUrl!,
                               })
                             }
-                            className="h-8 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-[#128A4C] shadow-none hover:bg-brand-panel"
+                            className="h-8 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-[#0B6B45] shadow-none hover:bg-brand-panel"
                           >
                             Mark scheme
                           </Button>

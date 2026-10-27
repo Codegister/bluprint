@@ -86,6 +86,10 @@ const schema = defineSchema(
       generationNote: v.optional(v.string()),
       summary: v.optional(
         v.object({
+          // Optional only because sets built before titles existed are already
+          // stored without one. The build's argument validator requires it;
+          // see convex/lib/summary.ts.
+          title: v.optional(v.string()),
           overview: v.string(),
           keyPoints: v.array(v.string()),
           examFocus: v.array(v.string()),
@@ -265,6 +269,17 @@ const schema = defineSchema(
       marking: v.optional(v.union(v.literal("points"), v.literal("levels"))),
       modelAnswer: v.string(),
       markingGuide: v.array(v.string()),
+      // The guide as discrete criteria. Optional because papers built before
+      // structure existed still open; their rows are derived from the guide.
+      criteria: v.optional(
+        v.array(
+          v.object({
+            id: v.string(),
+            marks: v.number(),
+            text: v.string(),
+          }),
+        ),
+      ),
       order: v.number(),
       // How the board lays the question out: its printed label ("1 (a)",
       // "0 1 . 1"), the section it belongs to, that section's instruction line,
@@ -561,6 +576,18 @@ const schema = defineSchema(
       marks: v.number(),
       modelAnswer: v.string(),
       markingGuide: v.array(v.string()),
+      // The same guide as discrete criteria, each with its own id and marks.
+      // Optional so questions built before this existed still open; the UI
+      // derives the same rows from `markingGuide` for those.
+      criteria: v.optional(
+        v.array(
+          v.object({
+            id: v.string(),
+            marks: v.number(),
+            text: v.string(),
+          }),
+        ),
+      ),
       order: v.number(),
       userAnswer: v.optional(v.string()),
       awardedMarks: v.optional(v.number()),

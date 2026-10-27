@@ -23,8 +23,24 @@ export const BUILD_MAX = 100;
 
 /**
  * The one sentence used wherever fewer items were built than were asked for.
- * Every banner says the same thing in the same words.
+ * It states both numbers and the count the notes actually supported, and never
+ * claims the maximum was reached when the counts disagree.
  */
 export function shortfallSentence(built: number, requested: number): string {
-  return `Built ${built} of ${requested} because the notes only support ${built}.`;
+  return `Built ${built} of ${requested}. Your notes supported ${built}.`;
+}
+
+/**
+ * Rewrites a stored note written before this wording existed, so an older set
+ * shows the same rule as a new one instead of the old "because the notes only
+ * support" sentence.
+ */
+export function normaliseCapacityNote(note: string): string {
+  return note
+    .replace(
+      /Built (\d+) of (\d+) because the notes only support \1\./g,
+      "Built $1 of $2. Your notes supported $1.",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
 }

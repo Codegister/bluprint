@@ -210,7 +210,7 @@ export function ExplainDialog({
             )}
 
             {error && (
-              <p className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]">
+              <p className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]">
                 {error}
               </p>
             )}
@@ -232,7 +232,7 @@ export function ExplainDialog({
                 placeholder="Ask a follow-up…"
                 aria-label="Ask a follow-up about this question"
                 maxLength={600}
-                className="h-8 min-w-0 flex-1 bg-transparent text-[0.82rem] text-brand-ink outline-none placeholder:text-muted-foreground/60"
+                className="h-8 min-w-0 flex-1 bg-transparent text-[0.82rem] text-brand-ink outline-none placeholder:text-muted-foreground/90"
               />
               <button
                 type="submit"

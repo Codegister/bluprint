@@ -38,10 +38,10 @@ const BAND_COPY: Record<ReadinessView["band"], string> = {
 };
 
 const PACE_STYLE: Record<PaceView["status"], string> = {
-  "on-track": "bg-[#E9FBF3] text-[#128A5B]",
+  "on-track": "bg-[#E9FBF3] text-[#0B6B45]",
   tight: "bg-[#FFF6E5] text-[#96650A]",
-  behind: "bg-[#FFEEF0] text-[#C93C49]",
-  done: "bg-[#E9FBF3] text-[#128A5B]",
+  behind: "bg-[#FFEEF0] text-[#A81F28]",
+  done: "bg-[#E9FBF3] text-[#0B6B45]",
   past: "bg-brand-panel text-muted-foreground",
 };
 
@@ -130,7 +130,7 @@ export function ReadinessPanel({
             {readiness.score}
             <span className="text-[1.1rem] font-bold text-muted-foreground">%</span>
           </p>
-          <p className="pb-1 text-[0.78rem] font-semibold text-[#128A5B]">
+          <p className="pb-1 text-[0.78rem] font-semibold text-[#0B6B45]">
             {readiness.band === "exam-ready"
               ? "Exam-ready"
               : readiness.band === "on-track"
@@ -165,7 +165,7 @@ export function ReadinessPanel({
               {pace ? `Plan to ${shortDate(pace.examDate)}` : "Exam pace plan"}
             </h2>
           </div>
-          <span className="grid size-9 place-items-center rounded-xl bg-[#FFF1DE] text-[#B4720E]">
+          <span className="grid size-9 place-items-center rounded-xl bg-[#FFF1DE] text-[#8A5410]">
             <CalendarClock className="size-4" aria-hidden />
           </span>
         </div>
@@ -240,7 +240,7 @@ export function ReadinessPanel({
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[0.76rem] font-semibold transition-colors",
               weakCardCount + weakQuizCount > 0
-                ? "bg-[#FFEEF0] text-[#C93C49] hover:bg-[#FFE3E6]"
+                ? "bg-[#FFEEF0] text-[#A81F28] hover:bg-[#FFE3E6]"
                 : "border border-border bg-white text-brand-ink/60 hover:bg-brand-panel",
             )}
           >

@@ -207,7 +207,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       placeholder="you@school.uk"
                       type="email"
                       autoComplete="email"
-                      className="h-12 rounded-2xl border-border bg-white pl-10 text-[0.95rem] text-brand-ink placeholder:text-muted-foreground/60 focus-visible:border-brand-pink/50 focus-visible:ring-brand-pink/20"
+                      className="h-12 rounded-2xl border-border bg-white pl-10 text-[0.95rem] text-brand-ink placeholder:text-muted-foreground/90 focus-visible:border-brand-pink/50 focus-visible:ring-brand-pink/20"
                       disabled={isLoading}
                       required
                     />
@@ -350,6 +350,22 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               Back to home
             </Link>
           </p>
+
+          {/* The trust pages are reachable before sign-in, where they matter. */}
+          <nav
+            aria-label="Legal"
+            className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[0.78rem] font-medium text-muted-foreground"
+          >
+            <Link to="/privacy" className="hover:text-brand-ink hover:underline">
+              Privacy
+            </Link>
+            <Link to="/terms" className="hover:text-brand-ink hover:underline">
+              Terms
+            </Link>
+            <Link to="/contact" className="hover:text-brand-ink hover:underline">
+              Contact
+            </Link>
+          </nav>
         </div>
       </main>
     </div>

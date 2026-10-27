@@ -1539,7 +1539,7 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
               role={dictationError ? "alert" : undefined}
               className={cn(
                 "mt-2 px-1 text-[0.72rem] leading-relaxed",
-                dictationError ? "text-[#C93C49]" : "text-muted-foreground",
+                dictationError ? "text-[#A81F28]" : "text-muted-foreground",
               )}
             >
               {dictationError

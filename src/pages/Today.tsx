@@ -185,9 +185,21 @@ export default function Today() {
   const buildingSets = (sets ?? []).filter(
     (set) => set.status === "queued" || set.status === "processing",
   );
-  const today = study?.todayCount ?? 0;
-  const goal = study?.goal ?? 20;
-  const progress = Math.min(100, Math.round((today / Math.max(1, goal)) * 100));
+  // The strip counts the same items the set pages show: every card, quiz
+  // question and written question across the ready sets, and how many of them
+  // have been answered correctly. The three parts travel with the total so the
+  // number can always be explained on screen.
+  const items = study?.items ?? {
+    total: 0,
+    correct: 0,
+    cards: { total: 0, correct: 0 },
+    quiz: { total: 0, correct: 0 },
+    exam: { total: 0, correct: 0 },
+  };
+  const progress = items.total
+    ? Math.min(100, Math.round((items.correct / items.total) * 100))
+    : 0;
+  const breakdown = `${items.cards.correct}/${items.cards.total} cards · ${items.quiz.correct}/${items.quiz.total} quiz · ${items.exam.correct}/${items.exam.total} exam`;
 
   /**
    * Choosing a length starts it: a sprint is meant to remove the decision, not
@@ -336,15 +348,24 @@ export default function Today() {
         {...enter(0.08)}
       >
         <div className="flex min-w-[200px] flex-1 items-center gap-2.5">
-          <p className="shrink-0 text-[0.76rem] font-semibold tabular-nums text-brand-ink">
-            {today}/{goal} questions
+          <p
+            title={`${items.correct} of ${items.total} items answered correctly — ${breakdown}`}
+            className="shrink-0 text-[0.76rem] font-semibold tabular-nums text-brand-ink"
+          >
+            {items.correct}/{items.total} questions
           </p>
           <Meter
             value={progress}
             className="h-1.5 max-w-[220px] flex-1 bg-brand-panel"
             barClassName="bg-brand-sky"
-            label="Questions answered today"
+            label={`${items.correct} of ${items.total} items answered correctly`}
           />
+          <p
+            title={breakdown}
+            className="text-[0.7rem] font-medium tabular-nums text-muted-foreground"
+          >
+            {breakdown}
+          </p>
         </div>
         <p className="flex items-center gap-1.5 text-[0.76rem] font-medium text-brand-ink/75">
           <Flame className="size-3.5 text-brand-peach" aria-hidden />
@@ -352,7 +373,7 @@ export default function Today() {
         </p>
         {study?.goalReason && (
           <p className="text-[0.72rem] text-muted-foreground sm:ml-auto">
-            {study.goalReason}
+            Daily goal: {study.goal} questions · {study.goalReason}
           </p>
         )}
       </motion.section>

@@ -218,7 +218,7 @@ export function SetSettingsDialog({
               placeholder="e.g. Biology"
               maxLength={60}
               disabled={saving !== null}
-              className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
+              className="mt-2 h-10 rounded-2xl border-border bg-white text-sm text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
             />
           </div>
 
@@ -308,7 +308,7 @@ export function SetSettingsDialog({
           <div className="mt-5 rounded-2xl border border-border bg-[#FCFCFD] p-3.5">
             <p className="text-xs font-semibold text-brand-ink">Material to build</p>
             <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-              {`${BUILD_MIN}–${BUILD_MAX} of each. A rebuild uses these counts, and Bluprint says so when the notes can only support fewer: “Built 6 of 10 because the notes only support 6.”`}
+              {`${BUILD_MIN}–${BUILD_MAX} of each. A rebuild uses these counts, and Bluprint says so when the notes can only support fewer: “Built 6 of 10. Your notes supported 6.”`}
             </p>
             <div className="rise-stagger mt-3 grid gap-3 sm:grid-cols-3">
               {[
@@ -361,7 +361,7 @@ export function SetSettingsDialog({
                   transition: { duration: 0.22, ease: EASE_EXIT },
                 }}
                 transition={{ duration: 0.25, ease: EASE }}
-                className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
+                className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
               >
                 {error}
               </motion.p>

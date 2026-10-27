@@ -278,7 +278,7 @@ function SessionRow({
             className={cn(
               "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[0.68rem] font-semibold transition-colors disabled:opacity-60",
               done
-                ? "border-[#CBE7D8] bg-[#EAF8F0] text-[#128A4C]"
+                ? "border-[#CBE7D8] bg-[#EAF8F0] text-[#0B6B45]"
                 : "border-border bg-white text-brand-ink/70 hover:border-chrome-4 hover:text-brand-ink",
             )}
           >
@@ -302,7 +302,7 @@ function SessionRow({
           <span
             className={cn(
               "ml-auto text-[0.62rem] font-medium",
-              done ? "text-[#128A4C]" : "text-muted-foreground",
+              done ? "text-[#0B6B45]" : "text-muted-foreground",
             )}
           >
             {session.minutes} min

@@ -25,13 +25,7 @@ import { subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import {
-  ArrowRight,
-  Check,
-  GraduationCap,
-  Play,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, GraduationCap, Play, Sparkles } from "lucide-react";
 
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
@@ -62,7 +56,7 @@ function SourceList({ sources }: { sources: Array<{ title: string; url: string }
           >
             {source.title || new URL(source.url).hostname.replace(/^www\./, "")}
           </a>
-          <span className="shrink-0 text-brand-ink/35">
+          <span className="shrink-0 text-brand-ink/65">
             {new URL(source.url).hostname.replace(/^www\./, "")}
           </span>
         </li>
@@ -185,7 +179,6 @@ export default function TutorPage() {
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [useWeb, setUseWeb] = useState(false);
   // Last tier used, so a suggested question keeps the same answer style.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -231,7 +224,8 @@ export default function TutorPage() {
         await askTutor({
           setId: setId as Id<"studySets">,
           question,
-          useWeb,
+          // Web search is disabled in the UI until it is available by default.
+          useWeb: false,
           tier: chosenTier,
         });
       } else if (validCourseId && courseId) {
@@ -239,7 +233,7 @@ export default function TutorPage() {
           courseId: courseId as Id<"courses">,
           unitTitle: unitTitle ?? undefined,
           question,
-          useWeb,
+          useWeb: false,
           tier: chosenTier,
         });
       }
@@ -610,22 +604,6 @@ export default function TutorPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={useWeb}
-              onClick={() => setUseWeb((value) => !value)}
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
-                useWeb
-                  ? "border-[#B6E4DB] bg-[#E4F6F2] text-[#0A655C]"
-                  : "border-border bg-white text-muted-foreground hover:bg-brand-panel",
-              )}
-              title="Let the tutor search the web for this question"
-            >
-              <Sparkles className="size-3.5" aria-hidden />
-              Web
-              {useWeb && <Check className="size-3" aria-hidden />}
-            </button>
             <Button
               type="button"
               variant="ghost"
@@ -717,9 +695,7 @@ export default function TutorPage() {
                         <TypingDots />
                         {message.sources.length > 0
                           ? "Reading the web…"
-                          : useWeb
-                            ? "Searching the web…"
-                            : "Thinking…"}
+                          : "Thinking…"}
                       </span>
                     )}
                   </div>
@@ -757,7 +733,7 @@ export default function TutorPage() {
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.28, ease: EASE }}
-              className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
+              className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
             >
               {error}
             </motion.p>
@@ -779,10 +755,8 @@ export default function TutorPage() {
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            Use Enter inside the prompt to send · Shift + Enter for a new line ·{" "}
-            {useWeb
-              ? "web search is on, so recent and specification details can be checked online."
-              : "web search is off, so answers come from your material and the model only."}{" "}
+            Use Enter inside the prompt to send · Shift + Enter for a new line ·
+            answers come from your material and the model only.{" "}
             Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>

@@ -11,8 +11,8 @@ format — RS 3/4/5/12-mark parts, a single English Literature essay, maths calc
 so on — and marked question by question. Courses can be turned into a colour-coded weekly
 revision timetable built from topics, from past papers only, or from a mix of the two.
 
-Version 1 is built for a small group of friends. Each person signs in separately and gets
-their own tutor home containing only their courses and study sets.
+Bluprint is small and independent, and built for real revision. Each person signs in
+separately and gets their own tutor home containing only their courses and study sets.
 
 ## Stack
 
@@ -406,6 +406,7 @@ Open the printed local URL (usually `http://localhost:5173`).
 ```bash
 bunx convex dev --once  # push functions and regenerate types
 bun tsc -b --noEmit     # frontend + Convex types
+bun test                # unit tests, including the summary generator→validator fixture
 bun run lint            # ESLint (the template's UI primitives have pre-existing findings)
 ```
 

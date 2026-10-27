@@ -632,7 +632,7 @@ export default function Course() {
                 <Meter
                   value={mastery}
                   className="mt-2 h-1.5"
-                  barClassName="bg-[#128A4C]"
+                  barClassName="bg-[#0B6B45]"
                   label="Topics revised"
                 />
               </div>
@@ -710,7 +710,7 @@ export default function Course() {
                     {pathway.examFormat}
                   </p>
                 </div>
-                <span className="rounded-full bg-[#EAFBF0] px-3 py-1.5 text-[0.72rem] font-semibold text-[#128A4C]">
+                <span className="rounded-full bg-[#EAFBF0] px-3 py-1.5 text-[0.72rem] font-semibold text-[#0B6B45]">
                   {details.topicCount} topic{details.topicCount === 1 ? "" : "s"} ·{" "}
                   {pathway.units.length} unit{pathway.units.length === 1 ? "" : "s"}
                 </span>
@@ -920,8 +920,8 @@ export default function Course() {
                                       className={cn(
                                         "inline-flex h-7 shrink-0 items-center gap-1 self-start rounded-full border px-2.5 text-[0.68rem] font-semibold transition-colors",
                                         isDone
-                                          ? "border-[#22A06B] bg-[#EAFBF0] text-[#128A4C]"
-                                          : "border-border bg-white text-brand-ink/60 hover:border-[#22A06B] hover:text-[#128A4C]",
+                                          ? "border-[#22A06B] bg-[#EAFBF0] text-[#0B6B45]"
+                                          : "border-border bg-white text-brand-ink/60 hover:border-[#22A06B] hover:text-[#0B6B45]",
                                       )}
                                     >
                                       {tickingTopic === topic.id ? (
@@ -983,7 +983,7 @@ export default function Course() {
                                           className={cn(
                                             "hidden rounded-full px-2.5 py-1 text-[0.68rem] font-semibold sm:inline-flex",
                                             set.status === "ready"
-                                              ? "bg-[#EAFBF0] text-[#128A4C]"
+                                              ? "bg-[#EAFBF0] text-[#0B6B45]"
                                               : set.status === "error"
                                                 ? "bg-[#FFEEF0] text-[#C23B49]"
                                                 : "bg-[#FFF6E5] text-[#96650A]",
@@ -1246,7 +1246,7 @@ export default function Course() {
                                   className={cn(
                                     "rounded-full px-2 py-0.5 text-[0.62rem] font-semibold",
                                     set.status === "ready"
-                                      ? "bg-[#EAFBF0] text-[#128A4C]"
+                                      ? "bg-[#EAFBF0] text-[#0B6B45]"
                                       : set.status === "error"
                                         ? "bg-[#FFEEF0] text-[#C23B49]"
                                         : "bg-[#FFF6E5] text-[#96650A]",
@@ -1274,7 +1274,7 @@ export default function Course() {
                                   <Meter
                                     value={mastery}
                                     className="h-1.5 w-full max-w-[190px]"
-                                    barClassName="bg-[#128A4C]"
+                                    barClassName="bg-[#0B6B45]"
                                     label={`${set.title} mastery`}
                                   />
                                   <span className="shrink-0 text-[0.66rem] font-semibold text-muted-foreground">

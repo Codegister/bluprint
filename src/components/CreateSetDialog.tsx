@@ -52,7 +52,7 @@ function fileSize(bytes: number): string {
  */
 function titleFromFile(name: string): string {
   const base = name.replace(/\.[^.]+$/, "");
-  return shortTitle(base.replace(/[_-]+/g, " "), 8, 60) || base.trim().slice(0, 60);
+  return shortTitle(base.replace(/[_-]+/g, " "), 5, 60) || base.trim().slice(0, 60);
 }
 
 const dropzoneClass =
@@ -610,7 +610,7 @@ export function CreateSetDialog({
                         type="button"
                         aria-label={`Remove ${image.file.name}`}
                         onClick={() => removePhoto(image.preview)}
-                        className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-white text-muted-foreground transition-colors hover:text-[#C93C49]"
+                        className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-white text-muted-foreground transition-colors hover:text-[#A81F28]"
                       >
                         <X className="size-3" />
                       </button>
@@ -675,7 +675,7 @@ export function CreateSetDialog({
                 maxLength={20_000}
                 rows={8}
                 disabled={isLoading}
-                className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
+                className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
               />
               <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
                 <span>A few sentences is enough to start</span>
@@ -698,7 +698,7 @@ export function CreateSetDialog({
               </span>
             </summary>
             <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-              {`Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. If your notes cannot support the number, Bluprint says so on the set page in one sentence: “Built 6 of 10 because the notes only support 6.”`}
+              {`Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. If your notes cannot support the number, Bluprint says so on the set page in one sentence: “Built 6 of 10. Your notes supported 6.”`}
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -767,7 +767,7 @@ export function CreateSetDialog({
                   transition: { duration: 0.22, ease: EASE_EXIT },
                 }}
                 transition={{ duration: 0.25, ease: EASE }}
-                className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#C93C49]"
+                className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#A81F28]"
               >
                 {error}
               </motion.div>

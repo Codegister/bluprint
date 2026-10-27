@@ -26,6 +26,8 @@ import {
   goalFromExam,
 } from "./lib/studyMetrics";
 import { gradeShortAnswer } from "./lib/recall";
+import { toCriteria } from "./lib/markingCriteria";
+import { summaryValidator } from "./lib/summary";
 
 const sourceType = v.union(
   v.literal("text"),
@@ -33,11 +35,9 @@ const sourceType = v.union(
   v.literal("video"),
 );
 
-const summaryValidator = v.object({
-  overview: v.string(),
-  keyPoints: v.array(v.string()),
-  examFocus: v.array(v.string()),
-});
+// The summary schema is imported, not declared here: the parser that builds a
+// summary and the mutation that stores it must agree on every field. A local
+// copy is exactly how `title` once broke every build.
 
 const cardInput = v.object({ front: v.string(), back: v.string() });
 const quizInput = v.object({
@@ -57,6 +57,12 @@ const examInput = v.object({
   marks: v.number(),
   modelAnswer: v.string(),
   markingGuide: v.array(v.string()),
+  // Optional on the way in: the build derives these from the guide below.
+  criteria: v.optional(
+    v.array(
+      v.object({ id: v.string(), marks: v.number(), text: v.string() }),
+    ),
+  ),
 });
 
 /** Child documents are always ordered explicitly; `_creationTime` ties are possible. */
@@ -361,12 +367,43 @@ export const studyStats = query({
     let remaining = 0;
     let nearestExam: { daysLeft: number; title: string } | null = null;
 
+    /**
+     * The Today strip's "X/Y questions": every card, quiz question and exam
+     * question in the student's ready sets, and how many of those they have
+     * answered correctly. The three parts are returned with it, so the number
+     * can always be explained on screen.
+     */
+    const items = {
+      total: 0,
+      correct: 0,
+      cards: { total: 0, correct: 0 },
+      quiz: { total: 0, correct: 0 },
+      exam: { total: 0, correct: 0 },
+    };
+
     for (const set of sets) {
       if (set.status !== "ready") continue;
       const cards = await ctx.db
         .query("flashcards")
         .withIndex("by_set", (q) => q.eq("setId", set._id))
         .collect();
+      const exams = await ctx.db
+        .query("examQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", set._id))
+        .collect();
+
+      items.cards.total += cards.length;
+      items.cards.correct += cards.filter(
+        (card) => card.status === "known",
+      ).length;
+      items.exam.total += exams.length;
+      // A written answer counts as correctly answered once it earns at least
+      // half the marks; the exact mark is still shown on the set page.
+      items.exam.correct += exams.filter(
+        (exam) =>
+          exam.awardedMarks !== undefined &&
+          exam.awardedMarks >= Math.ceil(exam.marks / 2),
+      ).length;
 
       remaining += cards.filter(
         (card) =>
@@ -383,6 +420,8 @@ export const studyStats = query({
         .collect();
       const quizSoFar = quizProgress(quizRows);
       remaining += Math.max(0, quizSoFar.total - quizSoFar.answered);
+      items.quiz.total += quizRows.length;
+      items.quiz.correct += quizSoFar.correct;
 
       if (set.examDate) {
         const examAt = examTimestamp(set.examDate);
@@ -399,6 +438,10 @@ export const studyStats = query({
     }
 
     const goal = goalFromExam(remaining, nearestExam?.daysLeft ?? null);
+    items.total =
+      items.cards.total + items.quiz.total + items.exam.total;
+    items.correct =
+      items.cards.correct + items.quiz.correct + items.exam.correct;
 
     return {
       ...streak,
@@ -407,6 +450,7 @@ export const studyStats = query({
       examInDays: nearestExam?.daysLeft ?? null,
       examTitle: nearestExam?.title ?? null,
       remaining,
+      items,
       tiers: STREAK_TIERS.map((tier) => ({
         ...tier,
         reached: streak.todayCount >= tier.questions,
@@ -1214,6 +1258,8 @@ export const completeGeneration = internalMutation({
         marks: question.marks,
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
+        // Stored as discrete criteria so each award can render as its own row.
+        criteria: question.criteria ?? toCriteria(question.markingGuide),
         order: index,
       });
     }

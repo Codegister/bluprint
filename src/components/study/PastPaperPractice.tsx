@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
+import { criteriaFor, feedbackSummary } from "@/convex/lib/markingCriteria";
 import { boardFamily, markNotation, questionTotalLine } from "@/convex/lib/paperFormat";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -165,6 +166,7 @@ export function PastPaperPractice({
               : 0;
             // Essays and long responses need a bigger box and essay guidance;
             // a short-answer question keeps the compact layout.
+            const criteria = criteriaFor(question);
             const isEssay = question.marking === "levels" && question.marks >= 20;
             const isExtended =
               question.marking === "levels" || question.marks >= 12;
@@ -185,7 +187,7 @@ export function PastPaperPractice({
                   </span>
                   <div className="flex items-center gap-2">
                     {graded && (
-                      <span className="rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#128A5B]">
+                      <span className="rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#0B6B45]">
                         {score}/{question.marks}
                       </span>
                     )}
@@ -222,7 +224,7 @@ export function PastPaperPractice({
                           </span>
                         )}
                         {question.marking === "levels" && (
-                          <span className="rounded-full bg-[#E9FBF3] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-[#128A5B]">
+                          <span className="rounded-full bg-[#E9FBF3] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.06em] text-[#0B6B45]">
                             Levels-marked
                           </span>
                         )}
@@ -248,7 +250,7 @@ export function PastPaperPractice({
                   maxLength={12000}
                   disabled={isGrading}
                   className={cn(
-                    "mt-4 resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15",
+                    "mt-4 resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15",
                     isEssay
                       ? "min-h-[320px]"
                       : isExtended
@@ -273,7 +275,7 @@ export function PastPaperPractice({
                     className={cn(
                       "h-10 rounded-full px-5 text-sm font-semibold sm:w-auto",
                       graded
-                        ? "bg-[#E9FBF3] text-[#128A5B] hover:bg-[#DDF7EB]"
+                        ? "bg-[#E9FBF3] text-[#0B6B45] hover:bg-[#DDF7EB]"
                         : "bg-[#191B27] text-white hover:bg-[#2A2D3E]",
                     )}
                   >
@@ -302,7 +304,7 @@ export function PastPaperPractice({
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, ease: EASE }}
-                    className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
+                    className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
                   >
                     {errors[question._id]}
                   </motion.p>
@@ -318,14 +320,14 @@ export function PastPaperPractice({
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold text-[#128A5B]">
+                        <p className="text-xs font-semibold text-[#0B6B45]">
                           Examiner marking
                         </p>
                         <p className="mt-1 font-display text-lg font-bold text-brand-ink">
                           {score} / {question.marks} marks
                         </p>
                       </div>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#128A5B]">
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#0B6B45]">
                         {scorePercent}%
                       </span>
                     </div>
@@ -338,54 +340,64 @@ export function PastPaperPractice({
                       />
                     </div>
                     <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-brand-ink/80">
-                      {question.feedback}
+                      {feedbackSummary(question.feedback ?? "")}
                     </p>
 
-                    {/* The mark as a checklist: one row per mark-scheme bullet,
-                        with the sentence of the answer that earned it. */}
-                    {(question.checklist?.length ?? 0) > 0 && (
+                    {/* The mark as a checklist: one row per criterion, its full
+                        text, and the quoted words that earned it. */}
+                    {criteria.length > 0 && (question.checklist?.length ?? 0) > 0 && (
                       <div className="mt-4">
                         <p className="text-xs font-semibold text-brand-ink">
-                          Awarded marks, bullet by bullet
+                          Awarded marks, criterion by criterion
                         </p>
                         <div className="mt-2 space-y-1.5">
-                          {question.checklist?.map((check) => (
-                            <div
-                              key={check.point}
-                              className={cn(
-                                "flex items-start gap-2 rounded-2xl border p-3 text-[0.8rem] leading-relaxed",
-                                check.awarded > 0
-                                  ? "border-[#CFE7DC] bg-white"
-                                  : "border-border bg-[#FCFBF8]",
-                              )}
-                            >
-                              {check.awarded > 0 ? (
-                                <Check
-                                  className="mt-0.5 size-4 shrink-0 text-[#128A5B]"
-                                  aria-hidden
-                                />
-                              ) : (
-                                <X
-                                  className="mt-0.5 size-4 shrink-0 text-[#C93C49]"
-                                  aria-hidden
-                                />
-                              )}
-                              <div>
-                                <p className="font-semibold text-brand-ink">
-                                  {check.awarded}/{check.marks} · {check.point}
-                                </p>
-                                <p className="mt-1 text-muted-foreground">
-                                  {check.awarded > 0
-                                    ? check.evidence && check.evidence !== "absent"
-                                      ? `Your words: “${check.evidence}”`
-                                      : "Credited from your answer."
-                                    : check.evidence && check.evidence !== "absent"
-                                      ? `You wrote “${check.evidence}”, which is not a creditable statement of this point.`
-                                      : "Absent: nothing in your answer states this point."}
-                                </p>
+                          {criteria.map((criterion, index) => {
+                            const check = question.checklist?.[index];
+                            const awarded = check?.awarded ?? 0;
+                            const evidence = check?.evidence;
+                            return (
+                              <div
+                                key={criterion.id}
+                                className={cn(
+                                  "flex items-start gap-2 rounded-2xl border p-3 text-[0.8rem] leading-relaxed",
+                                  awarded > 0
+                                    ? "border-[#CFE7DC] bg-white"
+                                    : "border-border bg-[#FCFBF8]",
+                                )}
+                              >
+                                {awarded > 0 ? (
+                                  <Check
+                                    className="mt-0.5 size-4 shrink-0 text-[#0B6B45]"
+                                    aria-hidden
+                                  />
+                                ) : (
+                                  <X
+                                    className="mt-0.5 size-4 shrink-0 text-[#A81F28]"
+                                    aria-hidden
+                                  />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                    <p className="font-semibold text-brand-ink">
+                                      {criterion.text}
+                                    </p>
+                                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-semibold tabular-nums text-brand-ink/70">
+                                      {awarded}/{criterion.marks} marks
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-muted-foreground">
+                                    {awarded > 0
+                                      ? evidence && evidence !== "absent"
+                                        ? `Your words: “${evidence}”`
+                                        : "Credited from your answer."
+                                      : evidence && evidence !== "absent"
+                                        ? `You wrote “${evidence}”, which is not a creditable statement of this point.`
+                                        : "Absent: nothing in your answer states this point."}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -401,23 +413,25 @@ export function PastPaperPractice({
                         </p>
                       </details>
 
-                      <details className="group rounded-2xl bg-white p-3.5">
-                        <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold text-brand-ink">
-                          Mark scheme
-                          <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                        </summary>
-                        <ul className="mt-2 space-y-1.5">
-                          {question.markingGuide.map((point) => (
-                            <li
-                              key={point}
-                              className="flex items-start gap-2 text-sm leading-relaxed text-brand-ink/70"
-                            >
-                              <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-lime" />
-                              {point}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
+                      {(question.checklist?.length ?? 0) === 0 && (
+                        <details className="group rounded-2xl bg-white p-3.5">
+                          <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold text-brand-ink">
+                            Mark scheme
+                            <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                          </summary>
+                          <ul className="mt-2 space-y-1.5">
+                            {criteria.map((criterion) => (
+                              <li
+                                key={criterion.id}
+                                className="flex items-start gap-2 text-sm leading-relaxed text-brand-ink/70"
+                              >
+                                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-lime" />
+                                {criterion.text}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
                     </div>
                   </motion.div>
                 )}

@@ -295,7 +295,7 @@ function SubjectRow({
           "grid size-6 shrink-0 place-items-center rounded-full border transition-colors",
           selected
             ? "border-[#191B27] bg-[#191B27] text-white"
-            : "border-border text-brand-ink/35",
+            : "border-border text-brand-ink/65",
         )}
       >
         {selected ? (
@@ -788,7 +788,7 @@ export default function CourseSetup() {
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search subjects"
                 aria-label="Search subjects"
-                className="h-9 rounded-xl border-border bg-white pl-8 pr-8 text-[0.82rem] shadow-none placeholder:text-muted-foreground/60"
+                className="h-9 rounded-xl border-border bg-white pl-8 pr-8 text-[0.82rem] shadow-none placeholder:text-muted-foreground/90"
               />
               {query && (
                 <button

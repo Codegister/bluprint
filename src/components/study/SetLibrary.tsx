@@ -33,7 +33,7 @@ function StatusText({ set }: { set: SetSummary }) {
       </span>
     );
   }
-  return <span className="text-[0.72rem] font-medium text-[#128A4C]">Ready</span>;
+  return <span className="text-[0.72rem] font-medium text-[#0B6B45]">Ready</span>;
 }
 
 /** One saved set, shown as a single scannable row. */
@@ -173,7 +173,7 @@ export function SetLibrary({ onCreate }: { onCreate: () => void }) {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search study sets"
             aria-label="Search study sets"
-            className="h-9 w-full rounded-full border-border bg-card text-[0.8rem] shadow-none placeholder:text-muted-foreground/60 sm:ml-auto sm:w-56"
+            className="h-9 w-full rounded-full border-border bg-card text-[0.8rem] shadow-none placeholder:text-muted-foreground/90 sm:ml-auto sm:w-56"
           />
         )}
       </motion.div>

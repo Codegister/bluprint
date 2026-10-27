@@ -12,7 +12,8 @@ import { WeakSpots } from "@/components/study/WeakSpots";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { readableError } from "@/lib/errors";
+import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
+import { buildErrorMessage, readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, relativeDate, sourceLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -275,7 +276,7 @@ function BuildingPanel({
           <div className="mt-4 flex items-baseline justify-between gap-3">
             <p className="text-[0.72rem] font-semibold text-brand-ink/70">
               {stage.label}
-              <span className="ml-2 font-medium text-brand-ink/35 tabular-nums">
+              <span className="ml-2 font-medium text-brand-ink/65 tabular-nums">
                 Step {BUILD_STAGES.indexOf(stage) + 1} of {BUILD_STAGES.length}
               </span>
             </p>
@@ -335,6 +336,7 @@ function ErrorPanel({
   onRetry: () => void;
   retrying: boolean;
 }) {
+  const failure = buildErrorMessage(set.errorMessage);
   return (
     <div className="mt-6 rounded-[2rem] border border-border bg-card p-6 sm:p-7">
       <div>
@@ -345,8 +347,7 @@ function ErrorPanel({
           That run stopped early
         </h2>
         <p className="mt-2 whitespace-pre-wrap text-[0.9rem] leading-relaxed text-muted-foreground">
-          {set.errorMessage ??
-            "NVIDIA could not finish this set. Your source is still saved, so you can rebuild it whenever you like."}
+          {failure.message}
         </p>
 
         <Button
@@ -363,8 +364,9 @@ function ErrorPanel({
         </Button>
 
         <p className="mt-3 text-[0.78rem] text-muted-foreground">
-          If NVIDIA is rate-limiting, wait a minute before rebuilding. Your upload
-          is saved.
+          {failure.rateLimited
+            ? "Wait about a minute before rebuilding. Your upload is saved."
+            : "Your upload is saved, so rebuilding uses the same notes."}
         </p>
       </div>
     </div>
@@ -517,7 +519,7 @@ function StudyActions({
           ? `${quizAnswered}/${quizTotal} answered`
           : "Multiple choice, with explanations",
       icon: CheckCircle2,
-      tint: "bg-[#E6F7EF] text-[#128A4C]",
+      tint: "bg-[#E6F7EF] text-[#0B6B45]",
     },
     {
       value: "exam",
@@ -526,7 +528,7 @@ function StudyActions({
       count: set.examCount,
       note: "Written answers, marked with feedback",
       icon: PenLine,
-      tint: "bg-[#FFF1DE] text-[#B4720E]",
+      tint: "bg-[#FFF1DE] text-[#8A5410]",
     },
   ] as const;
 
@@ -792,6 +794,7 @@ export default function StudySet() {
                 quiz={details.quiz}
                 setId={set._id}
                 qualification={qualification}
+                readiness={details.readiness.score}
                 onReviewCards={() => navigate(`/sets/${set._id}/cards`)}
               />
             )}
@@ -858,7 +861,7 @@ export default function StudySet() {
                 shows two explanations of the same shortfall. */}
             {set.generationNote && (
               <div className="mt-3 rounded-2xl border border-border bg-[#FFFBEC] px-4 py-3 text-[0.82rem] leading-relaxed text-[#7A5306]">
-                {set.generationNote}
+                {normaliseCapacityNote(set.generationNote)}
               </div>
             )}
 

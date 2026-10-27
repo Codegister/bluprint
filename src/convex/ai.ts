@@ -20,7 +20,8 @@ import {
   shortfallSentence,
 } from "./lib/buildDefaults";
 import { normalizeAnswer } from "./lib/recall";
-import { shortTitle } from "./lib/titles";
+import { parseSummary, type Summary } from "./lib/summary";
+import { cleanTopicTitle } from "./lib/titles";
 import { requireUserId } from "./lib/requireUser";
 import {
   fetchCognitoOutline,
@@ -75,14 +76,6 @@ type ChatMessage = {
   // instead of re-reading one flattened transcript block.
   role: "system" | "user" | "assistant";
   content: string | ContentPart[];
-};
-
-type Summary = {
-  /** A short topic name for the set ("Photosynthesis"), when the model gave one. */
-  title?: string;
-  overview: string;
-  keyPoints: string[];
-  examFocus: string[];
 };
 
 type GeneratedCard = { front: string; back: string };
@@ -533,27 +526,6 @@ function asText(value: unknown, maxLength = 2000): string {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
-function parseSummary(raw: string): Summary {
-  const parsed =
-    tryParseJson<Partial<Summary>>(raw) ??
-    (parsedObjects(stripReasoning(raw)).find((row) => "overview" in row) as
-      | Partial<Summary>
-      | undefined) ??
-    {};
-  const title = shortTitle(asText(parsed.title, 120));
-  const overview = asText(parsed.overview, 2500);
-  const keyPoints = Array.isArray(parsed.keyPoints)
-    ? parsed.keyPoints.map((point) => asText(point, 500)).filter(Boolean).slice(0, 10)
-    : [];
-  const examFocus = Array.isArray(parsed.examFocus)
-    ? parsed.examFocus.map((point) => asText(point, 500)).filter(Boolean).slice(0, 6)
-    : [];
-  if (!overview || keyPoints.length < 2) {
-    throw new Error("Bluprint could not build a useful summary from this material. Try a clearer photo or more notes.");
-  }
-  return { ...(title ? { title } : {}), overview, keyPoints, examFocus };
-}
-
 function parseCards(raw: string, limit = 12): GeneratedCard[] {
   const items = collectionItems(raw, "cards", (row) => typeof row.front === "string");
   return items
@@ -790,7 +762,9 @@ async function summariseNotes(
     topP: 1.0,
     disableThinking: true,
   });
-  return parseSummary(raw);
+  // The title falls back to the subject label, never to the first sentence of
+  // the notes: a sentence is not a name for a set.
+  return parseSummary(raw, context?.course);
 }
 
 // Batches keep each JSON response short enough to finish. A 20-question quiz
@@ -819,7 +793,7 @@ function materialLimits(notes: string): { cards: number; quiz: number; exam: num
 }
 
 /** A usable summary assembled from the notes when the summary call fails. */
-function summaryFromNotes(notes: string): Summary {
+function summaryFromNotes(notes: string, subject?: string): Summary {
   const clean = notes.replace(/\s+/g, " ").trim();
   const sentences = clean
     .split(/(?<=[.!?])\s+/)
@@ -831,6 +805,9 @@ function summaryFromNotes(notes: string): Summary {
     .slice(0, 8)
     .map((sentence) => sentence.slice(0, 220));
   return {
+    // The notes could not be summarised, so the set keeps a clean subject
+    // label. It is never named after its first sentence.
+    title: cleanTopicTitle("", subject ?? "Study notes"),
     overview: overview.slice(0, 1500),
     keyPoints,
     examFocus: [],
@@ -1387,10 +1364,12 @@ export const buildPastPaper = internalAction({
       });
       return { ok: true };
     } catch (error) {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : "Bluprint could not build this paper. Please try again.";
+      // Same rule as a study set: the log keeps the detail, the page gets a
+      // sentence it can act on.
+      console.error("Past paper build failed", paperId, error);
+      const message = isRateLimit(error)
+        ? "NVIDIA is rate-limiting Bluprint right now. Wait about a minute, then rebuild this paper."
+        : "We couldn't finish this paper. Your course is saved — try again.";
       await ctx.runMutation(internal.pastPapers.failBuild, { paperId, message });
       return { ok: false };
     }
@@ -2080,6 +2059,48 @@ export const rebuildCoursePathway = action({
 // ---------------------------------------------------------------------------
 
 /**
+ * What the student is told when a build fails.
+ *
+ * Convex wraps a failed action in its own message, and a schema mismatch used
+ * to reach the page as "ArgumentValidationError: Object contains extra field
+ * `title` … Path: .summary". Nothing internal — validator paths, model JSON,
+ * HTTP detail — belongs on screen, so anything that is not one of the few
+ * messages written for students is replaced with this sentence.
+ */
+const BUILD_FAILED_MESSAGE =
+  "We couldn't finish building this set. Your notes are saved — try again.";
+
+/** Only a real 429 gets the rate-limit message. */
+const RATE_LIMIT_MESSAGE =
+  "NVIDIA is rate-limiting Bluprint right now. Wait about a minute, then rebuild this set. Your notes are saved.";
+
+/** Messages this file writes for students, safe to show as they are. */
+const STUDENT_MESSAGES = [
+  "Bluprint couldn't find enough readable text",
+  "NVIDIA did not return any usable material",
+  "NVIDIA_API_KEY is not set on this deployment",
+  "Your NVIDIA account has no available credits",
+  "NVIDIA rejected the API key pool",
+];
+
+function isRateLimit(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/rate.?limit|too many requests/i.test(message)) return true;
+  // The transport records the upstream status on the error it throws.
+  const status = (error as { status?: unknown } | null)?.status;
+  return status === 429 || /\bHTTP 429\b/.test(message);
+}
+
+function buildFailureMessage(error: unknown): string {
+  if (isRateLimit(error)) return RATE_LIMIT_MESSAGE;
+  const message = error instanceof Error ? error.message : "";
+  if (STUDENT_MESSAGES.some((start) => message.startsWith(start))) {
+    return message.slice(0, 400);
+  }
+  return BUILD_FAILED_MESSAGE;
+}
+
+/**
  * Runs the whole pipeline for a set: read images if needed, then summary,
  * flashcards, quiz and exam questions. Progress is written back so the set page
  * can show live steps. Safe to retry.
@@ -2239,7 +2260,7 @@ export const processStudySet = action({
 
       // A failed stage should not lose the rest of the set. Only a run where
       // nothing at all came back is a real failure, and it gets a clear message.
-      const summary = generatedSummary ?? summaryFromNotes(notes);
+      const summary = generatedSummary ?? summaryFromNotes(notes, existing.course);
       if (
         !generatedSummary &&
         cards.length === 0 &&
@@ -2251,14 +2272,10 @@ export const processStudySet = action({
         );
       }
 
-      const missed: string[] = [];
-      if (!generatedSummary) missed.push("the summary");
-      if (cards.length === 0) missed.push("the flashcards");
-      if (quiz.length === 0) missed.push("the quiz");
-      if (exams.length === 0) missed.push("the exam questions");
-      // One sentence per item, in the same words everywhere it appears, so the
-      // set page never shows two different explanations of the same build.
-      const shortfall = [
+      // One rule for every shortfall, in the same words everywhere it appears:
+      // "Built X of Y. Your notes supported X." Nothing else is added, so the
+      // set page can never show a second, contradictory explanation.
+      const note = [
         cards.length < requestedCards
           ? shortfallSentence(cards.length, requestedCards)
           : "",
@@ -2267,15 +2284,6 @@ export const processStudySet = action({
           : "",
         exams.length < requestedExam
           ? shortfallSentence(exams.length, requestedExam)
-          : "",
-      ].filter(Boolean);
-      const note = [
-        shortfall.length > 0 ? shortfall.join(" ") : "",
-        missed.length > 0
-          ? `NVIDIA could not finish ${missed.join(", ")}. Everything that did generate is saved; rebuild to fill the gaps.`
-          : "",
-        Date.now() >= deadline
-          ? "The build reached its time limit before every batch finished. Rebuild to add the rest."
           : "",
       ]
         .filter(Boolean)
@@ -2299,10 +2307,10 @@ export const processStudySet = action({
       });
       return { started: true };
     } catch (error) {
-      const message =
-        error instanceof Error && error.message
-          ? error.message
-          : "Generation failed. Please retry.";
+      // The detail stays in the server log; the page only ever sees a sentence
+      // written for a student.
+      console.error("Study set build failed", setId, error);
+      const message = buildFailureMessage(error);
       await ctx.runMutation(internal.studySets.failGeneration, { setId, message });
       throw new Error(message);
     }
@@ -2627,42 +2635,24 @@ function buildChecks(
 }
 
 /**
- * The mark written out as the checklist it was counted from.
+ * The mark in one short paragraph.
  *
- * Every credited bullet carries the student's own sentence, and every missed
- * one that the answer touches on carries the sentence it was judged against, so
- * the note never claims a point is missing without showing where it was looked
- * for.
+ * The bullet-by-bullet detail lives in the checklist rows beneath it, where
+ * every criterion is shown in full with its quote. Repeating that list here is
+ * what produced "Credited: - 1/1 · 1 mark: …" twice on the same card.
  */
 function checklistFeedback(
   checks: MarkCheck[],
   awardedMarks: number,
   marksAvailable: number,
-  answer: string,
 ): string {
-  const credited = checks.filter((check) => check.awarded > 0);
-  const missed = checks.filter((check) => check.awarded === 0);
-  const lines = [`${awardedMarks} of ${marksAvailable} marks.`];
-  if (credited.length > 0) {
-    lines.push("", "Credited:");
-    for (const check of credited) {
-      const quote =
-        check.evidence && check.evidence !== "absent"
-          ? ` — “${check.evidence}”`
-          : "";
-      lines.push(`- ${check.awarded}/${check.marks} · ${check.point}${quote}`);
-    }
+  const credited = checks.filter((check) => check.awarded > 0).length;
+  const lead = `${awardedMarks} of ${marksAvailable} marks.`;
+  if (checks.length === 0) return lead;
+  if (credited === checks.length) {
+    return `${lead} Every point in the guide was credited from your answer.`;
   }
-  if (missed.length > 0) {
-    lines.push("", "Not credited:");
-    for (const check of missed) {
-      // The nearest sentence is shown when the answer refers to the point at
-      // all. Silence means the answer really does not touch on it.
-      const nearest = bestSentenceFor(check.point, answer);
-      lines.push(`- ${check.point}${nearest ? ` — nearest line: “${nearest}”` : ""}`);
-    }
-  }
-  return lines.join("\n");
+  return `${lead} ${credited} of ${checks.length} guide points were credited. Each point and the line it was judged against is below.`;
 }
 
 /** One examiner pass over the guide, returning a verdict for every bullet. */
@@ -2803,7 +2793,7 @@ async function markExamAnswer(
       awardedMarks,
       feedback:
         "This answer reproduces the model answer, the full-mark answer for this question.\n\n" +
-        checklistFeedback(checklist, awardedMarks, exam.marks, response),
+        checklistFeedback(checklist, awardedMarks, exam.marks),
       checklist,
     };
   }
@@ -2836,7 +2826,7 @@ async function markExamAnswer(
   const awardedMarks = awardedFromChecks(checks, exam.marks);
   return {
     awardedMarks,
-    feedback: checklistFeedback(checks, awardedMarks, exam.marks, response),
+    feedback: checklistFeedback(checks, awardedMarks, exam.marks),
     checklist: checks,
   };
 }

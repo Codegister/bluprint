@@ -33,24 +33,20 @@ type Palette = {
 };
 
 /**
- * Light theme: pale highlighter dye. These sit on white paper with multiply, so
- * they need to stay light or the hero turns into a colour block.
+ * Light theme (a flat neutral page): one chrome-blue accent, at low strength.
  * Dark theme: deep ink (indigo, forest, teal, plum, umber). Screen blending
  * lifts them off the near-black sheet without turning them into pale fog.
- * Both lists keep the same order and weights, so a puff's sprite index stays
- * valid across a theme switch.
+ * A puff keeps its sprite index across a theme switch; drawing falls back to
+ * the first pigment when the new palette is shorter.
  */
 const PALETTES: Record<Theme, Palette> = {
   light: {
     key: "light",
-    strength: 2.1,
-    pigments: [
-      { rgb: "164, 206, 74", weight: 3 }, // pale lime
-      { rgb: "158, 132, 235", weight: 2 }, // pale lilac
-      { rgb: "110, 172, 222", weight: 2 }, // pale sky
-      { rgb: "104, 190, 174", weight: 1 }, // pale teal
-      { rgb: "230, 158, 104", weight: 1 }, // pale peach
-    ],
+    // One accent only. The light theme is a flat neutral page, so the plumes
+    // are a single chrome-blue tint rather than lime, lilac, sky, teal and
+    // peach at once.
+    strength: 1.15,
+    pigments: [{ rgb: "91, 138, 196", weight: 1 }],
   },
   dark: {
     key: "dark",
@@ -200,8 +196,13 @@ export function InkInWater({
     let time = 0;
 
     const drawPuff = (puff: Puff, alpha: number, radius: number, x: number, y: number) => {
+      // The light theme has a single pigment, so a puff that entered in the
+      // dark theme keeps its position and borrows the first sprite after a
+      // theme switch instead of drawing an undefined image.
+      const sprite = sprites[puff.sprite] ?? sprites[0];
+      if (!sprite) return;
       ctx.globalAlpha = alpha;
-      ctx.drawImage(sprites[puff.sprite], x - radius, y - radius, radius * 2, radius * 2);
+      ctx.drawImage(sprite, x - radius, y - radius, radius * 2, radius * 2);
     };
 
     const render = () => {

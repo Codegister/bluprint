@@ -51,10 +51,13 @@ function ScoreRing({
     >
       <div className="grid size-full place-items-center rounded-full bg-white">
         <div>
+          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+            Score
+          </p>
           <p className="font-display text-3xl font-bold leading-none tabular-nums text-brand-ink">
             {score}/{total}
           </p>
-          <p className="mt-1 text-sm font-semibold tabular-nums text-[#128A5B]">
+          <p className="mt-1 text-sm font-semibold tabular-nums text-[#0B6B45]">
             {Math.round(shown)}%
           </p>
         </div>
@@ -96,11 +99,14 @@ export function QuizRunner({
   quiz,
   setId,
   qualification,
+  readiness,
   onReviewCards,
 }: {
   quiz: Doc<"quizQuestions">[];
   setId: Id<"studySets">;
   qualification?: string;
+  /** The set's exam-ready percentage, so the result screen can label it. */
+  readiness?: number;
   onReviewCards?: () => void;
 }) {
   const checkAnswer = useMutation(api.studySets.checkQuizAnswer);
@@ -144,14 +150,33 @@ export function QuizRunner({
       >
         <ScoreRing score={result.score} total={result.total} percent={pct} />
 
+        {/* Both numbers are labelled: a bare percentage above a fraction read
+            as two scores with no explanation. */}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-[0.82rem] font-semibold text-brand-ink">
+          <span className="rounded-full bg-brand-panel px-3 py-1 tabular-nums">
+            Score {result.score}/{result.total}
+          </span>
+          {readiness !== undefined && (
+            <span className="rounded-full bg-brand-panel px-3 py-1 tabular-nums">
+              Exam ready {readiness}%
+            </span>
+          )}
+        </div>
+
         <h3 className="mt-5 font-display text-2xl font-bold text-brand-ink">
           {pct >= 80 ? "Strong recall." : pct >= 50 ? "Useful baseline." : "Run it again."}
         </h3>
-        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
-          Your score is saved to this set, and every question you missed now has a
-          place in your weak spots. Read the explanations — they're the shortest
-          path to closing the gap.
-        </p>
+        {result.score === result.total ? (
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+            Clean sweep — nothing to review.
+          </p>
+        ) : (
+          <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+            Your score is saved to this set, and every question you missed now has
+            a place in your weak spots. Read the explanations — they're the
+            shortest path to closing the gap.
+          </p>
+        )}
 
         <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
           <Button
@@ -306,7 +331,7 @@ export function QuizRunner({
                       "border-border bg-white text-brand-ink/85 hover:border-chrome-4 hover:bg-brand-panel",
                     !checked && isSelected && "border-chrome-4 bg-brand-panel text-brand-ink",
                     isCorrect && "border-[#BDEBD3] bg-[#E9FBF3] text-[#0F7A50]",
-                    isWrongChoice && "border-[#F6D2D6] bg-[#FFEEF0] text-[#C93C49]",
+                    isWrongChoice && "border-[#F6D2D6] bg-[#FFEEF0] text-[#A81F28]",
                     checked &&
                       !isCorrect &&
                       !isWrongChoice &&
@@ -319,7 +344,7 @@ export function QuizRunner({
                       isCorrect
                         ? "bg-[#CFF3E2] text-[#0F7A50]"
                         : isWrongChoice
-                          ? "bg-[#FBDDE0] text-[#C93C49]"
+                          ? "bg-[#FBDDE0] text-[#A81F28]"
                           : isSelected
                             ? "bg-chrome-3 text-chrome-7"
                             : "bg-brand-panel text-muted-foreground",
@@ -351,7 +376,7 @@ export function QuizRunner({
                   ? "Type the missing word or phrase"
                   : "Type your answer in a few words"
               }
-              className="resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-4 focus-visible:ring-chrome-6/15"
+              className="resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-4 focus-visible:ring-chrome-6/15"
             />
             <p className="mt-1.5 text-[0.7rem] font-medium text-muted-foreground">
               Marked on key words, so small spelling and wording differences
@@ -371,7 +396,7 @@ export function QuizRunner({
               <p
                 className={cn(
                   "text-xs font-semibold",
-                  correct ? "text-[#0F7A50]" : "text-[#C93C49]",
+                  correct ? "text-[#0F7A50]" : "text-[#A81F28]",
                 )}
               >
                 {correct

@@ -27,6 +27,7 @@ import { ArrowRight, Camera, Sparkles } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
+import { SiteFooter } from "@/components/SiteFooter";
 import { savePendingNotes } from "@/lib/pendingNotes";
 
 /**
@@ -80,7 +81,7 @@ function HeroPreview({
             rows={2}
             maxLength={4000}
             placeholder="Paste notes, or start from a photo…"
-            className="w-full resize-none rounded-2xl border border-border bg-[#FCFBF8] px-3 py-2 text-[0.9rem] leading-relaxed text-brand-ink outline-none placeholder:text-muted-foreground/70 focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/20"
+            className="w-full resize-none rounded-2xl border border-border bg-[#FCFBF8] px-3 py-2 text-[0.9rem] leading-relaxed text-brand-ink outline-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/20"
           />
         </label>
         <div className="mt-3 flex items-center justify-between gap-3">
@@ -788,7 +789,7 @@ export default function Landing() {
               className="mt-3 max-w-xs text-[0.95rem] leading-relaxed text-muted-foreground"
               {...reveal(0.08)}
             >
-              Built to run for a handful of friends with one shared NVIDIA key.
+              Small, independent, and built for real revision.
             </motion.p>
             <div className="mt-6 flex items-start gap-3 rounded-2xl border border-border bg-white p-4">
               <Mascot size={52} float={false} />
@@ -888,26 +889,7 @@ export default function Landing() {
         </Reveal>
       </section>
 
-      <footer className="border-t border-border bg-card">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-8 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-          <Brand />
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[0.85rem] font-medium text-muted-foreground">
-            <a href="#pipeline" className="hover:text-brand-ink">
-              How it works
-            </a>
-            <a href="#outputs" className="hover:text-brand-ink">
-              What you get
-            </a>
-            <a href="#workspace" className="hover:text-brand-ink">
-              Your workspace
-            </a>
-            <Link to={startHref} className="hover:text-brand-ink">
-              {isAuthenticated ? "Home" : "Sign in"}
-            </Link>
-          </div>
-          <p className="text-[0.78rem] text-muted-foreground">Built for a small group</p>
-        </div>
-      </footer>
+      <SiteFooter sections />
     </div>
   );
 }

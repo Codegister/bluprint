@@ -57,7 +57,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="mono-label text-[#C93C49]">Second pass</p>
+            <p className="mono-label text-[#A81F28]">Second pass</p>
             <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">
               Weak spots in “{data.setTitle}”
             </h2>
@@ -68,10 +68,10 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
           </div>
           <div className="flex gap-2">
             <div className="rounded-2xl bg-[#FFEEF0] px-3 py-2 text-center">
-              <p className="font-display text-xl font-bold tabular-nums text-[#C93C49]">
+              <p className="font-display text-xl font-bold tabular-nums text-[#A81F28]">
                 {data.weakCardCount}
               </p>
-              <p className="text-[0.64rem] font-medium text-[#C93C49]/80">cards</p>
+              <p className="text-[0.64rem] font-medium text-[#A81F28]/80">cards</p>
             </div>
             <div className="rounded-2xl bg-[#FFF6E5] px-3 py-2 text-center">
               <p className="font-display text-xl font-bold tabular-nums text-[#96650A]">
@@ -132,7 +132,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
                 <p className="mt-1 text-[0.76rem] leading-relaxed text-muted-foreground">
                   {question.explanation}
                 </p>
-                <p className="mt-1.5 text-[0.68rem] font-semibold text-[#C93C49]">
+                <p className="mt-1.5 text-[0.68rem] font-semibold text-[#A81F28]">
                   Missed {question.missCount ?? 0}×
                 </p>
               </li>

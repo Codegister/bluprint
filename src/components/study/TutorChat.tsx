@@ -8,7 +8,7 @@ import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { Check, Globe, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 const SUGGESTIONS = [
@@ -56,7 +56,7 @@ function SourceList({ sources }: { sources: Source[] }) {
           >
             {source.title || hostOf(source.url)}
           </a>
-          <span className="shrink-0 text-brand-ink/35">{hostOf(source.url)}</span>
+          <span className="shrink-0 text-brand-ink/65">{hostOf(source.url)}</span>
         </li>
       ))}
     </ul>
@@ -129,9 +129,6 @@ export function TutorChat({
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Web search stays off unless the student asks for it: the tutor answers
-  // from the saved notes and specification first.
-  const [useWeb, setUseWeb] = useState(false);
   // The last tier the student used, so a suggested question uses the same one.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -167,7 +164,8 @@ export function TutorChat({
         await askTutor({
           setId: scope.setId,
           question,
-          useWeb,
+          // Web search is off for now; the chip that offered it is gone.
+          useWeb: false,
           tier: chosenTier,
         });
       } else {
@@ -175,7 +173,7 @@ export function TutorChat({
           courseId: scope.courseId,
           unitTitle: scope.unitTitle,
           question,
-          useWeb,
+          useWeb: false,
           tier: chosenTier,
         });
       }
@@ -209,22 +207,6 @@ export function TutorChat({
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
             {scopeControl}
-            <button
-              type="button"
-              aria-pressed={useWeb}
-              onClick={() => setUseWeb((value) => !value)}
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
-                useWeb
-                  ? "border-[#B6E4DB] bg-[#E4F6F2] text-[#0A655C]"
-                  : "border-border bg-white text-muted-foreground hover:bg-brand-panel",
-              )}
-              title="Let the tutor search the web for this question"
-            >
-              <Globe className="size-3.5" aria-hidden />
-              Web
-              {useWeb && <Check className="size-3" aria-hidden />}
-            </button>
           </div>
         </header>
 
@@ -296,9 +278,7 @@ export function TutorChat({
                         <TypingDots />
                         {message.sources.length > 0
                           ? "Reading the web…"
-                          : useWeb
-                            ? "Searching the web…"
-                            : "Thinking…"}
+                          : "Thinking…"}
                       </span>
                     )}
                   </div>
@@ -333,7 +313,7 @@ export function TutorChat({
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.28, ease: EASE }}
-              className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#C93C49]"
+              className="mb-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
             >
               {error}
             </motion.p>
@@ -359,10 +339,8 @@ export function TutorChat({
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-            Use Enter inside the prompt to send · Shift + Enter for a new line ·{" "}
-            {useWeb
-              ? "web search is on, so recent and specification details can be checked online."
-              : "web search is off, so answers come from your material and the model only."}{" "}
+            Use Enter inside the prompt to send · Shift + Enter for a new line ·
+            answers come from your material and the model only.{" "}
             Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>

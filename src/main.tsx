@@ -42,6 +42,7 @@ const StudySet = lazy(() => import("./pages/StudySet.tsx"));
 const Timetable = lazy(() => import("./pages/Timetable.tsx"));
 const TimetableBuilder = lazy(() => import("./pages/TimetableBuilder.tsx"));
 const Tutor = lazy(() => import("./pages/Tutor.tsx"));
+const TrustPage = lazy(() => import("./pages/Trust.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 /**
@@ -243,6 +244,11 @@ createRoot(document.getElementById("root")!).render(
                 path="/auth"
                 element={<AuthPage redirectAfterAuth="/tutor" />}
               />
+              {/* Public trust pages: readable signed out, linked from the
+                  footer and the sign-in screen. */}
+              <Route path="/privacy" element={<TrustPage kind="privacy" />} />
+              <Route path="/terms" element={<TrustPage kind="terms" />} />
+              <Route path="/contact" element={<TrustPage kind="contact" />} />
               {/* The old dashboard screen is now the tutor home. Both legacy
                   links keep working rather than dead-ending. */}
               <Route path="/dashboard" element={<DashboardRedirect />} />
@@ -342,12 +348,16 @@ createRoot(document.getElementById("root")!).render(
                   </RequireAuth>
                 }
               />
+              {/* A guest who opens the tutor is sent straight to sign-in. The
+                  full-page gate used to flash first, then be replaced by the
+                  auth screen. */}
               <Route
                 path="/tutor"
                 element={
                   <RequireAuth
                     title="Sign in to use the AI tutor"
                     description="The tutor uses your notes, courses and study sets."
+                    redirectImmediately
                   >
                     <Tutor />
                   </RequireAuth>

@@ -254,7 +254,7 @@ export function CoursePastPapers({
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[0.62rem] font-semibold",
                         ready
-                          ? "bg-[#EAFBF0] text-[#128A4C]"
+                          ? "bg-[#EAFBF0] text-[#0B6B45]"
                           : paper.status === "error"
                             ? "bg-[#FFEEF0] text-[#C23B49]"
                             : "bg-[#FFF6E5] text-[#96650A]",
@@ -287,7 +287,7 @@ export function CoursePastPapers({
                       <Meter
                         value={progress}
                         className="h-1.5 w-full max-w-[190px]"
-                        barClassName="bg-[#128A4C]"
+                        barClassName="bg-[#0B6B45]"
                         label={`${paper.title} answered`}
                       />
                       <span className="shrink-0 text-[0.66rem] font-semibold text-muted-foreground">

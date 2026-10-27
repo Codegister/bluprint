@@ -50,7 +50,7 @@ const RATINGS: Array<{
     label: "Good",
     hint: "Recalled it",
     className:
-      "border-[#CFE7DC] bg-[#F1FAF6] text-[#128A5B] hover:bg-[#E5F6EE]",
+      "border-[#CFE7DC] bg-[#F1FAF6] text-[#0B6B45] hover:bg-[#E5F6EE]",
   },
   {
     rating: 4,
@@ -264,7 +264,7 @@ export function FlashcardReview({
         <div className="mx-auto flex size-28 items-center justify-center">
           <Mascot size={112} float={false} />
         </div>
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#128A5B]">
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#0B6B45]">
           {sprint ? "Sprint complete" : "Session complete"}
         </p>
         <h3 className="mt-3 font-display text-2xl font-bold text-brand-ink">
@@ -379,7 +379,7 @@ export function FlashcardReview({
           </p>
           <div className="flex items-center gap-1.5">
             {(current.lapses ?? 0) > 0 && (
-              <span className="rounded-full bg-[#FFEEF0] px-2 py-0.5 text-[0.65rem] font-semibold text-[#C93C49]">
+              <span className="rounded-full bg-[#FFEEF0] px-2 py-0.5 text-[0.65rem] font-semibold text-[#A81F28]">
                 Weak spot
               </span>
             )}
@@ -410,10 +410,10 @@ export function FlashcardReview({
                 }
                 rows={3}
                 aria-label="Your answer"
-                className="min-h-[104px] resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/60 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
+                className="min-h-[104px] resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
               />
               {dictation.listening && (
-                <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-[#FFEEF0] px-2 py-0.5 text-[0.65rem] font-semibold text-[#C93C49]">
+                <span className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-[#FFEEF0] px-2 py-0.5 text-[0.65rem] font-semibold text-[#A81F28]">
                   <span className="size-1.5 animate-pulse rounded-full bg-[#D24350]" />
                   Recording
                 </span>
@@ -429,7 +429,7 @@ export function FlashcardReview({
                   className={cn(
                     "h-9 rounded-full px-3 text-[0.78rem] font-semibold shadow-none",
                     dictation.listening
-                      ? "border-[#F6D2D6] bg-[#FFEEF0] text-[#C93C49] hover:bg-[#FFE3E6]"
+                      ? "border-[#F6D2D6] bg-[#FFEEF0] text-[#A81F28] hover:bg-[#FFE3E6]"
                       : "border-border bg-white text-brand-ink hover:bg-brand-panel",
                   )}
                 >
@@ -477,7 +477,7 @@ export function FlashcardReview({
             transition={{ duration: 0.3, ease: EASE }}
           >
             <div className="mt-5 rounded-2xl border border-border bg-[#FCFBF8] p-4">
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-[#128A5B]">
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-[#0B6B45]">
                 Model answer
               </p>
               <p className="mt-1.5 whitespace-pre-wrap text-[0.95rem] leading-relaxed text-brand-ink/85">
@@ -504,7 +504,7 @@ export function FlashcardReview({
                   "mt-3 flex items-start gap-2 rounded-2xl p-3 text-[0.8rem] leading-relaxed",
                   grade.correct
                     ? "bg-[#E9FBF3] text-[#0F7A50]"
-                    : "bg-[#FFEEF0] text-[#C93C49]",
+                    : "bg-[#FFEEF0] text-[#A81F28]",
                 )}
               >
                 {grade.correct ? (
