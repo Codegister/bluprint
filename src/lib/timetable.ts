@@ -4,9 +4,11 @@
  */
 
 /**
- * Subject shades are assigned by course order, so a subject keeps the same
- * metal tone on its session cards and in the legend. The palette is the nine
- * chrome steps; classes are written in full so Tailwind can see them.
+ * Subject colours are assigned by course order, so a subject keeps the same
+ * colour on its builder tile, its session cards and in the legend. The hues
+ * come from the app's anodised accent slots and are mixed down for the tint,
+ * which keeps light and dark mode readable without a second palette. Classes
+ * are written in full so Tailwind can see them.
  */
 export type SubjectColor = {
   bar: string;
@@ -18,88 +20,53 @@ export type SubjectColor = {
 
 export const SUBJECT_COLORS: SubjectColor[] = [
   {
-    bar: "bg-chrome-8",
-    tint: "bg-chrome-2",
-    border: "border-chrome-4",
-    text: "text-chrome-8",
-    dot: "bg-chrome-8",
+    bar: "bg-brand-mint",
+    tint: "bg-brand-mint/25",
+    border: "border-brand-mint/50",
+    text: "text-brand-mint",
+    dot: "bg-brand-mint",
   },
   {
-    bar: "bg-chrome-6",
-    tint: "bg-chrome-3",
-    border: "border-chrome-4",
-    text: "text-chrome-7",
-    dot: "bg-chrome-6",
+    bar: "bg-brand-peach",
+    tint: "bg-brand-peach/25",
+    border: "border-brand-peach/50",
+    text: "text-brand-peach",
+    dot: "bg-brand-peach",
   },
   {
-    bar: "bg-chrome-4",
-    tint: "bg-chrome-2",
-    border: "border-chrome-4",
-    text: "text-chrome-8",
-    dot: "bg-chrome-4",
+    bar: "bg-brand-sky",
+    tint: "bg-brand-sky/25",
+    border: "border-brand-sky/50",
+    text: "text-brand-sky",
+    dot: "bg-brand-sky",
   },
   {
-    bar: "bg-chrome-7",
-    tint: "bg-chrome-3",
-    border: "border-chrome-5",
-    text: "text-chrome-8",
-    dot: "bg-chrome-7",
+    bar: "bg-brand-violet",
+    tint: "bg-brand-violet/25",
+    border: "border-brand-violet/50",
+    text: "text-brand-violet",
+    dot: "bg-brand-violet",
   },
   {
-    bar: "bg-chrome-5",
-    tint: "bg-chrome-2",
-    border: "border-chrome-4",
-    text: "text-chrome-7",
-    dot: "bg-chrome-5",
+    bar: "bg-brand-lime",
+    tint: "bg-brand-lime/25",
+    border: "border-brand-lime/50",
+    text: "text-brand-lime",
+    dot: "bg-brand-lime",
   },
   {
-    bar: "bg-chrome-3",
-    tint: "bg-chrome-2",
-    border: "border-chrome-3",
-    text: "text-chrome-8",
-    dot: "bg-chrome-3",
+    bar: "bg-brand-teal",
+    tint: "bg-brand-teal/25",
+    border: "border-brand-teal/50",
+    text: "text-brand-teal",
+    dot: "bg-brand-teal",
   },
   {
-    bar: "bg-chrome-8",
-    tint: "bg-chrome-3",
-    border: "border-chrome-5",
-    text: "text-chrome-8",
-    dot: "bg-chrome-8",
-  },
-  {
-    bar: "bg-chrome-6",
-    tint: "bg-chrome-2",
-    border: "border-chrome-4",
-    text: "text-chrome-7",
-    dot: "bg-chrome-6",
-  },
-  {
-    bar: "bg-chrome-5",
-    tint: "bg-chrome-3",
-    border: "border-chrome-4",
-    text: "text-chrome-8",
-    dot: "bg-chrome-5",
-  },
-  {
-    bar: "bg-chrome-4",
-    tint: "bg-chrome-2",
-    border: "border-chrome-5",
-    text: "text-chrome-7",
-    dot: "bg-chrome-4",
-  },
-  {
-    bar: "bg-chrome-7",
-    tint: "bg-chrome-3",
-    border: "border-chrome-4",
-    text: "text-chrome-8",
-    dot: "bg-chrome-7",
-  },
-  {
-    bar: "bg-chrome-3",
-    tint: "bg-chrome-2",
-    border: "border-chrome-4",
-    text: "text-chrome-8",
-    dot: "bg-chrome-3",
+    bar: "bg-brand-pink",
+    tint: "bg-brand-pink/25",
+    border: "border-brand-pink/50",
+    text: "text-brand-pink",
+    dot: "bg-brand-pink",
   },
 ];
 
