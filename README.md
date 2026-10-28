@@ -421,7 +421,7 @@ file storage, auth and NVIDIA calls — Pages only serves the built files, and
 1. Push this repository to GitHub with the default branch named `main`.
 2. In **Settings → Pages**, set **Source** to **GitHub Actions**.
 3. Push to `main` (or run **Deploy to GitHub Pages** from the Actions tab).
-   `.github/workflows/deploy.yml` typechecks, builds with the correct base path,
+   `.github/workflows/deploy.yml` installs, builds with the correct base path,
    copies `index.html` to `404.html` for client-side routes, and deploys `dist/`.
 4. Set the site URL on the Convex deployment so auth links and redirects point at Pages:
 
@@ -438,11 +438,16 @@ Notes:
   `BrowserRouter` reads `import.meta.env.BASE_URL` as its basename. A user site named
   `<user>.github.io` is detected and served from `/`.
 - Deep links work through the copied `404.html`; no server rewrite is needed.
+- The generated Convex client (`src/convex/_generated/`) is not committed, because
+  `convex codegen` needs an authenticated deployment. The workflow supplies the runtime
+  proxy the bundle needs, so Pages builds with no Convex credentials or secrets. Run
+  `bunx convex dev --once` locally for the real typed client and `bunx tsc -b`.
 - GitHub's own Pages build cannot run Convex functions. The app needs the Convex deployment
   to be up, which is true for the pinned URL in `src/main.tsx`.
 - To build the Pages bundle locally:
 
   ```bash
+  bunx convex dev --once   # writes src/convex/_generated/ and types the app
   bunx tsc -b && bunx vite build --base="/<repo>/"
   ```
 
