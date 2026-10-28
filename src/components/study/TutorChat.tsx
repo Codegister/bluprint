@@ -5,6 +5,11 @@ import { EASE, TypingDots } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
+import {
+  readTutorWebScope,
+  saveTutorWebScope,
+  tutorScopeCaption,
+} from "@/lib/tutorScope";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -129,9 +134,13 @@ export function TutorChat({
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Web grounding is opt-in per question: the tutor answers from the notes
-  // first, and this lets the student ask it to check the wider web too.
-  const [useWeb, setUseWeb] = useState(false);
+  // Web grounding is a permanent control, remembered per set: chosen once, the
+  // same conversation keeps the scope on the next visit.
+  const scopeId = scope.kind === "set" ? scope.setId : null;
+  const [useWeb, setUseWeb] = useState(() => readTutorWebScope(scopeId));
+  useEffect(() => {
+    if (scopeId) saveTutorWebScope(scopeId, useWeb);
+  }, [scopeId, useWeb]);
   // The last tier the student used, so a suggested question uses the same one.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -139,6 +148,18 @@ export function TutorChat({
   // The reply being written right now, if any.
   const streaming = messages?.find((message) => message.streaming);
   const streamedLength = streaming?.content.length ?? 0;
+  // Pages cited by the most recent finished answer, or null before one exists.
+  // The caption reads from this, so it describes what happened rather than what
+  // the chip is set to.
+  const latestSourceCount = (() => {
+    if (!messages) return null;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index]!;
+      if (message.role !== "assistant" || message.streaming) continue;
+      return message.sources?.length ?? 0;
+    }
+    return null;
+  })();
 
   // Keep the newest turn in view without moving the whole page.
   useEffect(() => {
@@ -241,8 +262,8 @@ export function TutorChat({
                 Stuck on something?
               </p>
               <p className="mt-1 max-w-sm text-[0.86rem] leading-relaxed text-muted-foreground">
-                Ask about {title}. The tutor can explain an idea, quiz you, or show
-                exactly where marks are usually lost.
+                Ask about {title}. The tutor can explain an idea, quiz you, or
+                mark an answer and say what was missing.
               </p>
               <div className="rise-stagger mt-4 grid w-full gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((suggestion) => (
@@ -360,9 +381,12 @@ export function TutorChat({
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
             Use Enter inside the prompt to send · Shift + Enter for a new line ·{" "}
-            {useWeb
-              ? "web search is on, so recent and specification details can be checked online."
-              : "web search is off, so answers come from your material and the model only."}{" "}
+            {tutorScopeCaption({
+              useWeb,
+              materialLabel:
+                scope.kind === "set" ? "this set's notes" : "this course's notes",
+              latestSourceCount,
+            })}{" "}
             Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>

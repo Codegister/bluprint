@@ -24,6 +24,13 @@ export const AI_RATE_LIMIT_MESSAGE =
 export const DICTATION_UNAVAILABLE_MESSAGE =
   "Dictation is not working right now. Please type your answer instead.";
 
+/**
+ * Shown when the examiner cannot produce a usable verdict even after a retry.
+ * The student's answer is persisted before this is thrown, so "saved" is true.
+ */
+export const MARKING_FAILED_MESSAGE =
+  "We couldn't mark that one. Your answer is saved — try again.";
+
 /** What the set page shows when a build fails for a reason it cannot name. */
 export const BUILD_FAILED_MESSAGE =
   "We couldn't finish building this set. Your notes are saved — try again.";

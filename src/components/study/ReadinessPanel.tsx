@@ -1,4 +1,5 @@
 import { Meter } from "@/components/motion/Motion";
+import { markLabel, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   ArrowRight,
@@ -17,6 +18,15 @@ export type ReadinessView = {
     quiz: number | null;
     exam: number | null;
   };
+  inputs: {
+    cardsSettled: number;
+    cardsTotal: number;
+    quizCorrect: number;
+    quizTotal: number;
+    examEarned: number;
+    examTotal: number;
+  };
+  weights: { recall: number; quiz: number; exam: number };
 };
 
 export type PaceView = {
@@ -150,6 +160,50 @@ export function ReadinessPanel({
           <PartMeter label="Written marks" value={readiness.parts.exam} tint="bg-[#F0A03C]" />
         </div>
 
+        {/* The number above is a weighted average. This is the working: what
+            each part is measured from, and how much of the total it carries. */}
+        <details className="group mt-3 rounded-xl bg-brand-panel/70 px-3 py-2">
+          <summary className="cursor-pointer list-none text-[0.72rem] font-semibold text-brand-ink/70">
+            How this is worked out
+            <span className="ml-1 font-normal text-muted-foreground group-open:hidden">
+              — {readiness.weights.recall}% recall · {readiness.weights.quiz}% quiz ·{" "}
+              {readiness.weights.exam}% written
+            </span>
+          </summary>
+          <ul className="mt-2 space-y-1 text-[0.72rem] leading-relaxed text-brand-ink/70">
+            <li>
+              <span className="font-semibold tabular-nums">{readiness.parts.recall}%</span>{" "}
+              card recall — {readiness.inputs.cardsSettled} of{" "}
+              {plural(readiness.inputs.cardsTotal, "card")} marked known, remembered
+              at their review interval. Weight {readiness.weights.recall}%.
+            </li>
+            <li>
+              {readiness.parts.quiz === null ? (
+                <>No quiz taken yet, so its weight is shared out across the rest.</>
+              ) : (
+                <>
+                  <span className="font-semibold tabular-nums">{readiness.parts.quiz}%</span>{" "}
+                  quiz accuracy — {readiness.inputs.quizCorrect} of{" "}
+                  {plural(readiness.inputs.quizTotal, "answer")} on the last quiz. Weight{" "}
+                  {readiness.weights.quiz}%.
+                </>
+              )}
+            </li>
+            <li>
+              {readiness.parts.exam === null ? (
+                <>No written answer marked yet, so its weight is shared out too.</>
+              ) : (
+                <>
+                  <span className="font-semibold tabular-nums">{readiness.parts.exam}%</span>{" "}
+                  written marks — {readiness.inputs.examEarned} of{" "}
+                  {markLabel(readiness.inputs.examTotal)} credited on marked
+                  questions. Weight {readiness.weights.exam}%.
+                </>
+              )}
+            </li>
+          </ul>
+        </details>
+
         <p className="mt-4 rounded-xl bg-brand-panel/70 px-3 py-2 text-[0.72rem] leading-relaxed text-brand-ink/65">
           {pace
             ? `Projected readiness on exam day: ${projected.score}% if nothing else changes. Each review pushes that up.`
@@ -217,7 +271,7 @@ export function ReadinessPanel({
               <Gauge className="mt-0.5 size-3.5 shrink-0 text-chrome-7" aria-hidden />
               {pace.remaining === 0
                 ? "Every card is consolidated. Keep it warm with short reviews."
-                : `${pace.remaining} cards are not yet settled. About ${pace.perDay} a day clears them before the paper.`}
+                : `${plural(pace.remaining, "card")} not yet settled. About ${plural(pace.perDay, "card")} a day clears them before the paper.`}
             </p>
           </>
         ) : (

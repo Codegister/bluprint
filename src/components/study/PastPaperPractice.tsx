@@ -6,6 +6,7 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { criteriaFor, feedbackSummary } from "@/convex/lib/markingCriteria";
 import { boardFamily, markNotation, questionTotalLine } from "@/convex/lib/paperFormat";
 import { readableError } from "@/lib/errors";
+import { markLabel, pointLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
 import { motion } from "framer-motion";
@@ -94,6 +95,7 @@ export function PastPaperPractice({
   const handleDispute = async (question: PaperQuestion) => {
     setDisputingId(question._id);
     setErrors((current) => ({ ...current, [question._id]: "" }));
+    toast.dismiss();
     try {
       const result = await disputeMark({ questionId: question._id });
       toast.success(
@@ -129,6 +131,8 @@ export function PastPaperPractice({
 
     setErrors((current) => ({ ...current, [question._id]: "" }));
     setGradingId(question._id);
+    // A failure from an earlier answer must not sit above a fresh success.
+    toast.dismiss();
     try {
       const result = await gradeAnswer({ questionId: question._id, answer });
       setAnswers((current) => ({ ...current, [question._id]: answer }));
@@ -343,7 +347,7 @@ export function PastPaperPractice({
                         ? `${wordCount} words · build a developed answer`
                         : question.marks <= 2
                           ? `${answer.trim().length} characters · a short answer is enough`
-                          : `${answer.trim().length} characters · aim for ${question.marks} clear point${question.marks === 1 ? "" : "s"}`}
+                          : `${answer.trim().length} characters · aim for ${pointLabel(question.marks)}`}
                   </p>
                   <Button
                     onClick={() => void handleMark(question)}
@@ -375,15 +379,25 @@ export function PastPaperPractice({
                 )}
 
                 {errors[question._id] && (
-                  <motion.p
+                  <motion.div
                     key={errors[question._id]}
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, ease: EASE }}
-                    className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
+                    role="alert"
+                    className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
                   >
-                    {errors[question._id]}
-                  </motion.p>
+                    <span>{errors[question._id]}</span>
+                    {!isGrading && (
+                      <button
+                        type="button"
+                        onClick={() => void handleMark(question)}
+                        className="shrink-0 rounded-full bg-white/70 px-3 py-1 font-semibold text-[#A81F28] underline-offset-2 hover:underline"
+                      >
+                        Try marking again
+                      </button>
+                    )}
+                  </motion.div>
                 )}
 
                 {graded && (
@@ -399,9 +413,15 @@ export function PastPaperPractice({
                         Examiner marking
                       </p>
                       <p className="mt-1 font-display text-lg font-bold text-brand-ink">
-                        {score} of {question.marks} marks
+                        {score} of {markLabel(question.marks)}
                       </p>
                     </div>
+                    {question.lowConfidence && (
+                      <p className="mt-2 rounded-xl bg-[#FFF7E6] px-3 py-2 text-[0.74rem] font-medium leading-relaxed text-[#7A4B06]">
+                        Two marks disagreed — treat this as guidance. The lower
+                        of the two was kept.
+                      </p>
+                    )}
                     <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#D7F0E3]">
                       <motion.div
                         className="h-full rounded-full bg-brand-mint"
@@ -455,7 +475,7 @@ export function PastPaperPractice({
                                       {criterion.text}
                                     </p>
                                     <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-semibold tabular-nums text-brand-ink/70">
-                                      {awarded}/{criterion.marks} marks
+                                      {awarded}/{markLabel(criterion.marks)}
                                     </span>
                                   </div>
                                   <p className="mt-1 text-muted-foreground">

@@ -1403,6 +1403,21 @@ const markCheck = v.object({
   evidence: v.string(),
 });
 
+/**
+ * Keeps a written answer that could not be marked. The student is told their
+ * answer is saved, so a marking failure must not also lose what they wrote.
+ */
+export const saveExamDraft = internalMutation({
+  args: { examId: v.id("examQuestions"), answer: v.string() },
+  handler: async (ctx, { examId, answer }) => {
+    const exam = await ctx.db.get(examId);
+    if (!exam) return;
+    await ctx.db.patch(examId, {
+      userAnswer: normalizeStudyText(answer).slice(0, 5000),
+    });
+  },
+});
+
 export const saveExamResult = internalMutation({
   args: {
     examId: v.id("examQuestions"),
@@ -1410,8 +1425,15 @@ export const saveExamResult = internalMutation({
     awardedMarks: v.number(),
     feedback: v.string(),
     checklist: v.optional(v.array(markCheck)),
+    // Set when the two marking passes disagreed; both totals are kept so the
+    // disagreement can be reviewed rather than guessed at.
+    lowConfidence: v.optional(v.boolean()),
+    markPasses: v.optional(v.array(v.number())),
   },
-  handler: async (ctx, { examId, answer, awardedMarks, feedback, checklist }) => {
+  handler: async (
+    ctx,
+    { examId, answer, awardedMarks, feedback, checklist, lowConfidence, markPasses },
+  ) => {
     const exam = await ctx.db.get(examId);
     if (!exam) throw new Error("Question not found.");
     const set = await ctx.db.get(exam.setId);
@@ -1426,6 +1448,8 @@ export const saveExamResult = internalMutation({
       awardedMarks: Math.max(0, Math.min(exam.marks, Math.round(awardedMarks))),
       feedback: normalizeStudyText(feedback).slice(0, 4000),
       checklist: checklist?.slice(0, 40),
+      lowConfidence,
+      markPasses: markPasses?.slice(0, 4),
       gradedAt: now,
     });
     await ctx.db.patch(set._id, { lastStudiedAt: now, updatedAt: now });

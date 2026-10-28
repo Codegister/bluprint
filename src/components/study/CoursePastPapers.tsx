@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
+import { markLabel, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -277,7 +278,7 @@ export function CoursePastPapers({
                   </div>
                   <p className="mt-1 text-[0.74rem] leading-relaxed text-muted-foreground">
                     {ready
-                      ? `${paper.questionCount} question${paper.questionCount === 1 ? "" : "s"} · ${paper.totalMarks} marks · about ${paper.durationMinutes} minutes${outdated ? " · rebuild to use the current question types and marks" : ""}`
+                      ? `${plural(paper.questionCount, "question")} · ${markLabel(paper.totalMarks)} · about ${plural(paper.durationMinutes, "minute")}${outdated ? " · rebuild to use the current question types and marks" : ""}`
                       : paper.status === "error"
                         ? buildErrorMessage(paper.errorMessage).message
                         : paper.progress ?? "Waiting to start"}
@@ -292,7 +293,7 @@ export function CoursePastPapers({
                       />
                       <span className="shrink-0 text-[0.66rem] font-semibold text-muted-foreground">
                         {paper.answeredCount}/{paper.questionCount} answered ·{" "}
-                        {paper.earnedMarks}/{paper.totalMarks} marks
+                        {paper.earnedMarks}/{markLabel(paper.totalMarks)}
                       </span>
                     </div>
                   )}

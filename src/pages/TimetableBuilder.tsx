@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
-import { dateInputValue, daysUntilInput } from "@/lib/format";
+import { dateInputValue, daysUntilInput, plural } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { formatLongDate, formatTime, SUBJECT_COLORS } from "@/lib/timetable";
 import { cn } from "@/lib/utils";
@@ -859,7 +859,7 @@ export default function TimetableBuilder() {
                           : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
                       )}
                     >
-                      {days} days
+                      {plural(days, "day")}
                     </button>
                   ))}
                 </div>

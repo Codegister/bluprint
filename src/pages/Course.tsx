@@ -25,7 +25,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
 import { notifyError, readableError } from "@/lib/errors";
-import { percent, relativeDate } from "@/lib/format";
+import { percent, plural, relativeDate } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -664,7 +664,7 @@ export default function Course() {
                 <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
                   {sets.length === 0
                     ? "Open a topic to make the first one"
-                    : `${cards} cards across this course`}
+                    : `${plural(cards, "card")} across this course`}
                 </p>
               </div>
               <div className="border-t border-border px-5 py-4 sm:border-l sm:border-t-0">
@@ -679,7 +679,7 @@ export default function Course() {
                   )}
                 </p>
                 <p className="mt-1 text-[0.72rem] leading-relaxed text-muted-foreground">
-                  {cards > 0 ? `${known} of ${cards} cards` : "Build material to track this"}
+                  {cards > 0 ? `${known} of ${plural(cards, "card")}` : "Build material to track this"}
                 </p>
               </div>
             </motion.section>
@@ -1008,7 +1008,7 @@ export default function Course() {
                                           )}
                                         >
                                           {set.status === "ready"
-                                            ? `${set.cardCount} cards`
+                                            ? plural(set.cardCount, "card")
                                             : set.status === "error"
                                               ? "Build interrupted"
                                               : "Building"}
@@ -1376,8 +1376,9 @@ export default function Course() {
                                 )}
                               </div>
                               <p className="mt-1 text-[0.74rem] text-muted-foreground">
-                                {set.cardCount} cards · {set.quizCount} quiz ·{" "}
-                                {set.examCount} exam · updated{" "}
+                                {plural(set.cardCount, "card")} ·{" "}
+                                {plural(set.quizCount, "quiz question")} ·{" "}
+                                {plural(set.examCount, "exam question")} · updated{" "}
                                 {relativeDate(set.updatedAt)}
                               </p>
                               {set.status === "ready" && set.cardCount > 0 && (

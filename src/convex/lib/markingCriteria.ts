@@ -383,21 +383,25 @@ export function evidenceCoverage(text: string, answer: string): number {
 /**
  * The terms that tell one criterion apart from the rest of the guide.
  *
- * A whole guide repeats words — "enzyme" appears in every enzyme question, so
- * matching it says nothing about which point the student made. A temperature
- * answer to a temperature-and-pH question could use that shared word to take a
- * pH mark. Dropping the words every criterion shares leaves the vocabulary that
- * carries each criterion's own idea, including a topic word like "pH" that only
- * some rows use.
+ * A whole guide repeats words — "enzyme" appears in most rows of an enzyme
+ * question, so matching it says nothing about which point the student made. A
+ * temperature answer that mentions "the optimum temperature" could otherwise
+ * take the "above the optimum the enzyme denatures" mark on the strength of
+ * "optimum" and "enzyme" alone, which is how a half answer once scored full
+ * marks. A word used by more than one row is therefore treated as part of the
+ * question's shared vocabulary and dropped, leaving the terms that carry each
+ * criterion's own idea.
  */
 export function distinctiveTermsFor(texts: string[]): string[][] {
   const all = texts.map((text) => criterionKeywords(criterionText(text)));
   if (all.length <= 1) return all;
-  const universal = new Set(
-    (all[0] ?? []).filter((term) => all.every((terms) => terms.includes(term))),
+  const shared = new Set(
+    all.flat().filter(
+      (term) => all.filter((terms) => terms.includes(term)).length > 1,
+    ),
   );
   return all.map((terms) => {
-    const kept = terms.filter((term) => !universal.has(term));
+    const kept = terms.filter((term) => !shared.has(term));
     // A guide where every row has only shared words still needs a guard, so
     // fall back to the full term list rather than allowing an automatic credit.
     return kept.length > 0 ? kept : terms;
@@ -450,11 +454,12 @@ export function awardCriterion(
  *
  * Used for a criterion the word guard could not confirm (coverage below half),
  * where the marker has read the answer and said the idea is there. The quote must
- * still touch the criterion's own vocabulary: "It controls what enters and
- * leaves the cell" shares enough with "Controls the movement of substances into
- * and out of the cell" to pass, while a temperature sentence shares nothing with
- * a pH criterion and takes nothing for it. `share` is 1 for a clear statement
- * and 0.5 for a partial one.
+ * still carry the criterion's own vocabulary: "It controls what enters and
+ * leaves the cell" shares `controls` and `cell` with "Controls the movement of
+ * substances into and out of the cell" and passes, while a sentence that
+ * borrows only one incidental word — "the optimum temperature" for a criterion
+ * about denaturation — takes nothing. `share` is 1 for a clear statement and 0.5
+ * for a partial one.
  */
 export function meaningAward(
   marks: number,
@@ -471,7 +476,11 @@ export function meaningAward(
   // checked against the answer and the criterion is not prose to paraphrase.
   // Prose criteria still need at least one of their own terms, which is what
   // stops a temperature answer taking a pH mark.
-  const shared = distinctiveCoverage(terms, quote) > 0;
+  // One borrowed word is not evidence; two, or a criterion short enough that
+  // one word is most of it, is.
+  const matched = terms.filter((term) => distinctiveCoverage([term], quote) > 0).length;
+  const needed = Math.min(2, terms.length);
+  const shared = needed > 0 && matched >= needed;
   if (!shared && !isSymbolicCriterion(criterion)) return 0;
   return Math.min(marks, Math.max(1, Math.ceil(marks * share)));
 }
@@ -488,6 +497,40 @@ export function isSymbolicCriterion(criterion: string): boolean {
   if (/\d+\s*[:/]\s*\d+/.test(text)) return true;
   const words = text.split(/\s+/).filter(Boolean);
   return words.length <= 6 && /\d/.test(text);
+}
+
+/**
+ * The mark for one answer, from two independent passes.
+ *
+ * A single pass is never trusted on its own: the same answer must score the
+ * same way whichever reply arrives first, and a disagreement is the honest
+ * signal that the answer sits on a boundary. Per criterion the lower award wins
+ * (a lucky pass cannot inflate a mark), the total is the sum of those awards,
+ * and the result is flagged when the two totals differ so the UI can say so.
+ */
+export function reconcilePasses(
+  first: number[],
+  second: number[],
+): {
+  awards: number[];
+  passes: [number, number];
+  lowConfidence: boolean;
+  total: number;
+} {
+  const length = Math.max(first.length, second.length);
+  const awards = Array.from({ length }, (_, index) =>
+    Math.min(first[index] ?? 0, second[index] ?? 0),
+  );
+  const passes: [number, number] = [
+    first.reduce((sum, value) => sum + value, 0),
+    second.reduce((sum, value) => sum + value, 0),
+  ];
+  return {
+    awards,
+    passes,
+    lowConfidence: passes[0] !== passes[1],
+    total: awards.reduce((sum, value) => sum + value, 0),
+  };
 }
 
 /**

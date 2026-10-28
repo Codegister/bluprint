@@ -339,6 +339,10 @@ const schema = defineSchema(
           }),
         ),
       ),
+      // Every answer is marked twice, exactly as a study set's exam questions
+      // are; a disagreement keeps the lower total and flags the result.
+      lowConfidence: v.optional(v.boolean()),
+      markPasses: v.optional(v.array(v.number())),
       gradedAt: v.optional(v.number()),
       // Set when the student asked for the mark to be looked at again. A
       // re-grade can only raise the mark, never lower it.
@@ -649,6 +653,11 @@ const schema = defineSchema(
           }),
         ),
       ),
+      // Every answer is marked twice. When the two passes disagree the lower
+      // total is kept and the result is flagged, so a single lucky pass can
+      // never inflate a mark; both totals are stored for review.
+      lowConfidence: v.optional(v.boolean()),
+      markPasses: v.optional(v.array(v.number())),
       gradedAt: v.optional(v.number()),
     }).index("by_set", ["setId"]),
 

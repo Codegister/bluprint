@@ -2,6 +2,7 @@ import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { SkeletonStudySetPage } from "@/components/Skeletons";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
+import { plural } from "@/lib/format";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -33,7 +34,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
       <>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-[0.8rem] font-semibold text-brand-ink">
-            Weak-spot session · {data.cards.length} cards
+            Weak-spot session · {plural(data.cards.length, "card")}
           </p>
           <Button
             variant="outline"

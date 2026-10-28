@@ -425,6 +425,19 @@ const markCheck = v.object({
   evidence: v.string(),
 });
 
+/**
+ * Keeps a written answer that could not be marked, so a marking failure never
+ * also discards what the student wrote.
+ */
+export const saveQuestionDraft = internalMutation({
+  args: { questionId: v.id("pastPaperQuestions"), answer: v.string() },
+  handler: async (ctx, { questionId, answer }) => {
+    const question = await ctx.db.get(questionId);
+    if (!question) return;
+    await ctx.db.patch(questionId, { userAnswer: answer.slice(0, 12000) });
+  },
+});
+
 /** Stores one marked answer and refreshes the paper's progress counters. */
 export const saveQuestionResult = internalMutation({
   args: {
@@ -435,8 +448,23 @@ export const saveQuestionResult = internalMutation({
     checklist: v.optional(v.array(markCheck)),
     // True when the mark was looked at again at the student's request.
     disputed: v.optional(v.boolean()),
+    // The two marking passes and whether they agreed, kept for review.
+    lowConfidence: v.optional(v.boolean()),
+    markPasses: v.optional(v.array(v.number())),
   },
-  handler: async (ctx, { questionId, answer, awardedMarks, feedback, checklist, disputed }) => {
+  handler: async (
+    ctx,
+    {
+      questionId,
+      answer,
+      awardedMarks,
+      feedback,
+      checklist,
+      disputed,
+      lowConfidence,
+      markPasses,
+    },
+  ) => {
     const question = await ctx.db.get(questionId);
     if (!question) throw new Error("Question not found.");
     const paper = await ctx.db.get(question.paperId);
@@ -450,6 +478,8 @@ export const saveQuestionResult = internalMutation({
       awardedMarks: Math.max(0, Math.min(question.marks, Math.round(awardedMarks))),
       feedback: feedback.slice(0, 4000),
       checklist: checklist?.slice(0, 40),
+      lowConfidence,
+      markPasses: markPasses?.slice(0, 4),
       gradedAt: now,
       ...(disputed ? { disputedAt: now } : {}),
     });

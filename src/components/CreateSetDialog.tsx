@@ -12,6 +12,7 @@ import { EASE, EASE_EXIT } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { notifyError, readableError } from "@/lib/errors";
+import { plural } from "@/lib/format";
 import {
   MAX_NOTE_CHARS,
   MAX_NOTE_CHARS_LABEL,
@@ -722,7 +723,8 @@ export function CreateSetDialog({
                 Build options
               </span>
               <span className="text-[0.7rem] text-muted-foreground">
-                {cardCount} cards · {quizCount} quiz · {examCount} exam
+                {plural(cardCount, "card")} · {plural(quizCount, "quiz question")} ·{" "}
+                {plural(examCount, "exam question")}
               </span>
             </summary>
             <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">

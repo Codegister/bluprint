@@ -42,6 +42,24 @@ export function percent(part: number, total: number): number {
   return Math.round((part / total) * 100);
 }
 
+/**
+ * A count with its noun in the right number: "1 mark", "2 marks". Every
+ * count-driven label goes through here so the app never prints "1 marks".
+ */
+export function plural(count: number, singular: string, pluralForm?: string): string {
+  return `${count} ${count === 1 ? singular : (pluralForm ?? `${singular}s`)}`;
+}
+
+/** "1 mark" / "3 marks" — the label used on every marking row and header. */
+export function markLabel(marks: number): string {
+  return plural(marks, "mark");
+}
+
+/** "1 clear point" / "3 clear points" — the guidance under an answer box. */
+export function pointLabel(points: number): string {
+  return plural(points, "clear point");
+}
+
 /** Local calendar date for an `<input type="date">`, without UTC drift. */
 export function dateInputValue(date: Date): string {
   const year = date.getFullYear();

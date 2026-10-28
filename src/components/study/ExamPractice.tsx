@@ -9,6 +9,7 @@ import {
   feedbackSummary,
 } from "@/convex/lib/markingCriteria";
 import { readableError } from "@/lib/errors";
+import { markLabel, pointLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
 import { motion } from "framer-motion";
@@ -59,6 +60,8 @@ export function ExamPractice({
 
     setErrors((current) => ({ ...current, [exam._id]: "" }));
     setGradingId(exam._id);
+    // A previous failure's toast must not outlive the failure.
+    toast.dismiss();
     try {
       const result = await gradeAnswer({ examId: exam._id, answer });
       toast.success(`Graded: ${result.awardedMarks}/${result.marks}`);
@@ -128,7 +131,7 @@ export function ExamPractice({
                   </span>
                 )}
                 <span className="rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70">
-                  {exam.marks} marks
+                  {markLabel(exam.marks)}
                 </span>
               </div>
             </div>
@@ -151,7 +154,7 @@ export function ExamPractice({
 
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs font-medium text-muted-foreground">
-                {answer.trim().length} characters · aim for {exam.marks} clear points
+                {answer.trim().length} characters · aim for {pointLabel(exam.marks)}
               </p>
               <Button
                 onClick={() => handleMark(exam)}
@@ -175,15 +178,26 @@ export function ExamPractice({
             </div>
 
             {errors[exam._id] && (
-              <motion.p
+              <motion.div
                 key={errors[exam._id]}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, ease: EASE }}
-                className="mt-3 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
+                className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
+                role="alert"
               >
-                {errors[exam._id]}
-              </motion.p>
+                <span>{errors[exam._id]}</span>
+                {/* A failure is retryable in place; the answer is still here. */}
+                {!isGrading && (
+                  <button
+                    type="button"
+                    onClick={() => void handleMark(exam)}
+                    className="shrink-0 rounded-full bg-white/70 px-3 py-1 font-semibold text-[#A81F28] underline-offset-2 hover:underline"
+                  >
+                    Try marking again
+                  </button>
+                )}
+              </motion.div>
             )}
 
             {graded && (
@@ -199,7 +213,7 @@ export function ExamPractice({
                     AI grading
                   </p>
                   <p className="mt-1 font-display text-lg font-bold text-brand-ink">
-                    {score} of {exam.marks} marks
+                    {score} of {markLabel(exam.marks)}
                   </p>
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#D7F0E3]">
@@ -210,6 +224,12 @@ export function ExamPractice({
                     transition={{ duration: 0.9, ease: EASE, delay: 0.15 }}
                   />
                 </div>
+                {exam.lowConfidence && (
+                  <p className="mt-2 rounded-xl bg-[#FFF7E6] px-3 py-2 text-[0.74rem] font-medium leading-relaxed text-[#7A4B06]">
+                    Two marks disagreed — treat this as guidance. The lower of
+                    the two was kept.
+                  </p>
+                )}
                 {/* The score is in the header and every criterion is a row
                     below, so the old summary paragraph only repeated them. */}
                 {(exam.checklist?.length ?? 0) === 0 && (
@@ -257,7 +277,7 @@ export function ExamPractice({
                                   {criterion.text}
                                 </p>
                                 <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-semibold tabular-nums text-brand-ink/70">
-                                  {awarded}/{criterion.marks} marks
+                                  {awarded}/{markLabel(criterion.marks)}
                                 </span>
                               </div>
                               <p className="mt-1 text-muted-foreground">

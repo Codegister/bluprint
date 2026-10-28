@@ -6,6 +6,7 @@ import { SkeletonRows } from "@/components/Skeletons";
 import { Meter, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
+import { plural } from "@/lib/format";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
@@ -451,7 +452,7 @@ export default function Today() {
               Due now
             </h2>
             <span className="text-[0.72rem] font-semibold tabular-nums text-muted-foreground">
-              {totalDue} cards
+              {plural(totalDue, "card")}
             </span>
           </div>
           {sets === undefined ? (

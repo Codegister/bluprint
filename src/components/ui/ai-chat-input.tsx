@@ -1451,6 +1451,8 @@ export const PromptInput = React.forwardRef<HTMLDivElement, PromptInputProps>(
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={openFileChooser}
+                aria-label="Attach a file"
+                title="Attach a file"
                 disabled={attachments.length >= maxAttachments}
                 className="ml-auto flex size-7 items-center justify-center rounded-full text-foreground/50 transition-all duration-200 hover:bg-accent/60 hover:text-foreground outline-none cursor-default disabled:opacity-40 disabled:pointer-events-none"
               >

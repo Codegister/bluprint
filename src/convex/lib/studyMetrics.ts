@@ -35,6 +35,17 @@ export type Readiness = {
     /** 0–100 earned exam marks, or null when nothing has been marked. */
     exam: number | null;
   };
+  /** The raw counts the percentage is built from. */
+  inputs: {
+    cardsSettled: number;
+    cardsTotal: number;
+    quizCorrect: number;
+    quizTotal: number;
+    examEarned: number;
+    examTotal: number;
+  };
+  /** The weighting applied to each part, as whole percentages of 100. */
+  weights: { recall: number; quiz: number; exam: number };
 };
 
 function clampPercent(value: number): number {
@@ -95,6 +106,14 @@ export function examReadiness(input: {
     parts.reduce((sum, part) => sum + part.value * part.weight, 0) / totalWeight,
   );
 
+  // The weighting actually applied, as whole percentages that add to 100. A
+  // set without a quiz or written questions redistributes their share rather
+  // than scoring them as zero, and the panel shows that it did.
+  const share = (weight: number) => Math.round((weight / totalWeight) * 100);
+  const quizShare = quizPart === null ? 0 : share(0.25);
+  const examShare = examPart === null ? 0 : share(0.15);
+  const recallShare = 100 - quizShare - examShare;
+
   return {
     score,
     band: bandFor(score),
@@ -103,6 +122,17 @@ export function examReadiness(input: {
       quiz: quizPart === null ? null : clampPercent(quizPart),
       exam: examPart === null ? null : clampPercent(examPart),
     },
+    // Everything the percentage is built from, so it can be audited rather
+    // than taken on trust.
+    inputs: {
+      cardsSettled: cards.filter((card) => card.status === "known").length,
+      cardsTotal: cards.length,
+      quizCorrect: quiz?.score ?? 0,
+      quizTotal: quiz?.total ?? 0,
+      examEarned: exam?.earned ?? 0,
+      examTotal: exam?.total ?? 0,
+    },
+    weights: { recall: recallShare, quiz: quizShare, exam: examShare },
   };
 }
 

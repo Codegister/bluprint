@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { qualificationLabel } from "@/lib/examBoards";
-import { relativeDate } from "@/lib/format";
+import { plural, relativeDate } from "@/lib/format";
 import { subjectMeta } from "@/lib/subjects";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -63,7 +63,8 @@ function SetRow({ set }: { set: SetSummary }) {
         </div>
         <p className="mt-1 truncate text-[0.76rem] text-muted-foreground">
           {context ? `${context} · ` : ""}
-          {set.cardCount} cards · {set.quizCount} quiz · {set.examCount} exam
+          {plural(set.cardCount, "card")} · {plural(set.quizCount, "quiz question")} ·{" "}
+          {plural(set.examCount, "exam question")}
         </p>
         {processing ? (
           <p className="mt-1.5 text-[0.72rem] text-muted-foreground">
@@ -100,7 +101,7 @@ function SetRow({ set }: { set: SetSummary }) {
             </p>
             <p className="mt-0.5">
               {set.pace
-                ? `${set.pace.perDay} cards/day`
+                ? `${plural(set.pace.perDay, "card")}/day`
                 : set.lastStudiedAt
                   ? `Studied ${relativeDate(set.lastStudiedAt)}`
                   : "Not started"}

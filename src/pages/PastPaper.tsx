@@ -8,6 +8,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
+import { markLabel, plural } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -157,7 +158,7 @@ export default function PastPaper() {
             marks
           </span>
           <span aria-hidden>·</span>
-          <span>{paper.durationMinutes} minutes, like a real paper</span>
+          <span>{plural(paper.durationMinutes, "minute")}, like a real paper</span>
           <span aria-hidden>·</span>
           <span>
             <span className="font-semibold text-brand-ink">
@@ -165,7 +166,7 @@ export default function PastPaper() {
             </span>{" "}
             answered
             {paper.answeredCount > 0
-              ? `, ${paper.earnedMarks} of ${paper.totalMarks} marks earned`
+              ? `, ${paper.earnedMarks} of ${markLabel(paper.totalMarks)} earned`
               : ""}
           </span>
           {blueprint && (

@@ -22,6 +22,11 @@ import { readableError } from "@/lib/errors";
 import { displayName, percent } from "@/lib/format";
 import { takePendingNotes } from "@/lib/pendingNotes";
 import { subjectMeta } from "@/lib/subjects";
+import {
+  readTutorWebScope,
+  saveTutorWebScope,
+  tutorScopeCaption,
+} from "@/lib/tutorScope";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -179,14 +184,30 @@ export default function TutorPage() {
   const [pending, setPending] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Web grounding is opted into per question, exactly as on the home tutor.
-  const [useWeb, setUseWeb] = useState(false);
+  // Web grounding is a permanent control, remembered per set, exactly as on the
+  // home tutor.
+  const [useWeb, setUseWeb] = useState(() =>
+    readTutorWebScope(validSetId ? setId : null),
+  );
+  useEffect(() => {
+    if (validSetId && setId) saveTutorWebScope(setId, useWeb);
+  }, [validSetId, setId, useWeb]);
   // Last tier used, so a suggested question keeps the same answer style.
   const [tier, setTier] = useState(defaultTier);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const streaming = messages?.find((message) => message.streaming);
   const streamedLength = streaming?.content.length ?? 0;
+  // The pages the newest finished answer cited; null until there is one.
+  const latestSourceCount = (() => {
+    if (!messages) return null;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index]!;
+      if (message.role !== "assistant" || message.streaming) continue;
+      return message.sources?.length ?? 0;
+    }
+    return null;
+  })();
 
   const title =
     validSetId && setId && setMessages
@@ -658,8 +679,8 @@ export default function TutorPage() {
                 Stuck on something?
               </p>
               <p className="mt-1 max-w-sm text-[0.86rem] leading-relaxed text-muted-foreground">
-                Ask about your material. The tutor can explain an idea, quiz you, or show
-                exactly where marks are usually lost.
+                Ask about your material. The tutor can explain an idea, quiz you,
+                or mark an answer and say what was missing.
               </p>
               <div className="rise-stagger mt-4 grid w-full gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((suggestion) => (
@@ -776,9 +797,13 @@ export default function TutorPage() {
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
             Use Enter inside the prompt to send · Shift + Enter for a new line ·{" "}
-            {useWeb
-              ? "web search is on, so recent and specification details can be checked online."
-              : "web search is off, so answers come from your material and the model only."}{" "}
+            {tutorScopeCaption({
+              useWeb,
+              materialLabel: validSetId
+                ? "this set's notes"
+                : "this course's notes",
+              latestSourceCount,
+            })}{" "}
             Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
             check them against your notes.
           </p>
