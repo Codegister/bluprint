@@ -1,0 +1,56 @@
+name: Check
+
+# Typechecking needs the generated Convex client (`src/convex/_generated/`),
+# which `convex codegen` produces and which needs a deployment key, so it is
+# not committed. This workflow is deliberately separate from the Pages deploy:
+# a missing or expired key can never stop the site from publishing.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Generate Convex client
+        # Add CONVEX_DEPLOY_KEY under Settings -> Secrets and variables ->
+        # Actions (Convex dashboard: the deployment's Settings -> Deploy keys).
+        # Without it the generated types do not exist, so the typecheck below
+        # has nothing to check against and says so instead of failing.
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          if [ -z "$CONVEX_DEPLOY_KEY" ]; then
+            echo "::warning::CONVEX_DEPLOY_KEY is not set; skipping generated Convex types and the typecheck."
+            exit 0
+          fi
+          bunx convex codegen --typecheck disable
+
+      - name: Typecheck
+        run: |
+          if [ ! -f src/convex/_generated/api.d.ts ]; then
+            echo "::warning::No generated Convex types; skipping tsc -b."
+            exit 0
+          fi
+          bunx tsc -b
+
+      - name: Tests
+        run: bun test
