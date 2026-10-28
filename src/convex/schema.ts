@@ -104,6 +104,12 @@ const schema = defineSchema(
       // Explains a build that hit the material's realistic limit or where one
       // section failed, without hiding the sections that did generate.
       generationNote: v.optional(v.string()),
+      // The specification statements of the topic this set was built from, kept
+      // with the set so coverage can still be reported after the course pathway
+      // changes. Empty for sets built from pasted notes with no course.
+      specPoints: v.optional(
+        v.array(v.object({ id: v.string(), text: v.string() })),
+      ),
       summary: v.optional(
         v.object({
           // Optional only because sets built before titles existed are already
@@ -349,6 +355,78 @@ const schema = defineSchema(
       disputedAt: v.optional(v.number()),
     }).index("by_paper", ["paperId"]),
 
+    // A real past-paper question the student supplies with its official mark
+    // scheme, by pasted text or a photo. Marked by the same examiner as a
+    // generated question, against the supplied criteria.
+    realQuestions: defineTable({
+      userId: v.id("users"),
+      // What the question is, in the student's words ("AQA Bio 2023 Q4").
+      title: v.string(),
+      courseId: v.optional(v.id("courses")),
+      question: v.string(),
+      marks: v.number(),
+      // The scheme exactly as supplied, kept so it can be shown back.
+      schemeText: v.string(),
+      // Parsed once on save, so marking, rendering and exports agree.
+      criteria: v.array(
+        v.object({ id: v.string(), marks: v.number(), text: v.string() }),
+      ),
+      source: v.union(v.literal("text"), v.literal("photo")),
+      sourceImageId: v.optional(v.id("_storage")),
+      userAnswer: v.optional(v.string()),
+      awardedMarks: v.optional(v.number()),
+      feedback: v.optional(v.string()),
+      checklist: v.optional(
+        v.array(
+          v.object({
+            point: v.string(),
+            marks: v.number(),
+            awarded: v.number(),
+            evidence: v.string(),
+          }),
+        ),
+      ),
+      lowConfidence: v.optional(v.boolean()),
+      markPasses: v.optional(v.array(v.number())),
+      gradedAt: v.optional(v.number()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_user_created", ["userId", "createdAt"]),
+
+    // One timed mock sitting: the questions chosen, how long each took and what
+    // it earned. Timings are stored because time per question is half of what a
+    // mock teaches.
+    mockAttempts: defineTable({
+      userId: v.id("users"),
+      setId: v.id("studySets"),
+      tariff: v.number(),
+      totalMarks: v.number(),
+      secondsAllowed: v.number(),
+      items: v.array(
+        v.object({
+          examId: v.id("examQuestions"),
+          marks: v.number(),
+          seconds: v.optional(v.number()),
+        }),
+      ),
+      status: v.union(v.literal("running"), v.literal("finished")),
+      startedAt: v.number(),
+      finishedAt: v.optional(v.number()),
+      elapsedSeconds: v.optional(v.number()),
+    }).index("by_user_set", ["userId", "setId"]),
+
+    // A read-only progress link: aggregates only, never notes, cards or answers.
+    // Revoking marks the row and the public query stops answering for it.
+    progressShares: defineTable({
+      userId: v.id("users"),
+      token: v.string(),
+      createdAt: v.number(),
+      revokedAt: v.optional(v.number()),
+      lastViewedAt: v.optional(v.number()),
+    })
+      .index("by_token", ["token"])
+      .index("by_user", ["userId"]),
+
     // One course topic's published notes, read from Cognito and stored so the
     // text is shown inside Bluprint (never linked out) and only scraped once.
     cognitoTopicNotes: defineTable({
@@ -551,6 +629,9 @@ const schema = defineSchema(
       // review screen labels those "Beyond your notes" so enrichment is visible
       // rather than passed off as something the teacher gave them.
       beyondNotes: v.optional(v.boolean()),
+      // The specification statement this card teaches, when the set came from a
+      // course topic. Course coverage is counted from these tags.
+      specRef: v.optional(v.string()),
       // "new" cards have not been reviewed yet.
       status: v.union(v.literal("new"), v.literal("known"), v.literal("again")),
       reviewCount: v.number(),
@@ -598,6 +679,8 @@ const schema = defineSchema(
       order: v.number(),
       // True when the question uses a fact the notes do not contain.
       beyondNotes: v.optional(v.boolean()),
+      // The specification statement this question tests, when known.
+      specRef: v.optional(v.string()),
       // Per-question accuracy, so the weak-spot session can point at the
       // questions that actually keep going wrong.
       missCount: v.optional(v.number()),
@@ -624,6 +707,8 @@ const schema = defineSchema(
       markingGuide: v.array(v.string()),
       // True when the question uses a fact the notes do not contain.
       beyondNotes: v.optional(v.boolean()),
+      // The specification statement this question tests, when known.
+      specRef: v.optional(v.string()),
       // The same guide as discrete criteria, each with its own id and marks.
       // Optional so questions built before this existed still open; the UI
       // derives the same rows from `markingGuide` for those.

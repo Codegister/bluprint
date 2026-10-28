@@ -11,9 +11,9 @@ import {
 import { readableError } from "@/lib/errors";
 import { markLabel, pointLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { useAction } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
-import { Check, ChevronDown, Loader2, X } from "lucide-react";
+import { Check, ChevronDown, Loader2, Upload, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -27,6 +27,9 @@ export function ExamPractice({
   qualification?: string;
 }) {
   const gradeAnswer = useAction(api.ai.gradeExamAnswer);
+  const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
+  const transcribe = useAction(api.ai.transcribeAnswerPhoto);
+  const [readingPhotoId, setReadingPhotoId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(exams.map((exam) => [exam._id, exam.userAnswer ?? ""])),
   );
@@ -47,6 +50,39 @@ export function ExamPractice({
       </motion.div>
     );
   }
+
+  /**
+   * A photo of a written answer: read it, put the transcription in the box for
+   * correction, then mark it as normal. Practising on paper is what the exam
+   * actually asks for, so the answer should not have to be retyped.
+   */
+  const handlePhoto = async (exam: Doc<"examQuestions">, file: File) => {
+    setReadingPhotoId(exam._id);
+    setErrors((current) => ({ ...current, [exam._id]: "" }));
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+      if (!response.ok) throw new Error("Upload failed.");
+      const payload = (await response.json()) as { storageId: string };
+      const result = await transcribe({
+        storageId: payload.storageId as Id<"_storage">,
+        kind: "answer",
+      });
+      setAnswers((current) => ({ ...current, [exam._id]: result.text }));
+      toast.success("Read your answer — check the transcription before marking it.");
+    } catch (error) {
+      setErrors((current) => ({
+        ...current,
+        [exam._id]: readableError(error, "Could not read that photo."),
+      }));
+    } finally {
+      setReadingPhotoId(null);
+    }
+  };
 
   const handleMark = async (exam: Doc<"examQuestions">) => {
     const answer = (answers[exam._id] ?? "").trim();
@@ -153,9 +189,30 @@ export function ExamPractice({
             />
 
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs font-medium text-muted-foreground">
-                {answer.trim().length} characters · aim for {pointLabel(exam.marks)}
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {answer.trim().length} characters · aim for {pointLabel(exam.marks)}
+                </p>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border bg-white px-2.5 py-1 text-[0.7rem] font-semibold text-brand-ink/70 hover:bg-brand-panel">
+                  {readingPhotoId === exam._id ? (
+                    <Loader2 className="size-3 animate-spin" aria-hidden />
+                  ) : (
+                    <Upload className="size-3" aria-hidden />
+                  )}
+                  {readingPhotoId === exam._id ? "Reading…" : "From a photo"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    aria-label="Mark a photo of your written answer"
+                    disabled={readingPhotoId !== null || isGrading}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void handlePhoto(exam, file);
+                    }}
+                  />
+                </label>
+              </div>
               <Button
                 onClick={() => handleMark(exam)}
                 disabled={isGrading}

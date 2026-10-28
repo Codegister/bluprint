@@ -566,6 +566,17 @@ export const createTopicSet = mutation({
       courseId,
       topicId,
       topicIds: chosen.map((entry) => entry.topic.id),
+      // The specification statements this set is built from, kept with the set
+      // so cards and questions can be tagged to them and coverage reported
+      // later, even if the pathway is rebuilt.
+      specPoints: chosen
+        .flatMap(({ topic }) =>
+          topic.keyPoints.map((text, index) => ({
+            id: `${topic.id}:${index}`,
+            text: `${topic.specReference ? `${topic.specReference} ` : ""}${text}`,
+          })),
+        )
+        .slice(0, 60),
       sourceImageIds: [],
       status: "queued",
       progress: "Queued",

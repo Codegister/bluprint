@@ -19,6 +19,7 @@ import {
   BUILD_MIN,
 } from "./lib/buildDefaults";
 import { shortTitle } from "./lib/titles";
+import { matchSpecPoint } from "./lib/specMapping";
 import { requireUserId } from "./lib/requireUser";
 import {
   requireVerifiedUser,
@@ -1275,14 +1276,22 @@ export const completeGeneration = internalMutation({
     await deleteStudySetContent(ctx, setId);
 
     const now = Date.now();
-    for (const [index, card] of cards.entries()) {
-      await ctx.db.insert("flashcards", {
-        setId,
-        userId: set.userId,
-        front: card.front,
-        back: card.back,
-        order: index,
-        beyondNotes: card.beyondNotes,
+  // Each item is tagged to the specification statement it teaches, when the
+  // set came from a course topic. Matching is deterministic (see
+  // lib/specMapping.ts), so the same item always carries the same tag.
+  const specPoints = set.specPoints ?? [];
+  const tag = (text: string): string | undefined =>
+    specPoints.length > 0 ? (matchSpecPoint(text, specPoints).id ?? undefined) : undefined;
+
+  for (const [index, card] of cards.entries()) {
+    await ctx.db.insert("flashcards", {
+      setId,
+      userId: set.userId,
+      front: card.front,
+      back: card.back,
+      order: index,
+      beyondNotes: card.beyondNotes,
+      specRef: tag(`${card.front} ${card.back}`),
         status: "new",
         reviewCount: 0,
         // New cards are due immediately and have no memory state yet. FSRS
@@ -1306,6 +1315,9 @@ export const completeGeneration = internalMutation({
         answer: question.answer,
         acceptedAnswers: question.acceptedAnswers,
         beyondNotes: question.beyondNotes,
+        specRef: tag(
+          `${question.question} ${question.answer ?? ""} ${question.explanation}`,
+        ),
         order: index,
         missCount: 0,
         correctCount: 0,
@@ -1320,6 +1332,7 @@ export const completeGeneration = internalMutation({
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
         beyondNotes: question.beyondNotes,
+        specRef: tag(`${question.question} ${question.modelAnswer}`),
         // Stored as discrete criteria, scaled to the question's marks, so a
         // six-mark answer can score 3 and each award is its own row.
         criteria:

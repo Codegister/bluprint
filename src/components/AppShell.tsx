@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { ChromeBackdrop } from "@/components/ChromeBackdrop";
 import { PageInk } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -20,6 +21,7 @@ import { useQuery } from "convex/react";
 import { motion, useScroll } from "framer-motion";
 import {
   CalendarDays,
+  FileText,
   GraduationCap,
   Menu,
   Sparkles,
@@ -57,6 +59,15 @@ const navItems = [
     active: ACTIVE_ROW,
     tile: "bg-brand-violet/20 text-brand-violet",
     soft: "bg-brand-violet/10 text-brand-violet",
+  },
+  {
+    // Real past-paper questions, marked against the board's own scheme.
+    to: "/past-papers",
+    label: "Past papers",
+    icon: FileText,
+    active: ACTIVE_ROW,
+    tile: "bg-brand-peach/25 text-brand-peach",
+    soft: "bg-brand-peach/15 text-brand-peach",
   },
   {
     to: "/today",
@@ -317,6 +328,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Sidebar onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
+
+      {/* One mount for the offline copy and its queue, on every screen. */}
+      <OfflineBanner />
 
       <main className="relative lg:pl-[292px]">
         {/* Every destination enters the same way, so moving between screens

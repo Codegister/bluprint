@@ -20,6 +20,7 @@ import {
   shortfallSentence,
 } from "./lib/buildDefaults";
 import { alignDataReference, isSelfContained } from "./lib/paperData";
+import { criteriaToGuide } from "./lib/realPaper";
 import { normalizeAnswer } from "./lib/recall";
 import { parseSummary, type Summary } from "./lib/summary";
 import {
@@ -1970,15 +1971,13 @@ export const disputePastPaperMark = action({
 async function transcribeImages(
   apiKeys: string[],
   images: Array<{ dataUrl: string }>,
+  instruction =
+    "These images are photos or frames of a student's handwritten or printed study notes. " +
+    "Transcribe ALL legible study content faithfully. Preserve headings, bullet structure, definitions, formulas and examples. " +
+    "Use plain text. If something is unclear, write [unclear]. Do not add commentary or invent missing content.",
 ): Promise<string> {
   const parts: ContentPart[] = [
-    {
-      type: "text",
-      text:
-        "These images are photos or frames of a student's handwritten or printed study notes. " +
-        "Transcribe ALL legible study content faithfully. Preserve headings, bullet structure, definitions, formulas and examples. " +
-        "Use plain text. If something is unclear, write [unclear]. Do not add commentary or invent missing content.",
-    },
+    { type: "text", text: instruction },
     ...images.map<ImagePart>((image) => ({
       type: "image_url",
       image_url: { url: image.dataUrl },
@@ -3836,6 +3835,124 @@ export const gradeExamAnswer = action({
     return {
       awardedMarks,
       marks: exam.marks,
+      feedback: marked.feedback,
+      checklist: marked.checklist,
+      lowConfidence: marked.lowConfidence,
+      passes: marked.passes,
+    };
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Real past-paper questions (student-supplied mark schemes)
+// ---------------------------------------------------------------------------
+
+/** Reads one photo of a written answer or a mark scheme, for correction. */
+export const transcribeAnswerPhoto = action({
+  args: {
+    storageId: v.id("_storage"),
+    kind: v.optional(v.union(v.literal("answer"), v.literal("scheme"))),
+  },
+  handler: async (ctx, { storageId, kind }): Promise<{ text: string }> => {
+    await requireUserId(ctx);
+    const blob = await ctx.storage.get(storageId);
+    if (!blob) throw new Error("That photo could not be read. Try uploading it again.");
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    if (buffer.byteLength > 8 * 1024 * 1024) {
+      throw new Error("That photo is too large. Try one under 8 MB.");
+    }
+    const mime = blob.type?.startsWith("image/") ? blob.type : "image/jpeg";
+    const apiKeys = resolveNvidiaKeys();
+    const instruction =
+      kind === "scheme"
+        ? "This image is a photograph of an exam mark scheme. Transcribe every credit point, one per line, keeping any \"1 mark\" or number prefixes and the wording exactly. Do not summarise, merge or add points. If something is illegible, write [unclear]."
+        : "This image is a photograph of a student's handwritten answer to an exam question. Transcribe exactly what is written, keeping sentence breaks. Do not correct spelling, grammar or science, and do not add anything that is not on the page. If something is illegible, write [unclear].";
+    const text = await withProviderGuard(ctx, "vision", () =>
+      transcribeImages(
+        apiKeys,
+        [{ dataUrl: `data:${mime};base64,${buffer.toString("base64")}` }],
+        instruction,
+      ),
+    );
+    return { text: text.trim() };
+  },
+});
+
+/** Marks a saved real question against the student's own supplied scheme. */
+export const markRealQuestion = action({
+  args: {
+    questionId: v.id("realQuestions"),
+    answer: v.string(),
+  },
+  handler: async (
+    ctx,
+    { questionId, answer },
+  ): Promise<{
+    awardedMarks: number;
+    marks: number;
+    feedback: string;
+    checklist: MarkCheck[];
+    lowConfidence: boolean;
+    passes: number[];
+  }> => {
+    const userId = await requireUserId(ctx);
+    const data = await ctx.runQuery(internal.realPapers.getForGrading, { questionId });
+    if (!data || data.row.userId !== userId) {
+      throw new Error("Question not found.");
+    }
+    const response = answer.trim();
+    if (response.length === 0) {
+      throw new Error("Write an answer before marking it.");
+    }
+
+    const { row, course } = data;
+    const apiKeys = resolveNvidiaKeys();
+    let marked: MarkedAnswer;
+    try {
+      marked = await withProviderGuard(ctx, "marking", () =>
+        markExamAnswer(
+          apiKeys,
+          {
+            question: row.question,
+            marks: row.marks,
+            // No exemplar is supplied for a real question: the scheme is the
+            // whole mark scheme, as it is on the board's own document.
+            modelAnswer: "",
+            markingGuide: criteriaToGuide(row.criteria),
+            criteria: row.criteria,
+          },
+          response,
+          course
+            ? {
+                course: course.subject,
+                examBoard: course.examBoard,
+                level: course.level,
+              }
+            : undefined,
+          "points",
+        ),
+      );
+    } catch (error) {
+      await ctx.runMutation(internal.realPapers.saveDraft, {
+        questionId,
+        answer: response,
+      });
+      throw error;
+    }
+
+    await ctx.runMutation(internal.realPapers.saveResult, {
+      questionId,
+      answer: response,
+      awardedMarks: marked.awardedMarks,
+      feedback: marked.feedback,
+      checklist: marked.checklist,
+      lowConfidence: marked.lowConfidence,
+      markPasses: marked.passes,
+    });
+
+    return {
+      awardedMarks: marked.awardedMarks,
+      marks: row.marks,
       feedback: marked.feedback,
       checklist: marked.checklist,
       lowConfidence: marked.lowConfidence,

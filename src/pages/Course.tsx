@@ -25,6 +25,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
 import { notifyError, readableError } from "@/lib/errors";
+import { CourseCoveragePanel } from "@/components/study/CourseCoveragePanel";
 import { percent, plural, relativeDate } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
@@ -684,6 +685,10 @@ export default function Course() {
               </div>
             </motion.section>
             )}
+
+            {/* Real coverage of the specification, counted from the content
+                that exists rather than from the number of topics. */}
+            <CourseCoveragePanel courseId={details.course._id} />
 
             <nav
               aria-label="Course sections"

@@ -8,6 +8,8 @@ import { FlashcardReview } from "@/components/study/FlashcardReview";
 import { QuizRunner } from "@/components/study/QuizRunner";
 import { ReadinessPanel } from "@/components/study/ReadinessPanel";
 import { SetSettingsDialog } from "@/components/study/SetSettingsDialog";
+import { SetExportButtons } from "@/components/study/SetExportButtons";
+import { SpecCoveragePanel } from "@/components/study/SpecCoveragePanel";
 import { WeakSpots } from "@/components/study/WeakSpots";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -29,6 +31,7 @@ import {
   PenLine,
   RotateCcw,
   Sparkles,
+  Timer,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -949,6 +952,26 @@ export default function StudySet() {
               <SummaryView set={set} sourceImages={details.sourceImages} />
             </div>
 
+            {/* Specification coverage, export and the timed mock: the three
+                things a student needs when the set is done, not while building
+                it. Each is one expansion away. */}
+            <div className="mt-4 space-y-3">
+              <SpecCoveragePanel setId={set._id} />
+              <SetExportButtons setId={set._id} />
+              <Link
+                to={`/sets/${set._id}/mock`}
+                className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-card p-4 text-[0.86rem] font-semibold text-brand-ink hover:bg-brand-panel"
+              >
+                <span className="flex items-center gap-2">
+                  <Timer className="size-4 text-chrome-7" aria-hidden />
+                  Sit a timed mock
+                </span>
+                <span className="text-[0.72rem] font-medium text-muted-foreground">
+                  One minute per mark
+                </span>
+              </Link>
+            </div>
+
             {/* Pacing detail is useful, but it should not sit between the
                 student and the set. It is one expansion away. */}
             <details className="mt-6 rounded-2xl border border-border bg-card p-4">
@@ -964,6 +987,7 @@ export default function StudySet() {
                   weakCardCount={details.weakCardCount}
                   weakQuizCount={details.weakQuizCount}
                   dueCount={details.dueCount}
+                  examBoard={set.examBoard}
                 />
               </div>
             </details>

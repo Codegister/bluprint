@@ -60,6 +60,29 @@ function bandFor(score: number): Readiness["band"] {
 }
 
 /**
+ * Days in a row with questions answered, counted back from today. A streak may
+ * end yesterday and still be live, because today is not over yet.
+ */
+export function currentStreak(
+  days: Array<{ day: string; questions: number }>,
+  now: number,
+): number {
+  const byDay = new Map(days.map((row) => [row.day, row.questions]));
+  const key = (date: Date) => date.toISOString().slice(0, 10);
+  let streak = 0;
+  const cursor = new Date(now);
+  if ((byDay.get(key(cursor)) ?? 0) <= 0) {
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  while ((byDay.get(key(cursor)) ?? 0) > 0) {
+    streak += 1;
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+    if (streak > 400) break;
+  }
+  return streak;
+}
+
+/**
  * Scores the set as it is expected to be remembered at `at`. Pass the exam
  * timestamp to project forward; pass now for the current picture.
  */

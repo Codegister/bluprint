@@ -42,6 +42,9 @@ const StudySet = lazy(() => import("./pages/StudySet.tsx"));
 const Timetable = lazy(() => import("./pages/Timetable.tsx"));
 const TimetableBuilder = lazy(() => import("./pages/TimetableBuilder.tsx"));
 const Tutor = lazy(() => import("./pages/Tutor.tsx"));
+const RealPapers = lazy(() => import("./pages/RealPapers.tsx"));
+const Mock = lazy(() => import("./pages/Mock.tsx"));
+const SharedProgress = lazy(() => import("./pages/SharedProgress.tsx"));
 const TrustPage = lazy(() => import("./pages/Trust.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -249,6 +252,31 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/privacy" element={<TrustPage kind="privacy" />} />
               <Route path="/terms" element={<TrustPage kind="terms" />} />
               <Route path="/contact" element={<TrustPage kind="contact" />} />
+              {/* A shared progress link is public by design: aggregates only,
+                  revocable, and it never includes notes or answers. */}
+              <Route path="/share/:token" element={<SharedProgress />} />
+              <Route
+                path="/past-papers"
+                element={
+                  <RequireAuth
+                    title="Sign in to mark a real past paper"
+                    description="Your questions, schemes and marks are saved to your own account."
+                  >
+                    <RealPapers />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/sets/:setId/mock"
+                element={
+                  <RequireAuth
+                    title="Sign in to sit a timed mock"
+                    description="Mocks are assembled from your own study set."
+                  >
+                    <Mock />
+                  </RequireAuth>
+                }
+              />
               {/* The old dashboard screen is now the tutor home. Both legacy
                   links keep working rather than dead-ending. */}
               <Route path="/dashboard" element={<DashboardRedirect />} />

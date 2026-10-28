@@ -1,4 +1,5 @@
 import { Meter } from "@/components/motion/Motion";
+import { predictGrade } from "@/convex/lib/gradeBoundaries";
 import { markLabel, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -111,6 +112,7 @@ export function ReadinessPanel({
   weakCardCount,
   weakQuizCount,
   dueCount,
+  examBoard,
 }: {
   setId: string;
   readiness: ReadinessView;
@@ -119,7 +121,12 @@ export function ReadinessPanel({
   weakCardCount: number;
   weakQuizCount: number;
   dueCount: number;
+  examBoard?: string;
 }) {
+  // The percentage as a 9–1 grade, always with its band and the date of the
+  // boundary table it came from: a single number would imply a precision the
+  // boundaries do not have.
+  const prediction = predictGrade(readiness.score, examBoard);
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <section className="rounded-[2rem] border border-border bg-card p-6">
@@ -152,6 +159,30 @@ export function ReadinessPanel({
         </div>
         <p className="mt-1 text-[0.78rem] leading-relaxed text-muted-foreground">
           {BAND_COPY[readiness.band]}
+        </p>
+
+        <div className="mt-3 flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-white px-3.5 py-2.5">
+          <div>
+            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Predicted grade
+            </p>
+            <p className="font-display text-[1.5rem] font-extrabold leading-none tabular-nums text-brand-ink">
+              {prediction.label}
+            </p>
+          </div>
+          <p className="pb-0.5 text-[0.72rem] leading-relaxed text-muted-foreground">
+            {prediction.label === "—"
+              ? prediction.bandLabel
+              : `Band ${prediction.bandLabel} on ${prediction.board} boundaries`}
+            {prediction.nextGrade
+              ? ` · ${prediction.nextGrade.percentAway} points from a ${prediction.nextGrade.grade}`
+              : ""}
+          </p>
+        </div>
+        <p className="mt-1 text-[0.68rem] leading-relaxed text-muted-foreground">
+          Indicative only: {prediction.board} boundaries from {prediction.series},
+          last checked {prediction.updatedAt}. Real boundaries differ by subject and
+          move each series.
         </p>
 
         <div className="mt-4 space-y-2.5">

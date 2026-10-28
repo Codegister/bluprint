@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SkeletonRows } from "@/components/Skeletons";
 import { Meter, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
+import { AccountExportButton, ShareProgressButton } from "@/components/study/ShareAndExport";
 import { api } from "@/convex/_generated/api";
 import { plural } from "@/lib/format";
 import { useQuery } from "convex/react";
@@ -173,6 +174,9 @@ export default function Today() {
 
   const study = useQuery(api.studySets.studyStats);
   const sets = useQuery(api.studySets.listMine);
+  // Confidence against quiz accuracy, once there is enough of both to mean
+  // anything (the query returns no rows until then).
+  const calibration = useQuery(api.insights.calibration);
   const sprintCards = useQuery(
     api.studySets.sprintQueue,
     sprintLength ? { length: sprintLength } : "skip",
@@ -522,6 +526,34 @@ export default function Today() {
               ))}
             </ul>
           )}
+        </div>
+      </section>
+
+      {/* Calibration: what you think you know against what the quiz says. */}
+      {calibration?.sentence && (
+        <section className="mt-6 rounded-[1.6rem] border border-border bg-card p-5">
+          <p className="mono-label text-chrome-7">Calibration</p>
+          <p className="mt-1 text-[0.9rem] font-semibold leading-relaxed text-brand-ink">
+            {calibration.sentence}
+          </p>
+          <p className="mt-1 text-[0.76rem] leading-relaxed text-muted-foreground">
+            Compare this with a flashcard review: rate cards honestly, and the two
+            numbers close up as your judgement improves.
+          </p>
+        </section>
+      )}
+
+      <section className="mt-6 grid gap-3 lg:grid-cols-2">
+        <ShareProgressButton />
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-[0.84rem] font-semibold text-brand-ink">Your data</p>
+          <p className="mt-1 text-[0.74rem] leading-relaxed text-muted-foreground">
+            Every note, card, answer and mark in one JSON file. The content is
+            yours; this is the copy of it.
+          </p>
+          <div className="mt-2">
+            <AccountExportButton />
+          </div>
         </div>
       </section>
 
