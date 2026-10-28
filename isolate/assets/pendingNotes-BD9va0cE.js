@@ -1,1 +1,0 @@
-const n="bluprint:pending-notes";function t(e){try{window.sessionStorage.setItem(n,e.slice(0,2e4))}catch{}}function s(){try{const e=window.sessionStorage.getItem(n);return e===null?null:(window.sessionStorage.removeItem(n),e.trim().length>=40?e:null)}catch{return null}}export{t as s,s as t};
