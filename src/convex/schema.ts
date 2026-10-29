@@ -47,6 +47,10 @@ const schema = defineSchema(
       windowStart: v.number(),
       windowFailures: v.number(),
       lastCodeSentAt: v.number(),
+      // Codes sent inside the current hour. Capped so one address cannot be
+      // used to flood an inbox, independently of the one-a-minute cooldown.
+      sendWindowStart: v.optional(v.number()),
+      sendWindowCount: v.optional(v.number()),
       lastFailedAt: v.optional(v.number()),
       // True once the current code has been thrown away after too many misses.
       codeInvalidated: v.optional(v.boolean()),

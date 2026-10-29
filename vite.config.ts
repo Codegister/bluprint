@@ -1,12 +1,72 @@
 import { vlyPlugin } from "@vly-ai/integrations";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+/**
+ * GitHub Pages cannot set response headers, so a production build carries the
+ * policy in a meta tag. It is added after Vite writes index.html, hashing the
+ * inline theme script that already exists there, so the hash cannot drift from
+ * the script the browser actually receives.
+ *
+ * This is a best-effort substitute for real headers: `frame-ancestors` and
+ * `X-Content-Type-Options` are ignored in meta tags. See README.
+ */
+function securityMeta(): Plugin {
+  return {
+    name: "bluprint-security-meta",
+    apply: "build",
+    closeBundle() {
+      const file = path.resolve(__dirname, "dist/index.html");
+      if (!existsSync(file)) return;
+      const html = readFileSync(file, "utf8");
+      if (html.includes("Content-Security-Policy")) return;
+
+      const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
+        .map((match) => match[1] ?? "")
+        .filter((code) => code.trim().length > 0)
+        .map(
+          (code) =>
+            `'sha256-${createHash("sha256")
+              .update(code, "utf8")
+              .digest("base64")}'`,
+        );
+
+      const csp = [
+        "default-src 'self'",
+        `script-src 'self' ${hashes.join(" ")}`.trim(),
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "connect-src 'self' https://honorable-lyrebird-974.convex.cloud wss://honorable-lyrebird-974.convex.cloud https://honorable-lyrebird-974.convex.site",
+        "img-src 'self' data: blob:",
+        "font-src 'self' data: https://fonts.gstatic.com",
+        "media-src 'self' blob:",
+        "worker-src 'self' blob:",
+        "frame-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "upgrade-insecure-requests",
+      ].join("; ");
+
+      const meta = [
+        `<meta http-equiv="Content-Security-Policy" content="${csp}" />`,
+        `<meta http-equiv="X-Content-Type-Options" content="nosniff" />`,
+        `<meta name="referrer" content="strict-origin-when-cross-origin" />`,
+        `<meta http-equiv="Permissions-Policy" content="camera=(), microphone=(self), geolocation=()" />`,
+      ].join("\n  ");
+
+      writeFileSync(file, html.replace("</head>", `  ${meta}\n</head>`));
+    },
+  };
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vlyPlugin(), react(), tailwindcss()],
+  plugins: [vlyPlugin(), react(), tailwindcss(), securityMeta()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -60,7 +120,7 @@ export default defineConfig({
           'forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
         },
         // Optimize chunk size
-        chunkFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
       },

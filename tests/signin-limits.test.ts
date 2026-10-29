@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   MAX_CODE_ATTEMPTS,
+  MAX_SENDS_PER_HOUR,
   RESEND_COOLDOWN_MS,
   describeAttempts,
   type OtpGuardRow,
@@ -101,6 +103,34 @@ describe("email code attempts", () => {
       NOW,
     );
     expect(state.lockedUntil).toBe(0);
+  });
+});
+
+describe("OTP guard is server-only", () => {
+  const source = readFileSync(
+    new URL("../src/convex/otpGuard.ts", import.meta.url),
+    "utf8",
+  );
+
+  test("no guard write is exposed as a public mutation", () => {
+    // A public client used to be able to lock, reset or discard any address's
+    // guard. Every write must go through the server-only provider paths.
+    expect(source).not.toMatch(/export const \w+ = mutation\(/);
+    expect(source).not.toMatch(/export const recordFailure/);
+    expect(source).toMatch(/export const noteCodeSent = internalMutation\(/);
+    expect(source).toMatch(/export const recordSuccess = internalMutation\(/);
+    expect(source).toMatch(/export const beginSend = internalMutation\(/);
+  });
+
+  test("status has no email argument and answers only for the signed-in account", () => {
+    expect(source).toMatch(/export const status = query\(\{\s*args: \{\},/);
+    expect(source).not.toMatch(/export const status = query\(\{\s*args: \{ email/);
+    expect(source).toMatch(/getAuthUserId\(ctx\)/);
+  });
+
+  test("the request cap is a small, fixed number", () => {
+    expect(MAX_SENDS_PER_HOUR).toBeGreaterThan(0);
+    expect(MAX_SENDS_PER_HOUR).toBeLessThanOrEqual(10);
   });
 });
 

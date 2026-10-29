@@ -1,6 +1,16 @@
 import { Email } from "@convex-dev/auth/providers/Email";
-import axios from "axios";
+import type { GenericActionCtxWithAuthConfig } from "@convex-dev/auth/server";
 import { RandomReader, generateRandomString } from "@oslojs/crypto/random";
+import axios from "axios";
+import type { GenericDataModel } from "convex/server";
+import { internal } from "../_generated/api";
+
+/**
+ * The action context Convex Auth hands to `sendVerificationRequest` as a second
+ * argument. The library's public type omits it, so it is declared here; the
+ * guard writes below are only possible because the provider runs on the server.
+ */
+type OtpSendCtx = GenericActionCtxWithAuthConfig<GenericDataModel>;
 
 export const emailOtp = Email({
   id: "email-otp",
@@ -14,7 +24,29 @@ export const emailOtp = Email({
     const alphabet = "0123456789";
     return generateRandomString(random, alphabet, 6);
   },
-  async sendVerificationRequest({ identifier: email, token }) {
+  async sendVerificationRequest(
+    { identifier: email, token }: { identifier: string; token: string },
+    ctx?: OtpSendCtx,
+  ) {
+    // Convex Auth always supplies the context when it calls this provider. The
+    // optional type keeps the config assignable to its one-argument signature.
+    if (!ctx) throw new Error("Sign-in codes can only be sent by the server.");
+
+    // The cooldown and hourly cap are checked here, server-side, before the
+    // gateway is asked to send anything. The browser can neither skip nor
+    // reset them.
+    const now = Date.now();
+    const gate = await ctx.runMutation(internal.otpGuard.beginSend, { email });
+    if (!gate.allowed) {
+      const wait =
+        gate.retryAt > now ? Math.ceil((gate.retryAt - now) / 1000) : 0;
+      throw new Error(
+        wait > 0
+          ? `A code was requested recently. Try again in ${wait}s.`
+          : "Too many codes have been requested for this address. Try again later.",
+      );
+    }
+
     try {
       await axios.post(
         freebuffEmailOtpUrl(),
@@ -24,6 +56,10 @@ export const emailOtp = Email({
     } catch (error) {
       throw freebuffEmailOtpError(error);
     }
+
+    // Only after the gateway accepted the mail: a failed send must not start a
+    // cooldown or discard a code the student can still use.
+    await ctx.runMutation(internal.otpGuard.noteCodeSent, { email });
   },
 });
 

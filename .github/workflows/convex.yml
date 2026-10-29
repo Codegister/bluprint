@@ -1,0 +1,42 @@
+name: Deploy Convex backend
+
+# Manual on purpose: a production deploy should be a deliberate act, and the
+# deploy key lives only in repository secrets. Run it from the Actions tab after
+# a merge that changes src/convex/.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: convex-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: convex deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Check deploy key
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          if [ -z "$CONVEX_DEPLOY_KEY" ]; then
+            echo "::error::CONVEX_DEPLOY_KEY is not set in repository secrets."
+            exit 1
+          fi
+
+      - name: Deploy
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: bunx convex deploy --yes

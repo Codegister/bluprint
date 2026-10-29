@@ -1,17 +1,25 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
-import { MAX_CODE_ATTEMPTS, describeAttempts } from "./lib/otpLimits";
+import { internalMutation, query } from "./_generated/server";
+import {
+  MAX_CODE_ATTEMPTS,
+  MAX_HOURLY_ATTEMPTS,
+  MAX_SENDS_PER_HOUR,
+  RESEND_COOLDOWN_MS,
+} from "./lib/otpLimits";
 
 /**
- * Brute-force protection for the six-digit email code.
+ * Brute-force and abuse protection for the six-digit email code.
  *
- * Convex Auth verifies the code but leaves the number of wrong guesses open, so
- * a six-digit code could be guessed at for as long as it lives. This module
- * keeps the attempt record: five wrong codes invalidate the code outright, and
- * every further guess asks for a longer wait first. The hourly window survives
- * a resend, so requesting another code never buys more guesses.
+ * Nothing in this module is callable from the browser except `status`, which
+ * answers only for the signed-in account and holds no email argument. Sends
+ * are recorded by the email provider after the gateway accepts the mail, and a
+ * successful verification clears the record from Convex Auth's own success
+ * callback. A wrong code is counted by Convex Auth itself (see the
+ * `maxFailedAttempsPerHour` setting in auth.ts), so a client can no longer
+ * create, reset or discard a guard for somebody else's address.
  *
  * The arithmetic is in lib/otpLimits.ts so it can be tested, and the rules live
  * on the server so a reload cannot hand attempts back.
@@ -35,15 +43,55 @@ async function rowFor(
     .unique();
 }
 
-/** Live state for one address; the sign-in page subscribes to this. */
+/**
+ * Live state for the caller's own account. The sign-in page no longer reads
+ * this (it is signed out, so it has no identity to prove); it exists for an
+ * account screen that needs to show its own cooldown or lock.
+ *
+ * Deliberately returns only the three fields a countdown needs: an address
+ * cannot be probed for whether a code exists, how many codes were sent, or any
+ * other account's state.
+ */
 export const status = query({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => {
-    const address = normaliseEmail(email);
-    if (!address) {
-      return describeAttempts(null, Date.now());
-    }
-    return describeAttempts(await rowFor(ctx, address), Date.now());
+  args: {},
+  handler: async (ctx) => {
+    const blank = {
+      attemptsLeft: MAX_CODE_ATTEMPTS,
+      resendAt: 0,
+      lockedUntil: 0,
+    };
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return blank;
+    const user = await ctx.db.get(userId);
+    const email = user?.email?.trim();
+    if (!email) return blank;
+
+    const now = Date.now();
+    const row = await rowFor(ctx, email.toLowerCase());
+    const limit = await ctx.db
+      .query("authRateLimits")
+      .withIndex("identifier", (q) => q.eq("identifier", email))
+      .unique();
+
+    const attemptsLeft = limit
+      ? Math.max(
+          0,
+          Math.min(MAX_CODE_ATTEMPTS, Math.ceil(limit.attemptsLeft)),
+        )
+      : MAX_CODE_ATTEMPTS;
+    // Convex Auth refills attempts continuously at max/hour. The lock lifts
+    // when one attempt is available again.
+    const lockedUntil =
+      limit && limit.attemptsLeft < 1
+        ? limit.lastAttemptTime +
+          (1 - limit.attemptsLeft) * (HOUR_MS / MAX_HOURLY_ATTEMPTS)
+        : 0;
+
+    return {
+      attemptsLeft,
+      resendAt: row ? row.lastCodeSentAt + RESEND_COOLDOWN_MS : 0,
+      lockedUntil: Math.max(lockedUntil, 0),
+    };
   },
 });
 
@@ -77,103 +125,6 @@ async function codesForAddress(
 }
 
 /**
- * Records that a code was just emailed. Resets the per-code count (a fresh code
- * deserves a fresh five) but keeps the hourly window, so resending is not a way
- * to get more guesses.
- *
- * Issuing a new code also throws away every older outstanding code, except the
- * one just sent: two live codes would mean two sets of five guesses, and a
- * student who asked for a resend because their first code never arrived should
- * not leave that code usable for a brute-force attempt.
- */
-export const noteCodeSent = mutation({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => {
-    const address = normaliseEmail(email);
-    if (!address) throw new Error("Enter an email address first.");
-
-    const now = Date.now();
-    const row = await rowFor(ctx, address);
-    if (!row) {
-      await discardOlderCodes(ctx, address);
-      await ctx.db.insert("otpGuards", {
-        email: address,
-        codeFailures: 0,
-        windowStart: now,
-        windowFailures: 0,
-        lastCodeSentAt: now,
-      });
-      return describeAttempts(null, now);
-    }
-
-    await discardOlderCodes(ctx, address);
-
-    const windowOpen = now - row.windowStart < HOUR_MS;
-    await ctx.db.patch(row._id, {
-      codeFailures: 0,
-      codeInvalidated: false,
-      lastCodeSentAt: now,
-      lastFailedAt: undefined,
-      // A window older than an hour starts again, which is what lets a student
-      // who mistyped five times yesterday try again today.
-      windowStart: windowOpen ? row.windowStart : now,
-      windowFailures: windowOpen ? row.windowFailures : 0,
-    });
-    return describeAttempts(await rowFor(ctx, address), now);
-  },
-});
-
-/**
- * Records one wrong code. At five misses the code is deleted from Convex Auth's
- * table, so it cannot be verified at all — not even by a client that skips this
- * page — until a new one is sent.
- */
-export const recordFailure = mutation({
-  args: { email: v.string() },
-  handler: async (ctx, { email }) => {
-    const address = normaliseEmail(email);
-    if (!address) throw new Error("Enter an email address first.");
-
-    const now = Date.now();
-    const row = await rowFor(ctx, address);
-    if (!row) {
-      await ctx.db.insert("otpGuards", {
-        email: address,
-        codeFailures: 1,
-        windowStart: now,
-        windowFailures: 1,
-        lastCodeSentAt: now,
-        lastFailedAt: now,
-      });
-      return describeAttempts(await rowFor(ctx, address), now);
-    }
-
-    const windowOpen = now - row.windowStart < HOUR_MS;
-    const codeFailures = row.codeFailures + 1;
-    const dead = codeFailures >= MAX_CODE_ATTEMPTS;
-
-    await ctx.db.patch(row._id, {
-      codeFailures,
-      codeInvalidated: dead ? true : row.codeInvalidated,
-      lastFailedAt: now,
-      windowStart: windowOpen ? row.windowStart : now,
-      windowFailures: (windowOpen ? row.windowFailures : 0) + 1,
-    });
-
-    if (dead) {
-      // Throw every code away so the count is a real limit rather than a
-      // message: with no live code, the fifth miss cannot be followed by a
-      // sixth guess even from a client that skips this page.
-      for (const code of await codesForAddress(ctx, address)) {
-        await ctx.db.delete(code._id);
-      }
-    }
-
-    return describeAttempts(await rowFor(ctx, address), now);
-  },
-});
-
-/**
  * Deletes every outstanding code for an address except the newest one. Called
  * right after a code has been emailed, so the code the student was just sent
  * survives and any earlier one stops working immediately.
@@ -189,12 +140,102 @@ async function discardOlderCodes(
   }
 }
 
-/** A correct code clears the record, so the next sign-in starts from zero. */
-export const recordSuccess = mutation({
+/**
+ * Whether the server may send another code right now: one a minute, and a
+ * hard hourly cap so one address cannot be used to flood an inbox. Called by
+ * the email provider before it talks to the gateway, never by a client.
+ */
+export const beginSend = internalMutation({
   args: { email: v.string() },
   handler: async (ctx, { email }) => {
-    const row = await rowFor(ctx, normaliseEmail(email));
-    if (row) await ctx.db.delete(row._id);
-    return { cleared: row !== null };
+    const address = normaliseEmail(email);
+    if (!address) return { allowed: false, retryAt: 0 };
+
+    const now = Date.now();
+    const row = await rowFor(ctx, address);
+    if (!row) return { allowed: true, retryAt: 0 };
+
+    const resendAt = row.lastCodeSentAt + RESEND_COOLDOWN_MS;
+    if (resendAt > now) return { allowed: false, retryAt: resendAt };
+
+    const windowStart = row.sendWindowStart ?? 0;
+    const windowOpen = now - windowStart < HOUR_MS;
+    const sent = windowOpen ? (row.sendWindowCount ?? 0) : 0;
+    if (sent >= MAX_SENDS_PER_HOUR) {
+      return { allowed: false, retryAt: windowStart + HOUR_MS };
+    }
+
+    return { allowed: true, retryAt: 0 };
+  },
+});
+
+/**
+ * Records that a code was just emailed. Resets the per-code count (a fresh code
+ * deserves a fresh five) but keeps the hourly send window and the failures, so
+ * resending is not a way to get more guesses.
+ *
+ * Issuing a new code also throws away every older outstanding code, except the
+ * one just sent: two live codes would mean two sets of five guesses, and a
+ * student who asked for a resend because their first code never arrived should
+ * not leave that code usable for a brute-force attempt.
+ */
+export const noteCodeSent = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const address = normaliseEmail(email);
+    if (!address) throw new Error("Enter an email address first.");
+
+    const now = Date.now();
+    const row = await rowFor(ctx, address);
+    if (!row) {
+      await discardOlderCodes(ctx, address);
+      await ctx.db.insert("otpGuards", {
+        email: address,
+        codeFailures: 0,
+        windowStart: now,
+        windowFailures: 0,
+        lastCodeSentAt: now,
+        sendWindowStart: now,
+        sendWindowCount: 1,
+      });
+      return;
+    }
+
+    await discardOlderCodes(ctx, address);
+
+    const windowOpen = now - row.windowStart < HOUR_MS;
+    const sendWindowStart = row.sendWindowStart ?? now;
+    const sendWindowOpen = now - sendWindowStart < HOUR_MS;
+    await ctx.db.patch(row._id, {
+      codeFailures: 0,
+      codeInvalidated: false,
+      lastCodeSentAt: now,
+      lastFailedAt: undefined,
+      // A window older than an hour starts again, which is what lets a student
+      // who mistyped five times yesterday try again today.
+      windowStart: windowOpen ? row.windowStart : now,
+      windowFailures: windowOpen ? row.windowFailures : 0,
+      sendWindowStart: sendWindowOpen ? sendWindowStart : now,
+      sendWindowCount: (sendWindowOpen ? (row.sendWindowCount ?? 0) : 0) + 1,
+    });
+  },
+});
+
+/** A correct code clears the record, so the next sign-in starts from zero. */
+export async function clearGuard(
+  ctx: MutationCtx,
+  email: string,
+): Promise<boolean> {
+  const row = await rowFor(ctx, normaliseEmail(email));
+  if (!row) return false;
+  await ctx.db.delete(row._id);
+  return true;
+}
+
+/** Internal wrapper so the success callback and server code share one path. */
+export const recordSuccess = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    return { cleared: await clearGuard(ctx, email) };
   },
 });

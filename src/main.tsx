@@ -186,6 +186,43 @@ function RouteSyncer() {
     );
   }, [location.pathname]);
 
+  // The app is one HTML file served for every route, so indexing rules are
+  // applied per navigation. Sign-in and shared-progress links are private or
+  // tokenised; the landing page is the only canonical destination.
+  useEffect(() => {
+    const path = location.pathname;
+    const privateScreen = path === "/auth" || path.startsWith("/share/");
+
+    let robots = document.head.querySelector<HTMLMetaElement>(
+      'meta[name="robots"]',
+    );
+    if (privateScreen) {
+      if (!robots) {
+        robots = document.createElement("meta");
+        robots.name = "robots";
+        document.head.appendChild(robots);
+      }
+      robots.content = "noindex, nofollow";
+    } else if (robots) {
+      robots.remove();
+    }
+
+    let canonical = document.head.querySelector<HTMLLinkElement>(
+      'link[rel="canonical"]',
+    );
+    if (path === "/" || path === "") {
+      if (!canonical) {
+        canonical = document.createElement("link");
+        canonical.rel = "canonical";
+        document.head.appendChild(canonical);
+      }
+      canonical.href = `${window.location.origin}${import.meta.env.BASE_URL}`;
+    } else if (canonical) {
+      // The static canonical describes the landing page, not a deep route.
+      canonical.remove();
+    }
+  }, [location.pathname]);
+
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.data?.type === "navigate") {

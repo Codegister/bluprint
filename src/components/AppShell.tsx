@@ -5,6 +5,16 @@ import { PageInk } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { enter } from "@/components/motion/Motion";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -137,6 +147,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
   const location = useLocation();
   const sets = useQuery(api.studySets.listMine);
+  // A guest has no email to sign back in with, so leaving the session deletes
+  // the only copy of their work. Ask before doing that.
+  const [confirmingGuestSignOut, setConfirmingGuestSignOut] = useState(false);
 
   const decks = useMemo(
     () =>
@@ -146,7 +159,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     [sets],
   );
 
-  const handleSignOut = async () => {
+  const performSignOut = async () => {
     try {
       await signOut();
       onNavigate?.();
@@ -157,6 +170,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     } catch (error) {
       notifyError(error, "Could not sign out. Please try again.");
     }
+  };
+
+  const handleSignOut = async () => {
+    if (user?.isAnonymous) {
+      setConfirmingGuestSignOut(true);
+      return;
+    }
+    await performSignOut();
   };
 
   return (
@@ -278,6 +299,51 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           Sign out
         </button>
       </div>
+
+      <AlertDialog
+        open={confirmingGuestSignOut}
+        onOpenChange={setConfirmingGuestSignOut}
+      >
+        <AlertDialogContent className="rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">
+              Sign out of this guest workspace?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Your sets, cards and progress live only in this browser. There is
+              no email account to sign back into, so signing out removes this
+              session and the work attached to it. Use the set&apos;s export
+              buttons first if you want to keep a copy.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full">
+              Keep my sets
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void performSignOut()}
+              className="rounded-full bg-destructive text-white hover:bg-destructive/90"
+            >
+              Sign out anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+/** A standing reminder for guests once they have work worth losing. */
+function GuestNotice() {
+  const { user } = useAuth();
+  const sets = useQuery(api.studySets.listMine);
+  if (!user?.isAnonymous || !sets || sets.length === 0) return null;
+
+  return (
+    <div className="mb-4 rounded-2xl border border-[#E8D3A3] bg-[#FFF8E8] px-4 py-3 text-[0.8rem] leading-relaxed text-[#7A5200]">
+      <span className="font-semibold">Guest workspace.</span> Your sets live
+      only in this browser. Signing out or clearing site data removes them, so
+      export anything you want to keep first.
     </div>
   );
 }
@@ -341,6 +407,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="relative mx-auto w-full max-w-[1080px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10"
           {...enter(0.02, 8)}
         >
+          <GuestNotice />
           {children}
         </motion.div>
       </main>

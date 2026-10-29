@@ -1,0 +1,5 @@
+Contact: https://github.com/Codegister/bluprint/issues
+Expires: 2027-10-29T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://codegister.github.io/bluprint/.well-known/security.txt
+Policy: https://codegister.github.io/bluprint/privacy

@@ -1,0 +1,29 @@
+name: Secret scan
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: a secret removed in a later commit is still leaked.
+          fetch-depth: 0
+
+      - name: Scan for secrets
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            zricethezav/gitleaks:latest detect \
+            --source=/repo \
+            --verbose \
+            --redact \
+            --exit-code 1

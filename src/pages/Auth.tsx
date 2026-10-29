@@ -11,11 +11,10 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { useConvex, useMutation, useQuery } from "convex/react";
+
 import { motion } from "framer-motion";
 import { AlertCircle, ArrowLeft, ArrowRight, Loader2, Mail } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
@@ -62,31 +61,28 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // The address the code was sent to, whether the page has just sent it or is
-  // showing the code step after a reload.
-  const codeEmail = step === "signIn" ? sentTo : step.email;
-  const status = useQuery(
-    api.otpGuard.status,
-    codeEmail ? { email: codeEmail } : "skip",
-  );
-  const convex = useConvex();
-  const noteCodeSent = useMutation(api.otpGuard.noteCodeSent);
-  const recordFailure = useMutation(api.otpGuard.recordFailure);
-  const recordSuccess = useMutation(api.otpGuard.recordSuccess);
-
-  // The countdowns run off one clock so the button label, the gate and the
-  // server's timestamps never disagree.
+  // The countdowns run off one clock so every label on the page agrees.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const attemptsLeft = status?.attemptsLeft ?? 5;
-  const codeUsable = status?.codeUsable ?? true;
-  const resendIn = secondsUntil(status?.resendAt, now);
-  const retryIn = secondsUntil(status?.retryAt, now);
-  const lockedSeconds = secondsUntil(status?.lockedUntil, now);
+  // The server owns the guard: a browser can no longer set, reset or clear an
+  // attempt record, and the sign-in page is signed out, so it cannot read one
+  // either. This local count only shapes the wording; Convex Auth enforces the
+  // real five-tries-per-hour limit on every verification.
+  const [failures, setFailures] = useState(0);
+  const attemptsLeft = Math.max(0, 5 - failures);
+  const resendIn =
+    lastSent &&
+    step !== "signIn" &&
+    lastSent.email === step.email.trim().toLowerCase()
+      ? Math.max(
+          0,
+          Math.ceil((lastSent.at + RESEND_SECONDS * 1000 - now) / 1000),
+        )
+      : 0;
   const typedResendIn =
     lastSent && lastSent.email === typedEmail.trim().toLowerCase()
       ? Math.max(0, Math.ceil((lastSent.at + RESEND_SECONDS * 1000 - now) / 1000))
@@ -104,8 +100,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     formData.set("email", email);
     try {
       await signIn("email-otp", formData);
-      await noteCodeSent({ email });
       setSentTo(email);
+      setFailures(0);
       setLastSent({ email: email.trim().toLowerCase(), at: Date.now() });
       setStep({ email });
       setError(null);
@@ -132,34 +128,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       return;
     }
     setIsLoading(true);
-    // The local countdown is only a hint; this is the server's own record, so
-    // the cooldown still holds after a reload.
-    try {
-      const live = await convex.query(api.otpGuard.status, { email });
-      const lockedFor = Math.max(
-        Math.ceil((live.lockedUntil - Date.now()) / 1000),
-        0,
-      );
-      if (lockedFor > 0) {
-        setError(
-          `Too many wrong codes for this address. Try again in ${Math.ceil(lockedFor / 60)} minutes, or continue as a guest.`,
-        );
-        setIsLoading(false);
-        return;
-      }
-      const wait = Math.max(
-        Math.ceil((live.resendAt - Date.now()) / 1000),
-        0,
-      );
-      if (wait > 0) {
-        setError(`A code was just sent. You can request another in ${wait}s.`);
-        setIsLoading(false);
-        return;
-      }
-    } catch {
-      // A gate that cannot be read must not strand the student; the send itself
-      // still records the attempt.
-    }
+    // The send path enforces the cooldown and the hourly cap on the server. A
+    // refused send comes back as the provider's readable error.
     await sendCode(email);
     setIsLoading(false);
   };
@@ -169,46 +139,29 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
    * so it is the same after a reload, and it says plainly when the code has
    * been thrown away rather than inviting another guess.
    */
-  const failureMessage = (next: {
-    attemptsLeft: number;
-    codeUsable: boolean;
-    retryAt: number;
-  }): string => {
-    const wait = secondsUntil(next.retryAt, Date.now());
-    if (!next.codeUsable) {
-      return "That code didn't work, and it has now been cancelled after 5 wrong tries. Request a new code.";
+  /** A wrong code. The real limit is enforced by the server; this is wording. */
+  const failureMessage = (left: number): string => {
+    if (left <= 0) {
+      return "That code didn't work. Request a new code below.";
     }
-    const left = `${next.attemptsLeft} attempt${next.attemptsLeft === 1 ? "" : "s"} left.`;
-    return `That code didn't work. ${left}${wait > 0 ? ` Wait ${wait}s before trying again.` : ""}`;
+    return `That code didn't work. ${left} attempt${left === 1 ? "" : "s"} left.`;
   };
 
   const handleOtpSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
 
-    if (lockedSeconds > 0) {
-      setError(
-        `Too many wrong codes. Try again in ${Math.ceil(lockedSeconds / 60)} minutes.`,
-      );
-      return;
-    }
-    if (!codeUsable) {
-      setError(
-        "This code was cancelled after 5 wrong tries. Request a new code below.",
-      );
-      return;
-    }
-    if (retryIn > 0) {
-      setError(`Wait ${retryIn}s before trying another code.`);
+    if (attemptsLeft === 0) {
+      setError("Request a new code below to keep trying.");
       return;
     }
 
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? codeEmail);
 
-    setIsLoading(true);    try {
+    setIsLoading(true);
+    try {
       await signIn("email-otp", formData);
-      await recordSuccess({ email });
       navigate(redirect);
     } catch (verifyError) {
       setOtp("");
@@ -224,23 +177,19 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         return;
       }
 
-      try {
-        const next = await recordFailure({ email });
-        setError(failureMessage(next));
-      } catch {
-        setError("That code didn't work. Check the six digits and try again.");
-      }
-
+      setFailures((count) => count + 1);
+      setError(failureMessage(Math.max(0, attemptsLeft - 1)));
       setIsLoading(false);
     }
   };
 
   const handleResend = async () => {
-    if (!sentTo || resendIn > 0 || lockedSeconds > 0) return;
+    if (!sentTo || resendIn > 0) return;
     setIsLoading(true);
     const sent = await sendCode(sentTo);
     setIsLoading(false);
     setOtp("");
+    setFailures(0);
     if (sent) {
       toast.success("A new code is on its way.");
     }
@@ -480,22 +429,21 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     </InputOTP>
                   </div>
 
-                  {/* The limit is stated before it is hit, and the count is
-                      the server's, so it matches after a reload. */}
+                  {/* The server owns the limit; this is the page's own count of
+                      the misses it has seen, so it never claims more than it
+                      knows. */}
                   <p
                     className={cn(
                       "mt-3 text-center text-[0.78rem] font-medium",
-                      codeUsable ? "text-muted-foreground" : "text-[#A81F28]",
+                      attemptsLeft > 0
+                        ? "text-muted-foreground"
+                        : "text-[#A81F28]",
                     )}
                     aria-live="polite"
                   >
-                    {!status
-                      ? "Checking this code…"
-                      : lockedSeconds > 0
-                        ? `Too many wrong codes. Try again in ${Math.ceil(lockedSeconds / 60)} minutes.`
-                        : !codeUsable
-                          ? "This code was cancelled after 5 wrong tries. Request a new one."
-                          : `${attemptsLeft} of 5 tries left for this code`}
+                    {attemptsLeft > 0
+                      ? `${attemptsLeft} of 5 tries left for this code`
+                      : "Request a new code below."}
                   </p>
 
                   {error && (
@@ -508,11 +456,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <Button
                     type="submit"
                     disabled={
-                      isLoading ||
-                      otp.length !== 6 ||
-                      lockedSeconds > 0 ||
-                      retryIn > 0 ||
-                      !codeUsable
+                      isLoading || otp.length !== 6 || attemptsLeft === 0
                     }
                     className="chrome-button mt-5 h-12 w-full rounded-full bg-[#191B27] text-[0.95rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:bg-[#191B27]/40"
                   >
@@ -521,8 +465,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         <Loader2 className="mr-2 size-4 animate-spin" />
                         Verifying…
                       </>
-                    ) : retryIn > 0 ? (
-                      <>Try again in {retryIn}s</>
                     ) : (
                       <>
                         Verify and enter
@@ -535,14 +477,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <button
                       type="button"
                       onClick={() => void handleResend()}
-                      disabled={isLoading || resendIn > 0 || lockedSeconds > 0}
+                      disabled={isLoading || resendIn > 0}
                       className="rounded-full px-3 py-1.5 text-[0.82rem] font-semibold text-brand-ink/75 underline-offset-4 hover:text-brand-ink hover:underline disabled:text-muted-foreground disabled:no-underline"
                     >
-                      {lockedSeconds > 0
-                        ? `Locked for ${Math.ceil(lockedSeconds / 60)} more minutes`
-                        : resendIn > 0
-                          ? `Resend code in ${resendIn}s`
-                          : "Resend code"}
+                      {resendIn > 0
+                        ? `Resend code in ${resendIn}s`
+                        : "Resend code"}
                     </button>
                     <p className="text-center text-[0.78rem] leading-relaxed text-muted-foreground">
                       Codes expire after 15 minutes. Check your spam folder if it hasn't

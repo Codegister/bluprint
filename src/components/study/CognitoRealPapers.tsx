@@ -212,8 +212,18 @@ export function CognitoRealPapers({
 
       <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
         Papers and mark schemes are published by the exam boards and hosted by
-        Cognito, shown here as reference material. For practice written for
-        Bluprint, use the paper builder above.
+        Cognito, shown here as reference material; all rights remain with the
+        publisher. For practice written for Bluprint, use the paper builder
+        above. Rights holders can request removal through the{" "}
+        <a
+          href="https://github.com/Codegister/bluprint/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold underline decoration-chrome-4 underline-offset-2 hover:text-brand-ink"
+        >
+          project issue tracker
+        </a>
+        .
       </p>
 
       <Dialog

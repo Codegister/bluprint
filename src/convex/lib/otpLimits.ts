@@ -12,6 +12,8 @@ export const MAX_CODE_ATTEMPTS = 5;
 export const RESEND_COOLDOWN_MS = 60_000;
 /** Wrong codes allowed in an hour, across any number of resent codes. */
 export const MAX_HOURLY_ATTEMPTS = 5;
+/** Codes one address can be sent in an hour, however often it asks. */
+export const MAX_SENDS_PER_HOUR = 6;
 
 /** The wait before the next try, indexed by the failures already made. */
 const RETRY_DELAYS_MS = [0, 0, 3_000, 8_000, 20_000];
