@@ -33,16 +33,29 @@ jobs:
       - name: Generate Convex client
         # Add CONVEX_DEPLOY_KEY under Settings -> Secrets and variables ->
         # Actions (Convex dashboard: the deployment's Settings -> Deploy keys).
-        # Without it the generated types do not exist, so the typecheck below
-        # has nothing to check against and says so instead of failing.
+        # The key must target the deployment pinned in src/main.tsx. Without a
+        # key the generated types do not exist, so the typecheck below says so
+        # instead of failing.
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: |
-          if [ -z "$CONVEX_DEPLOY_KEY" ]; then
+          key="$(printf '%s' "${CONVEX_DEPLOY_KEY:-}" | tr -d '[:space:]')"
+          if [ -z "$key" ]; then
             echo "::warning::CONVEX_DEPLOY_KEY is not set; skipping generated Convex types and the typecheck."
             exit 0
           fi
-          bunx convex codegen --typecheck disable
+          export CONVEX_DEPLOY_KEY="$key"
+          bash .github/scripts/check-convex-key.sh
+          set +e
+          output="$(bunx convex codegen --typecheck disable 2>&1)"
+          status=$?
+          output="$(printf '%s\n' "$output" | sed "s#$CONVEX_DEPLOY_KEY#***#g")"
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            detail="$(printf '%s\n' "$output" | grep -m1 -E '✖|Error|error|Invalid' || true)"
+            echo "::error title=Convex codegen failed::${detail:-The CLI exited $status. See the job log.}"
+            exit "$status"
+          fi
 
       - name: Typecheck
         run: |
