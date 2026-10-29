@@ -64,7 +64,21 @@ jobs:
             echo "::warning::No generated Convex types; skipping tsc -b."
             exit 0
           fi
-          bunx tsc -b
+          set +e
+          output="$(bunx tsc -b --pretty false 2>&1)"
+          status=$?
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            # A plain tsc failure is only visible in the job log, which the
+            # workflow API does not expose. Turn each TypeScript diagnostic
+            # into an annotation with its file and position.
+            while IFS= read -r line; do
+              if [[ "$line" =~ ^(.+)\(([0-9]+),([0-9]+)\):\ error\ (TS[0-9]+):\ (.*)$ ]]; then
+                echo "::error file=${BASH_REMATCH[1]},line=${BASH_REMATCH[2]},col=${BASH_REMATCH[3]}::${BASH_REMATCH[5]} (${BASH_REMATCH[4]})"
+              fi
+            done <<< "$output"
+            exit "$status"
+          fi
 
       - name: Tests
         run: bun test

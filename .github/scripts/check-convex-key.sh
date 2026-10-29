@@ -36,12 +36,20 @@ case "$key" in
     ;;
 esac
 
+# The dashboard's copy control has also been seen to join the deployment
+# name and the token with no separator at all. Convex tokens are JWT-like and
+# start with the base64 of a JSON header, `eyJ`; a deployment name cannot
+# contain that sequence. Reinsert the separator only after the prod:/dev:
+# prefix has been checked, and leave the token itself untouched.
+if [[ "$key" != *"|"* && "$key" == *"eyJ"* ]]; then
+  prefix="${key%%eyJ*}"
+  token="${key#*eyJ}"
+  key="${prefix}|eyJ${token}"
+  echo "::notice::Inserted the missing | separator in CONVEX_DEPLOY_KEY."
+fi
+
 if [ "$key" = "${key%%|*}" ]; then
-  if [[ "$key" == *"eyJ"* ]]; then
-    echo "::error title=Convex deploy key malformed::The token is present but the | separator is missing. Insert | between the deployment name and the token, so it reads prod:<deployment>|<token>."
-  else
-    echo "::error title=Convex deploy key malformed::The secret is only the deployment prefix. Copy the whole key; it must look like prod:<deployment>|<token>."
-  fi
+  echo "::error title=Convex deploy key malformed::The secret is only the deployment prefix. Copy the whole key; it must look like prod:<deployment>|<token>."
   exit 1
 fi
 

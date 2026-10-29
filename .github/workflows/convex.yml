@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - "src/convex/**"
+      # A fix to the key handling must be able to re-run the deploy.
+      - ".github/scripts/check-convex-key.sh"
       - ".github/workflows/convex.yml"
 
 permissions:
