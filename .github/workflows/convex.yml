@@ -1,10 +1,15 @@
 name: Deploy Convex backend
 
-# Manual on purpose: a production deploy should be a deliberate act, and the
-# deploy key lives only in repository secrets. Run it from the Actions tab after
-# a merge that changes src/convex/.
+# Deploys the backend when Convex functions change on main. The deploy key
+# lives only in repository secrets; workflow_dispatch allows a deliberate
+# re-run without another commit.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/convex/**"
+      - ".github/workflows/convex.yml"
 
 permissions:
   contents: read
