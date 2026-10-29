@@ -1,31 +1,47 @@
 #!/usr/bin/env bash
 # Validate CONVEX_DEPLOY_KEY before any command uses it.
 #
-# The key is a deployment credential. It is trimmed (a copied key can carry a
-# trailing newline, which Convex rejects), checked for the expected shape, and
-# compared with the deployment pinned in src/main.tsx. Deploying to a different
-# deployment would leave the live app on its old backend, so that is a hard
-# failure rather than a warning.
-#
-# Only the deployment name is printed. The token after "|" never is.
+# The key is a deployment credential. Convex accepts exactly
+# `prod:<deployment>|<token>` (or `dev:`). The dashboard's copy control has
+# been observed to hand back a typographic vertical bar, to add invisible
+# characters, and to drop the separator or the deployment name entirely. This
+# script normalizes those presentation artifacts, validates the target against
+# the deployment pinned in src/main.tsx, and writes the usable key to a
+# runner-private file. Only the deployment name is ever printed.
 set -euo pipefail
 
 key="${CONVEX_DEPLOY_KEY:-}"
 key="$(printf '%s' "$key" | tr -d '[:space:]')"
 
-# The Convex dashboard's copy control can hand back a typographic vertical
-# bar (U+2502 or U+FF5C) instead of ASCII |. Convex only accepts ASCII, so a
-# correct key copied through that control would otherwise look malformed.
-normalized="${key//│/|}"
-normalized="${normalized//｜/|}"
-if [ "$normalized" != "$key" ]; then
-  echo "::notice::Replaced a typographic vertical bar in CONVEX_DEPLOY_KEY with ASCII |."
-  key="$normalized"
-fi
-
 if [ -z "$key" ]; then
   echo "::error title=Convex deploy key missing::Add CONVEX_DEPLOY_KEY under Settings -> Secrets and variables -> Actions."
   exit 1
+fi
+
+# The frontend pins its backend in src/main.tsx; reading it here keeps the
+# workflow and the bundle from drifting apart.
+url="$(grep -m1 -oE 'https://[a-z0-9-]+\.convex\.cloud' src/main.tsx || true)"
+expected="${url#https://}"
+expected="${expected%.convex.cloud}"
+if [ -z "$expected" ]; then
+  echo "::error title=Cannot read Convex URL::src/main.tsx has no https://<deployment>.convex.cloud URL."
+  exit 1
+fi
+
+# Normalize the artifacts the copy control can introduce. The key itself must
+# be ASCII: no invisible characters, no typographic bar.
+original="$key"
+key="${key//│/|}"
+key="${key//｜/|}"
+key="${key//$'\u200B'/}"
+key="${key//$'\u200C'/}"
+key="${key//$'\u200D'/}"
+key="${key//$'\uFEFF'/}"
+key="${key//$'\u00A0'/}"
+key="${key//$'\u202F'/}"
+key="${key//$'\u2007'/}"
+if [ "$key" != "$original" ]; then
+  echo "::notice::Normalized invisible characters in CONVEX_DEPLOY_KEY."
 fi
 
 case "$key" in
@@ -36,11 +52,18 @@ case "$key" in
     ;;
 esac
 
-# The dashboard's copy control has also been seen to join the deployment
-# name and the token with no separator at all. Convex tokens are JWT-like and
-# start with the base64 of a JSON header, `eyJ`; a deployment name cannot
-# contain that sequence. Reinsert the separator only after the prod:/dev:
-# prefix has been checked, and leave the token itself untouched.
+# Some copies omit the deployment name entirely: `prod:eyJ...`. The token
+# cannot be used without its name, and the app has exactly one valid target.
+if [[ "$key" == prod:eyJ* || "$key" == dev:eyJ* ]]; then
+  scheme="${key%%:*}"
+  rest="${key#*:}"
+  key="${scheme}:${expected}|${rest}"
+  echo "::notice::Recovered the deployment name from the app's pinned URL."
+fi
+
+# Other copies join the deployment name and token with no separator at all.
+# Convex tokens are JWT-like and start with the base64 of a JSON header,
+# `eyJ`; a deployment name cannot contain that sequence.
 if [[ "$key" != *"|"* && "$key" == *"eyJ"* ]]; then
   prefix="${key%%eyJ*}"
   token="${key#*eyJ}"
@@ -58,21 +81,10 @@ name="${target#*:}"       # e.g. harmless-dog-538
 
 case "$name" in
   ""|*[!a-z0-9-]*)
-    echo "::error title=Convex deploy key malformed::The deployment name in the key is not a valid Convex deployment name."
+    echo "::error title=Convex deploy key malformed::The deployment name in the key is not a valid Convex deployment name (length ${#name}). Copy the key again; it must read prod:<deployment>|<token>."
     exit 1
     ;;
 esac
-
-# The frontend pins its backend in src/main.tsx; reading it here keeps the
-# workflow and the bundle from drifting apart.
-url="$(grep -m1 -oE 'https://[a-z0-9-]+\.convex\.cloud' src/main.tsx || true)"
-expected="${url#https://}"
-expected="${expected%.convex.cloud}"
-
-if [ -z "$expected" ]; then
-  echo "::error title=Cannot read Convex URL::src/main.tsx has no https://<deployment>.convex.cloud URL."
-  exit 1
-fi
 
 if [ "$name" != "$expected" ]; then
   echo "::error title=Wrong Convex deployment::The key targets $name, but the app is pinned to $expected. Generate a deploy key for $expected and replace CONVEX_DEPLOY_KEY."
@@ -80,7 +92,7 @@ if [ "$name" != "$expected" ]; then
 fi
 
 # The workflows read this file rather than the raw secret, so they use the
-# trimmed and normalized value that was actually validated. The runner is
+# trimmed, normalized value that was actually validated. The runner is
 # ephemeral and the file is owner-only.
 key_file="${RUNNER_TEMP:-/tmp}/convex-deploy-key"
 umask 077
