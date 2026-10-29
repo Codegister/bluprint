@@ -23,6 +23,9 @@ const SUGGESTIONS = [
   "Give me a worked example",
 ];
 
+/** The register control. It changes the explanation, not the model. */
+const EXPLAIN_LEVELS = ["Simple", "GCSE", "A-Level"] as const;
+
 /**
  * What a tutor conversation is grounded in. A study set uses its saved notes; a
  * course uses its scraped pathway, optionally narrowed to one unit.
@@ -143,6 +146,7 @@ export function TutorChat({
   }, [scopeId, useWeb]);
   // The last tier the student used, so a suggested question uses the same one.
   const [tier, setTier] = useState(defaultTier);
+  const [explainLevel, setExplainLevel] = useState("GCSE");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // The reply being written right now, if any.
@@ -190,6 +194,7 @@ export function TutorChat({
           question,
           useWeb,
           tier: chosenTier,
+          explainLevel,
         });
       } else {
         await askCourseTutor({
@@ -198,6 +203,7 @@ export function TutorChat({
           question,
           useWeb,
           tier: chosenTier,
+          explainLevel,
         });
       }
     } catch (sendError) {
@@ -230,6 +236,21 @@ export function TutorChat({
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
             {scopeControl}
+            <label className="flex items-center gap-1 text-[0.68rem] font-medium text-muted-foreground">
+              <span className="sr-only">Explanation level</span>
+              <select
+                aria-label="Explanation level"
+                value={explainLevel}
+                onChange={(event) => setExplainLevel(event.target.value)}
+                className="h-7 rounded-full border border-border bg-white px-2 text-[0.7rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
+              >
+                {EXPLAIN_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               aria-pressed={useWeb}
@@ -387,8 +408,7 @@ export function TutorChat({
                 scope.kind === "set" ? "this set's notes" : "this course's notes",
               latestSourceCount,
             })}{" "}
-            Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
-            check them against your notes.
+            Simple, GCSE and A-Level set the register. Fast, Balanced and Deep set how long and deep the answer is. Anything labelled “Beyond your notes” is enrichment to check. Answers can be wrong, so compare them with your notes.
           </p>
         </div>
       </section>

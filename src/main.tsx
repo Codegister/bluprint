@@ -144,6 +144,10 @@ class RootErrorBoundary extends React.Component<
 // stops answering the old OTP status query for arbitrary addresses, so a
 // frontend release cannot get ahead of the backend fix.
 const CONVEX_URL = "https://harmless-dog-538.convex.cloud";
+
+// One canonical origin, even if an old host is still serving a copy. The
+// static tag in index.html carries the same value.
+const CANONICAL_URL = "https://codegister.github.io/bluprint/";
 const convex = new ConvexReactClient(CONVEX_URL);
 
 // GitHub Pages serves a project site from /<repo>/, so the router must treat
@@ -219,7 +223,7 @@ function RouteSyncer() {
         canonical.rel = "canonical";
         document.head.appendChild(canonical);
       }
-      canonical.href = `${window.location.origin}${import.meta.env.BASE_URL}`;
+      canonical.href = CANONICAL_URL;
     } else if (canonical) {
       // The static canonical describes the landing page, not a deep route.
       canonical.remove();

@@ -22,23 +22,26 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
+import { AccountExportButton } from "@/components/study/ShareAndExport";
 import { useAuth } from "@/hooks/use-auth";
 import { notifyError } from "@/lib/errors";
 import { displayName, initialFor } from "@/lib/format";
 import { subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { motion, useScroll } from "framer-motion";
 import {
   CalendarDays,
   FileText,
   GraduationCap,
+  Loader2,
   Menu,
   Sparkles,
   Target,
+  Trash2,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 
 /**
@@ -146,10 +149,14 @@ function DeckRow({
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const deleteAccount = useMutation(api.users.deleteAccount);
   const sets = useQuery(api.studySets.listMine);
   // A guest has no email to sign back in with, so leaving the session deletes
   // the only copy of their work. Ask before doing that.
   const [confirmingGuestSignOut, setConfirmingGuestSignOut] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const decks = useMemo(
     () =>
@@ -178,6 +185,24 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       return;
     }
     await performSignOut();
+  };
+
+  const performDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      toast.success("Your account and every set attached to it were deleted.");
+      try {
+        await signOut();
+      } catch {
+        // The user row and sessions are already gone; signing out locally is
+        // best-effort from here.
+      }
+      window.location.replace(import.meta.env.BASE_URL || "/");
+    } catch (error) {
+      notifyError(error, "Could not delete your account. Please try again.");
+      setDeleting(false);
+    }
   };
 
   return (
@@ -291,13 +316,24 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           {/* A preference, not a destination: it belongs with the account. */}
           <ThemeToggle />
         </div>
-        <button
-          type="button"
-          onClick={handleSignOut}
-          className="mt-3 text-[0.76rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
-        >
-          Sign out
-        </button>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="text-[0.76rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+          >
+            Sign out
+          </button>
+          {user && !user.isAnonymous && (
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              className="text-[0.76rem] font-semibold text-[#A81F28] underline-offset-2 hover:underline"
+            >
+              Delete account
+            </button>
+          )}
+        </div>
       </div>
 
       <AlertDialog
@@ -316,7 +352,20 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               buttons first if you want to keep a copy.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmingGuestSignOut(false);
+                onNavigate?.();
+                navigate(
+                  `/auth?link=1&returnTo=${encodeURIComponent(location.pathname)}`,
+                );
+              }}
+              className="inline-flex h-10 items-center justify-center rounded-full bg-brand-sky px-4 text-[0.82rem] font-semibold text-white hover:bg-brand-sky/90"
+            >
+              Add an email to keep them
+            </button>
             <AlertDialogCancel className="rounded-full">
               Keep my sets
             </AlertDialogCancel>
@@ -325,6 +374,53 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               className="rounded-full bg-destructive text-white hover:bg-destructive/90"
             >
               Sign out anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent className="rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">
+              Delete your account?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-muted-foreground">
+              <span className="block">
+                This removes every study set, card, note, uploaded image, mark
+                and your account row. It cannot be undone.
+              </span>
+              <span className="block font-medium text-brand-ink">
+                Download a copy first if you might want your notes later.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <AccountExportButton />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full" disabled={deleting}>
+              Keep my account
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void performDelete();
+              }}
+              className="rounded-full bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden />
+                  Deleting…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-1.5 size-4" aria-hidden />
+                  Delete everything
+                </>
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -342,8 +438,14 @@ function GuestNotice() {
   return (
     <div className="mb-4 rounded-2xl border border-[#E8D3A3] bg-[#FFF8E8] px-4 py-3 text-[0.8rem] leading-relaxed text-[#7A5200]">
       <span className="font-semibold">Guest workspace.</span> Your sets live
-      only in this browser. Signing out or clearing site data removes them, so
-      export anything you want to keep first.
+      only in this browser. Signing out or clearing site data removes them.{" "}
+      <Link
+        to="/auth?link=1&returnTo=%2Ftutor"
+        className="font-semibold underline decoration-[#7A5200]/40 underline-offset-2 hover:text-brand-ink"
+      >
+        Add an email to keep them
+      </Link>
+      , or export anything you want to keep first.
     </div>
   );
 }

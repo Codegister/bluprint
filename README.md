@@ -65,16 +65,16 @@ shader follow it.
 The metal shades live in `src/index.css` as `--chrome-0` to `--chrome-8` and are exposed
 to Tailwind as `bg-chrome-*`, `text-chrome-*`, and `border-chrome-*`:
 
-| Token | Value | Role |
-| --- | --- | --- |
-| `--chrome-0` | `#ffffff` | polished highlight |
-| `--chrome-1` | `#eef2f6` | page base |
-| `--chrome-2` | `#e0e6ed` | raised panel |
-| `--chrome-3` | `#c8d1db` | soft rule |
-| `--chrome-4` | `#a3b0be` | strong rule |
-| `--chrome-5` | `#6f7d8c` | quiet icons |
-| `--chrome-6` | `#4b5866` | secondary copy |
-| `--chrome-7` | `#2c3641` | strong secondary copy |
+| Token        | Value     | Role                   |
+| ------------ | --------- | ---------------------- |
+| `--chrome-0` | `#ffffff` | polished highlight     |
+| `--chrome-1` | `#eef2f6` | page base              |
+| `--chrome-2` | `#e0e6ed` | raised panel           |
+| `--chrome-3` | `#c8d1db` | soft rule              |
+| `--chrome-4` | `#a3b0be` | strong rule            |
+| `--chrome-5` | `#6f7d8c` | quiet icons            |
+| `--chrome-6` | `#4b5866` | secondary copy         |
+| `--chrome-7` | `#2c3641` | strong secondary copy  |
 | `--chrome-8` | `#0a0f15` | graphite ink / primary |
 
 The `.dark` block re-points the same ramp for gunmetal (0 is the raised highlight, 8 is
@@ -221,7 +221,7 @@ earned. Four practice papers per course is the cap; remove one to build another.
    inline. An **About** chip in the panel header defaults to the most recent set, so the
    first question works without a second chooser. Below the panel are **Continue** (the
    last set and the most due), the searchable **study sets** library, and compact
-   **Courses** rows with a *Practise* link per course. The header keeps the day's streak
+   **Courses** rows with a _Practise_ link per course. The header keeps the day's streak
    and due count in one line. The full **Today** screen holds the due queue, one session
    button with a length control, and the sets that need work. A session takes the most
    useful cards first: everything overdue, then the shakiest memories.
@@ -235,33 +235,33 @@ earned. Four practice papers per course is the cap; remove one to build another.
    status, and projected readiness on the day. The daily goal uses the nearest exam across
    all ready sets.
 10. **Needs work** — a dedicated session per set collects cards that were rated Again, have
-   lapsed, or never reached a stable memory, plus the quiz questions you keep missing. It
-   starts with the worst material rather than replaying the whole deck.
-7. **Ask the tutor** — the tutor can be pointed at a study set, a whole course, or one
-   unit of a course. A set thread reads that set's notes; a course or unit thread reads the
-   scraped pathway for that scope. It knows the course, board, and level, and keeps each
-   conversation saved separately, so a question about one unit never blends into another.
-   Answers are **streamed** — the reply is written into the chat as the model produces it,
-   and is saved as it grows, so it survives a reload.
-   A **Web** switch on the tutor header decides whether it may search the internet for the
-   question. With web on, it can check exam-board pages and other sites, and the pages it
-   used are listed under the answer and saved with the thread. With web off it answers from
-   your material alone. Suggested first questions get you started; exam practice is one
-   question at a time.
-   The **level picker** under the prompt chooses how much work the tutor does: **Fast**
-   (a quick, short answer), **Balanced** (the default everyday answer) and **Deep** (the
-   longest answer budget and a worked explanation, for a full derivation or a marked essay
-   plan). Levels are named by feel rather than by model — each one maps to a different
-   NVIDIA model on the server, so the browser never sees a model id.
-11. **Edit and rebuild** — **Edit set** in the set's `⋯` menu changes its name, course,
-   board, level, or exam date, and its three build sliders (1–100 flashcards, quiz questions
-   and exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and
-   exam questions with those counts and the new board conventions; your notes and uploads
-   are kept. The exam date saves without a rebuild.
-12. **Persist** — study sets, extracted notes, uploads, FSRS card state, daily counts, quiz
-   scores, and tutor conversations stay saved between sessions, scoped to the account that
-   created them.
-13. **Plan your revision** — **Build revision timetable** asks which subjects to revise,
+    lapsed, or never reached a stable memory, plus the quiz questions you keep missing. It
+    starts with the worst material rather than replaying the whole deck.
+11. **Ask the tutor** — the tutor can be pointed at a study set, a whole course, or one
+    unit of a course. A set thread reads that set's notes; a course or unit thread reads the
+    scraped pathway for that scope. It knows the course, board, and level, and keeps each
+    conversation saved separately, so a question about one unit never blends into another.
+    Answers are **streamed** — the reply is written into the chat as the model produces it,
+    and is saved as it grows, so it survives a reload.
+    A **Web** switch on the tutor header decides whether it may search the internet for the
+    question. With web on, it can check exam-board pages and other sites, and the pages it
+    used are listed under the answer and saved with the thread. With web off it answers from
+    your material alone. Suggested first questions get you started; exam practice is one
+    question at a time.
+    The **level picker** under the prompt chooses how much work the tutor does: **Fast**
+    (a quick, short answer), **Balanced** (the default everyday answer) and **Deep** (the
+    longest answer budget and a worked explanation, for a full derivation or a marked essay
+    plan). Levels are named by feel rather than by model — each one maps to a different
+    NVIDIA model on the server, so the browser never sees a model id.
+12. **Edit and rebuild** — **Edit set** in the set's `⋯` menu changes its name, course,
+    board, level, or exam date, and its three build sliders (1–100 flashcards, quiz questions
+    and exam-style questions). "Save and rebuild" regenerates the summary, cards, quiz, and
+    exam questions with those counts and the new board conventions; your notes and uploads
+    are kept. The exam date saves without a rebuild.
+13. **Persist** — study sets, extracted notes, uploads, FSRS card state, daily counts, quiz
+    scores, and tutor conversations stay saved between sessions, scoped to the account that
+    created them.
+14. **Plan your revision** — **Build revision timetable** asks which subjects to revise,
     which **study method** the plan uses (topics, past papers only, or a mix of both), the
     **longest** a topic session can be, one paper choice for the whole plan, how long a
     school day and a day off should be, how many days a week you can work, and when your
@@ -271,13 +271,13 @@ earned. Four practice papers per course is the cap; remove one to build another.
     The schedule is saved to your account and appears in the sidebar as a colour-coded weekly
     timetable; clicking a topic session opens (or builds) its study set, and clicking a past
     paper session opens the saved paper.
-14. **Practise a paper** — every ready course keeps up to four saved practice papers,
+15. **Practise a paper** — every ready course keeps up to four saved practice papers,
     written from its specification in that subject's real question format (RS 3/4/5/12,
     English essays, maths calculations, and so on) and marked question by question against
     their own mark schemes. Progress and marks per paper are kept alongside the course.
-15. **Start on Home** — signing in, and opening `/`, both land on `/tutor`, the tab
+16. **Start on Home** — signing in, and opening `/`, both land on `/tutor`, the tab
     labelled **Home**. The screen leads with **Add material**, then the full tutor panel
-    (the *About* chip in its header defaults to your most recent set), then **Continue**,
+    (the _About_ chip in its header defaults to your most recent set), then **Continue**,
     your **study sets**, and compact **Courses** rows with practice links. `/dashboard`
     still redirects here, carrying `?new=1` with it, so old links keep working.
 
@@ -290,22 +290,58 @@ Home opens with a **Getting started** guide that names the four moves in the ord
 build on each other — set up courses, build a study set, explore the tutor, build a
 timetable — and ticks each one off as it is done. It removes itself when all four are
 complete, and **Hide this guide** dismisses it early. Every screen then ends with the next
-step: Courses offers *Build a study set*, a set offers *Add these cards to today's
-session*, Today offers *See what's planned next*, and the timetable offers *Start today's
-session*, so the loop closes without going back to the menu. All top-level screens share
+step: Courses offers _Build a study set_, a set offers _Add these cards to today's
+session_, Today offers _See what's planned next_, and the timetable offers _Start today's
+session_, so the loop closes without going back to the menu. All top-level screens share
 one header frame (eyebrow, title, one-line description, single primary action), and each
 route's content rises into place with the same short entrance.
 
-Each course has four sections: **Pathway**, **Notes**, **Practice** (past papers and topic
-papers behind one toggle) and **Study sets**. **Notes** reads each topic's notes in place,
+Each course has five sections: **Pathway**, **Specification**, **Notes**, **Practice** (past
+papers and topic papers behind one toggle) and **Study sets**. **Specification** lists the
+course's spec points by unit, ticking each one once the material built for its topic covers
+it, so the tab doubles as the list of what is still missing.
+**Notes** reads each topic's notes in place,
 and it is the one place a course cannot be missing: where the subject publishes notes they
 are shown as published, and where it does not — Edexcel GCSE Religious Studies, AQA GCSE
 Spanish, and any topic whose note pages do not line up — Bluprint writes detailed notes
 from the specification and the panel says so. A study set opens on its **Overview**, with tabs for
 **Flashcards**, **Quiz**, **Exam practice** and **Needs work** (when there is any). A
 single **Continue studying** button picks the recommended mode — due cards first, then the
-quiz if it has never been taken — and *Edit set* and *Ask the tutor* sit in the `⋯` menu.
+quiz if it has never been taken — and _Edit set_ and _Ask the tutor_ sit in the `⋯` menu.
 Sets built from a course topic link back to that course.
+
+## Security and hosting
+
+- **One canonical URL.** <https://codegister.github.io/bluprint/> is the only
+  address in the canonical, Open Graph and Twitter tags. The manifest is
+  relative so it keeps working under the `/bluprint/` base. The older
+  `bluprint.freebuff.app` host must redirect here at the host level; a static
+  GitHub Pages site cannot redirect another origin.
+- **Headers.** GitHub Pages cannot set response headers. Production builds
+  inject a CSP, a referrer policy and a Permissions-Policy as meta tags (see
+  `securityMeta` in `vite.config.ts`); the theme boot script is a separate
+  `public/theme-init.js` file, so `script-src 'self'` needs no inline hash.
+  `frame-ancestors` and `X-Content-Type-Options` are ignored in meta tags, so
+  clickjacking protection needs a host that can set real headers.
+  `public/_headers`, `public/_redirects` and `vercel.json` are ready for
+  Netlify, Cloudflare Pages or Vercel, which also answer deep links with a 200
+  instead of the Pages `404.html` fallback.
+- **Email-code guard.** `otpGuards` is written only by the provider
+  (`noteCodeSent`) after the gateway accepts the mail, cleared by Convex Auth's
+  verified-profile success callback (`recordSuccess`), and gated by `beginSend`
+  (one a minute, six an hour per address). `status` takes no email argument and
+  answers only for the signed-in account. A verification is refused before
+  Convex Auth records a failure when no live code exists for the address. Both
+  the send and verify paths also count a salted IP hash in a ten-minute bucket,
+  so one machine cannot spray addresses or drive lockouts.
+- **Repository.** `Security checks` runs gitleaks, rejects a personal email in
+  new commit metadata, and reviews dependency changes for high-severity
+  vulnerabilities; Dependabot opens weekly Bun and monthly Actions updates.
+  Making the source repository private, rewriting the existing Gmail address
+  out of history, and retiring the old host are operator actions: this workspace
+  cannot change repository visibility, force-push rewritten history or redirect
+  another origin.
+- **Reporting.** `/.well-known/security.txt` points at the private security advisory form, not a public issue tracker.
 
 ## Assumptions
 
@@ -467,6 +503,27 @@ npx convex env set NVIDIA_API_KEY "nvapi-key-one,nvapi-key-two,nvapi-key-three"
 On Freebuff, add `NVIDIA_API_KEY` in the project's **Keys** tab and paste the keys as a
 comma-separated value. Convex functions read it as `process.env.NVIDIA_API_KEY`.
 
+### Or load the keys from Infisical
+
+Instead of setting each key on the deployment, a machine identity can load them from
+Infisical at startup. Create a universal-auth identity with read access to the project,
+then set its credentials on the Convex deployment:
+
+```bash
+npx convex env set INFISICAL_CLIENT_ID "<client-id>"
+npx convex env set INFISICAL_CLIENT_SECRET "<client-secret>"
+npx convex env set INFISICAL_PROJECT_ID "<project-id>"
+# optional: INFISICAL_ENVIRONMENT (default prod), INFISICAL_SECRET_PATH (default /),
+# INFISICAL_SITE_URL (self-hosted Infisical)
+```
+
+`src/convex/lib/infisicalConfig.ts` signs in once when the Node AI actions boot and
+copies every secret in that environment and path into `process.env`, so
+`NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, the web-search keys and the model overrides
+all resolve unchanged. A value already set on the deployment wins, and with no identity
+configured the deployment environment is used exactly as before. The client secret is
+never written to source, logged or sent to the browser.
+
 Every NVIDIA request rotates to the next key in the pool. A key that returns HTTP 429 is
 cooled down for 45 seconds and the request immediately moves to the next key. A key
 rejected with 401 or 403 is dropped from rotation for the life of the server process.
@@ -506,13 +563,13 @@ providers for ten minutes on their own.
 
 All are optional; add any one and its tier switches on.
 
-| Provider | Environment variable | Free allowance | Get a key |
-| --- | --- | --- | --- |
-| Tavily | `TAVILY_API_KEY` | 1,000 credits/month, no card | <https://app.tavily.com> |
-| Exa | `EXA_API_KEY` | $10 of credits/month, no card | <https://dashboard.exa.ai> |
-| Serper | `SERPER_API_KEY` | 2,500 queries once | <https://serper.dev> |
-| OpenRouter | `OPENROUTER_API_KEY` | Paid web plugin (last resort) | <https://openrouter.ai/keys> |
-| Wikimedia | `WIKIMEDIA_CONTACT` | Not a key — your email, for a higher rate limit | — |
+| Provider   | Environment variable | Free allowance                                  | Get a key                    |
+| ---------- | -------------------- | ----------------------------------------------- | ---------------------------- |
+| Tavily     | `TAVILY_API_KEY`     | 1,000 credits/month, no card                    | <https://app.tavily.com>     |
+| Exa        | `EXA_API_KEY`        | $10 of credits/month, no card                   | <https://dashboard.exa.ai>   |
+| Serper     | `SERPER_API_KEY`     | 2,500 queries once                              | <https://serper.dev>         |
+| OpenRouter | `OPENROUTER_API_KEY` | Paid web plugin (last resort)                   | <https://openrouter.ai/keys> |
+| Wikimedia  | `WIKIMEDIA_CONTACT`  | Not a key — your email, for a higher rate limit | —                            |
 
 ```bash
 npx convex env set TAVILY_API_KEY "tvly-..."
@@ -528,14 +585,14 @@ traffic, so a compliant contact raises that limit considerably.
 
 #### Other providers considered
 
-| Provider | Free tier | Why it is not wired in |
-| --- | --- | --- |
-| You.com | Keyless MCP search, 100 queries/day | Non-standard endpoint; would need an MCP client |
-| Linkup | $20/month credits for professional email accounts | Free tier depends on the account type |
-| Firecrawl | 1,000 credits/month | Terms restrict commercial use of the free tier |
-| Jina Search | 10M free tokens (~1,000 searches) | Reader models are CC-BY-NC; commercial licence needed |
-| Brave Search | $5 monthly credit, card required | Terms forbid using results to build AI services |
-| Perplexity Sonar | None | Pay-as-you-go only |
+| Provider         | Free tier                                         | Why it is not wired in                                |
+| ---------------- | ------------------------------------------------- | ----------------------------------------------------- |
+| You.com          | Keyless MCP search, 100 queries/day               | Non-standard endpoint; would need an MCP client       |
+| Linkup           | $20/month credits for professional email accounts | Free tier depends on the account type                 |
+| Firecrawl        | 1,000 credits/month                               | Terms restrict commercial use of the free tier        |
+| Jina Search      | 10M free tokens (~1,000 searches)                 | Reader models are CC-BY-NC; commercial licence needed |
+| Brave Search     | $5 monthly credit, card required                  | Terms forbid using results to build AI services       |
+| Perplexity Sonar | None                                              | Pay-as-you-go only                                    |
 
 Keyless scraping of DuckDuckGo, Mojeek, Startpage, Ecosia, Qwant or Google is deliberately
 not used: they return bot challenges (DuckDuckGo answers HTTP 202 with no results), and
@@ -552,15 +609,15 @@ and answer tutor questions.
 NVIDIA retires models periodically. Defaults chosen from currently available hosted
 endpoints:
 
-| Purpose | Environment variable | Default |
-| --- | --- | --- |
-| Summaries, cards, quizzes, exams | `NVIDIA_TEXT_MODEL` | `nvidia/nemotron-3.5-lightning-30b-a3b` |
-| Reading photos / video frames | `NVIDIA_VISION_MODEL` | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
-| Tutor tier: Fast | `NVIDIA_TUTOR_FAST_MODEL` | `nvidia/nemotron-3.5-bolt-e4b` |
-| Tutor tier: Balanced (default) | `NVIDIA_TUTOR_BALANCED_MODEL` | `NVIDIA_TEXT_MODEL`'s model |
-| Tutor tier: Deep | `NVIDIA_TUTOR_DEEP_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` |
-| Tutor answers with web access | `OPENROUTER_TUTOR_MODEL` | `meta-llama/llama-3.3-70b-instruct` |
-| Tutor dictation through OpenRouter | `OPENROUTER_STT_MODELS` | `nvidia/parakeet-tdt-0.6b-v3`, then `openai/whisper-large-v3-turbo` |
+| Purpose                            | Environment variable          | Default                                                             |
+| ---------------------------------- | ----------------------------- | ------------------------------------------------------------------- |
+| Summaries, cards, quizzes, exams   | `NVIDIA_TEXT_MODEL`           | `nvidia/nemotron-3.5-lightning-30b-a3b`                             |
+| Reading photos / video frames      | `NVIDIA_VISION_MODEL`         | `nvidia/nemotron-3.5-super-vl-120b-a12b`                            |
+| Tutor tier: Fast                   | `NVIDIA_TUTOR_FAST_MODEL`     | `nvidia/nemotron-3.5-bolt-e4b`                                      |
+| Tutor tier: Balanced (default)     | `NVIDIA_TUTOR_BALANCED_MODEL` | `NVIDIA_TEXT_MODEL`'s model                                         |
+| Tutor tier: Deep                   | `NVIDIA_TUTOR_DEEP_MODEL`     | `nvidia/nemotron-3-ultra-550b-a55b`                                 |
+| Tutor answers with web access      | `OPENROUTER_TUTOR_MODEL`      | `meta-llama/llama-3.3-70b-instruct`                                 |
+| Tutor dictation through OpenRouter | `OPENROUTER_STT_MODELS`       | `nvidia/parakeet-tdt-0.6b-v3`, then `openai/whisper-large-v3-turbo` |
 
 The three tutor levels are Fast, Balanced and Deep; `NVIDIA_TUTOR_POWERFUL_MODEL` and the
 older extra tier names are still read where present, but new deployments only need the
@@ -606,11 +663,11 @@ Dictation works in two layers, and neither needs a new key:
    (no network, blocked, unsupported), the 60-second clip is uploaded and transcribed
    server-side. No key reaches the page. Providers are tried in order:
 
-| Order | Provider | Needs |
-| --- | --- | --- |
-| 1 | NVIDIA's own speech deployment | `NVIDIA_API_KEY` **and** `NVIDIA_ASR_URL` |
-| 2 | NVIDIA Parakeet, through OpenRouter | `OPENROUTER_API_KEY` with credit |
-| 3 | OpenAI Whisper, through OpenRouter | `OPENROUTER_API_KEY` with credit |
+| Order | Provider                            | Needs                                     |
+| ----- | ----------------------------------- | ----------------------------------------- |
+| 1     | NVIDIA's own speech deployment      | `NVIDIA_API_KEY` **and** `NVIDIA_ASR_URL` |
+| 2     | NVIDIA Parakeet, through OpenRouter | `OPENROUTER_API_KEY` with credit          |
+| 3     | OpenAI Whisper, through OpenRouter  | `OPENROUTER_API_KEY` with credit          |
 
 **About credits:** OpenRouter bills transcription per audio second (roughly one penny per
 twelve minutes of speech) and currently lists no free transcription model. An OpenRouter
@@ -645,7 +702,7 @@ seconds in the browser and rejected above 8 MB. `NVIDIA_ASR_MODEL` and
 - If anything fails, the set gets an **error** status, a readable message, and a retry
   button. Extracted notes and uploads are kept.
 - Rate limits (HTTP 429) rotate to the next key in the pool. If the whole pool is
-exhausted, the set is paused with a clear message so you can retry after the cooldown.
+  exhausted, the set is paused with a clear message so you can retry after the cooldown.
   Rejected keys are skipped automatically.
 
 Convex actions can run for several minutes, so generation continues if the page is closed.
@@ -975,7 +1032,6 @@ src/
 - **English prompts and defaults**, with at most 20,000 characters of pasted notes stored
   and generated from (12,000 characters of the longest notes are sent per model call, with
   a note saying the material was shortened).
-
 
 ## Troubleshooting
 

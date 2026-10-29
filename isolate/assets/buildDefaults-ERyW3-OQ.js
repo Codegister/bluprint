@@ -1,1 +1,0 @@
-const e={cards:10,quiz:5,exam:3},o=1,s=100;function a(t){return t.replace(/Built (\d+) of (\d+) because the notes only support \1\./g,"Built $1 of $2. Your notes supported $1.").replace(/\s+/g," ").trim()}export{e as B,o as a,s as b,a as n};

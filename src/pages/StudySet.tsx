@@ -681,7 +681,7 @@ export default function StudySet() {
             {!isMode && set.status === "ready" && (
               <Button
                 asChild
-                className="h-9 shrink-0 rounded-full px-4 text-[0.8rem] font-semibold"
+                className="hidden h-9 shrink-0 rounded-full px-4 text-[0.8rem] font-semibold sm:inline-flex"
               >
                 <Link to={`/sets/${set._id}/${recommendedSection}`}>
                   {details.dueCount > 0 && (
@@ -725,6 +725,34 @@ export default function StudySet() {
             </details>
           </div>
         </div>
+
+        <nav
+          aria-label="Breadcrumb"
+          className="mb-2 flex flex-wrap items-center gap-1.5 text-[0.74rem] font-medium text-muted-foreground"
+        >
+          <Link to="/tutor#sets" className="hover:text-brand-ink hover:underline">
+            Sets
+          </Link>
+          <span aria-hidden>/</span>
+          {isMode ? (
+            <>
+              <Link
+                to={`/sets/${set._id}`}
+                className="max-w-[16rem] truncate hover:text-brand-ink hover:underline"
+              >
+                {set.title}
+              </Link>
+              <span aria-hidden>/</span>
+              <span aria-current="page" className="font-semibold text-brand-ink">
+                {SECTION_LABEL[activeSection]}
+              </span>
+            </>
+          ) : (
+            <span aria-current="page" className="max-w-[16rem] truncate">
+              {set.title}
+            </span>
+          )}
+        </nav>
 
         <div className="chrome-plate mt-2 min-w-0 rounded-[1.6rem] px-4 py-4">
           {isMode && (
@@ -946,6 +974,17 @@ export default function StudySet() {
                 quizAnswered={details.quizAnswered}
                 quizTotal={details.quizTotal}
               />
+            </div>
+
+            {/* A phone-sized session CTA that stays in reach while the overview
+                scrolls. The header button is hidden below sm for the same reason. */}
+            <div className="sticky bottom-3 z-20 mt-4 sm:hidden">
+              <Button asChild className="h-12 w-full rounded-full text-[0.9rem] font-semibold shadow-lg">
+                <Link to={`/sets/${set._id}/${recommendedSection}`}>
+                  {recommendedLabel}
+                  <ArrowRight className="size-4" aria-hidden />
+                </Link>
+              </Button>
             </div>
 
             <div className="mt-6">

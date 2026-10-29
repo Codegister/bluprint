@@ -132,6 +132,30 @@ describe("OTP guard is server-only", () => {
     expect(MAX_SENDS_PER_HOUR).toBeGreaterThan(0);
     expect(MAX_SENDS_PER_HOUR).toBeLessThanOrEqual(10);
   });
+
+  test("an invented address is refused before a failure is recorded", () => {
+    const authSource = readFileSync(
+      new URL("../src/convex/auth.ts", import.meta.url),
+      "utf8",
+    );
+    // The wrapper asks whether a live code exists before it invokes the
+    // library's sign-in action, so a guess at an address with no code cannot
+    // consume that address's five tries.
+    expect(authSource).toMatch(/internal\.otpGuard\.hasLiveCode/);
+    expect(authSource).toMatch(/if \(!liveCode\) \{/);
+    expect(authSource).toMatch(/That code has expired/);
+  });
+
+  test("only a verified profile clears the guard", () => {
+    const authSource = readFileSync(
+      new URL("../src/convex/auth.ts", import.meta.url),
+      "utf8",
+    );
+    // A send also creates or updates a user row. Clearing on the send path
+    // would let an attacker guess four codes, request a new one, and start
+    // over with five more tries.
+    expect(authSource).toMatch(/if \(profile\.emailVerified !== true\) return;/);
+  });
 });
 
 describe("meaning-based credit for a paraphrase", () => {

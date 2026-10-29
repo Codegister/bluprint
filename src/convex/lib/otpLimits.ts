@@ -15,6 +15,18 @@ export const MAX_HOURLY_ATTEMPTS = 5;
 /** Codes one address can be sent in an hour, however often it asks. */
 export const MAX_SENDS_PER_HOUR = 6;
 
+/**
+ * Per-IP limits, in a short rolling bucket.
+ *
+ * One address is limited above; these stop one machine from cycling through
+ * many addresses. The window is deliberately short so a shared school network
+ * recovers quickly, and the caps are high enough for a class signing in at
+ * once. The stored value is only a salted hash of the IP, never the address.
+ */
+export const IP_WINDOW_MS = 10 * 60 * 1000;
+export const MAX_SENDS_PER_IP_WINDOW = 40;
+export const MAX_VERIFIES_PER_IP_WINDOW = 60;
+
 /** The wait before the next try, indexed by the failures already made. */
 const RETRY_DELAYS_MS = [0, 0, 3_000, 8_000, 20_000];
 

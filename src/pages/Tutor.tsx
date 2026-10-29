@@ -42,6 +42,8 @@ const SUGGESTIONS = [
   "Give me a worked example",
 ];
 
+const EXPLAIN_LEVELS = ["Simple", "GCSE", "A-Level"] as const;
+
 /** Numbered links that match the [1], [2] citations in an answer. */
 function SourceList({ sources }: { sources: Array<{ title: string; url: string }> }) {
   if (sources.length === 0) return null;
@@ -194,6 +196,7 @@ export default function TutorPage() {
   }, [validSetId, setId, useWeb]);
   // Last tier used, so a suggested question keeps the same answer style.
   const [tier, setTier] = useState(defaultTier);
+  const [explainLevel, setExplainLevel] = useState("GCSE");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const streaming = messages?.find((message) => message.streaming);
@@ -249,6 +252,7 @@ export default function TutorPage() {
           question,
           useWeb,
           tier: chosenTier,
+          explainLevel,
         });
       } else if (validCourseId && courseId) {
         await askCourseTutor({
@@ -257,6 +261,7 @@ export default function TutorPage() {
           question,
           useWeb,
           tier: chosenTier,
+          explainLevel,
         });
       }
     } catch (sendError) {
@@ -627,6 +632,18 @@ export default function TutorPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <select
+              aria-label="Explanation level"
+              value={explainLevel}
+              onChange={(event) => setExplainLevel(event.target.value)}
+              className="h-8 rounded-full border border-border bg-white px-2 text-[0.7rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
+            >
+              {EXPLAIN_LEVELS.map((level) => (
+                <option key={level} value={level}>
+                  {level}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               aria-pressed={useWeb}
@@ -804,8 +821,7 @@ export default function TutorPage() {
                 : "this course's notes",
               latestSourceCount,
             })}{" "}
-            Fast, Balanced and Deep set how long and deep the answer is. Answers can be wrong, so
-            check them against your notes.
+            Simple, GCSE and A-Level set the register. Fast, Balanced and Deep set how long and deep the answer is. Anything labelled “Beyond your notes” is enrichment to check. Answers can be wrong, so compare them with your notes.
           </p>
         </motion.div>
       </div>
