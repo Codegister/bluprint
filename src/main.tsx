@@ -140,6 +140,9 @@ class RootErrorBoundary extends React.Component<
 // server environment. A stale VITE_CONVEX_URL must not point the browser at
 // another deployment. The address has to be the .cloud host with no trailing
 // slash, because Convex appends "/api/..." to it and "//api/..." fails to sync.
+// The Pages workflow refuses to publish this client until the same deployment
+// stops answering the old OTP status query for arbitrary addresses, so a
+// frontend release cannot get ahead of the backend fix.
 const CONVEX_URL = "https://harmless-dog-538.convex.cloud";
 const convex = new ConvexReactClient(CONVEX_URL);
 
