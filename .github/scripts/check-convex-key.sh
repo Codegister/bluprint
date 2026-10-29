@@ -33,6 +33,9 @@ fi
 original="$key"
 key="${key//│/|}"
 key="${key//｜/|}"
+# The dashboard's copy control URL-encodes the | separator as %7C.
+key="${key//%7C/|}"
+key="${key//%7c/|}"
 key="${key//$'\u200B'/}"
 key="${key//$'\u200C'/}"
 key="${key//$'\u200D'/}"
@@ -41,7 +44,7 @@ key="${key//$'\u00A0'/}"
 key="${key//$'\u202F'/}"
 key="${key//$'\u2007'/}"
 if [ "$key" != "$original" ]; then
-  echo "::notice::Normalized invisible characters in CONVEX_DEPLOY_KEY."
+  echo "::notice::Normalized the copied Convex deploy key."
 fi
 
 case "$key" in
