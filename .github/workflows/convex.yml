@@ -39,4 +39,12 @@ jobs:
       - name: Deploy
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-        run: bunx convex deploy --yes
+        run: |
+          # A copy/pasted secret can keep a trailing newline; the CLI treats
+          # that as part of the key.
+          export CONVEX_DEPLOY_KEY="$(printf '%s' "$CONVEX_DEPLOY_KEY" | tr -d '\r\n')"
+          # Convex deploy typechecks before it regenerates `src/convex/_generated`,
+          # which is gitignored, so a clean checkout fails that step even when the
+          # functions are valid. The Check workflow runs codegen and a real
+          # typecheck with the same key; this step only ships the code.
+          bunx convex deploy --yes --typecheck disable
