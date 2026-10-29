@@ -117,8 +117,8 @@ export default function RealPapers() {
     <AppShell>
       <div className="mx-auto w-full max-w-4xl px-4 pb-16 sm:px-6">
         <PageHeader
-          title="Real past papers"
-          description="Paste a question and the board's own mark scheme. Bluprint marks your answer against that scheme, point by point."
+          title="Real question bank"
+          description="Paste one question and the board's own mark scheme. For a full paper, open your course's Past papers tab. Bluprint marks your answer point by point."
           actions={
             <Button
               onClick={() => setOpen((value) => !value)}
@@ -245,9 +245,11 @@ export default function RealPapers() {
             <SkeletonRows rows={3} />
           ) : saved.length === 0 ? (
             <p className="gizmo-card p-6 text-sm leading-relaxed text-muted-foreground">
-              No real questions yet. Add one with its mark scheme and Bluprint will
-              mark your answer against the board's own points — the same strict
-              marking it applies to generated questions.
+              No real questions yet. Copy a question and its mark scheme from the
+              board's published paper — for example, “AQA Biology 2023 Paper 1,
+              Q4” — then add it here. Bluprint marks your answer against the
+              board's own points, the same strict marking it applies to generated
+              questions.
             </p>
           ) : (
             saved.map((row) => {

@@ -17,11 +17,19 @@ import {
   BUILD_DEFAULTS,
   BUILD_MAX,
   BUILD_MIN,
+  shortfallFor,
   shortfallSentence,
 } from "./lib/buildDefaults";
+import { materialLimits } from "./lib/buildCapacity";
 import { alignDataReference, isSelfContained } from "./lib/paperData";
 import { criteriaToGuide } from "./lib/realPaper";
-import { normalizeAnswer } from "./lib/recall";
+import { filterGuideToNotes } from "./lib/noteSupport";
+import {
+  gradeVocabularyAnswer,
+  isLanguageCourse,
+  isShortAnswer,
+  normalizeAnswer,
+} from "./lib/recall";
 import { parseSummary, type Summary } from "./lib/summary";
 import {
   parseTopicNotes,
@@ -1053,17 +1061,10 @@ const MAX_REQUESTED_ITEMS = BUILD_MAX;
 type BatchProgress = (completed: number, target: number) => Promise<void> | void;
 
 /**
- * How many items the material can honestly support. A student can ask for 100
- * of everything, but two paragraphs cannot yield 100 exam-style questions;
- * without this ceiling the pipeline spends minutes on calls that cannot succeed
- * and then reports a failed run. These ratios are deliberately generous.
+ * The per-material ceiling lives in lib/buildCapacity.ts, where it counts
+ * distinct statements instead of only words. This keeps a five-fact note from
+ * being capped at one quiz and one exam question.
  */
-function materialLimits(notes: string): { cards: number; quiz: number; exam: number } {
-  const words = notes.trim().split(/\s+/).filter(Boolean).length;
-  const cap = (divisor: number) =>
-    Math.max(1, Math.min(MAX_REQUESTED_ITEMS, Math.floor(words / divisor)));
-  return { cards: cap(12), quiz: cap(30), exam: cap(90) };
-}
 
 /** A usable summary assembled from the notes when the summary call fails. */
 function summaryFromNotes(notes: string, subject?: string): Summary {
@@ -1309,6 +1310,7 @@ async function generateExams(
             "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
             `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
             "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
+            "Every bullet must be directly supported by the material above; never introduce a fact, example or mechanism the material does not contain. If the material cannot support the marks you planned, lower the question's marks so the bullets still add up exactly. " +
             "Include a full-mark model answer that hits each bullet. " +
             (previous
               ? `Do not repeat these existing questions:\n${previous}\n`
@@ -1329,8 +1331,26 @@ async function generateExams(
       continue;
     }
 
+    // A prompt cannot guarantee that a model stayed inside the notes. Drop any
+    // bullet whose subject terms are absent from the material, and lower the
+    // question's marks to the bullets that remain, so a student is never marked
+    // down for a fact their notes did not contain.
+    const supported = syllabus
+      ? batch
+      : batch
+          .map((exam) => {
+            const guide = filterGuideToNotes(notes, exam.markingGuide);
+            if (guide.length === 0) return null;
+            const marks = Math.max(
+              1,
+              guide.reduce((sum, bullet) => sum + bulletMarks(bullet), 0),
+            );
+            return { ...exam, marks, markingGuide: guide };
+          })
+          .filter((exam): exam is GeneratedExam => exam !== null);
+
     let added = 0;
-    for (const exam of batch) {
+    for (const exam of supported) {
       const key = exam.question.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
@@ -2960,10 +2980,10 @@ export const processStudySet = action({
           ? shortfallSentence(cards.length, requestedCards)
           : "",
         quiz.length < requestedQuiz
-          ? shortfallSentence(quiz.length, requestedQuiz)
+          ? shortfallFor("quiz", quiz.length, requestedQuiz)
           : "",
         exams.length < requestedExam
-          ? shortfallSentence(exams.length, requestedExam)
+          ? shortfallFor("exam", exams.length, requestedExam)
           : "",
       ]
         .filter(Boolean)
@@ -3037,7 +3057,7 @@ function examinerRules(): string {
     "5. A bullet that asks for more than one thing earns only the parts the answer meets, so awarded counts the marks earned out of the marks that bullet carries.\n" +
     "6. Whole marks only. A contradiction cancels a bullet even when the same point is stated correctly elsewhere.\n" +
     "7. The model answer is not a second mark scheme: judge only against the bullets. Do not reward restating the question, repetition, length, effort or confidence, and do not mark a correct answer down for being short.\n" +
-    "8. Same wording, same verdicts. Decide from what is written, every time, so marking the same answer twice cannot produce two different marks.\n" +
+    "8. Same wording, same verdicts. Decide from what is written, every time, so marking the same answer twice cannot produce two different marks. When you write feedback, address the student as \"you\" and name the missing idea in plain words; never write \"the student\" or \"student claims\".\n" +
     DATA_NOT_INSTRUCTIONS
   );
 }
@@ -3138,7 +3158,7 @@ function levelsExaminerRules(marksAvailable: number): string {
     "4. Judge the whole essay: argument, analysis of the writer's methods or the evidence, use of supporting detail, and technical accuracy where the board assesses it.\n" +
     "5. Do not reward length, effort, confidence or a list of facts that does not answer the question.\n" +
     `6. Award whole marks only, between 0 and ${marksAvailable}. Never exceed the level's upper mark.\n` +
-    "7. The feedback must name the level awarded, what lifted the answer, and the single change that would move it into the next level. No praise, no encouragement.\n" +
+    "7. The feedback must name the level awarded, what lifted the answer, and the single change that would move it into the next level. Address the student as \"you\" and name the missing idea; never write \"the student\" or \"student claims\". No praise, no encouragement.\n" +
     "8. Quote the answer: name the phrases that place it in the level, and never write that the answer does not mention something unless you have read the whole answer and it truly does not.\n" +
     DATA_NOT_INSTRUCTIONS
   );
@@ -3984,12 +4004,32 @@ const RECALL_MARKER_RULES =
   "4. Ignore accents and the small spelling slips a dictation engine makes, and accept a name written with different capitalisation.\n" +
   "5. Incorrect when the answer contradicts the model answer, gives a different fact or value, names an unrelated thing, or is only on topic and vague without actually answering. Restating the question is never an answer.\n" +
   "6. Where the model answer makes several points and the question does not demand all of them, a correct answer needs the point the question asks for; for anything else, credit the share that is present in score.\n" +
-  "7. Never reward length, confidence or effort, and never mark down an answer for being brief.";
+  "7. Never reward length, confidence or effort, and never mark down an answer for being brief.\n" +
+  "8. Write the note to the student in second person: say \"You said …\" or \"You missed …\", and name the missing idea. Never write \"the student\", \"student claims\" or \"the candidate\".\n" +
+  "9. A one-word or short-phrase answer is a fact, not a topic. If the model answer is a single term, a different word is a different fact: do not accept a related word, a word from the same topic, a different person or tense that changes meaning, or a translation of a different word. Accept only the same term or a true synonym with the same meaning in the same language.";
 
 const RECALL_MARKER_OUTPUT_SHAPE =
   'Return JSON exactly like: {"correct":true,"score":0.9,"note":"one short sentence naming what was accepted or what was missing"}. ' +
   "score is the share of the model answer's meaning the student produced, from 0 to 1. " +
   "The note is at most 20 words: no praise, no encouragement, no restating the model answer.";
+
+/**
+ * The model is told to write to the student, but a prompt is not a guarantee.
+ * This rewrites the teacher's-note phrasing that slipped through ("student
+ * claims", "the student", "the candidate") into second person without changing
+ * the fact being reported.
+ */
+function studentVoice(note: string): string {
+  return note
+    .replace(/\b(?:the\s+)?student\s+claims\b/gi, "You said")
+    .replace(/\b(?:the\s+)?student's\b/gi, "your")
+    .replace(/\b(?:the\s+)?candidate's\b/gi, "your")
+    .replace(/\b(?:the\s+)?student\b/gi, "you")
+    .replace(/\b(?:the\s+)?candidate\b/gi, "you")
+    .replace(/\byou's\b/gi, "your")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 /**
  * Marks one spoken or typed flashcard answer by meaning. The mark is returned to
@@ -4016,6 +4056,19 @@ export const gradeRecallAnswer = action({
     }
 
     const { card, set } = data;
+    // A short vocabulary card is checked without the model. The model is good
+    // at paraphrase, but a different Spanish word is not a paraphrase of the
+    // card, and a confident model verdict must not turn it into a mark.
+    if (isLanguageCourse(set.course) && isShortAnswer(card.back)) {
+      const local = gradeVocabularyAnswer(card.back, response);
+      return {
+        correct: local.correct,
+        score: local.score,
+        note: local.correct
+          ? "That matches the card."
+          : `You said “${response.slice(0, 80)}”. The card says “${card.back}”. A different word is a different fact.`,
+      };
+    }
     const qualification = qualificationText({
       course: set.course,
       examBoard: set.examBoard,
@@ -4053,14 +4106,16 @@ export const gradeRecallAnswer = action({
       score?: unknown;
       note?: unknown;
     }>(raw);
-    const correct = parsed.correct === true;
     const claimed = Number(parsed.score);
     const score = Number.isFinite(claimed)
       ? Math.max(0, Math.min(1, claimed))
-      : correct
+      : parsed.correct === true
         ? 1
         : 0;
-    const note = asText(parsed.note, 300);
+    // The model’s verdict and its own score must agree. Previously a reply
+    // with correct:true and a low score was shown as a pass.
+    const correct = parsed.correct === true && score >= 0.75;
+    const note = studentVoice(asText(parsed.note, 300));
     if (typeof parsed.correct !== "boolean" || !note) {
       throw new Error(
         "The meaning check did not return a usable mark. Try again, or use self-mark.",
@@ -4189,14 +4244,17 @@ function explainLevelRules(level: string | undefined, question: string): string 
       "EXPLAIN LEVEL - SIMPLE: teach someone who has never met this topic. " +
       "Open with one short, everyday analogy, then give one worked example that walks through it step by step. " +
       "Use short sentences, define every term the first time, and do not answer with a bullet list of facts. " +
+      "Start with a complete sentence; never open with a word fragment, an ellipsis, or a hyphen. " +
       "Use at most one hyphen bullet if a list is unavoidable."
     );
   }
   if (chosen === "a-level" || chosen === "alevel" || chosen === "a level") {
     return (
-      "EXPLAIN LEVEL - A-LEVEL: use precise technical vocabulary and explain mechanisms, evidence and evaluation. " +
-      "Keep paragraphs to three or four sentences, connect each point to the specification, and include one worked example where it clarifies the reasoning. " +
-      "Do not simplify away the qualification's required depth."
+      "EXPLAIN LEVEL - A-LEVEL: give the same full explanation, then add the mechanism, evidence and the examiner's phrasing. " +
+      "Start with a direct answer, then explain the mechanism step by step, then show how an examiner would phrase it. " +
+      "Write at least three paragraphs and do not give a two-sentence summary; A-Level must add depth, never remove it. " +
+      "Use precise technical vocabulary and three or four sentence paragraphs. Do not shorten the explanation or remove the reasoning; depth is added, not substituted for clarity. " +
+      "If the 250-word guidance would cut off the mechanism, finish the mechanism instead. Start with a complete sentence; never open with a word fragment, an ellipsis, or a hyphen."
     );
   }
   return (
@@ -4220,6 +4278,7 @@ function tutorPrompt(
   const system = [
     TUTOR_SYSTEM_PROMPT,
     TUTOR_THREAD_RULES,
+    "Begin every reply with a complete sentence. Never start with a partial word, a hyphen, or a continuation of the study material.",
     materialBlock(context.material),
     `<material_title>${context.title}</material_title>`,
     `<qualification>${qualification || "Not specified"}</qualification>`,

@@ -16,6 +16,12 @@
  * runtime can import exactly the same rules.
  */
 
+const LANGUAGE_COURSE =
+  /\b(spanish|french|german|italian|portuguese|mandarin|chinese|japanese|russian|arabic|latin|welsh|irish|english language)\b/i;
+
+/** Articles that do not change a vocabulary answer ("la casa" = "casa"). */
+const LEADING_ARTICLE = /^(?:the|a|an|el|la|los|las|un|una|unos|unas|le|les|des|du)\s+/;
+
 const STOP_WORDS = new Set([
   "a",
   "an",
@@ -310,6 +316,34 @@ export function gradeShortAnswer(
   }
 
   return { correct: false, score: best };
+}
+
+/** True when the course is a modern or classical language. */
+export function isLanguageCourse(course: string | undefined): boolean {
+  return Boolean(course && LANGUAGE_COURSE.test(course));
+}
+
+/** True when the expected answer is a short term or phrase, not a sentence. */
+export function isShortAnswer(expected: string, max = 2): boolean {
+  const words = contentWords(expected);
+  return words.length > 0 && words.length <= max;
+}
+
+/**
+ * Marks a short vocabulary answer. A language card is a fact, not a topic:
+ * "la casa" is not answered by "el perro", however confidently it is said.
+ * Articles are ignored so "casa" still matches "la casa".
+ */
+export function gradeVocabularyAnswer(
+  expected: string,
+  response: string,
+): ShortAnswerGrade {
+  const wanted = normalizeAnswer(expected).replace(LEADING_ARTICLE, "").trim();
+  const offered = normalizeAnswer(response).replace(LEADING_ARTICLE, "").trim();
+  if (wanted.length > 0 && wanted === offered) {
+    return { correct: true, score: 1 };
+  }
+  return gradeShortAnswer(wanted || expected, [], offered || response);
 }
 
 /**

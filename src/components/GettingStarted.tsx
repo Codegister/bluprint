@@ -101,7 +101,10 @@ export function GettingStarted({
       title: "Explore the tutor",
       body: "Ask about a course, a set or a card you keep missing.",
       tone: "border-brand-mint/30 bg-brand-mint/15 text-brand-mint",
-      done: tutorUsed,
+      // A stored tutor flag can survive from an earlier browser session. It
+      // only counts once the student has material for the tutor to use, so a
+      // brand-new guest never opens the guide at "1 of 4 done".
+      done: tutorUsed && (courses.length > 0 || sets.length > 0),
       action: (
         <button
           type="button"

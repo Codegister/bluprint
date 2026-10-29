@@ -317,6 +317,14 @@ Sets built from a course topic link back to that course.
   relative so it keeps working under the `/bluprint/` base. The older
   `bluprint.freebuff.app` host must redirect here at the host level; a static
   GitHub Pages site cannot redirect another origin.
+- **Canonical backend.** The client pins
+  `https://harmless-dog-538.convex.cloud`, and production data belongs there.
+  The former `honorable-lyrebird-974` deployment is **not** canonical and must
+  be deleted, not merely ignored: it still answers its old public functions and
+  still holds its historical rows. Export anything that must be kept, migrate
+  it with a one-off internal mutation if needed, then delete that deployment in
+  the Convex dashboard (project → deployment → Settings → Delete deployment).
+  Never point the client, exports or migrations at it, and never recreate it.
 - **Headers.** GitHub Pages cannot set response headers. Production builds
   inject a CSP, a referrer policy and a Permissions-Policy as meta tags (see
   `securityMeta` in `vite.config.ts`); the theme boot script is a separate

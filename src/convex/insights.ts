@@ -4,8 +4,8 @@
  * only means anything when both sides come from the same sets.
  */
 
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { query } from "./_generated/server";
-import { requireUserId } from "./lib/requireUser";
 import {
   calibrationFor,
   calibrationSentence,
@@ -15,7 +15,11 @@ import {
 export const calibration = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
+    // Signed out has no calibration to compare, not an internal failure. The
+    // empty result keeps the public HTTP path returning JSON instead of a
+    // redacted error while exposing nothing.
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return { rows: [], sentence: null };
     const sets = await ctx.db
       .query("studySets")
       .withIndex("by_user_updated", (q) => q.eq("userId", userId))

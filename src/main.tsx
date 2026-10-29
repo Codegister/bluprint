@@ -217,16 +217,20 @@ function RouteSyncer() {
     let canonical = document.head.querySelector<HTMLLinkElement>(
       'link[rel="canonical"]',
     );
-    if (path === "/" || path === "") {
+    if (privateScreen) {
+      // A tokenised share page or the sign-in screen must not compete with
+      // the landing page in search results at all.
+      if (canonical) canonical.remove();
+    } else {
+      // Every public app route points at the one canonical landing page, so
+      // /tutor, /privacy and the rest cannot be indexed as separate copies of
+      // the app shell. The static tag in index.html is the first-paint value.
       if (!canonical) {
         canonical = document.createElement("link");
         canonical.rel = "canonical";
         document.head.appendChild(canonical);
       }
       canonical.href = CANONICAL_URL;
-    } else if (canonical) {
-      // The static canonical describes the landing page, not a deep route.
-      canonical.remove();
     }
   }, [location.pathname]);
 

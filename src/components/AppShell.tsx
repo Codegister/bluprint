@@ -74,9 +74,10 @@ const navItems = [
     soft: "bg-brand-violet/10 text-brand-violet",
   },
   {
-    // Real past-paper questions, marked against the board's own scheme.
+    // One real past-paper question at a time, marked against the board's own
+    // scheme. Whole papers live on each course's Past papers tab.
     to: "/past-papers",
-    label: "Past papers",
+    label: "Question bank",
     icon: FileText,
     active: ACTIVE_ROW,
     tile: "bg-brand-peach/25 text-brand-peach",

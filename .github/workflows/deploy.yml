@@ -49,6 +49,21 @@ jobs:
             exit 1
           fi
           echo "Production backend no longer answers otpGuard:status for an arbitrary address."
+          healthy="$(curl -sS -X POST "$url/api/query" \
+            -H 'Content-Type: application/json' \
+            --data '{"path":"studySets:listMine","args":{},"format":"json"}')" || {
+            echo "::error title=Production backend unreachable::The frontend points at $url."
+            exit 1
+          }
+          if ! printf '%s' "$healthy" | jq -e . >/dev/null 2>&1; then
+            echo "::error title=Production backend returned non-JSON::studySets:listMine did not answer with JSON."
+            exit 1
+          fi
+          if printf '%s' "$healthy" | jq -e '(.errorMessage // "") | test("Server Error")' >/dev/null; then
+            echo "::error title=Production backend is half-broken::studySets:listMine returned a bare Server Error. Deploy a backend whose modules all load before publishing."
+            exit 1
+          fi
+          echo "A known public query returns JSON rather than a bare server error."
 
       - uses: oven-sh/setup-bun@v2
         with:

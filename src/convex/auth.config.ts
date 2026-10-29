@@ -8,14 +8,10 @@ import type { AuthConfig } from "convex/server";
 const freebuffIssuer =
   process.env.VLY_CONVEX_AUTH_ISSUER ?? "https://freebuff.com";
 
-if (!process.env.VLY_INTEGRATION_KEY) {
-  // Email sign-in is useless without the integration gateway. Fail fast in the
-  // deployment so a missing secret does not result in silent auth failures.
-  throw new Error(
-    "VLY_INTEGRATION_KEY is not set on this deployment, so email sign-in cannot send codes.",
-  );
-}
-
+// Do not throw at module scope here. Every function module loads this config,
+// so a missing email-gateway key would turn unrelated queries into a generic
+// "Server Error" instead of only failing the send-code request. The email
+// provider throws a clear error at send time (see auth/emailOtp.ts).
 export default {
   providers: [
     // Standard Convex Auth provider for this project's own sign-in ("Get

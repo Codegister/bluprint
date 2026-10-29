@@ -240,6 +240,7 @@ export function TutorChat({
               <span className="sr-only">Explanation level</span>
               <select
                 aria-label="Explanation level"
+                title="Simple: analogy + worked example · GCSE: clear definitions · A-Level: mechanism + exam phrasing"
                 value={explainLevel}
                 onChange={(event) => setExplainLevel(event.target.value)}
                 className="h-7 rounded-full border border-border bg-white px-2 text-[0.7rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
@@ -268,6 +269,10 @@ export function TutorChat({
               {useWeb && <Check className="size-3" aria-hidden />}
             </button>
           </div>
+          <p className="w-full text-[0.64rem] leading-relaxed text-muted-foreground">
+            Simple: analogy + worked example · GCSE: clear definitions ·
+            A-Level: mechanism + exam phrasing
+          </p>
         </header>
 
         <div

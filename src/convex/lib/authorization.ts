@@ -1,4 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { ConvexError } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 
 /**
@@ -20,7 +21,7 @@ export async function requireUserId(ctx: {
 }): Promise<Id<"users">> {
   const userId = await getAuthUserId(ctx);
   if (userId === null) {
-    throw new Error("Please sign in to continue.");
+    throw new ConvexError("Please sign in to continue.");
   }
   return userId;
 }
@@ -37,10 +38,10 @@ export async function requireOwner<Row extends { userId: Id<"users"> }>(
   userId: Id<"users">,
 ): Promise<Row> {
   if (!row) {
-    throw new Error("That item was not found.");
+    throw new ConvexError("That item was not found.");
   }
   if (row.userId !== userId) {
-    throw new Error("That item does not belong to you.");
+    throw new ConvexError("That item does not belong to you.");
   }
   return row;
 }
@@ -58,7 +59,7 @@ export async function requireVerifiedUser(
 ): Promise<void> {
   const user = await ctx.db.get(userId);
   if (!user || typeof user !== "object") {
-    throw new Error("Account not found.");
+    throw new ConvexError("Account not found.");
   }
   const record = user as {
     emailVerificationTime?: number | null;
@@ -68,7 +69,7 @@ export async function requireVerifiedUser(
   // verify. The gate only applies to accounts that signed in with an email.
   if (record.isAnonymous) return;
   if (!record.emailVerificationTime) {
-    throw new Error("Please verify your email before continuing.");
+    throw new ConvexError("Please verify your email before continuing.");
   }
 }
 
@@ -84,9 +85,9 @@ export async function requireAdmin(
 ): Promise<void> {
   const user = await ctx.db.get(userId);
   if (!user || typeof user !== "object") {
-    throw new Error("Account not found.");
+    throw new ConvexError("Account not found.");
   }
   if ((user as { role?: string | null }).role !== "admin") {
-    throw new Error("This action is restricted to admins.");
+    throw new ConvexError("This action is restricted to admins.");
   }
 }

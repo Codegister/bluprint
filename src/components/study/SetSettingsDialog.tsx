@@ -78,6 +78,23 @@ export function SetSettingsDialog({
   // A rebuild started here is fire-and-forget. If the set is deleted while it
   // is still running, its rejection must not pop an error beside "Set deleted."
   const deletedRef = useRef(false);
+  const countsChanged =
+    cardCount !== (set.targetCardCount ?? BUILD_DEFAULTS.cards) ||
+    quizCount !== (set.targetQuizCount ?? BUILD_DEFAULTS.quiz) ||
+    examCount !== (set.targetExamCount ?? BUILD_DEFAULTS.exam);
+  const contextChanged =
+    examBoard !== (set.examBoard ?? "") || level !== (set.level ?? "");
+  const rebuildNeeded = countsChanged || contextChanged;
+  // The button names the decision it carries out. A count change and a board
+  // change have different consequences, and "Save and rebuild" hid both.
+  const rebuildLabel =
+    countsChanged && contextChanged
+      ? "Rebuild with these counts and board/level"
+      : countsChanged
+        ? "Rebuild with these counts"
+        : contextChanged
+          ? "Rebuild for the new board/level"
+          : "Save and rebuild";
 
   // Re-sync every time the dialog opens so a cancelled edit is discarded.
   useEffect(() => {
@@ -139,7 +156,7 @@ export function SetSettingsDialog({
             readableError(rebuildError, "The rebuild stopped. Open the set to retry."),
           );
         });
-        toast.success("Rebuilding with the new exam context.");
+        toast.success("Rebuilding with the new settings.");
       } else {
         toast.success("Set details saved.");
       }
@@ -313,17 +330,30 @@ export function SetSettingsDialog({
           </div>
 
           <div className="mt-5 rounded-2xl border border-border bg-[#FCFCFD] p-3.5">
-            <p className="text-xs font-semibold text-brand-ink">Material to build</p>
+            <p className="text-xs font-semibold text-brand-ink">
+              Counts for the next rebuild
+            </p>
             <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-              {`${BUILD_MIN}–${BUILD_MAX} of each. A rebuild uses these counts, and Bluprint says so when the notes can only support fewer: “Built 6 of 10. Your notes supported 6.”`}
+              {`${BUILD_MIN}–${BUILD_MAX} of each. These are targets for the next rebuild, not the current set. It currently holds ${set.cardCount} flashcard${set.cardCount === 1 ? "" : "s"}, ${set.quizCount} quiz question${set.quizCount === 1 ? "" : "s"} and ${set.examCount} exam question${set.examCount === 1 ? "" : "s"}.`}
             </p>
             <div className="rise-stagger mt-3 grid gap-3 sm:grid-cols-3">
               {[
-                { label: "Flashcards", value: cardCount, onChange: setCardCount },
-                { label: "Quiz questions", value: quizCount, onChange: setQuizCount },
+                {
+                  label: "Flashcards",
+                  value: cardCount,
+                  current: set.cardCount,
+                  onChange: setCardCount,
+                },
+                {
+                  label: "Quiz questions",
+                  value: quizCount,
+                  current: set.quizCount,
+                  onChange: setQuizCount,
+                },
                 {
                   label: "Exam-style questions",
                   value: examCount,
+                  current: set.examCount,
                   onChange: setExamCount,
                 },
               ].map((control) => (
@@ -333,6 +363,9 @@ export function SetSettingsDialog({
                     <span className="rounded-full bg-white px-1.5 py-0.5 text-[0.66rem] tabular-nums text-chrome-7">
                       {control.value}
                     </span>
+                  </span>
+                  <span className="mt-0.5 block text-[0.62rem] font-normal text-muted-foreground">
+                    currently {control.current}
                   </span>
                   <input
                     type="range"
@@ -393,9 +426,10 @@ export function SetSettingsDialog({
             <Button
               type="button"
               variant="outline"
-              disabled={saving !== null}
+              disabled={saving !== null || rebuildNeeded}
               onClick={() => void save(false)}
               className="h-11 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+              title={rebuildNeeded ? "These changes need a rebuild." : undefined}
             >
               {saving === "save" ? <Loader2 className="size-4 animate-spin" /> : null}
               Save
@@ -407,7 +441,7 @@ export function SetSettingsDialog({
               className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E]"
             >
               {saving === "rebuild" ? <Loader2 className="size-4 animate-spin" /> : null}
-              Save and rebuild
+              {rebuildLabel}
             </Button>
           </div>
 

@@ -630,10 +630,14 @@ export default function TutorPage() {
             <p className="truncate text-[0.74rem] text-muted-foreground">
               {title}
             </p>
+            <p className="truncate text-[0.64rem] text-muted-foreground">
+              Simple: analogy + example · GCSE: definitions · A-Level: mechanism
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <select
               aria-label="Explanation level"
+              title="Simple: analogy + example · GCSE: clear definitions · A-Level: mechanism + exam phrasing"
               value={explainLevel}
               onChange={(event) => setExplainLevel(event.target.value)}
               className="h-8 rounded-full border border-border bg-white px-2 text-[0.7rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/25"

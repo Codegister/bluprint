@@ -313,6 +313,36 @@ export function PastPaperPractice({
                   </div>
                 </div>
 
+                {/* Visible before writing, not only after marking: the target
+                    is part of the question, not a surprise at the end. */}
+                {criteria.length > 0 && (
+                  <details
+                    open
+                    className="group mt-3 rounded-2xl border border-border bg-brand-panel/45 p-3"
+                  >
+                    <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold text-brand-ink">
+                      What earns the marks
+                      <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                    </summary>
+                    <ul className="mt-2 space-y-1">
+                      {criteria.map((criterion) => (
+                        <li
+                          key={criterion.id}
+                          className="flex items-start gap-2 text-[0.78rem] leading-relaxed text-brand-ink/70"
+                        >
+                          <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-lime" />
+                          <span>
+                            {criterion.text}
+                            <span className="ml-1 text-[0.68rem] text-muted-foreground">
+                              ({markLabel(criterion.marks)})
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
                 <Textarea
                   value={answer}
                   onChange={(event) =>

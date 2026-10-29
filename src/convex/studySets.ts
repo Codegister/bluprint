@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
@@ -257,7 +258,12 @@ export async function deleteStudySetContent(ctx: MutationCtx, setId: Id<"studySe
 export const listMine = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
+    // Signed out is an empty library, not an error. The HTTP API returns real
+    // JSON here (and the client never renders data for a missing session), so
+    // a probe can tell a working deployment from a half-loaded one without a
+    // redacted "Server Error".
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) return [];
     const sets = await ctx.db
       .query("studySets")
       .withIndex("by_user_updated", (q) => q.eq("userId", userId))

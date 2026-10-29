@@ -298,7 +298,9 @@ export default function Today() {
         eyebrow="Today"
         title={
           study?.examInDays !== null && study?.examInDays !== undefined
-            ? `${study.examInDays} day${study.examInDays === 1 ? "" : "s"} to ${study.examTitle ?? "your exam"}`
+            ? study.examInDays === 0
+              ? `Exam today · ${study.examTitle ?? "your exam"}`
+              : `Exam in ${study.examInDays} day${study.examInDays === 1 ? "" : "s"} · ${study.examTitle ?? "your exam"}`
             : "A little every day beats a panic the night before"
         }
         description="Everything due today, in one place. Pick a length, then start."
@@ -382,7 +384,7 @@ export default function Today() {
         {study?.goalReason && (
           <p className="text-[0.72rem] text-muted-foreground sm:ml-auto">
             {items.total > 0
-              ? `Daily goal: ${dailyGoal} of ${items.total} available question${items.total === 1 ? "" : "s"} · ${study.goalReason}`
+              ? `Daily goal: ${dailyGoal} question${dailyGoal === 1 ? "" : "s"}. ${Math.min(items.correct, dailyGoal)} done, ${Math.max(0, dailyGoal - items.correct)} to go.`
               : "Your daily goal appears once a set has questions in it."}
           </p>
         )}

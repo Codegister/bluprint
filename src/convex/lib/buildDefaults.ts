@@ -31,6 +31,23 @@ export function shortfallSentence(built: number, requested: number): string {
 }
 
 /**
+ * The honest sentence for a quiz or exam shortfall. A generator that can only
+ * make one question should not imply the student's notes are worse than they
+ * are; it names the built count and the one action that changes it. Cards keep
+ * the established "Built X of Y" wording.
+ */
+export function shortfallFor(
+  kind: "cards" | "quiz" | "exam",
+  built: number,
+  requested: number,
+): string {
+  if (kind === "cards") return shortfallSentence(built, requested);
+  const noun = kind === "quiz" ? "quiz question" : "exam question";
+  const target = kind === "quiz" ? "quiz" : "paper";
+  return `Bluprint can build ${built} ${noun}${built === 1 ? "" : "s"} from this note; add more detail for a full ${target}.`;
+}
+
+/**
  * Rewrites a stored note written before this wording existed, so an older set
  * shows the same rule as a new one instead of the old "because the notes only
  * support" sentence.

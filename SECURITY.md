@@ -47,14 +47,28 @@ for the audit's acceptance criteria.
    `https://codegister.github.io/bluprint/` at the host or DNS provider, or take
    the old deployment down. The current canonical URL in `index.html`, the
    manifest and the share links is the GitHub Pages URL.
-4. **Move off GitHub Pages for headers and 200 deep links.** GitHub Pages
+
+4. **Delete the old Convex deployment.** `honorable-lyrebird-974` is still live
+   and still answers its old public mutations; it also holds historical sets,
+   cards and uploads. From the Convex dashboard for this project:
+   1. Open `honorable-lyrebird-974` → Settings and note its data.
+   2. If anything must be kept, export it (`bunx convex export --deployment
+      honorable-lyrebird-974 --path old-backup.zip` with a deploy key for that
+      deployment) and migrate it into `harmless-dog-538` with a one-off
+      internal mutation.
+   3. Delete `honorable-lyrebird-974` from the dashboard. Do not leave it
+      running as a read-only or unused deployment: its functions remain
+      callable until it is deleted.
+   The current deployment is `harmless-dog-538`; the README's canonical-backend
+   note is the source of truth.
+5. **Move off GitHub Pages for headers and 200 deep links.** GitHub Pages
    ignores `_headers`, cannot set response headers and returns its `404.html`
    for `/tutor`, `/sets/*`, `/privacy` and `/share/*`. `public/_redirects` and
    `vercel.json` are ready for Netlify, Cloudflare Pages or Vercel; deploy there
    and point the canonical URL at the new host. Until then the meta CSP is only
    partial: `frame-ancestors` is ignored in a meta tag, so clickjacking cannot
    be fully prevented on Pages.
-5. **Past papers now link to the publisher.** The `/cognito-paper` proxy has
+6. **Past papers now link to the publisher.** The `/cognito-paper` proxy has
    been removed. The Past papers page credits the boards and Cognito, links to
    the question paper and mark scheme on Cognito's own site in a new tab, and
    offers a takedown route. Bluprint no longer serves or redistributes the
