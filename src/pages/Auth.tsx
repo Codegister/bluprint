@@ -157,7 +157,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     }
 
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email") ?? codeEmail);
 
     setIsLoading(true);
     try {

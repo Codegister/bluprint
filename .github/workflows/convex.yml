@@ -43,11 +43,11 @@ jobs:
           bash .github/scripts/check-convex-key.sh
 
       - name: Deploy
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
         run: |
           set +e
-          export CONVEX_DEPLOY_KEY="$(printf '%s' "${CONVEX_DEPLOY_KEY:-}" | tr -d '[:space:]')"
+          # Written by the validation step: trimmed, normalized and checked
+          # against the deployment pinned in src/main.tsx.
+          export CONVEX_DEPLOY_KEY="$(cat "${RUNNER_TEMP:-/tmp}/convex-deploy-key")"
           # `convex deploy` has no --yes flag in this CLI; it is non-interactive
           # in CI. Typechecking is disabled here because it runs before the
           # gitignored `src/convex/_generated` client is regenerated; the Check

@@ -11,7 +11,7 @@ const configured = (import.meta.env.VITE_CONVEX_URL as string | undefined)
 const cloudUrl =
   configured && configured.endsWith(".convex.cloud")
     ? configured
-    : "https://honorable-lyrebird-974.convex.cloud";
+    : "https://harmless-dog-538.convex.cloud";
 
 export const CONVEX_SITE_URL = cloudUrl.replace(
   /\.convex\.cloud$/,

@@ -136,11 +136,11 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-// Pinned to the deployment that holds this project's courses and server
-// environment. A stale VITE_CONVEX_URL must not point the browser at another
-// deployment. The address has to be the .cloud host with no trailing slash,
-// because Convex appends "/api/..." to it and "//api/..." fails to sync.
-const CONVEX_URL = "https://honorable-lyrebird-974.convex.cloud";
+// Pinned to the production deployment that holds this project's courses and
+// server environment. A stale VITE_CONVEX_URL must not point the browser at
+// another deployment. The address has to be the .cloud host with no trailing
+// slash, because Convex appends "/api/..." to it and "//api/..." fails to sync.
+const CONVEX_URL = "https://harmless-dog-538.convex.cloud";
 const convex = new ConvexReactClient(CONVEX_URL);
 
 // GitHub Pages serves a project site from /<repo>/, so the router must treat

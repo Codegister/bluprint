@@ -22,6 +22,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Require patched production backend
+        # The client now points at the production deployment. Publishing it
+        # before that deployment has the OTP fix would move users onto an
+        # unpatched backend, so the build stops here until the old public
+        # status query stops answering for an arbitrary address. The probe is
+        # read-only and uses a reserved invalid address.
+        run: |
+          url="$(grep -m1 -oE 'https://[a-z0-9-]+\.convex\.cloud' src/main.tsx || true)"
+          if [ -z "$url" ]; then
+            echo "::error title=No Convex URL::src/main.tsx has no https://<deployment>.convex.cloud URL."
+            exit 1
+          fi
+          body="$(curl -sS -X POST "$url/api/query" \
+            -H 'Content-Type: application/json' \
+            --data '{"path":"otpGuard:status","args":{"email":"security-probe@example.invalid"},"format":"json"}')" || {
+            echo "::error title=Production backend unreachable::The frontend points at $url."
+            exit 1
+          }
+          if ! printf '%s' "$body" | jq -e . >/dev/null 2>&1; then
+            echo "::error title=Production backend returned non-JSON::The frontend points at $url."
+            exit 1
+          fi
+          if printf '%s' "$body" | jq -e '.status == "success" and (.value.attemptsLeft != null)' >/dev/null; then
+            echo "::error title=Production backend is not patched::otpGuard:status still answers for an arbitrary address. Deploy the fixed Convex backend first, then re-run this workflow."
+            exit 1
+          fi
+          echo "Production backend no longer answers otpGuard:status for an arbitrary address."
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest

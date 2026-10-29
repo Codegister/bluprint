@@ -39,7 +39,7 @@ function securityMeta(): Plugin {
         "default-src 'self'",
         `script-src 'self' ${hashes.join(" ")}`.trim(),
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "connect-src 'self' https://honorable-lyrebird-974.convex.cloud wss://honorable-lyrebird-974.convex.cloud https://honorable-lyrebird-974.convex.site",
+        "connect-src 'self' https://harmless-dog-538.convex.cloud wss://harmless-dog-538.convex.cloud https://harmless-dog-538.convex.site",
         "img-src 'self' data: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
         "media-src 'self' blob:",

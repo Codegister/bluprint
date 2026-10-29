@@ -13,6 +13,16 @@ set -euo pipefail
 key="${CONVEX_DEPLOY_KEY:-}"
 key="$(printf '%s' "$key" | tr -d '[:space:]')"
 
+# The Convex dashboard's copy control can hand back a typographic vertical
+# bar (U+2502 or U+FF5C) instead of ASCII |. Convex only accepts ASCII, so a
+# correct key copied through that control would otherwise look malformed.
+normalized="${key//│/|}"
+normalized="${normalized//｜/|}"
+if [ "$normalized" != "$key" ]; then
+  echo "::notice::Replaced a typographic vertical bar in CONVEX_DEPLOY_KEY with ASCII |."
+  key="$normalized"
+fi
+
 if [ -z "$key" ]; then
   echo "::error title=Convex deploy key missing::Add CONVEX_DEPLOY_KEY under Settings -> Secrets and variables -> Actions."
   exit 1
@@ -27,12 +37,16 @@ case "$key" in
 esac
 
 if [ "$key" = "${key%%|*}" ]; then
-  echo "::error title=Convex deploy key malformed::The secret has no | separator. Copy the whole key from the Convex dashboard."
+  if [[ "$key" == *"eyJ"* ]]; then
+    echo "::error title=Convex deploy key malformed::The token is present but the | separator is missing. Insert | between the deployment name and the token, so it reads prod:<deployment>|<token>."
+  else
+    echo "::error title=Convex deploy key malformed::The secret is only the deployment prefix. Copy the whole key; it must look like prod:<deployment>|<token>."
+  fi
   exit 1
 fi
 
-target="${key%%|*}"       # e.g. prod:honorable-lyrebird-974
-name="${target#*:}"       # e.g. honorable-lyrebird-974
+target="${key%%|*}"       # e.g. prod:harmless-dog-538
+name="${target#*:}"       # e.g. harmless-dog-538
 
 case "$name" in
   ""|*[!a-z0-9-]*)
@@ -56,5 +70,13 @@ if [ "$name" != "$expected" ]; then
   echo "::error title=Wrong Convex deployment::The key targets $name, but the app is pinned to $expected. Generate a deploy key for $expected and replace CONVEX_DEPLOY_KEY."
   exit 1
 fi
+
+# The workflows read this file rather than the raw secret, so they use the
+# trimmed and normalized value that was actually validated. The runner is
+# ephemeral and the file is owner-only.
+key_file="${RUNNER_TEMP:-/tmp}/convex-deploy-key"
+umask 077
+printf '%s' "$key" > "$key_file"
+chmod 600 "$key_file"
 
 echo "Deploy key targets $target, matching the app's pinned deployment."

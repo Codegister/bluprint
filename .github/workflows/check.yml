@@ -46,6 +46,7 @@ jobs:
           fi
           export CONVEX_DEPLOY_KEY="$key"
           bash .github/scripts/check-convex-key.sh
+          export CONVEX_DEPLOY_KEY="$(cat "${RUNNER_TEMP:-/tmp}/convex-deploy-key")"
           set +e
           output="$(bunx convex codegen --typecheck disable 2>&1)"
           status=$?
