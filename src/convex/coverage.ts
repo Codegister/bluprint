@@ -99,10 +99,13 @@ export const forCourse = query({
           covered: covered.length,
           total: points.length,
           percent: points.length > 0 ? Math.round((covered.length / points.length) * 100) : 0,
-          uncovered: points
-            .filter((point) => !coveredIds.has(point.id))
-            .slice(0, 3)
-            .map((point) => point.text),
+          // Every statement with its tick state, so the course checklist can
+          // show what is done instead of only what is missing.
+          points: points.map((point) => ({
+            id: point.id,
+            text: point.text,
+            covered: coveredIds.has(point.id),
+          })),
         };
       }),
     );

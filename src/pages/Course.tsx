@@ -60,13 +60,14 @@ const PATH_COLORS = [
 ];
 
 /**
- * Four destinations: the pathway, the detailed notes for it, practice, and the
- * sets built from it.
+ * Five destinations: the pathway, the specification behind it, the detailed
+ * notes, practice, and the sets built from it.
  */
-type CourseSection = "pathway" | "notes" | "practice" | "sets";
+type CourseSection = "pathway" | "spec" | "notes" | "practice" | "sets";
 
 const COURSE_SECTIONS: Array<{ value: CourseSection; label: string }> = [
   { value: "pathway", label: "Pathway" },
+  { value: "spec", label: "Specification" },
   { value: "notes", label: "Notes" },
   { value: "practice", label: "Practice" },
   { value: "sets", label: "Study sets" },
@@ -244,11 +245,13 @@ export default function Course() {
       ? "sets"
       : requested === "notes"
         ? "notes"
-        : requested === "practice" ||
-            requested === "papers" ||
-            requested === "topic-papers"
-          ? "practice"
-          : "pathway";
+        : requested === "spec"
+          ? "spec"
+          : requested === "practice" ||
+              requested === "papers" ||
+              requested === "topic-papers"
+            ? "practice"
+            : "pathway";
   const [practiceTab, setPracticeTab] = useState<"papers" | "topics">(
     requested === "topic-papers" ? "topics" : "papers",
   );
@@ -686,10 +689,6 @@ export default function Course() {
             </motion.section>
             )}
 
-            {/* Real coverage of the specification, counted from the content
-                that exists rather than from the number of topics. */}
-            <CourseCoveragePanel courseId={details.course._id} />
-
             <nav
               aria-label="Course sections"
               className="mt-5 flex flex-wrap gap-1.5"
@@ -1103,6 +1102,10 @@ export default function Course() {
                   {course.lastStudiedAt ? relativeDate(course.lastStudiedAt) : "not yet"}
                 </p>
             </>)}
+
+            {currentSection === "spec" && (
+              <CourseCoveragePanel courseId={course._id} />
+            )}
 
             {currentSection === "notes" && (
               <motion.section
