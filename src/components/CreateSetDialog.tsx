@@ -799,7 +799,16 @@ export function CreateSetDialog({
                 transition={{ duration: 0.25, ease: EASE }}
                 className="mt-4 rounded-2xl bg-[#FFEEF0] px-3.5 py-3 text-xs leading-relaxed text-[#A81F28]"
               >
-                {error}
+                <p>{error}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleSubmit()}
+                  disabled={isLoading}
+                  className="mt-2 h-8 rounded-full border-[#E7B3B8] bg-white px-3 text-[0.72rem] font-semibold text-[#A81F28] shadow-none hover:bg-[#FFF6F7]"
+                >
+                  Retry
+                </Button>
               </motion.div>
             )}
           </AnimatePresence>

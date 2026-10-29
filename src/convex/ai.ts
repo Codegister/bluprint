@@ -94,7 +94,6 @@ import {
   type PaperBlueprint,
 } from "./lib/paperBlueprint";
 
-
 type TextPart = { type: "text"; text: string };
 type ImagePart = { type: "image_url"; image_url: { url: string } };
 type ContentPart = TextPart | ImagePart;
@@ -4095,6 +4094,7 @@ const TUTOR_SYSTEM_PROMPT =
   "The study material provided is the source: work from it, and say plainly when it does not cover something before giving the standard explanation. " +
   "Never invent content and attribute it to the material, never cite a page you did not read, and never invent a source. " +
   "When web results are provided, use them for anything outside the material and name the site they came from. " +
+  "Any fact, example or explanation that is not in the supplied material must begin with the exact label \"Beyond your notes:\" so the student knows what to check. " +
   "Only test or quiz the student when they ask to be quizzed or tested. " +
   "This thread begins where the student's first message begins: never greet them as returning, never say \"welcome back\", and never refer to a previous session or a continuing conversation. " +
   "Plain text with short paragraphs and hyphen bullets. No markdown headings, tables, or code fences. " +
@@ -4165,8 +4165,45 @@ type TutorContext = {
   course?: string;
   examBoard?: string;
   level?: string;
+  /** The student's explicit explanation register: Simple, GCSE or A-Level. */
+  explainLevel?: string;
   messages: Array<{ role: string; content: string }>;
 };
+
+/**
+ * The register the student chose, and the special case behind the quick prompt
+ * "explain this topic like I'm new to it". That prompt used to produce a list
+ * of facts copied from the notes; a new student needs an analogy and one worked
+ * example first, so the prompt itself forces the Simple rules even when the
+ * picker is set to A-Level.
+ */
+function explainLevelRules(level: string | undefined, question: string): string {
+  const asksForSimple =
+    /\b(like i'?m new|new to (this|it)|in simple terms|explain (this|it) simply)\b/i.test(
+      question,
+    );
+  const chosen = asksForSimple ? "simple" : (level ?? "").trim().toLowerCase();
+
+  if (chosen === "simple") {
+    return (
+      "EXPLAIN LEVEL - SIMPLE: teach someone who has never met this topic. " +
+      "Open with one short, everyday analogy, then give one worked example that walks through it step by step. " +
+      "Use short sentences, define every term the first time, and do not answer with a bullet list of facts. " +
+      "Use at most one hyphen bullet if a list is unavoidable."
+    );
+  }
+  if (chosen === "a-level" || chosen === "alevel" || chosen === "a level") {
+    return (
+      "EXPLAIN LEVEL - A-LEVEL: use precise technical vocabulary and explain mechanisms, evidence and evaluation. " +
+      "Keep paragraphs to three or four sentences, connect each point to the specification, and include one worked example where it clarifies the reasoning. " +
+      "Do not simplify away the qualification's required depth."
+    );
+  }
+  return (
+    "EXPLAIN LEVEL - GCSE: pitch at a GCSE student. Define technical terms, use two to four sentence paragraphs, and give one concrete example. " +
+    "Use the exam board's command words when discussing exam technique, and avoid university-level detail that is not needed for the qualification."
+  );
+}
 
 /** The question as the tutor's prompt, with the material and any web results. */
 function tutorPrompt(
@@ -4192,6 +4229,7 @@ function tutorPrompt(
     context.level
       ? `Pitch the explanation at ${context.level} depth and use that qualification's command words when discussing exam technique.`
       : "",
+    explainLevelRules(context.explainLevel, question),
     webRules(webState),
     web.length > 0 ? webResultsBlock(web) : "",
   ]
@@ -4761,10 +4799,12 @@ export const askTutor = action({
     useWeb: v.optional(v.boolean()),
     // A level label such as "Deep"; the matching NVIDIA model stays server-side.
     tier: v.optional(v.string()),
+    // Simple, GCSE or A-Level. It changes register, not the model.
+    explainLevel: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { setId, question, useWeb, tier },
+    { setId, question, useWeb, tier, explainLevel },
   ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
@@ -4790,6 +4830,7 @@ export const askTutor = action({
         course: context.set.course,
         examBoard: context.set.examBoard,
         level: context.set.level,
+        explainLevel,
         messages: context.messages,
       };
       const result = await streamTutorAnswer(
@@ -4847,10 +4888,11 @@ export const askCourseTutor = action({
     useWeb: v.optional(v.boolean()),
     // Same level labels as `askTutor`; the model mapping is shared.
     tier: v.optional(v.string()),
+    explainLevel: v.optional(v.string()),
   },
   handler: async (
     ctx,
-    { courseId, unitTitle, question, useWeb, tier },
+    { courseId, unitTitle, question, useWeb, tier, explainLevel },
   ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
@@ -4872,7 +4914,7 @@ export const askCourseTutor = action({
     try {
       const result = await streamTutorAnswer(
         apiKeys,
-        context,
+        { ...context, explainLevel },
         text,
         // Off unless the browser explicitly asks for it.
         useWeb === true,
@@ -4995,6 +5037,7 @@ export const explainQuestion = action({
     // The tiny prompt the window sends: "Explain this." unless the student
     // typed a follow-up.
     prompt: v.optional(v.string()),
+    explainLevel: v.optional(v.string()),
   },
   handler: async (
     ctx,
@@ -5011,6 +5054,7 @@ export const explainQuestion = action({
       qualification,
       history,
       prompt,
+      explainLevel,
     },
   ): Promise<{ reply: string }> => {
     const userId = await requireUserId(ctx);
@@ -5025,6 +5069,7 @@ export const explainQuestion = action({
     const apiKeys = resolveNvidiaKeys();
     const system = [
       EXPLAIN_SYSTEM_PROMPT,
+      explainLevelRules(explainLevel, asked),
       explainContextBlock({
         kind,
         question,

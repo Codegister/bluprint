@@ -2,11 +2,14 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { internalMutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 import {
+  IP_WINDOW_MS,
   MAX_CODE_ATTEMPTS,
   MAX_HOURLY_ATTEMPTS,
   MAX_SENDS_PER_HOUR,
+  MAX_SENDS_PER_IP_WINDOW,
+  MAX_VERIFIES_PER_IP_WINDOW,
   RESEND_COOLDOWN_MS,
 } from "./lib/otpLimits";
 
@@ -29,6 +32,75 @@ const HOUR_MS = 60 * 60 * 1000;
 
 function normaliseEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+/**
+ * A salted hash of the caller's IP. Convex reports the address on the request
+ * metadata and propagates it through nested functions, so the browser cannot
+ * choose or spoof it. The raw address is never written to the database.
+ */
+async function currentIpHash(ctx: MutationCtx): Promise<string | null> {
+  const { ip } = await ctx.meta.getRequestMetadata();
+  if (!ip) return null;
+  const pepper = process.env.OTP_IP_PEPPER?.trim() || "bluprint-otp-ip-v1";
+  const bytes = new TextEncoder().encode(`${pepper}|${ip}`);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Counts one attempt against this IP's bucket and refuses once the cap is met.
+ * The hash and bucket are the only stored values; stale buckets are pruned as
+ * they are seen so the table cannot grow without bound.
+ */
+async function consumeIp(
+  ctx: MutationCtx,
+  scope: "send" | "verify",
+  ipHash: string,
+  limit: number,
+): Promise<{ allowed: boolean; retryAt: number }> {
+  const now = Date.now();
+  const bucketStart = Math.floor(now / IP_WINDOW_MS) * IP_WINDOW_MS;
+  const staleBefore = bucketStart - 24 * 60 * 60 * 1000;
+  const stale = await ctx.db
+    .query("otpIpAttempts")
+    .withIndex("by_scope_ip_bucket", (q) =>
+      q
+        .eq("scope", scope)
+        .eq("ipHash", ipHash)
+        .lt("bucketStart", staleBefore),
+    )
+    .take(100);
+  for (const row of stale) await ctx.db.delete(row._id);
+
+  const row = await ctx.db
+    .query("otpIpAttempts")
+    .withIndex("by_scope_ip_bucket", (q) =>
+      q
+        .eq("scope", scope)
+        .eq("ipHash", ipHash)
+        .eq("bucketStart", bucketStart),
+    )
+    .unique();
+
+  if (row && row.count >= limit) {
+    return { allowed: false, retryAt: bucketStart + IP_WINDOW_MS };
+  }
+
+  if (row) {
+    await ctx.db.patch(row._id, { count: row.count + 1, lastAt: now });
+  } else {
+    await ctx.db.insert("otpIpAttempts", {
+      scope,
+      ipHash,
+      bucketStart,
+      count: 1,
+      lastAt: now,
+    });
+  }
+  return { allowed: true, retryAt: 0 };
 }
 
 type GuardRow = Doc<"otpGuards">;
@@ -102,15 +174,25 @@ export const status = query({
  * lowercased form rather than trusting one exact spelling.
  */
 async function codesForAddress(
-  ctx: MutationCtx,
+  ctx: Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">,
   address: string,
-): Promise<Array<{ _id: Id<"authVerificationCodes">; _creationTime: number }>> {
+): Promise<
+  Array<{
+    _id: Id<"authVerificationCodes">;
+    _creationTime: number;
+    expirationTime: number | undefined;
+  }>
+> {
   const accounts = await ctx.db
     .query("authAccounts")
     .withIndex("providerAndAccountId", (q) => q.eq("provider", "email-otp"))
     .collect();
 
-  const codes: Array<{ _id: Id<"authVerificationCodes">; _creationTime: number }> = [];
+  const codes: Array<{
+    _id: Id<"authVerificationCodes">;
+    _creationTime: number;
+    expirationTime: number | undefined;
+  }> = [];
   for (const account of accounts) {
     if (account.providerAccountId.trim().toLowerCase() !== address) continue;
     const rows = await ctx.db
@@ -118,7 +200,11 @@ async function codesForAddress(
       .withIndex("accountId", (q) => q.eq("accountId", account._id))
       .collect();
     for (const row of rows) {
-      codes.push({ _id: row._id, _creationTime: row._creationTime });
+      codes.push({
+        _id: row._id,
+        _creationTime: row._creationTime,
+        expirationTime: row.expirationTime,
+      });
     }
   }
   return codes.sort((a, b) => a._creationTime - b._creationTime);
@@ -150,6 +236,14 @@ export const beginSend = internalMutation({
   handler: async (ctx, { email }) => {
     const address = normaliseEmail(email);
     if (!address) return { allowed: false, retryAt: 0 };
+
+    // One machine cannot cycle through addresses: the send is counted against
+    // a short-lived IP bucket before the per-address cooldown is considered.
+    const ipHash = await currentIpHash(ctx);
+    if (ipHash) {
+      const ipGate = await consumeIp(ctx, "send", ipHash, MAX_SENDS_PER_IP_WINDOW);
+      if (!ipGate.allowed) return ipGate;
+    }
 
     const now = Date.now();
     const row = await rowFor(ctx, address);
@@ -221,15 +315,70 @@ export const noteCodeSent = internalMutation({
   },
 });
 
+/**
+ * True when the address has a code that has not expired. The sign-in wrapper
+ * checks this before invoking Convex Auth, so a verification against an
+ * address with no live code is refused without recording a failure against
+ * that address.
+ */
+export const hasLiveCode = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const address = normaliseEmail(email);
+    if (!address) return false;
+    const now = Date.now();
+    const codes = await codesForAddress(ctx, address);
+    return codes.some(
+      (code) => code.expirationTime !== undefined && code.expirationTime > now,
+    );
+  },
+});
+
+/**
+ * Counts one verification attempt against the caller's IP before the code is
+ * checked. Called by the server-side `signIn` wrapper in auth.ts, so a browser
+ * cannot verify codes without passing through it. Per-address limits still
+ * come from Convex Auth; this is what stops one machine spraying many
+ * addresses.
+ */
+export const noteVerifyAttempt = internalMutation({
+  args: { email: v.string() },
+  handler: async (ctx): Promise<{
+    allowed: boolean;
+    retryAt: number;
+    attemptsLeft: number;
+  }> => {
+    const ipHash = await currentIpHash(ctx);
+    if (!ipHash) {
+      return { allowed: true, retryAt: 0, attemptsLeft: MAX_VERIFIES_PER_IP_WINDOW };
+    }
+    const gate = await consumeIp(ctx, "verify", ipHash, MAX_VERIFIES_PER_IP_WINDOW);
+    return {
+      ...gate,
+      attemptsLeft: gate.allowed ? MAX_VERIFIES_PER_IP_WINDOW - 1 : 0,
+    };
+  },
+});
+
 /** A correct code clears the record, so the next sign-in starts from zero. */
 export async function clearGuard(
   ctx: MutationCtx,
   email: string,
 ): Promise<boolean> {
-  const row = await rowFor(ctx, normaliseEmail(email));
-  if (!row) return false;
-  await ctx.db.delete(row._id);
-  return true;
+  const address = normaliseEmail(email);
+  const row = await rowFor(ctx, address);
+  if (row) await ctx.db.delete(row._id);
+
+  // Also clear Convex Auth's own hourly counter. A student who mistyped four
+  // times and then got the code right starts their next sign-in from zero.
+  for (const identifier of new Set([email, address])) {
+    const limit = await ctx.db
+      .query("authRateLimits")
+      .withIndex("identifier", (q) => q.eq("identifier", identifier))
+      .unique();
+    if (limit) await ctx.db.delete(limit._id);
+  }
+  return row !== null;
 }
 
 /** Internal wrapper so the success callback and server code share one path. */

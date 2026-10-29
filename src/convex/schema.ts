@@ -56,6 +56,19 @@ const schema = defineSchema(
       codeInvalidated: v.optional(v.boolean()),
     }).index("by_email", ["email"]),
 
+    // Per-IP attempt buckets for the email-code flow. The IP is stored only as
+    // a salted SHA-256 hash, alongside a ten-minute bucket; the raw address is
+    // never written. Kept separate from otpGuards (one row per address) so a
+    // single machine cannot spread guesses across many addresses.
+    otpIpAttempts: defineTable({
+      // "send" or "verify"
+      scope: v.string(),
+      ipHash: v.string(),
+      bucketStart: v.number(),
+      count: v.number(),
+      lastAt: v.number(),
+    }).index("by_scope_ip_bucket", ["scope", "ipHash", "bucketStart"]),
+
     // A study set is one uploaded bundle of notes plus everything Bluprint
     // generated from it. `notes` is the plain text extracted from photos/video
     // or pasted directly, so the source material survives between sessions.

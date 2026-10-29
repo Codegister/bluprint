@@ -23,7 +23,11 @@
   />
   <meta property="og:url" content="https://codegister.github.io/bluprint/" />
   <meta property="og:image" content="https://codegister.github.io/bluprint/logo.svg" />
+  <meta property="og:image:alt" content="Bluprint" />
+  <meta property="og:locale" content="en_GB" />
   <meta name="twitter:card" content="summary" />
+  <meta name="twitter:image" content="https://codegister.github.io/bluprint/logo.svg" />
+  <meta name="twitter:image:alt" content="Bluprint" />
   <meta name="twitter:title" content="Bluprint: notes in, revision out" />
   <meta
     name="twitter:description"
@@ -36,26 +40,7 @@
     rel="stylesheet"
   />
   <title>Bluprint: notes in, revision out</title>
-  <!--
-    Apply the stored theme before React mounts so the first paint is already
-    light or dark. Until the student picks a side, the OS preference wins.
-    ThemeProvider in src/components/ThemeProvider.tsx owns every later change.
-  -->
-  <script>
-    (function () {
-      try {
-        var stored = window.localStorage.getItem("bluprint.theme");
-        var dark =
-          stored === "dark" ||
-          (stored !== "light" &&
-            window.matchMedia("(prefers-color-scheme: dark)").matches);
-        document.documentElement.classList.toggle("dark", dark);
-        document.documentElement.style.colorScheme = dark ? "dark" : "light";
-      } catch (error) {
-        /* Storage can be blocked; the light sheet is the safe default. */
-      }
-    })();
-  </script>
+  <script src="%BASE_URL%theme-init.js"></script>
   <script type="module" src="/src/vly-runtime.ts"></script>
 </head>
 

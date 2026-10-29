@@ -233,7 +233,7 @@ function byStudyPriority(
   return a.order - b.order;
 }
 
-async function deleteStudySetContent(ctx: MutationCtx, setId: Id<"studySets">) {
+export async function deleteStudySetContent(ctx: MutationCtx, setId: Id<"studySets">) {
   const sets: Array<"flashcards" | "quizQuestions" | "examQuestions" | "quizAttempts"> = [
     "flashcards",
     "quizQuestions",

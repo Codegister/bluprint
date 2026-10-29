@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { BUILD_DEFAULTS } from "@/convex/lib/buildDefaults";
 import { useAuth } from "@/hooks/use-auth";
+import { readableError } from "@/lib/errors";
 import {
   EASE,
   Floating,
@@ -56,6 +57,9 @@ function HeroPreview({
 
   return (
     <div className="gizmo-card p-4 sm:p-6">
+      <p className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-2.5 py-1 text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-chrome-7">
+        20-second example
+      </p>
       <div className="flex items-center gap-4">
         <Mascot size={92} />
         <div>
@@ -315,9 +319,11 @@ function OutputCard({
 }
 
 export default function Landing() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, signIn } = useAuth();
   const navigate = useNavigate();
   const [heroNotes, setHeroNotes] = useState("");
+  const [guestBusy, setGuestBusy] = useState(false);
+  const [guestError, setGuestError] = useState<string | null>(null);
   const startHref = isAuthenticated ? "/tutor" : "/auth?returnTo=%2Ftutor";
   const startLabel = isAuthenticated ? "Open dashboard" : "Start a study set";
   // The hero's own field: the pasted text is saved for this tab and handed to
@@ -338,6 +344,20 @@ export default function Landing() {
     savePendingNotes(notes);
     navigate(startHref);
   };
+  const startAsGuest = async () => {
+    setGuestBusy(true);
+    setGuestError(null);
+    try {
+      await signIn("anonymous");
+      navigate("/tutor");
+    } catch (error) {
+      setGuestError(
+        readableError(error, "Could not start a guest session. Try again."),
+      );
+      setGuestBusy(false);
+    }
+  };
+
   // Reading progress drawn along the bottom edge of the sticky header.
   const { scrollYProgress } = useScroll();
 
@@ -452,7 +472,25 @@ export default function Landing() {
               >
                 <a href="#pipeline">See how it works</a>
               </Button>
+              {!isAuthenticated && (
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="ghost"
+                  onClick={() => void startAsGuest()}
+                  disabled={guestBusy}
+                  className="h-12 px-4 text-[0.9rem] font-semibold text-brand-ink/75 hover:bg-brand-panel"
+                >
+                  {guestBusy ? "Starting…" : "Try it without an account"}
+                </Button>
+              )}
             </motion.div>
+
+            {guestError && (
+              <p className="mt-3 text-[0.82rem] text-[#A81F28]" role="alert">
+                {guestError}
+              </p>
+            )}
 
             <motion.p
               className="mt-7 text-[0.82rem] leading-relaxed text-muted-foreground"

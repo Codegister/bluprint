@@ -1,4 +1,4 @@
-name: Secret scan
+name: Security checks
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   gitleaks:
-    name: gitleaks
+    name: gitleaks and commit identity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Scan for secrets
-        run: |
+        run: |-
           docker run --rm \
             -v "$PWD:/repo" \
             zricethezav/gitleaks:latest detect \
@@ -27,3 +27,38 @@ jobs:
             --verbose \
             --redact \
             --exit-code 1
+
+      - name: Reject a personal email in new commits
+        # The historical Gmail address is removed by the filter-repo rewrite in
+        # SECURITY.md. This gate stops a new commit from adding it again before
+        # that rewrite happens.
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |-
+          set -euo pipefail
+          if [ -n "${BEFORE_SHA:-}" ] && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+            range="${BEFORE_SHA}..${AFTER_SHA}"
+          else
+            range="${AFTER_SHA}~1..${AFTER_SHA}"
+          fi
+          emails="$(git log --format='%ae%n%ce' "$range" | sort -u || true)"
+          if printf '%s\n' "$emails" | grep -Eic '@(gmail|googlemail)\.com$'; then
+            echo "::error title=Personal email in commit::Use the GitHub noreply address for new commits. Existing history still needs the filter-repo rewrite documented in SECURITY.md."
+            exit 1
+          fi
+
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail on a high-severity vulnerable dependency
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

@@ -42,9 +42,12 @@ function resolveRedirectAfterAuth(returnTo: string | null, fallback = "/tutor") 
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
-  const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
+  const { isLoading: authLoading, isAuthenticated, user, signIn } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const linkMode = searchParams.get("link") === "1";
+  const convertingGuest = linkMode && user?.isAnonymous === true;
+  const resolving = authLoading || user === undefined;
   const redirect = resolveRedirectAfterAuth(
     searchParams.get("returnTo"),
     redirectAfterAuth,
@@ -89,10 +92,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       : 0;
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    // A guest who arrived through "Add an email" is authenticated already, but
+    // must stay on this screen to verify the new address. A normal signed-in
+    // visitor is sent straight on.
+    if (!resolving && isAuthenticated && !convertingGuest) {
       navigate(redirect);
     }
-  }, [authLoading, isAuthenticated, navigate, redirect]);
+  }, [resolving, isAuthenticated, convertingGuest, navigate, redirect]);
 
   /** Sends a code and records when, so the resend cooldown is honest. */
   const sendCode = async (email: string): Promise<boolean> => {
@@ -300,10 +306,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 transition={{ duration: 0.3, ease: EASE }}
               >
                 <h2 className="text-[1.55rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
-                  Sign in to your workspace
+                  {convertingGuest
+                    ? "Add an email to keep your sets"
+                    : "Sign in to your workspace"}
                 </h2>                  <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
-                    We&apos;ll email you a six-digit code. New here? The same form
-                    creates your account.
+                  {convertingGuest
+                    ? "We'll email a six-digit code to confirm the address. Your guest sets and progress stay attached to this account."
+                    : "We'll email you a six-digit code. New here? The same form creates your account."}
                   </p>
 
                 <form onSubmit={handleEmailSubmit} className="mt-6" noValidate>
@@ -353,6 +362,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     )}
                   </Button>
 
+                  {!convertingGuest && (
+                    <>
                   <div className="my-5 flex items-center gap-3">
                     <span className="h-px flex-1 bg-border" />
                     <span className="text-[0.8rem] text-muted-foreground">or</span>
@@ -370,6 +381,15 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <p className="mt-1.5 text-center text-[0.74rem] leading-relaxed text-muted-foreground">
                     Guest sessions stay on this browser.
                   </p>
+                    </>
+                  )}
+                  {convertingGuest && (
+                    <p className="mt-3 rounded-2xl bg-brand-panel px-3 py-2 text-[0.74rem] leading-relaxed text-muted-foreground">
+                      If this email already has a Bluprint account, you&apos;ll
+                      sign into that account. Export guest sets first if you want
+                      a separate copy.
+                    </p>
+                  )}
                 </form>
               </motion.div>
             ) : (

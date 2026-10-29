@@ -93,6 +93,10 @@ jobs:
         # lets a deep link such as /today load the app, which then routes it.
         run: |
           cp dist/index.html dist/404.html
+          # Deep links are served through 404.html on Pages. They are real app
+          # routes, not missing pages, but a crawler must not index the shell at
+          # every path; share and auth routes are private anyway.
+          sed -i 's#</head>#  <meta name="robots" content="noindex, nofollow" />\n</head>#' dist/404.html
           touch dist/.nojekyll
 
       - uses: actions/configure-pages@v5

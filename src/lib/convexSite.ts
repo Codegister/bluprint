@@ -17,11 +17,3 @@ export const CONVEX_SITE_URL = cloudUrl.replace(
   /\.convex\.cloud$/,
   ".convex.site",
 );
-
-/**
- * A real past paper, served through this app so it can be read in the viewer
- * instead of opening cognito.org. The URL is encoded, never rewritten.
- */
-export function cognitoPaperProxyUrl(pdfUrl: string): string {
-  return `${CONVEX_SITE_URL}/cognito-paper?url=${encodeURIComponent(pdfUrl)}`;
-}

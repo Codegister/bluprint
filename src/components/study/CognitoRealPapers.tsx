@@ -1,30 +1,20 @@
 import { EASE, reveal } from "@/components/motion/Motion";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { PdfViewer } from "@/components/study/PdfViewer";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { cognitoPaperProxyUrl } from "@/lib/convexSite";
 import { readableError } from "@/lib/errors";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { FileText, RotateCcw, X } from "lucide-react";
+import { ExternalLink, FileText, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * The real past papers Cognito publishes for a course, shown inside Bluprint.
+ * The real past papers Cognito publishes for a course.
  *
- * Each row is one board paper with its mark scheme. The PDFs are read through
- * the app's own proxy so they can be viewed here; nothing links out to the
- * Cognito site. The files belong to the exam boards and Cognito, so they are
- * presented as published reference material, not as Bluprint's own questions.
+ * Each row links to the board paper and its mark scheme on Cognito's own site,
+ * opened in a new tab. Bluprint does not copy, proxy or redistribute the PDFs:
+ * no licence to do so exists, and the publisher remains the host. The files
+ * belong to the exam boards and Cognito, not to Bluprint.
  */
 export function CognitoRealPapers({
   courseId,
@@ -38,10 +28,6 @@ export function CognitoRealPapers({
   const load = useAction(api.cognitoLibrary.loadPastPapers);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewing, setViewing] = useState<{
-    title: string;
-    url: string;
-  } | null>(null);
   const started = useRef(false);
 
   const run = async () => {
@@ -86,9 +72,9 @@ export function CognitoRealPapers({
             The actual board papers
           </h2>
           <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
-            Published by Cognito for this course, opened in the app. Read the
-            question paper here, then check your answers against the board&apos;s
-            own mark scheme.
+            Published by Cognito for this course. Each paper opens on
+            Cognito&apos;s own site in a new tab, where you can read the question
+            paper and check your answers against the board&apos;s mark scheme.
           </p>
         </div>
         <span className="rounded-full bg-brand-panel px-3 py-1.5 text-[0.7rem] font-semibold text-chrome-7">
@@ -173,33 +159,27 @@ export function CognitoRealPapers({
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
-                            setViewing({
-                              title: `${year} ${paper.label} question paper`,
-                              url: paper.questionUrl,
-                            })
-                          }
-                          className="h-8 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                        <a
+                          href={paper.questionUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`${year} ${paper.label} question paper on Cognito`}
+                          className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                         >
                           Question paper
-                        </Button>
+                          <ExternalLink className="size-3" aria-hidden />
+                        </a>
                         {paper.markSchemeUrl && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() =>
-                              setViewing({
-                                title: `${year} ${paper.label} mark scheme`,
-                                url: paper.markSchemeUrl!,
-                              })
-                            }
-                            className="h-8 rounded-full border-border bg-white px-3 text-[0.74rem] font-semibold text-[#0B6B45] shadow-none hover:bg-brand-panel"
+                          <a
+                            href={paper.markSchemeUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${year} ${paper.label} mark scheme on Cognito`}
+                            className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-3 text-[0.74rem] font-semibold text-[#0B6B45] shadow-none hover:bg-brand-panel"
                           >
                             Mark scheme
-                          </Button>
+                            <ExternalLink className="size-3" aria-hidden />
+                          </a>
                         )}
                       </div>
                     </li>
@@ -212,9 +192,10 @@ export function CognitoRealPapers({
 
       <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
         Papers and mark schemes are published by the exam boards and hosted by
-        Cognito, shown here as reference material; all rights remain with the
-        publisher. For practice written for Bluprint, use the paper builder
-        above. Rights holders can request removal through the{" "}
+        Cognito. These links open Cognito&apos;s own site; Bluprint does not host
+        or redistribute the files, and all rights remain with the publisher. For
+        practice written for Bluprint, use the paper builder above. Rights
+        holders can request that a link be removed through the{" "}
         <a
           href="https://github.com/Codegister/bluprint/issues"
           target="_blank"
@@ -226,55 +207,6 @@ export function CognitoRealPapers({
         .
       </p>
 
-      <Dialog
-        open={viewing !== null}
-        onOpenChange={(open) => {
-          if (!open) setViewing(null);
-        }}
-      >
-        {/*
-          The paper opens full screen: a paper needs the whole viewport to show
-          a page at a readable size, and the pages themselves are drawn by
-          `PdfViewer` rather than by the browser's PDF plugin.
-        */}
-        <DialogContent
-          showCloseButton={false}
-          className="h-[100dvh] max-h-[100dvh] w-screen max-w-none gap-0 rounded-none border-0 bg-[#F4F4F7] p-0 sm:max-w-none"
-          // A header row plus a scrolling viewer that takes every other pixel.
-          style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)" }}
-        >
-          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-white px-4 py-2.5 sm:px-5">
-            <div className="flex min-w-0 items-center gap-2">
-              <FileText className="size-4 shrink-0 text-[#B7791F]" aria-hidden />
-              <DialogTitle className="truncate font-display text-[0.9rem] font-bold leading-tight text-brand-ink">
-                {viewing?.title ?? "Past paper"}
-              </DialogTitle>
-              <DialogDescription className="sr-only">
-                The board&apos;s published paper, served through Bluprint.
-              </DialogDescription>
-            </div>
-            <DialogClose asChild>
-              <button
-                type="button"
-                aria-label="Close the paper"
-                className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-panel text-brand-ink/70 transition-colors hover:bg-[#E7E7EE] hover:text-brand-ink"
-              >
-                <X className="size-4" aria-hidden />
-              </button>
-            </DialogClose>
-          </header>
-
-          <div className="min-h-0 overflow-y-auto px-3 py-4 sm:px-5">
-            {viewing && (
-              <PdfViewer
-                key={viewing.url}
-                url={cognitoPaperProxyUrl(viewing.url)}
-                title={viewing.title}
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </motion.section>
   );
 }

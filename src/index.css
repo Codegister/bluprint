@@ -1743,3 +1743,24 @@
     display: none;
   }
 }
+
+
+/* Keyboard focus is always visible, including on the custom pill controls that
+   used to rely on a border colour alone. */
+:where(a, button, input, select, textarea, summary, [role="button"]):focus-visible {
+  outline: 2px solid #2f7fa8;
+  outline-offset: 2px;
+}
+
+/* WCAG 2.2 AA target size: controls that are not text links keep at least a
+   24px hit area even on a narrow phone. Inline links are exempt. */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  summary,
+  select {
+    min-height: 24px;
+  }
+}
+
+/* bluprint-focus-visible */

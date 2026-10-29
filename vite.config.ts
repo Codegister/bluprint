@@ -1,16 +1,15 @@
 import { vlyPlugin } from "@vly-ai/integrations";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "path";
 import { defineConfig, type Plugin } from "vite";
 
 /**
  * GitHub Pages cannot set response headers, so a production build carries the
- * policy in a meta tag. It is added after Vite writes index.html, hashing the
- * inline theme script that already exists there, so the hash cannot drift from
- * the script the browser actually receives.
+ * policy in a meta tag. It is added after Vite writes index.html. The theme
+ * boot script is a separate public file, so `script-src 'self'` needs no
+ * inline hash.
  *
  * This is a best-effort substitute for real headers: `frame-ancestors` and
  * `X-Content-Type-Options` are ignored in meta tags. See README.
@@ -25,24 +24,17 @@ function securityMeta(): Plugin {
       const html = readFileSync(file, "utf8");
       if (html.includes("Content-Security-Policy")) return;
 
-      const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
-        .map((match) => match[1] ?? "")
-        .filter((code) => code.trim().length > 0)
-        .map(
-          (code) =>
-            `'sha256-${createHash("sha256")
-              .update(code, "utf8")
-              .digest("base64")}'`,
-        );
-
+      // The theme boot script is a separate file, so script-src can stay
+      // strict without a per-build hash. The boot-loader's inline style is
+      // covered by style-src's 'unsafe-inline'.
       const csp = [
         "default-src 'self'",
-        `script-src 'self' ${hashes.join(" ")}`.trim(),
+        "script-src 'self'",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "connect-src 'self' https://harmless-dog-538.convex.cloud wss://harmless-dog-538.convex.cloud https://harmless-dog-538.convex.site",
-        "img-src 'self' data: blob:",
+        "img-src 'self' data: blob: https://harmless-dog-538.convex.cloud",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "media-src 'self' blob:",
+        "media-src 'self' blob: https://harmless-dog-538.convex.cloud",
         "worker-src 'self' blob:",
         "frame-src 'self' blob:",
         "object-src 'none'",
