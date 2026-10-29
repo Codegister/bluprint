@@ -173,11 +173,6 @@ export const deleteAccount = mutation({
         .filter((q) => q.eq(q.field("sessionId"), session._id))
         .collect();
       for (const row of tokens) await ctx.db.delete(row._id);
-      const codes = await ctx.db
-        .query("authVerificationCodes")
-        .filter((q) => q.eq(q.field("sessionId"), session._id))
-        .collect();
-      for (const row of codes) await ctx.db.delete(row._id);
       await ctx.db.delete(session._id);
     }
 

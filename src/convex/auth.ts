@@ -2,7 +2,11 @@ import { convexAuth, getAuthSessionId } from "@convex-dev/auth/server";
 import { Anonymous } from "@convex-dev/auth/providers/Anonymous";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { action, type ActionCtx } from "./_generated/server";
+import {
+  action,
+  type ActionCtx,
+  type MutationCtx,
+} from "./_generated/server";
 import { emailOtp } from "./auth/emailOtp";
 
 /**
@@ -36,6 +40,10 @@ const authConfig = convexAuth({
      * guest is linked.
      */
     async createOrUpdateUser(ctx, { existingUserId, type, profile }) {
+      // The auth callback's context is generic, so its `db` only knows the
+      // system indexes. Cast once to the app's generated writer so the email
+      // and per-user indexes below are typed.
+      const db = ctx.db as unknown as MutationCtx["db"];
       const email =
         typeof profile.email === "string"
           ? profile.email.trim().toLowerCase()
@@ -62,7 +70,7 @@ const authConfig = convexAuth({
       // verification). Reuse a verified user with this email if there is one,
       // or the anonymous placeholder created by an earlier send.
       if (email) {
-        const sameEmail = await ctx.db
+        const sameEmail = await db
           .query("users")
           .withIndex("email", (q) => q.eq("email", email))
           .collect();
@@ -95,13 +103,13 @@ const authConfig = convexAuth({
               const placeholder = await ctx.db.get(existingUserId);
               if (placeholder?.isAnonymous && !placeholder.emailVerificationTime) {
                 const [set, course] = await Promise.all([
-                  ctx.db
+                  db
                     .query("studySets")
                     .withIndex("by_user_updated", (q) =>
                       q.eq("userId", placeholder._id),
                     )
                     .first(),
-                  ctx.db
+                  db
                     .query("courses")
                     .withIndex("by_user_updated", (q) =>
                       q.eq("userId", placeholder._id),
