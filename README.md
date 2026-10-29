@@ -503,27 +503,6 @@ npx convex env set NVIDIA_API_KEY "nvapi-key-one,nvapi-key-two,nvapi-key-three"
 On Freebuff, add `NVIDIA_API_KEY` in the project's **Keys** tab and paste the keys as a
 comma-separated value. Convex functions read it as `process.env.NVIDIA_API_KEY`.
 
-### Or load the keys from Infisical
-
-Instead of setting each key on the deployment, a machine identity can load them from
-Infisical at startup. Create a universal-auth identity with read access to the project,
-then set its credentials on the Convex deployment:
-
-```bash
-npx convex env set INFISICAL_CLIENT_ID "<client-id>"
-npx convex env set INFISICAL_CLIENT_SECRET "<client-secret>"
-npx convex env set INFISICAL_PROJECT_ID "<project-id>"
-# optional: INFISICAL_ENVIRONMENT (default prod), INFISICAL_SECRET_PATH (default /),
-# INFISICAL_SITE_URL (self-hosted Infisical)
-```
-
-`src/convex/lib/infisicalConfig.ts` signs in once when the Node AI actions boot and
-copies every secret in that environment and path into `process.env`, so
-`NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, the web-search keys and the model overrides
-all resolve unchanged. A value already set on the deployment wins, and with no identity
-configured the deployment environment is used exactly as before. The client secret is
-never written to source, logged or sent to the browser.
-
 Every NVIDIA request rotates to the next key in the pool. A key that returns HTTP 429 is
 cooled down for 45 seconds and the request immediately moves to the next key. A key
 rejected with 401 or 403 is dropped from rotation for the life of the server process.

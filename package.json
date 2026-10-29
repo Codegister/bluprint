@@ -14,7 +14,6 @@
   "dependencies": {
     "@convex-dev/auth": "^0.0.90",
     "@hookform/resolvers": "^5.2.2",
-    "@infisical/sdk": "5.0.2",
     "@jridgewell/trace-mapping": "^0.3.31",
     "@oslojs/crypto": "^1.0.1",
     "@radix-ui/react-accordion": "^1.2.12",

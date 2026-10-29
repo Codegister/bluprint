@@ -75,7 +75,6 @@ import {
   TUTOR_UNAVAILABLE_MESSAGE,
 } from "./lib/aiMessages";
 import { incidentKind } from "./lib/incidentRules";
-import { primeInfisicalSecrets } from "./lib/infisicalConfig";
 import { noteLimitMessage, withinNoteLimit } from "./lib/noteLimits";
 import {
   MAX_NOTES_CHARS,
@@ -94,12 +93,6 @@ import {
   flattenPaperBlueprint,
   type PaperBlueprint,
 } from "./lib/paperBlueprint";
-
-// API keys and config come from Infisical when the deployment has a machine
-// identity. The load starts as this Node module boots and is cached for the
-// life of the process; with no identity the deployment environment is used
-// exactly as before. See ./lib/infisicalConfig.
-primeInfisicalSecrets();
 
 type TextPart = { type: "text"; text: string };
 type ImagePart = { type: "image_url"; image_url: { url: string } };
