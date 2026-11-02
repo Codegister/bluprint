@@ -12,11 +12,11 @@ import { useEffect, useRef, useState } from "react";
 /**
  * The detailed notes for one pathway topic, shown here rather than linking out.
  *
- * The copy is read once and stored. Most courses publish notes for each topic
- * and those are what appears; a course with nothing published — Edexcel GCSE
- * Religious Studies and AQA GCSE Spanish, for instance — has notes written by
- * Bluprint instead. The stored origin decides which of the two the heading
- * claims, so the reader never passes one off as the other.
+ * The copy is read once and stored. When Save My Exams has a validated match
+ * for the course and a note for the topic, that is what appears; otherwise
+ * Bluprint writes the notes from the specification. The stored origin decides
+ * which of the two the heading claims, so the reader never passes one off as
+ * the other.
  */
 export function TopicNotes({
   courseId,
@@ -55,8 +55,8 @@ export function TopicNotes({
   });
 
   const sections = cached?.sections ?? [];
-  // Notes stored before this source existed were all read from Cognito.
-  const written = (cached?.origin ?? "cognito") === "bluprint";
+  const written = cached?.origin === "bluprint";
+  const fromSaveMyExams = cached?.origin === "savemyexams";
 
   return (
     <motion.div
@@ -73,7 +73,9 @@ export function TopicNotes({
           <p className="mt-0.5 text-[0.78rem] font-semibold text-brand-ink">
             {written
               ? "Written by Bluprint from your specification"
-              : "Read here, from Cognito's published notes"}
+              : fromSaveMyExams
+                ? "Read here, from Save My Exams' published notes"
+                : "Preparing notes from Save My Exams"}
           </p>
         </div>
         <button
@@ -122,7 +124,7 @@ export function TopicNotes({
         <p className="mt-3 flex items-start gap-2 text-[0.78rem] leading-relaxed text-muted-foreground">
           <BookOpen className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           No notes are stored for this topic yet. Use the topic summary and key
-          points above, or open the notes again to have them written.
+          points above, or open the notes again to have them prepared.
         </p>
       )}
 
@@ -153,7 +155,7 @@ export function TopicNotes({
           {cached.sections.length} note sections{" "}
           {written
             ? "written by Bluprint"
-            : `from Cognito · ${cached.sources.length} subtopic${
+            : `from Save My Exams · ${cached.sources.length} subtopic${
                 cached.sources.length === 1 ? "" : "s"
               }`}{" "}
           · checked {new Date(cached.fetchedAt).toLocaleDateString()}

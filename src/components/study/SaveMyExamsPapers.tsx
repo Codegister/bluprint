@@ -9,21 +9,14 @@ import { ExternalLink, FileText, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * The real past papers Cognito publishes for a course.
+ * The real past papers Save My Exams indexes for a course.
  *
- * Each row links to the board paper and its mark scheme on Cognito's own site,
- * opened in a new tab. Bluprint does not copy, proxy or redistribute the PDFs:
- * no licence to do so exists, and the publisher remains the host. The files
- * belong to the exam boards and Cognito, not to Bluprint.
+ * Each row links to the exam board's paper and mark scheme in a new tab.
+ * Bluprint does not copy, proxy or redistribute the PDFs: no licence to do so
+ * exists, and the publisher remains the host. The files belong to the exam
+ * boards, not to Bluprint.
  */
-export function CognitoRealPapers({
-  courseId,
-  enabled,
-}: {
-  courseId: Id<"courses">;
-  /** False for a course with no published Cognito page to read. */
-  enabled: boolean;
-}) {
+export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
   const cached = useQuery(api.cognitoLibrary.getPastPapers, { courseId });
   const load = useAction(api.cognitoLibrary.loadPastPapers);
   const [busy, setBusy] = useState(false);
@@ -37,7 +30,10 @@ export function CognitoRealPapers({
       await load({ courseId });
     } catch (cause) {
       setError(
-        readableError(cause, "Cognito's past papers could not be read just now."),
+        readableError(
+          cause,
+          "Save My Exams' past papers could not be read just now.",
+        ),
       );
     } finally {
       setBusy(false);
@@ -46,14 +42,10 @@ export function CognitoRealPapers({
 
   useEffect(() => {
     // Load once when the section first appears; the cached list is reactive.
-    if (!enabled || started.current || cached === undefined || cached !== null) {
-      return;
-    }
+    if (started.current || cached === undefined || cached !== null) return;
     started.current = true;
     void run();
   });
-
-  if (!enabled) return null;
 
   const papers = cached?.papers ?? [];
   const years = [...new Set(papers.map((paper) => paper.year))];
@@ -72,22 +64,22 @@ export function CognitoRealPapers({
             The actual board papers
           </h2>
           <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
-            Published by Cognito for this course. Each paper opens on
-            Cognito&apos;s own site in a new tab, where you can read the question
-            paper and check your answers against the board&apos;s mark scheme.
+            Indexed by Save My Exams for this course. Each paper opens the exam
+            board&apos;s own PDF in a new tab, where you can read the question paper
+            and check your answers against the mark scheme.
           </p>
         </div>
         <span className="rounded-full bg-brand-panel px-3 py-1.5 text-[0.7rem] font-semibold text-chrome-7">
           {papers.length > 0
             ? `${papers.length} paper${papers.length === 1 ? "" : "s"}`
-            : "Cognito"}
+            : "Save My Exams"}
         </span>
       </div>
 
       {(busy || cached === undefined) && (
         <div role="status" aria-busy="true" className="mt-4 space-y-2">
           <span className="sr-only">
-            Reading Cognito&apos;s past-paper list for this course
+            Reading Save My Exams&apos; past-paper list for this course
           </span>
           {[0, 1, 2].map((index) => (
             <div
@@ -128,9 +120,9 @@ export function CognitoRealPapers({
 
       {!busy && !error && cached && papers.length === 0 && (
         <p className="mt-4 rounded-2xl border border-dashed border-border bg-brand-panel px-4 py-4 text-[0.8rem] leading-relaxed text-muted-foreground">
-          Cognito does not list published papers for this course yet. Build a
-          practice paper above to work in this subject&apos;s real format
-          instead.
+          Save My Exams does not publish a matching course for this
+          qualification, or has no papers for it yet. Build a practice paper
+          above to work in this subject&apos;s real format instead.
         </p>
       )}
 
@@ -146,7 +138,7 @@ export function CognitoRealPapers({
                   .filter((paper) => paper.year === year)
                   .map((paper) => (
                     <li
-                      key={`${year}-${paper.label}`}
+                      key={paper.questionUrl}
                       className="flex flex-col gap-2 rounded-2xl border border-border bg-[#FCFCFD] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex min-w-0 items-center gap-2">
@@ -163,7 +155,7 @@ export function CognitoRealPapers({
                           href={paper.questionUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          aria-label={`${year} ${paper.label} question paper on Cognito`}
+                          aria-label={`${year} ${paper.label} question paper listed by Save My Exams`}
                           className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                         >
                           Question paper
@@ -174,7 +166,7 @@ export function CognitoRealPapers({
                             href={paper.markSchemeUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={`${year} ${paper.label} mark scheme on Cognito`}
+                            aria-label={`${year} ${paper.label} mark scheme listed by Save My Exams`}
                             className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-3 text-[0.74rem] font-semibold text-[#0B6B45] shadow-none hover:bg-brand-panel"
                           >
                             Mark scheme
@@ -191,11 +183,12 @@ export function CognitoRealPapers({
       )}
 
       <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
-        Papers and mark schemes are published by the exam boards and hosted by
-        Cognito. These links open Cognito&apos;s own site; Bluprint does not host
-        or redistribute the files, and all rights remain with the publisher. For
-        practice written for Bluprint, use the paper builder above. Rights
-        holders can request that a link be removed through the{" "}
+        Papers and mark schemes are published by the exam boards; the list is
+        read from Save My Exams. These links open the publisher&apos;s own PDFs;
+        Bluprint does not host or redistribute the files, and all rights remain
+        with the publisher. For practice written for Bluprint, use the paper
+        builder above. Rights holders can request that a link be removed through
+        the{" "}
         <a
           href="https://github.com/Codegister/bluprint/issues"
           target="_blank"

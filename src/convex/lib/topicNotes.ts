@@ -3,12 +3,12 @@
  *
  * Two sources feed the notes tab:
  *
- *   - Cognito's published notes, when the course has a notes page (most
- *     subjects). Those are read, never written.
- *   - Bluprint's own notes, written with NVIDIA, for a course whose topics have
- *     no published notes at all: Edexcel GCSE Religious Studies (saved Pearson
- *     content, so there is no Cognito page) and AQA GCSE Spanish (Cognito only
- *     publishes the specification for it).
+ *   - Save My Exams' published notes, when a matching course is found and it
+ *     publishes a note for the topic. Those are read, never written.
+ *   - Bluprint's own notes, written with NVIDIA, when Save My Exams cannot be
+ *     matched safely or has no note for that topic. Examples include an
+ *     ambiguous OCR A/B course, Combined Science Trilogy/Synergy, and courses
+ *     whose topics Save My Exams does not cover.
  *
  * Both are stored as the same section list, so the reader renders either one,
  * and the stored `origin` decides the wording under the heading. The parser
@@ -38,10 +38,14 @@ export const topicNoteSectionValidator = v.object({
   blocks: v.array(v.string()),
 });
 
-/** Where a stored copy of the notes came from. */
-export type TopicNotesOrigin = "cognito" | "bluprint";
+/**
+ * Where a stored copy of the notes came from. "cognito" is legacy only: it
+ * keeps old rows valid until they are read again and replaced.
+ */
+export type TopicNotesOrigin = "savemyexams" | "cognito" | "bluprint";
 
 export const topicNotesOriginValidator = v.union(
+  v.literal("savemyexams"),
   v.literal("cognito"),
   v.literal("bluprint"),
 );

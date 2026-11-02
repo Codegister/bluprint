@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { NextStep } from "@/components/NextStep";
 import { SkeletonCoursePage } from "@/components/Skeletons";
-import { CognitoRealPapers } from "@/components/study/CognitoRealPapers";
+import { SaveMyExamsPapers } from "@/components/study/SaveMyExamsPapers";
 import { TopicNotes } from "@/components/study/TopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
 import {
@@ -1119,11 +1119,10 @@ export default function Course() {
                   Notes for every topic in this course
                 </h2>
                 <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
-                  Open a topic to read its notes.{" "}
-                  {pathway.sourceUrl
-                    ? "Published notes are shown as published; where the course has none for a topic, Bluprint writes them from the specification."
-                    : "This course has no published notes, so Bluprint writes them from the specification."}{" "}
-                  Each one is prepared once and kept for next time.
+                  Open a topic to read its notes. Save My Exams notes are shown
+                  when Bluprint can match the course safely; where it cannot,
+                  Bluprint writes them from the specification. Each one is
+                  prepared once and kept for next time.
                 </p>
 
                 {pathway.units.length === 0 ? (
@@ -1237,10 +1236,7 @@ export default function Course() {
                   papers={pathway.papers}
                 />
 
-                <CognitoRealPapers
-                  courseId={course._id}
-                  enabled={Boolean(pathway.sourceUrl)}
-                />
+                <SaveMyExamsPapers courseId={course._id} />
             </>)}
 
             {currentSection === "practice" && practiceTab === "topics" && (<>

@@ -444,27 +444,33 @@ const schema = defineSchema(
       .index("by_token", ["token"])
       .index("by_user", ["userId"]),
 
-    // One course topic's published notes, read from Cognito and stored so the
-    // text is shown inside Bluprint (never linked out) and only scraped once.
+    // One course topic's published notes, read from Save My Exams and stored so
+    // the text is shown inside Bluprint (never linked out) and only scraped once.
     cognitoTopicNotes: defineTable({
       courseId: v.id("courses"),
       topicId: v.string(),
       // One shape, shared with the parser that fills it (lib/topicNotes).
       sections: v.array(topicNoteSectionValidator),
       sources: v.array(v.object({ title: v.string(), url: v.string() })),
-      // Who wrote this copy. Absent on notes stored before the field existed,
-      // and every one of those was read from Cognito's published pages.
+      // Who wrote this copy. "cognito" is retained only so rows stored before
+      // the source changed remain valid; they are treated as stale and replaced.
       origin: v.optional(
-        v.union(v.literal("cognito"), v.literal("bluprint")),
+        v.union(
+          v.literal("savemyexams"),
+          v.literal("cognito"),
+          v.literal("bluprint"),
+        ),
       ),
       fetchedAt: v.number(),
     }).index("by_course_topic", ["courseId", "topicId"]),
 
-    // The real past papers Cognito lists for a course, cached so the course
-    // page can show them without asking the student to visit the site.
+    // The real past papers Save My Exams indexes for a course, cached so the
+    // course page can show them without asking the student to visit the site.
     cognitoPastPapers: defineTable({
       courseId: v.id("courses"),
       sourceUrl: v.string(),
+      // Absent on the old Cognito lists; those are hidden and replaced.
+      origin: v.optional(v.literal("savemyexams")),
       papers: v.array(
         v.object({
           year: v.string(),

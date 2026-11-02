@@ -9,32 +9,40 @@ import {
 } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import {
-  fetchCognitoPage,
-  parseCognitoPastPaperIndex,
-  parseCognitoTopicLinks,
-  parseCognitoTopicPage,
-  topicNotesPages,
-  type CognitoNoteSection,
-} from "./lib/cognito";
+  fetchSaveMyExamsPage,
+  findSaveMyExamsNotesPages,
+  parseSaveMyExamsNotePage,
+  parseSaveMyExamsNotesIndex,
+  parseSaveMyExamsPastPapers,
+  resolveSaveMyExamsCourse,
+  saveMyExamsSiteOrigin,
+  type SaveMyExamsCourse,
+  type SaveMyExamsNotesIndex,
+} from "./lib/savemyexams";
 import {
+  cleanSections,
   topicNotesOriginValidator,
   type TopicNotesOrigin,
 } from "./lib/topicNotes";
 
 /**
- * Cognito content shown inside Bluprint, plus the notes Bluprint writes when
- * Cognito publishes none.
+ * Save My Exams content shown inside Bluprint, plus the notes Bluprint writes
+ * when Save My Exams does not publish a matching course or topic.
  *
- * A course pathway already comes from Cognito, and the same course page also
- * publishes the notes for each topic and the real past papers. Both are read on
- * request and stored, so the student reads them here rather than being sent to
- * another site, and a topic is only scraped once.
+ * A course pathway comes from Cognito, but the notes and real past papers now
+ * come from Save My Exams. Both are read on request and stored, so a topic is
+ * only scraped once. Before anything is read, the Save My Exams course is
+ * matched against the Bluprint course's level, subject, board and tier; a
+ * wrong or ambiguous match is rejected rather than silently showing another
+ * course's material.
  *
- * Some courses have no published notes to read: Edexcel GCSE Religious Studies
- * is saved Pearson content with no Cognito page, and AQA GCSE Spanish has only
- * a specification page. Those topics get notes written with NVIDIA instead, and
- * the copy is marked so the reader can say who wrote it. Papers are always
- * Cognito's own list and PDF files.
+ * Some courses have no matching Save My Exams course (or no notes for a topic).
+ * Those topics get notes written with NVIDIA instead, and the copy is marked so
+ * the reader can say who wrote it. Papers are always the board's own PDFs,
+ * indexed by Save My Exams.
+ *
+ * The table names still say "cognito" for compatibility with existing rows;
+ * they are internal storage names, not the source the student is shown.
  */
 
 /** Notes change rarely, so a cached copy is kept for a month. */
@@ -70,7 +78,13 @@ export const getTopicNotes = query({
         q.eq("courseId", courseId).eq("topicId", topicId),
       )
       .collect();
-    return rows[0] ?? null;
+    // Rows read from Cognito before this source changed are not shown. The
+    // action below sees them as stale and replaces them on the next visit.
+    return (
+      rows.find(
+        (row) => row.origin === "savemyexams" || row.origin === "bluprint",
+      ) ?? null
+    );
   },
 });
 
@@ -85,7 +99,7 @@ export const getPastPapers = query({
       .query("cognitoPastPapers")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))
       .collect();
-    return rows[0] ?? null;
+    return rows.find((row) => row.origin === "savemyexams") ?? null;
   },
 });
 
@@ -120,7 +134,7 @@ export const saveTopicNotes = internalMutation({
     topicId: v.string(),
     sections: v.array(noteSection),
     sources: v.array(v.object({ title: v.string(), url: v.string() })),
-    // Defaults to Cognito: every caller but the notes writer read a page.
+    // Defaults to Save My Exams: every caller but the notes writer read a page.
     origin: v.optional(topicNotesOriginValidator),
   },
   handler: async (ctx, { courseId, topicId, sections, sources, origin }) => {
@@ -136,7 +150,7 @@ export const saveTopicNotes = internalMutation({
       topicId,
       sections,
       sources,
-      origin: origin ?? "cognito",
+      origin: origin ?? "savemyexams",
       fetchedAt: Date.now(),
     });
   },
@@ -159,6 +173,7 @@ export const savePastPapers = internalMutation({
       courseId,
       sourceUrl,
       papers,
+      origin: "savemyexams",
       fetchedAt: Date.now(),
     });
   },
@@ -205,53 +220,96 @@ function findTopic(
   return null;
 }
 
+function lastPathSegment(url: string): string | undefined {
+  try {
+    const segments = new URL(url).pathname.split("/").filter(Boolean);
+    return segments[segments.length - 1];
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The notes a topic's own published pages hold. A topic is several subtopic
  * pages, so this reads them politely in small batches. Returns empty when the
  * course publishes nothing for this topic — the caller decides what to do then.
  */
 async function readPublishedNotes(
-  notesUrl: string,
+  course: SaveMyExamsCourse,
   topic: { title: string; reference?: string },
-): Promise<{ sections: CognitoNoteSection[]; sources: Array<{ title: string; url: string }> }> {
-  const index = await fetchCognitoPage(notesUrl);
-  if (!index) {
+): Promise<{
+  sections: Array<{ heading: string; blocks: string[] }>;
+  sources: Array<{ title: string; url: string }>;
+}> {
+  const indexes: SaveMyExamsNotesIndex[] = [];
+  let reachedIndex = false;
+  let indexError = false;
+  for (const path of course.notesIndexPaths) {
+    const response = await fetchSaveMyExamsPage(path);
+    if (response.status === "ok") {
+      reachedIndex = true;
+      const parsed = parseSaveMyExamsNotesIndex(response.html);
+      if (parsed) indexes.push(parsed);
+    } else if (response.status === "error") {
+      indexError = true;
+    }
+  }
+  if (!reachedIndex && indexError) {
     throw new Error(
-      "Cognito's notes could not be reached just now. Try again in a moment.",
+      "Save My Exams' notes could not be reached just now. Try again in a moment.",
+    );
+  }
+  if (indexes.length === 0) return { sections: [], sources: [] };
+
+  const pages = findSaveMyExamsNotesPages(indexes, topic);
+  if (pages.length === 0) return { sections: [], sources: [] };
+
+  let reachedPage = false;
+  let pageError = false;
+  const read = await inBatches(pages, NOTES_CONCURRENCY, async (page) => {
+    const response = await fetchSaveMyExamsPage(page.url);
+    if (response.status !== "ok") {
+      if (response.status === "error") pageError = true;
+      return null;
+    }
+    reachedPage = true;
+    const sections = parseSaveMyExamsNotePage(
+      response.html,
+      page.indexBasePath,
+      lastPathSegment(page.url),
+    );
+    return sections ? { page, sections } : null;
+  });
+  if (!reachedPage && pageError) {
+    throw new Error(
+      "Save My Exams' notes could not be reached just now. Try again in a moment.",
     );
   }
 
-  const pages = topicNotesPages(parseCognitoTopicLinks(index.html), topic);
-  if (pages.length === 0) return { sections: [], sources: [] };
-
-  const read = await inBatches(pages, NOTES_CONCURRENCY, async (page) => {
-    const html = await fetchCognitoPage(page.url);
-    return html ? parseCognitoTopicPage(html.html) : [];
-  });
-
-  const sections: CognitoNoteSection[] = read
-    .flat()
-    .slice(0, MAX_SECTIONS)
-    .map((section) => ({
-      heading: section.heading,
-      blocks: section.blocks,
-    }));
+  const successful = read.filter(
+    (result): result is NonNullable<typeof result> => result !== null,
+  );
+  const sections = cleanSections(
+    successful.flatMap((result) => result.sections),
+  ).slice(0, MAX_SECTIONS);
   // Pages that exist but carried no notes are not worth citing.
   if (sections.length === 0) return { sections: [], sources: [] };
   return {
     sections,
-    sources: pages.map((page) => ({ title: page.title, url: page.url })),
+    sources: successful.map((result) => ({
+      title: result.page.title,
+      url: result.page.url,
+    })),
   };
 }
 
 /**
  * The notes for one pathway topic, stored so the next visit is instant.
  *
- * Cognito's published notes are read first whenever the course has them. A
- * topic with nothing published — Edexcel GCSE RS, AQA GCSE Spanish, or a note
- * page whose leaf pages do not match this topic — is written with NVIDIA
- * instead, so no course is left without a notes tab. Either way the stored copy
- * records who wrote it.
+ * Save My Exams' published notes are read first whenever the course has them.
+ * When Save My Exams cannot be matched safely, or does not publish a note for
+ * this topic, Bluprint writes the notes instead, so no course is left without
+ * a notes tab. Either way the stored copy records who wrote it.
  */
 export const loadTopicNotes = action({
   args: { courseId: v.id("courses"), topicId: v.string() },
@@ -270,44 +328,59 @@ export const loadTopicNotes = action({
       topicId,
     });
     // A copy with no sections was stored before notes were written for topics
-    // Cognito does not cover, so it is treated as missing and replaced.
+    // Save My Exams does not cover, and a Cognito copy came from the old source;
+    // both are treated as missing and replaced.
+    const cacheable =
+      cached?.origin === "savemyexams" || cached?.origin === "bluprint";
     if (
       cached &&
+      cacheable &&
       cached.sections.length > 0 &&
       Date.now() - cached.fetchedAt < NOTES_TTL
     ) {
       return {
         sections: cached.sections.length,
         cached: true,
-        origin: cached.origin ?? "cognito",
+        origin: cached.origin === "bluprint" ? "bluprint" : "savemyexams",
       };
     }
 
     const topic = findTopic(course, topicId);
     if (!topic) throw new Error("That topic is not part of this pathway.");
 
-    const notesUrl = course.pathway?.sourceUrl;
-    const published = notesUrl
-      ? await readPublishedNotes(notesUrl, topic)
-      : { sections: [], sources: [] };
-
-    if (published.sections.length > 0) {
-      await ctx.runMutation(internal.cognitoLibrary.saveTopicNotes, {
-        courseId,
-        topicId,
-        sections: published.sections,
-        sources: published.sources,
-        origin: "cognito",
-      });
-      return {
-        sections: published.sections.length,
-        cached: false,
-        origin: "cognito",
-      };
+    const resolved = await resolveSaveMyExamsCourse({
+      level: course.level,
+      subject: course.subject,
+      examBoard: course.examBoard,
+      ...(course.tier ? { tier: course.tier } : {}),
+      ...(course.variant ? { variant: course.variant } : {}),
+    });
+    if (resolved.status === "unavailable") {
+      throw new Error(
+        "Save My Exams could not be reached just now. Try again in a moment.",
+      );
     }
 
-    // Nothing published for this topic, so Bluprint writes the notes and stores
-    // them under its own name.
+    if (resolved.status === "matched") {
+      const published = await readPublishedNotes(resolved.course, topic);
+      if (published.sections.length > 0) {
+        await ctx.runMutation(internal.cognitoLibrary.saveTopicNotes, {
+          courseId,
+          topicId,
+          sections: published.sections,
+          sources: published.sources,
+          origin: "savemyexams",
+        });
+        return {
+          sections: published.sections.length,
+          cached: false,
+          origin: "savemyexams",
+        };
+      }
+    }
+
+    // No safe Save My Exams match for this topic, so Bluprint writes the notes
+    // and stores them under its own name.
     const written = await ctx.runAction(internal.ai.writeTopicNotes, {
       courseId,
       topicId,
@@ -318,9 +391,9 @@ export const loadTopicNotes = action({
 });
 
 /**
- * Reads the real past papers Cognito lists for a course and stores the list.
- * The list is shown in Bluprint; the files themselves are opened in the app's
- * own viewer rather than sending the student to the site.
+ * Reads the real past papers Save My Exams indexes for a course and stores the
+ * list. The list is shown in Bluprint; the files themselves are opened in the
+ * board's own PDF viewer rather than sending the student to another index.
  */
 export const loadPastPapers = action({
   args: { courseId: v.id("courses") },
@@ -337,7 +410,10 @@ export const loadPastPapers = action({
     const cached = await ctx.runQuery(internal.cognitoLibrary.readPastPapers, {
       courseId,
     });
-    if (cached && Date.now() - cached.fetchedAt < PAPERS_TTL) {
+    if (
+      cached?.origin === "savemyexams" &&
+      Date.now() - cached.fetchedAt < PAPERS_TTL
+    ) {
       return {
         papers: cached.papers.length,
         cached: true,
@@ -345,22 +421,47 @@ export const loadPastPapers = action({
       };
     }
 
-    const notesUrl = course.pathway?.sourceUrl;
-    if (!notesUrl) {
+    const resolved = await resolveSaveMyExamsCourse({
+      level: course.level,
+      subject: course.subject,
+      examBoard: course.examBoard,
+      ...(course.tier ? { tier: course.tier } : {}),
+      ...(course.variant ? { variant: course.variant } : {}),
+    });
+    if (resolved.status === "unavailable") {
       throw new Error(
-        "Cognito does not publish papers for this course, so there is nothing to show here yet.",
-      );
-    }
-    const baseUrl = notesUrl.replace(/\/notes\/?$/i, "");
-    const sourceUrl = `${baseUrl}/past-papers/by-year`;
-    const page = await fetchCognitoPage(sourceUrl);
-    if (!page) {
-      throw new Error(
-        "Cognito's past-paper list could not be reached just now. Try again in a moment.",
+        "Save My Exams' past-paper list could not be reached just now. Try again in a moment.",
       );
     }
 
-    const papers = parseCognitoPastPaperIndex(page.html);
+    // No matching course is a stable answer, not a temporary failure. Store an
+    // empty list so the page can say so without retrying on every visit.
+    if (resolved.status === "unmatched") {
+      await ctx.runMutation(internal.cognitoLibrary.savePastPapers, {
+        courseId,
+        sourceUrl: saveMyExamsSiteOrigin(),
+        papers: [],
+      });
+      return { papers: 0, cached: false, sourceUrl: "" };
+    }
+
+    const page = await fetchSaveMyExamsPage(resolved.course.pastPapersPath);
+    if (page.status === "error") {
+      throw new Error(
+        "Save My Exams' past-paper list could not be reached just now. Try again in a moment.",
+      );
+    }
+
+    const papers =
+      page.status === "ok"
+        ? parseSaveMyExamsPastPapers(page.html, {
+            tier: course.tier,
+            levelSlug: resolved.course.levelSlug,
+            subjectSlug: resolved.course.subjectSlug,
+            boardSlug: resolved.course.boardSlug,
+          })
+        : [];
+    const sourceUrl = page.status === "ok" ? page.url : "";
     await ctx.runMutation(internal.cognitoLibrary.savePastPapers, {
       courseId,
       sourceUrl,
