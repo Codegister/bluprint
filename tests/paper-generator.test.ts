@@ -15,6 +15,9 @@ describe("paper generator context", () => {
       /^\| R\d+ \|/.test(line),
     );
     expect(rows).toHaveLength(42);
+    for (const row of rows) {
+      expect(row.split("|").length - 2).toBe(35);
+    }
   });
 
   test("uses the supplied documents and keeps the paper grid authoritative", () => {
