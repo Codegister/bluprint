@@ -16,8 +16,9 @@ import { useEffect, useRef, useState } from "react";
  * The real past papers Save My Exams indexes for a course.
  *
  * Each row opens the exam board's paper or mark scheme inside Bluprint. The
- * publisher remains the host: the file is embedded, not copied, proxied or
- * redistributed. The original link is always available in the viewer.
+ * publisher remains the host: the file is rendered from the publisher's own
+ * server, not copied, proxied or redistributed. The original link is always
+ * available in the viewer.
  */
 export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
   const cached = useQuery(api.cognitoLibrary.getPastPapers, { courseId });

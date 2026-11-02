@@ -1,3 +1,4 @@
+import { PdfViewer } from "@/components/study/PdfViewer";
 import {
   Dialog,
   DialogContent,
@@ -17,8 +18,10 @@ export type ViewedPaper = {
 /**
  * Shows a publisher's paper inside Bluprint.
  *
- * The publisher still serves the file: this is an embed, not a copy or a proxy.
- * The open-original link stays available for a board that blocks embedding.
+ * The publisher still serves the file. It is fetched by the same PDF renderer
+ * used for stored papers and drawn page by page, rather than handed to the
+ * browser's PDF plugin in an iframe (which some browsers leave blank). No file
+ * bytes are copied or hosted by Bluprint.
  */
 export function PaperViewerDialog({
   paper,
@@ -41,7 +44,7 @@ export function PaperViewerDialog({
             <span className="truncate">{paper?.title}</span>
           </DialogTitle>
           <DialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.75rem]">
-            <span>{paper?.kind} hosted by the exam board.</span>
+            <span>{paper?.kind} from the exam board.</span>
             {paper && (
               <a
                 href={paper.url}
@@ -56,19 +59,19 @@ export function PaperViewerDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {paper && (
-          <iframe
-            key={paper.url}
-            src={paper.url}
-            title={`${paper.title} — ${paper.kind}`}
-            className="min-h-0 w-full flex-1 bg-white"
-            allowFullScreen
-          />
-        )}
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+          {paper && (
+            <PdfViewer
+              key={paper.url}
+              url={paper.url}
+              title={`${paper.title} — ${paper.kind}`}
+            />
+          )}
+        </div>
 
         <p className="shrink-0 border-t border-border bg-brand-panel px-5 py-2.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-          The paper stays on the publisher&apos;s server. If it does not appear,
-          the board may block embedding — use Open original.
+          Rendered from the publisher&apos;s own file and never copied or hosted
+          by Bluprint. If the publisher blocks this view, use Open original.
         </p>
       </DialogContent>
     </Dialog>
