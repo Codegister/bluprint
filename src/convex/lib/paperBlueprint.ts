@@ -23,7 +23,7 @@ export type PaperSlot = {
   command: string;
   /** Part letter for a question split into (a), (b), (c)… */
   part?: string;
-  /** An exact label read from a reference paper, e.g. "0 1 . 1". */
+  /** An exact label supplied by the paper format, e.g. "0 1 . 1". */
   label?: string;
   /** What the question must ask the student to do. */
   ask: string;
@@ -1114,86 +1114,6 @@ export function buildPaperBlueprint(
     return humanities(course);
   }
   return generic();
-}
-
-export type ReferenceFormatLike = {
-  totalMarks: number;
-  questions: Array<{
-    label: string;
-    marks: number;
-    command?: string;
-    section?: string;
-  }>;
-};
-
-/**
- * Re-shapes a subject blueprint to the question count, marks and order of a
- * real reference paper. The subject templates still supply what each question
- * must ask and how it is marked, so a reference paper cannot turn an English
- * essay into a one-mark recall question; only the exam's actual structure is
- * taken from the real paper.
- */
-export function applyReferencePaper(
-  course: BlueprintCourse,
-  base: PaperBlueprint,
-  reference: ReferenceFormatLike,
-): PaperBlueprint {
-  if (reference.questions.length === 0) return base;
-
-  const templates = flattenPaperBlueprint(base);
-  const byMarks = new Map<number, FlatPaperSlot[]>();
-  for (const template of templates) {
-    const queue = byMarks.get(template.marks) ?? [];
-    queue.push(template);
-    byMarks.set(template.marks, queue);
-  }
-
-  const sections: PaperSection[] = [];
-  const bySection = new Map<string, PaperSection>();
-  reference.questions.forEach((question, index) => {
-    const template =
-      byMarks.get(question.marks)?.shift() ??
-      templates[index % templates.length] ??
-      templates[0];
-    if (!template) return;
-
-    const title = question.section?.trim() || template.section;
-    let target = bySection.get(title);
-    if (!target) {
-      target = {
-        title,
-        instruction: template.sectionInstruction,
-        slots: [],
-      };
-      bySection.set(title, target);
-      sections.push(target);
-    }
-
-    target.slots.push({
-      marks: question.marks,
-      command: question.command ?? template.command,
-      ask: template.ask,
-      // Long reference questions are level-marked even if the subject
-      // blueprint had no template of that exact size.
-      marking:
-        template.marking === "points" && question.marks >= 12
-          ? "levels"
-          : template.marking,
-      label: question.label,
-    });
-  });
-
-  if (sections.length === 0) return base;
-
-  return makeBlueprint(
-    base.id,
-    `${base.description} Its ${reference.questions.length} questions follow the selected real paper's structure.`,
-    sections,
-    [
-      ...base.rules,
-      "Follow the reference paper's question count, order, marks and section breaks exactly. Do not reproduce its questions or wording.",
-    ],
-  );
 }
 
 /** One line for the course page, e.g. "8 questions · 3, 4, 5 and 12 marks". */

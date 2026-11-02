@@ -278,20 +278,6 @@ const schema = defineSchema(
       // Missing means the whole qualification is examinable, which is how
       // papers built before a course was split into papers behave.
       paper: v.optional(v.string()),
-      // The real paper whose question structure this practice paper follows.
-      // Its PDF is read only for labels, marks and command words; the paper's
-      // content is never stored or copied.
-      referencePaper: v.optional(
-        v.object({
-          year: v.string(),
-          label: v.string(),
-          questionUrl: v.string(),
-          markSchemeUrl: v.optional(v.string()),
-        }),
-      ),
-      // True when the reference PDF was read and its structure was used. False
-      // means the board blueprint was used instead, which the UI must say.
-      referenceFormatUsed: v.optional(v.boolean()),
       // Every paper is one hour long. The timetable assumes 60 minutes per
       // paper, so the duration is stored rather than guessed at render time.
       durationMinutes: v.number(),

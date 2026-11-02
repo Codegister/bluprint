@@ -1,10 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { SkeletonPastPaperPage } from "@/components/Skeletons";
 import { enter, reveal } from "@/components/motion/Motion";
-import {
-  PaperViewerDialog,
-  type ViewedPaper,
-} from "@/components/study/PaperViewerDialog";
 import { PastPaperPractice } from "@/components/study/PastPaperPractice";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -59,9 +55,6 @@ export default function PastPaper() {
   );
   const rebuild = useMutation(api.pastPapers.rebuild);
   const [retrying, setRetrying] = useState(false);
-  const [viewingReference, setViewingReference] = useState<ViewedPaper | null>(
-    null,
-  );
 
   // A build can outlive the copy on the page, so the page keeps its own clock
   // instead of claiming a fixed wait. `details` is a live query: every stage the
@@ -184,26 +177,6 @@ export default function PastPaper() {
               </span>
             </>
           )}
-          {paper.referencePaper && (
-            <>
-              <span aria-hidden>·</span>
-              <button
-                type="button"
-                onClick={() =>
-                  setViewingReference({
-                    url: paper.referencePaper!.questionUrl,
-                    title: `${paper.referencePaper!.year} · ${paper.referencePaper!.label}`,
-                    kind: "Reference paper",
-                  })
-                }
-                className="font-semibold text-[#8A5A12] underline decoration-[#D9B36C] underline-offset-2 hover:text-brand-ink"
-              >
-                {paper.referenceFormatUsed === false
-                  ? `Reference unreadable: ${paper.referencePaper.year} · ${paper.referencePaper.label}`
-                  : `Reference: ${paper.referencePaper.year} · ${paper.referencePaper.label}`}
-              </button>
-            </>
-          )}
         </motion.section>
 
         {outdated && (
@@ -317,17 +290,10 @@ export default function PastPaper() {
         <p className="mt-4 text-[0.72rem] leading-relaxed text-muted-foreground">
           Written from the saved specification for this course and laid out in this
           subject's paper format, with the same question types and marks, cover rubric,
-          numbering, mark notation and command words.
-          {paper.referencePaper
-            ? paper.referenceFormatUsed === false
-              ? ` The selected ${paper.referencePaper.year} ${paper.referencePaper.label} reference could not be read, so the board's standard format was used. The questions are original and never reproduced from a real paper.`
-              : ` Its structure follows the real ${paper.referencePaper.year} ${paper.referencePaper.label} paper; the questions are original and never reproduced from it.`
-            : " Published board papers and mark schemes are copyrighted, so the questions are original and never reproduced from a real paper."}
+          numbering, mark notation and command words. The paper is checked against the
+          board's format and mark-scheme rules, and the questions are original and never
+          reproduced from a real paper.
         </p>
-        <PaperViewerDialog
-          paper={viewingReference}
-          onClose={() => setViewingReference(null)}
-        />
       </>
     );
   })();

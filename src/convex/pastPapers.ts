@@ -94,8 +94,6 @@ export const listForCourse = query({
         _id: paper._id,
         title: paper.title,
         paper: paper.paper,
-        referencePaper: paper.referencePaper,
-        referenceFormatUsed: paper.referenceFormatUsed,
         formatId: paper.formatId,
         status: paper.status,
         progress: paper.progress,
@@ -149,11 +147,8 @@ export const create = mutation({
     // Which paper of the qualification to write, when the course is split.
     // Missing means the whole qualification is examinable.
     paper: v.optional(v.string()),
-    // A real paper from this course's cached Save My Exams list. The server
-    // resolves it from that list rather than trusting a URL from the browser.
-    referenceUrl: v.optional(v.string()),
   },
-  handler: async (ctx, { courseId, paper, referenceUrl }) => {
+  handler: async (ctx, { courseId, paper }) => {
     const userId = await requireUserId(ctx);
     const course = await requireOwner(
       await ctx.db.get(courseId),
@@ -194,31 +189,6 @@ export const create = mutation({
       throw new Error("Choose one of the papers this course is examined in.");
     }
 
-    // A reference paper must be one Bluprint has already listed for this
-    // course. A URL supplied by the browser is never fetched directly.
-    let referencePaper: Doc<"pastPapers">["referencePaper"];
-    if (referenceUrl) {
-      const lists = await ctx.db
-        .query("cognitoPastPapers")
-        .withIndex("by_course", (q) => q.eq("courseId", courseId))
-        .collect();
-      const listed = lists
-        .filter((row) => row.origin === "savemyexams")
-        .flatMap((row) => row.papers)
-        .find((row) => row.questionUrl === referenceUrl);
-      if (!listed) {
-        throw new Error("That reference paper is not in this course's paper list.");
-      }
-      referencePaper = {
-        year: listed.year,
-        label: listed.label,
-        questionUrl: listed.questionUrl,
-        ...(listed.markSchemeUrl
-          ? { markSchemeUrl: listed.markSchemeUrl }
-          : {}),
-      };
-    }
-
     // Keep numbering stable when an older paper has been removed.
     const highest = mine.reduce((max, row) => {
       const match = /practice paper (\d+)/i.exec(row.title);
@@ -236,7 +206,6 @@ export const create = mutation({
         ? `${chosen} practice paper ${samePaper + 1}`
         : `Practice paper ${highest + 1}`,
       paper: chosen,
-      ...(referencePaper ? { referencePaper } : {}),
       durationMinutes: PAPER_MINUTES,
       totalMarks: 0,
       questionCount: 0,
@@ -374,12 +343,8 @@ export const completeBuild = internalMutation({
     formatId: v.string(),
     cover: paperCover,
     questions: v.array(generatedQuestion),
-    referenceFormatUsed: v.optional(v.boolean()),
   },
-  handler: async (
-    ctx,
-    { paperId, formatId, cover, questions, referenceFormatUsed },
-  ) => {
+  handler: async (ctx, { paperId, formatId, cover, questions }) => {
     const paper = await ctx.db.get(paperId);
     // Deleted while it was building: stop quietly instead of writing questions
     // into a paper that no longer exists.
@@ -416,7 +381,6 @@ export const completeBuild = internalMutation({
       errorMessage: undefined,
       formatId,
       cover,
-      ...(referenceFormatUsed !== undefined ? { referenceFormatUsed } : {}),
       questionCount: questions.length,
       totalMarks,
       answeredCount: 0,
