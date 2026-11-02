@@ -31,7 +31,7 @@ export function PdfViewer({ url, title }: { url: string; title: string }) {
   const [width, setWidth] = useState(720);
 
   // Load the file once per address. `disableRange` keeps the request a plain
-  // cross-origin GET, which the publisher answers with CORS headers.
+  // GET to Bluprint's cached-paper route rather than a ranged CDN request.
   useEffect(() => {
     let cancelled = false;
     setPdf(null);

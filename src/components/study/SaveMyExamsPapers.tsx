@@ -16,9 +16,8 @@ import { useEffect, useRef, useState } from "react";
  * The real past papers Save My Exams indexes for a course.
  *
  * Each row opens the exam board's paper or mark scheme inside Bluprint. The
- * publisher remains the host: the file is rendered from the publisher's own
- * server, not copied, proxied or redistributed. The original link is always
- * available in the viewer.
+ * first open downloads the file into Bluprint's storage; later opens reuse
+ * that copy. The original link is always available in the viewer.
  */
 export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
   const cached = useQuery(api.cognitoLibrary.getPastPapers, { courseId });
@@ -198,11 +197,11 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
 
       <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
         Papers and mark schemes are published by the exam boards; the list is
-        read from Save My Exams. These files stay on the publisher&apos;s server and
-        open inside Bluprint. Bluprint does not host or redistribute them, and
-        all rights remain with the publisher. For practice written for Bluprint,
-        use the paper builder above. Rights holders can request that a link be
-        removed through the{" "}
+        read from Save My Exams. Bluprint stores a cached copy the first time a
+        file is opened, so the viewer does not depend on the publisher&apos;s
+        site. All rights remain with the publisher. For practice written for
+        Bluprint, use the paper builder above. Rights holders can request that a
+        link be removed through the{" "}
         <a
           href="https://github.com/Codegister/bluprint/issues"
           target="_blank"

@@ -46,6 +46,8 @@ const STUDENT_MESSAGES = [
   "Exam question not found",
   "Past paper question not found",
   "Course not found",
+  "This paper could not be downloaded from the exam board",
+  "This paper link is not one Bluprint",
   "Write a question for the tutor first",
   "Write a fuller answer before sending it for grading",
   "Say or type an answer before checking it",

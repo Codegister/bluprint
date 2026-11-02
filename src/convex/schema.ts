@@ -514,6 +514,17 @@ const schema = defineSchema(
       fetchedAt: v.number(),
     }).index("by_course", ["courseId"]),
 
+    // Publisher PDFs downloaded once and kept in Convex file storage. The
+    // source URL is the cache key; http.ts serves the stored file with the
+    // headers the in-app PDF renderer needs. Board papers remain copyrighted
+    // and operating this cache requires permission to redistribute them.
+    paperFiles: defineTable({
+      sourceUrl: v.string(),
+      storageId: v.id("_storage"),
+      bytes: v.number(),
+      fetchedAt: v.number(),
+    }).index("by_source", ["sourceUrl"]),
+
     // One saved revision timetable per account. Dates are UTC calendar keys
     // (YYYY-MM-DD) so a plan renders the same day regardless of server timezone.
     revisionPlans: defineTable({
