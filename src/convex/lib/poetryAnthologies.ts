@@ -621,16 +621,29 @@ export function hasDuplicateAnthology(
   return [...poemCounts.values()].some((count) => count > 1);
 }
 
+/** Normalises a theme so "&", "and" and punctuation compare equally. */
+function themeKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Matches a stored poetry theme to the saved cluster, if one is named. */
 export function clusterForTheme(theme?: string): AnthologyCluster[] {
   if (!theme) return ANTHOLOGIES;
-  const needle = theme.trim().toLowerCase();
+  const needle = themeKey(theme);
   if (!needle) return ANTHOLOGIES;
-  const match = ANTHOLOGIES.filter(
-    (cluster) =>
-      cluster.key === needle ||
-      cluster.title.toLowerCase().includes(needle) ||
-      needle.includes(cluster.key.replace(/-/g, " ")),
-  );
-  return match.length > 0 ? match : ANTHOLOGIES;
+  // A generic old label cannot identify a cluster; keep the historical
+  // behaviour and treat it as both clusters.
+  if (/^(poetry|poems?|anthology|poetry anthology)$/.test(needle)) {
+    return ANTHOLOGIES;
+  }
+  return ANTHOLOGIES.filter((cluster) => {
+    const title = themeKey(cluster.title);
+    const key = themeKey(cluster.key);
+    return key === needle || title.includes(needle) || needle.includes(key);
+  });
 }

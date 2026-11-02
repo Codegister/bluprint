@@ -9,6 +9,10 @@ import {
   parseSaveMyExamsNotesIndex,
   parseSaveMyExamsPastPapers,
 } from "../src/convex/lib/savemyexams";
+import {
+  clusterForTheme,
+  completeAnthology,
+} from "../src/convex/lib/poetryAnthologies";
 
 function pageHtml(props: unknown): string {
   return `<!doctype html><html><body><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
@@ -604,6 +608,31 @@ describe("Save My Exams English Literature filtering", () => {
     });
     expect(filtered.sections[0]?.topics).toHaveLength(4);
     expect(filtered.sections[1]?.topics).toHaveLength(2);
+  });
+});
+
+describe("English Literature poetry completion", () => {
+  test("matches a picked cluster even when one side uses an ampersand", () => {
+    expect(clusterForTheme("Power & Conflict").map((cluster) => cluster.key)).toEqual([
+      "power-and-conflict",
+    ]);
+    expect(
+      clusterForTheme("Love & Relationships").map((cluster) => cluster.key),
+    ).toEqual(["love-and-relationships"]);
+  });
+
+  test("adds only the selected anthology to a built pathway", () => {
+    const completed = completeAnthology(
+      { overview: "", examFormat: "", units: [] },
+      {
+        subject: "English Literature",
+        level: "GCSE",
+        poetryTheme: "Power & Conflict",
+      },
+    );
+    expect(completed.units.map((unit) => unit.title)).toEqual([
+      "Poetry anthology: Power and Conflict",
+    ]);
   });
 });
 
