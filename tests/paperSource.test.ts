@@ -29,6 +29,34 @@ describe("paper source URLs", () => {
     ).toBeNull();
   });
 
+  test("accepts AQA's newer file path and Save My Exams' file CDN", () => {
+    expect(
+      normalisePaperSourceUrl(
+        "https://www.aqa.org.uk/files/paper-id/AQA-87021-QP-JUN25.PDF",
+      ),
+    ).toBe(
+      "https://www.aqa.org.uk/files/paper-id/AQA-87021-QP-JUN25.PDF",
+    );
+    expect(
+      normalisePaperSourceUrl(
+        "https://cdn.sanity.io/files/p28bar15/green/paper.pdf?download=1",
+      ),
+    ).toBe(
+      "https://cdn.sanity.io/files/p28bar15/green/paper.pdf?download=1",
+    );
+  });
+
+  test("rejects paths outside the approved file directories", () => {
+    expect(
+      normalisePaperSourceUrl("https://www.aqa.org.uk/past-papers/paper.pdf"),
+    ).toBeNull();
+    expect(
+      normalisePaperSourceUrl(
+        "https://cdn.sanity.io/files/another-project/paper.pdf",
+      ),
+    ).toBeNull();
+  });
+
   test("rejects credentials and explicit ports", () => {
     expect(
       normalisePaperSourceUrl(
