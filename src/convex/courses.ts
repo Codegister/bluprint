@@ -10,6 +10,7 @@ import {
 } from "./_generated/server";
 import { BUILD_DEFAULTS } from "./lib/buildDefaults";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
+import { literatureChoicesFor } from "./lib/literatureChoices";
 import { consumeBuildAllowance } from "./buildUsage";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner, requireVerifiedUser } from "./lib/authorization";
@@ -110,6 +111,9 @@ export const listMine = query({
         tier: course.tier,
         variant: course.variant,
         poetryTheme: course.poetryTheme,
+        litShakespeare: course.litShakespeare,
+        litNovel: course.litNovel,
+        litModern: course.litModern,
         status: course.status,
         progress: course.progress,
         errorMessage: course.errorMessage,
@@ -196,6 +200,10 @@ export const createMany = mutation({
         rsReligion2: v.optional(v.string()),
         rsSpec: v.optional(v.string()),
         rsSpec2: v.optional(v.string()),
+        litShakespeare: v.optional(v.string()),
+        litNovel: v.optional(v.string()),
+        litModern: v.optional(v.string()),
+        poetryTheme: v.optional(v.string()),
       }),
     ),
   },
@@ -234,6 +242,10 @@ export const createMany = mutation({
         rsReligion2: isKs3 ? undefined : safeCourseLabel(course.rsReligion2),
         rsSpec: isKs3 ? undefined : safeCourseLabel(course.rsSpec),
         rsSpec2: isKs3 ? undefined : safeCourseLabel(course.rsSpec2),
+        litShakespeare: isKs3 ? undefined : safeCourseLabel(course.litShakespeare),
+        litNovel: isKs3 ? undefined : safeCourseLabel(course.litNovel),
+        litModern: isKs3 ? undefined : safeCourseLabel(course.litModern),
+        poetryTheme: isKs3 ? undefined : safeCourseLabel(course.poetryTheme),
       }))
       .filter((course) => course.subject?.length ?? 0 > 0)
       .slice(0, MAX_COURSES_PER_SETUP);
@@ -260,10 +272,14 @@ export const createMany = mutation({
       rsReligion2?: string | null;
       rsSpec?: string | null;
       rsSpec2?: string | null;
+      litShakespeare?: string | null;
+      litNovel?: string | null;
+      litModern?: string | null;
+      poetryTheme?: string | null;
     }) =>
-      // Every RS choice is part of the identity: changing the main religion or
-      // an Area of Study is a different pathway, not a duplicate.
-      `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.rsRoute ?? ""}|${course.rsReligion ?? ""}|${course.rsReligion2 ?? ""}|${course.rsSpec ?? ""}|${course.rsSpec2 ?? ""}`.toLowerCase();
+      // Every choice is part of the identity: changing a religion, a set text
+      // or an Area of Study is a different pathway, not a duplicate.
+      `${course.subject}|${course.level}|${course.examBoard}|${course.variant ?? ""}|${course.tier ?? ""}|${course.rsRoute ?? ""}|${course.rsReligion ?? ""}|${course.rsReligion2 ?? ""}|${course.rsSpec ?? ""}|${course.rsSpec2 ?? ""}|${course.litShakespeare ?? ""}|${course.litNovel ?? ""}|${course.litModern ?? ""}|${course.poetryTheme ?? ""}`.toLowerCase();
 
     const known = new Set(
       existing.map((course) =>
@@ -278,6 +294,10 @@ export const createMany = mutation({
           rsReligion2: course.rsReligion2,
           rsSpec: course.rsSpec,
           rsSpec2: course.rsSpec2,
+          litShakespeare: course.litShakespeare,
+          litNovel: course.litNovel,
+          litModern: course.litModern,
+          poetryTheme: course.poetryTheme,
         }),
       ),
     );
@@ -301,6 +321,10 @@ export const createMany = mutation({
         rsReligion2: course.rsReligion2,
         rsSpec: course.rsSpec,
         rsSpec2: course.rsSpec2,
+        litShakespeare: course.litShakespeare,
+        litNovel: course.litNovel,
+        litModern: course.litModern,
+        poetryTheme: course.poetryTheme,
         status: "queued",
         progress: "Queued",
         completedTopics: [],
@@ -319,6 +343,87 @@ export const createMany = mutation({
     }
 
     return { ids, queued: ids.length, skipped: requested.length - ids.length };
+  },
+});
+
+/**
+ * Changes the set texts of an existing GCSE English Literature course and
+ * rebuilds its pathway. The choices are validated against the board's own list,
+ * so a stale client cannot save a text the notes tree does not contain.
+ */
+export const setLiteratureChoices = mutation({
+  args: {
+    courseId: v.id("courses"),
+    shakespeare: v.string(),
+    novel: v.string(),
+    modern: v.string(),
+    poetry: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    await requireVerifiedUser(ctx, userId);
+    const course = await requireOwner(
+      await ctx.db.get(args.courseId),
+      userId,
+    );
+    if (
+      course.subject.trim().toLowerCase() !== "english literature" ||
+      !/gcse/i.test(course.level)
+    ) {
+      throw new Error("Set texts can only be chosen for GCSE English Literature.");
+    }
+
+    const choices = literatureChoicesFor(course.examBoard);
+    if (!choices) {
+      throw new Error("Set texts are not available for this exam board.");
+    }
+    const pick = (label: string, value: string, options: readonly string[]) => {
+      const match = options.find(
+        (option) => option.toLowerCase() === value.trim().toLowerCase(),
+      );
+      if (!match) throw new Error(`Choose a ${label} from the list.`);
+      return match;
+    };
+
+    const litShakespeare = pick(
+      choices.shakespeareLabel.toLowerCase(),
+      args.shakespeare,
+      choices.shakespeare,
+    );
+    const litNovel = pick(
+      choices.novelLabel.toLowerCase(),
+      args.novel,
+      choices.novel,
+    );
+    const litModern = pick(
+      choices.modernLabel.toLowerCase(),
+      args.modern,
+      choices.modern,
+    );
+    const poetryTheme =
+      choices.poetry.length > 0
+        ? pick(
+            choices.poetryLabel.toLowerCase(),
+            args.poetry ?? "",
+            choices.poetry,
+          )
+        : undefined;
+
+    await ctx.db.patch(args.courseId, {
+      litShakespeare,
+      litNovel,
+      litModern,
+      poetryTheme,
+      status: "queued",
+      progress: "Updating the course texts…",
+      errorMessage: undefined,
+      processingStartedAt: undefined,
+      updatedAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(0, internal.ai.buildCoursePathway, {
+      courseId: args.courseId,
+    });
+    return { queued: true };
   },
 });
 

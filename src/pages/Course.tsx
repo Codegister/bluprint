@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { NextStep } from "@/components/NextStep";
 import { SkeletonCoursePage } from "@/components/Skeletons";
 import { SaveMyExamsPapers } from "@/components/study/SaveMyExamsPapers";
+import { LiteratureTextChoices } from "@/components/study/LiteratureTextChoices";
 import { TopicNotes } from "@/components/study/TopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
 import {
@@ -755,6 +756,11 @@ export default function Course() {
                 board's current specification before relying on a topic list.
               </p>
                 </motion.section>
+
+                <LiteratureTextChoices
+                  key={`${course.litShakespeare ?? ""}|${course.litNovel ?? ""}|${course.litModern ?? ""}|${course.poetryTheme ?? ""}`}
+                  course={course}
+                />
 
                 {nextTopic && (
               <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-border bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">

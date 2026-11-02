@@ -644,6 +644,100 @@ export function outlineFromSaveMyExams(
   return { sections: ordered, pageCount, sourceUrl: sourceUrl || SITE };
 }
 
+export type SaveMyExamsLiteratureChoices = {
+  shakespeare?: string;
+  novel?: string;
+  modern?: string;
+  poetry?: string;
+};
+
+type LiteratureSection = "shakespeare" | "novel" | "modern" | "poetry";
+
+/** Which set-text group a Save My Exams section belongs to. */
+function literatureSection(title: string): LiteratureSection | null {
+  const key = titleKey(title);
+  if (key.includes("shakespeare")) return "shakespeare";
+  if (key.includes("19th century") || key.includes("novel")) return "novel";
+  if (
+    key.includes("modern text") ||
+    key.includes("modern prose") ||
+    key.includes("post 1914")
+  ) {
+    return "modern";
+  }
+  if (key.includes("poetry")) return "poetry";
+  return null;
+}
+
+/** Keeps the exam-technique pages that sit above the set texts. */
+function isLiteratureGuide(title: string): boolean {
+  const key = titleKey(title);
+  return (
+    key.startsWith("how to answer") ||
+    key.includes("exam technique") ||
+    key.includes("exam skills") ||
+    key === "overview" ||
+    key === "an overview"
+  );
+}
+
+function isChosenText(title: string, choice: string): boolean {
+  const topic = titleKey(title);
+  const chosen = titleKey(choice);
+  if (!topic || !chosen) return false;
+  return topic === chosen || topic.includes(chosen) || chosen.includes(topic);
+}
+
+/**
+ * Narrows an English Literature outline to the set texts a student chose.
+ *
+ * Save My Exams publishes every text a board offers under one section. The
+ * pathway should only show the Shakespeare play, novel, modern text and poetry
+ * cluster studied in class, while keeping the "How to Answer" guidance that
+ * applies to the whole section. When a chosen title cannot be matched the
+ * section is left intact rather than silently discarding the course content.
+ */
+export function filterSaveMyExamsLiteratureOutline(
+  outline: SaveMyExamsOutline,
+  choices: SaveMyExamsLiteratureChoices,
+): SaveMyExamsOutline {
+  const sections = outline.sections.map((section) => {
+    const group = literatureSection(section.title);
+    const choice = group ? choices[group]?.trim() : undefined;
+    if (!choice) return section;
+
+    if (!section.topics.some((topic) => isChosenText(topic.title, choice))) {
+      return section;
+    }
+
+    return {
+      ...section,
+      topics: section.topics.filter(
+        (topic) =>
+          isLiteratureGuide(topic.title) ||
+          isChosenText(topic.title, choice),
+      ),
+    };
+  });
+
+  const kept = sections.filter((section) => section.topics.length > 0);
+  if (kept.length === 0) return outline;
+
+  return {
+    ...outline,
+    sections: kept,
+    pageCount: kept.reduce(
+      (sum, section) =>
+        sum +
+        section.topics.reduce(
+          (topicSum, topic) => topicSum + topic.subtopics.length,
+          0,
+        ),
+      0,
+    ),
+  };
+}
+
 /**
  * Picks the note pages for one pathway topic. Exact topic names are preferred;
  * a specification reference is used next. No fuzzy matching is allowed here:

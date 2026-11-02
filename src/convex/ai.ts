@@ -60,6 +60,7 @@ import {
 } from "./lib/poetryAnthologies";
 import {
   fetchSaveMyExamsPage,
+  filterSaveMyExamsLiteratureOutline,
   outlineFromSaveMyExams,
   parseSaveMyExamsNotesIndex,
   resolveSaveMyExamsCourse,
@@ -2097,6 +2098,9 @@ type PathwayCourse = {
   tier?: string;
   variant?: string;
   poetryTheme?: string;
+  litShakespeare?: string;
+  litNovel?: string;
+  litModern?: string;
   rsRoute?: string;
   rsReligion?: string;
   rsReligion2?: string;
@@ -2289,8 +2293,19 @@ async function scrapeSaveMyExamsPathway(
     indexes.push(index);
   }
 
-  const outline = outlineFromSaveMyExams(indexes);
-  if (!outline) return null;
+  const scraped = outlineFromSaveMyExams(indexes);
+  if (!scraped) return null;
+  // English Literature publishes every set text under one section. Keep only
+  // the student's own Shakespeare play, novel, modern text and poetry cluster.
+  const outline =
+    /english literature/i.test(course.subject) && /gcse/i.test(course.level)
+      ? filterSaveMyExamsLiteratureOutline(scraped, {
+          shakespeare: course.litShakespeare,
+          novel: course.litNovel,
+          modern: course.litModern,
+          poetry: course.poetryTheme,
+        })
+      : scraped;
   const topicCount = outline.sections.reduce(
     (sum, section) => sum + section.topics.length,
     0,

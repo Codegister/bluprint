@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  filterSaveMyExamsLiteratureOutline,
   findSaveMyExamsNotesPages,
   outlineFromSaveMyExams,
   parseSaveMyExamsCourse,
@@ -525,6 +526,85 @@ const paperPage = pageHtml({
       },
     ],
   },
+});
+
+describe("Save My Exams English Literature filtering", () => {
+  const outline = {
+    sourceUrl: "https://www.savemyexams.com/gcse/english-literature/aqa/",
+    pageCount: 12,
+    sections: [
+      {
+        title: "1. Shakespeare",
+        topics: [
+          { title: "How to Answer the Shakespeare Essay Question", subtopics: ["guide"] },
+          { title: "Macbeth", subtopics: ["plot", "characters"] },
+          { title: "Romeo & Juliet", subtopics: ["plot", "themes"] },
+          { title: "Romeo & Juliet: Overview", subtopics: ["overview"] },
+        ],
+      },
+      {
+        title: "2. 19th Century Novel",
+        topics: [
+          { title: "A Christmas Carol", subtopics: ["plot", "context"] },
+          { title: "Jane Eyre", subtopics: ["plot"] },
+        ],
+      },
+      {
+        title: "3. Modern Texts",
+        topics: [
+          { title: "An Inspector Calls", subtopics: ["plot", "characters"] },
+          { title: "Animal Farm", subtopics: ["plot"] },
+        ],
+      },
+      {
+        title: "4. Poetry Anthology",
+        topics: [
+          { title: "Power & Conflict", subtopics: ["poems", "comparison"] },
+          { title: "Love & Relationships", subtopics: ["poems"] },
+        ],
+      },
+      {
+        title: "5. Unseen Poetry",
+        topics: [{ title: "Unseen Poetry", subtopics: ["approach"] }],
+      },
+    ],
+  };
+
+  test("keeps the chosen text and exam guidance in each section", () => {
+    const filtered = filterSaveMyExamsLiteratureOutline(outline, {
+      shakespeare: "Macbeth",
+      novel: "A Christmas Carol",
+      modern: "An Inspector Calls",
+      poetry: "Power & Conflict",
+    });
+    expect(filtered.sections.map((section) => section.title)).toEqual([
+      "1. Shakespeare",
+      "2. 19th Century Novel",
+      "3. Modern Texts",
+      "4. Poetry Anthology",
+      "5. Unseen Poetry",
+    ]);
+    expect(filtered.sections[0]?.topics.map((topic) => topic.title)).toEqual([
+      "How to Answer the Shakespeare Essay Question",
+      "Macbeth",
+    ]);
+    expect(filtered.sections[1]?.topics.map((topic) => topic.title)).toEqual([
+      "A Christmas Carol",
+    ]);
+    expect(filtered.sections[3]?.topics.map((topic) => topic.title)).toEqual([
+      "Power & Conflict",
+    ]);
+    expect(filtered.pageCount).toBe(10);
+    expect(outline.sections[0]?.topics).toHaveLength(4);
+  });
+
+  test("leaves a section intact when the chosen text is not published", () => {
+    const filtered = filterSaveMyExamsLiteratureOutline(outline, {
+      shakespeare: "Hamlet",
+    });
+    expect(filtered.sections[0]?.topics).toHaveLength(4);
+    expect(filtered.sections[1]?.topics).toHaveLength(2);
+  });
 });
 
 describe("Save My Exams past papers", () => {

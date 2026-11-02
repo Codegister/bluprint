@@ -185,6 +185,11 @@ const schema = defineSchema(
       rsReligion2: v.optional(v.string()),
       rsSpec: v.optional(v.string()),
       rsSpec2: v.optional(v.string()),
+      // GCSE English Literature set texts. The pathway is filtered to these
+      // choices so other boards' texts never appear in the student's course.
+      litShakespeare: v.optional(v.string()),
+      litNovel: v.optional(v.string()),
+      litModern: v.optional(v.string()),
       // English Language/Literature poetry anthology studied at GCSE. Kept as
       // free text so older courses and other qualifications still load.
       poetryTheme: v.optional(v.string()),

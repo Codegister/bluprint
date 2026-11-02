@@ -6,6 +6,10 @@ import { api } from "@/convex/_generated/api";
 import { readableError } from "@/lib/errors";
 import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
 import {
+  literatureChoicesFor,
+  type LiteratureChoiceSet,
+} from "@/convex/lib/literatureChoices";
+import {
   POPULAR_SUBJECTS,
   SUBJECTS,
   subjectMeta,
@@ -41,12 +45,16 @@ type CourseDraft = {
   rsReligion2?: string;
   rsSpec?: string;
   rsSpec2?: string;
+  litShakespeare?: string;
+  litNovel?: string;
+  litModern?: string;
+  poetryTheme?: string;
 };
 
 /** The questions asked after a subject is tapped, in order. "rs" is the
  *  Religious Studies route/religion/units step that GCSE RS asks after board
- *  and tier. */
-type Question = "board" | "tier" | "rs";
+ *  and tier; "lit" is the matching set-text step for GCSE English Literature. */
+type Question = "board" | "tier" | "rs" | "lit";
 
 /**
  * Edexcel GCSE Religious Studies is two separate specifications, so the route
@@ -140,6 +148,18 @@ function rsStepFor(draft?: CourseDraft): RsStep | null {
   return draft.rsSpec ? null : "thirdPaper";
 }
 
+type LitStep = "shakespeare" | "novel" | "modern" | "poetry";
+type LitField = "litShakespeare" | "litNovel" | "litModern" | "poetryTheme";
+
+/** The next set text a GCSE English Literature course still needs. */
+function litStepFor(draft?: CourseDraft, hasPoetry = false): LitStep | null {
+  if (!draft?.litShakespeare) return "shakespeare";
+  if (!draft.litNovel) return "novel";
+  if (!draft.litModern) return "modern";
+  if (hasPoetry && !draft.poetryTheme) return "poetry";
+  return null;
+}
+
 const levelHints: Record<string, string> = {
   GCSE: "Years 10–11",
   KS3: "Years 7–9",
@@ -180,7 +200,7 @@ function defaultTierFor(level: string, subject: string): string | undefined {
  * can ask for a route, a second religion and the chosen spec titles on top of
  * the generic board and tier questions above.
  */
-function questionsFor(level: string, subject: string): Question[] {
+function questionsFor(level: string, subject: string, board?: string): Question[] {
   const questions: Question[] = [];
   if (level === "GCSE" || level === "A-Level") questions.push("board");
   const { tiers, variants } = tierChoices(level, subject);
@@ -191,6 +211,13 @@ function questionsFor(level: string, subject: string): Question[] {
     (variants.length === 0 && tiers.length > 0)
   ) {
     questions.push("rs");
+  }
+  if (
+    level === "GCSE" &&
+    subject === "English Literature" &&
+    literatureChoicesFor(board ?? "")
+  ) {
+    questions.push("lit");
   }
   return questions;
 }
@@ -229,13 +256,27 @@ function SubjectRow({
         .join(" · ")
     : "";
 
-  const rsDetail = draft?.rsRoute
+  const choiceDetail = draft?.rsRoute
     ? ` · ${draft.rsRoute.replace("Edexcel ", "")}${
         draft.rsReligion ? ` · ${draft.rsReligion}` : ""
       }${draft.rsReligion2 ? ` · ${draft.rsReligion2}` : ""}${
         draft.rsSpec ? ` · ${draft.rsSpec}` : ""
       }${draft.rsSpec2 ? ` · ${draft.rsSpec2}` : ""}`
-    : "";
+    : [
+        draft?.litShakespeare,
+        draft?.litNovel,
+        draft?.litModern,
+        draft?.poetryTheme,
+      ].filter(Boolean).length > 0
+      ? ` · ${[
+          draft?.litShakespeare,
+          draft?.litNovel,
+          draft?.litModern,
+          draft?.poetryTheme,
+        ]
+          .filter(Boolean)
+          .join(" · ")}`
+      : "";
 
   return (
     <motion.button
@@ -266,7 +307,7 @@ function SubjectRow({
         {/* The detail line is always present, even when empty, so selecting a
             course fills it in without making the row taller than its neighbours. */}
         <span className="mt-0.5 flex min-h-4 min-w-0 items-center gap-1 text-[0.68rem] text-muted-foreground">
-          {detail || rsDetail ? (
+          {detail || choiceDetail ? (
             <>
               {isDefault && (
                 <>
@@ -280,7 +321,7 @@ function SubjectRow({
               )}
               <span className="min-w-0 truncate">
                 {detail}
-                {rsDetail}
+                {choiceDetail}
               </span>
             </>
           ) : (
@@ -305,6 +346,83 @@ function SubjectRow({
         )}
       </span>
     </motion.button>
+  );
+}
+
+function LiteratureStep({
+  step,
+  choices,
+  draft,
+  onChoose,
+}: {
+  step: LitStep;
+  choices: LiteratureChoiceSet;
+  draft?: CourseDraft;
+  onChoose: (field: LitField, value: string) => void;
+}) {
+  const group: {
+    field: LitField;
+    title: string;
+    hint: string;
+    options: readonly string[];
+  } =
+    step === "shakespeare"
+      ? {
+          field: "litShakespeare",
+          title: `Which ${choices.shakespeareLabel.toLowerCase()}?`,
+          hint: "Pick the play your class is studying. Only its notes will appear in your pathway.",
+          options: choices.shakespeare,
+        }
+      : step === "novel"
+        ? {
+            field: "litNovel",
+            title: `Which ${choices.novelLabel.toLowerCase()}?`,
+            hint: "Pick the novel your class is studying. Only its notes will appear in your pathway.",
+            options: choices.novel,
+          }
+        : step === "modern"
+          ? {
+              field: "litModern",
+              title: `Which ${choices.modernLabel.toLowerCase()}?`,
+              hint: "Pick the modern text your class is studying. Only its notes will appear in your pathway.",
+              options: choices.modern,
+            }
+          : {
+              field: "poetryTheme",
+              title: `Which ${choices.poetryLabel.toLowerCase()}?`,
+              hint: "Pick the poetry cluster your class is studying. Only that cluster's notes will appear.",
+              options: choices.poetry,
+            };
+
+  return (
+    <section className="mt-6">
+      <h2 className="font-display text-[1.06rem] font-bold text-brand-ink">
+        {group.title}
+      </h2>
+      <p className="mt-1 text-[0.78rem] text-muted-foreground">{group.hint}</p>
+      <div className="rise-stagger mt-3 grid gap-1.5 sm:grid-cols-2">
+        {group.options.map((option) => {
+          const chosen = draft?.[group.field] === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={chosen}
+              onClick={() => onChoose(group.field, option)}
+              className={cn(
+                "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-[0.84rem] font-semibold transition-colors",
+                chosen
+                  ? "border-[#191B27] bg-[#191B27] text-white"
+                  : "border-border bg-white text-brand-ink/80 hover:border-chrome-6/50 hover:bg-brand-panel",
+              )}
+            >
+              <span className="truncate">{option}</span>
+              {chosen && <Check className="size-4 shrink-0" aria-hidden />}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -384,7 +502,10 @@ export default function CourseSetup() {
   const activeDraft = active ? selected[active] : undefined;
   const activeMeta = active ? subjectMeta(active) : null;
   const activeChoices = active && level ? tierChoices(level, active) : null;
-  const questions = active && level ? questionsFor(level, active) : [];
+  const questions =
+    active && level
+      ? questionsFor(level, active, activeDraft?.examBoard ?? board)
+      : [];
   const currentQuestionIndex =
     Math.min(questionIndex, Math.max(0, questions.length - 1));
   const currentQuestion: (Question | "rs") | null =
@@ -395,6 +516,15 @@ export default function CourseSetup() {
     active && level === "GCSE" && active === "Religious Studies"
       ? (rsStepFor(activeDraft) ?? "route")
       : null;
+  const litChoices =
+    active && level === "GCSE" && active === "English Literature"
+      ? literatureChoicesFor(activeDraft?.examBoard ?? board)
+      : null;
+  // Reopening a finished course starts at the first text so any choice can be
+  // changed, exactly like the RS card.
+  const litStep = litChoices
+    ? (litStepFor(activeDraft, litChoices.poetry.length > 0) ?? "shakespeare")
+    : null;
 
   const chooseQualification = (next: string) => {
     const nextBoard = defaultBoardFor(next);
@@ -476,6 +606,17 @@ export default function CourseSetup() {
     if (!rsStepFor(next)) finishQuestions();
   };
 
+  const setLit = (field: LitField, value: string) => {
+    if (!active || !litChoices) return;
+    const course = selected[active];
+    if (!course) return;
+    const next: CourseDraft = { ...course, [field]: value };
+    setSelected((current) => ({ ...current, [active]: next }));
+    setError(null);
+    // The last text sends the student back to the subject list, matching RS.
+    if (!litStepFor(next, litChoices.poetry.length > 0)) finishQuestions();
+  };
+
   const openSubject = (name: string) => {
     const clean = name.trim().slice(0, 80);
     if (clean.length < 2 || !level) return;
@@ -513,7 +654,7 @@ export default function CourseSetup() {
     );
     setError(null);
 
-    const needed = questionsFor(level, clean);
+    const needed = questionsFor(level, clean, nextBoard);
     // A new subject that can use the remembered answers is added straight away;
     // clicking an existing one still opens them so it can be changed.
     const alreadyAnswered = needed.every((question) =>
@@ -521,7 +662,7 @@ export default function CourseSetup() {
         ? Boolean(rememberedBoard)
         : // Religious Studies always asks its route, religion and paper
           // choices, even when a board and tier are remembered.
-          question === "rs"
+          question === "rs" || question === "lit"
           ? false
           : Boolean(nextAnswer),
     );
@@ -556,10 +697,20 @@ export default function CourseSetup() {
   };
 
   const setCourseBoard = (name: string, next: string) => {
-    setSelected((current) => ({
-      ...current,
-      [name]: { ...current[name]!, examBoard: next },
-    }));
+    setSelected((current) => {
+      const course = current[name];
+      if (!course) return current;
+      const changed: CourseDraft = { ...course, examBoard: next };
+      // A different board offers a different set of texts, so choices made for
+      // the old board cannot be carried over.
+      if (name === "English Literature" && course.examBoard !== next) {
+        changed.litShakespeare = undefined;
+        changed.litNovel = undefined;
+        changed.litModern = undefined;
+        changed.poetryTheme = undefined;
+      }
+      return { ...current, [name]: changed };
+    });
   };
 
   const setCourseTier = (name: string, value: string) => {
@@ -632,6 +783,10 @@ export default function CourseSetup() {
           rsReligion2: selected[subject]!.rsReligion2,
           rsSpec: selected[subject]!.rsSpec,
           rsSpec2: selected[subject]!.rsSpec2,
+          litShakespeare: selected[subject]!.litShakespeare,
+          litNovel: selected[subject]!.litNovel,
+          litModern: selected[subject]!.litModern,
+          poetryTheme: selected[subject]!.poetryTheme,
         })),
       });
 
@@ -682,7 +837,8 @@ export default function CourseSetup() {
           Pick what you study. Bluprint maps each course from its published
           specification, then builds revision material for every topic. Religious
           Studies is split into Edexcel Religious Studies A and B, with the
-          religions and units you study.
+          religions and units you study. English Literature asks for your
+          Shakespeare play, novel, modern text and poetry cluster.
         </p>
       </div>
 
@@ -1181,6 +1337,15 @@ export default function CourseSetup() {
                       </>
                     ) : null}
                   </section>
+                ) : null}
+
+                {currentQuestion === "lit" && litChoices && litStep ? (
+                  <LiteratureStep
+                    step={litStep}
+                    choices={litChoices}
+                    draft={activeDraft}
+                    onChoose={setLit}
+                  />
                 ) : null}
               </motion.section>
             ) : (
