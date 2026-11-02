@@ -139,7 +139,7 @@ const SUBJECT_SLUGS: Record<string, string> = {
   "english language": "english-language",
   "english literature": "english-literature",
   "computer science": "computer-science",
-  "business studies": "business-studies",
+  "business studies": "business",
   "religious studies": "religious-studies",
   "media studies": "media-studies",
   "design and technology": "design-technology",
@@ -195,6 +195,7 @@ const SUBJECT_TITLE_ALIASES: Record<string, string[]> = {
   "design and technology": ["design technology"],
   "physical education": ["pe"],
   "religious studies": ["rs"],
+  "business studies": ["business"],
 };
 
 function subjectMatches(wanted: string, offered: string | undefined): boolean {

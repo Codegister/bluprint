@@ -30,6 +30,17 @@ const biologyCourseWithLinks =
   '<a href="/gcse/biology/aqa/18/revision-notes/">Revision notes</a>' +
   '<a href="/gcse/biology/aqa/18/revision-notes/">Duplicate</a>';
 
+const businessCourse =
+  pageHtml({
+    breadcrumbs: {
+      titles: { level: "GCSE", subject: "Business", board: "AQA" },
+      slugs: { level: "gcse", subject: "business", board: "aqa", year: "17" },
+    },
+    courseTitle: "AQA GCSE Business",
+    availableResources: { "past-papers": "/gcse/business/aqa/past-papers/" },
+  }) +
+  '<a href="/gcse/business/aqa/17/revision-notes/">Revision notes</a>';
+
 const mathsCourse =
   pageHtml({
     breadcrumbs: {
@@ -79,6 +90,19 @@ describe("Save My Exams course matching", () => {
         examBoard: "Edexcel",
       }),
     ).toBeNull();
+  });
+
+  test("matches Business Studies to Save My Exams Business", () => {
+    const course = parseSaveMyExamsCourse(businessCourse, {
+      level: "GCSE",
+      subject: "Business Studies",
+      examBoard: "AQA",
+      tier: "Higher",
+    });
+    expect(course?.subjectSlug).toBe("business");
+    expect(course?.notesIndexPaths).toEqual([
+      "/gcse/business/aqa/17/revision-notes/",
+    ]);
   });
 
   test("uses the tier's own Maths route", () => {
