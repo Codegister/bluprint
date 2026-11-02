@@ -95,6 +95,37 @@ export const consume = internalMutation({
   },
 });
 
+/**
+ * Returns the allowance for a build that failed before it produced anything.
+ *
+ * The timestamp scopes the refund to the attempt that failed, so a newer paper
+ * started for another course is not quietly forgotten. Called by the paper
+ * build action's failure path.
+ */
+export const refund = internalMutation({
+  args: {
+    userId: v.id("users"),
+    kind: v.union(
+      v.literal("set"),
+      v.literal("rebuild"),
+      v.literal("paper"),
+    ),
+    before: v.number(),
+  },
+  handler: async (ctx, { userId, kind, before }) => {
+    const rows = await ctx.db
+      .query("buildUsage")
+      .withIndex("by_user_at", (q) => q.eq("userId", userId))
+      .collect();
+    const row = rows
+      .filter((entry) => entry.kind === kind && entry.at <= before)
+      .sort((a, b) => b.at - a.at)[0];
+    if (!row) return { refunded: false };
+    await ctx.db.delete(row._id);
+    return { refunded: true };
+  },
+});
+
 /** What the allowance looks like right now, for the account and the logs. */
 export const myUsage = internalMutation({
   args: { userId: v.id("users") },

@@ -108,6 +108,7 @@ import { buildPaperCover } from "./lib/paperFormat";
 import {
   buildPaperBlueprint,
   flattenPaperBlueprint,
+  type FlatPaperSlot,
   type PaperBlueprint,
 } from "./lib/paperBlueprint";
 import { PAPER_GENERATOR_SYSTEM_MESSAGE } from "./lib/paperGenerator";
@@ -653,7 +654,11 @@ function parsedObjects(text: string): Array<Record<string, unknown>> {
       const start = starts.pop();
       if (start === undefined) continue;
       try {
-        const value = JSON.parse(repairJsonEscapes(text.slice(start, i + 1)));
+        const value = JSON.parse(
+          repairJsonEscapes(
+            repairJsonControlChars(text.slice(start, i + 1)),
+          ),
+        );
         if (value && typeof value === "object" && !Array.isArray(value)) {
           found.push({ start, value: value as Record<string, unknown> });
         }
@@ -687,13 +692,16 @@ function tryParseJson<T>(raw: string): T | null {
   }
 
   for (const candidate of candidates) {
+    // Literal newlines inside a model's long answer are invalid JSON and are
+    // common in essay subjects; repair those before trying the whole document.
+    const withControlChars = repairJsonControlChars(candidate);
     try {
-      return JSON.parse(candidate) as T;
+      return JSON.parse(withControlChars) as T;
     } catch {
       // LaTeX-heavy answers (Physics, Chemistry) need their escapes repaired
       // before the second attempt.
       try {
-        return JSON.parse(repairJsonEscapes(candidate)) as T;
+        return JSON.parse(repairJsonEscapes(withControlChars)) as T;
       } catch {
         // Try the next candidate.
       }
@@ -1590,15 +1598,37 @@ async function ensureSelfContained(
  * subject's real question types, marks, command words and marking style are
  * fixed by the blueprint.
  */
+/** A one-question format brief, so a per-question call cannot write the whole paper. */
+function slotBrief(blueprint: PaperBlueprint, slot: FlatPaperSlot): string {
+  return [
+    "PAPER FORMAT — this request is one question from the subject's real paper.",
+    `Total: 1 question, ${slot.marks} marks.`,
+    "",
+    `## ${slot.section}`,
+    slot.sectionInstruction,
+    `${slot.label} — ${slot.marks} mark${slot.marks === 1 ? "" : "s"} — command word: ${slot.command} — ${slot.marking === "levels" ? "levels-marked" : "point-marked"}`,
+    `  ${slot.ask}`,
+    "",
+    "FORMAT RULES",
+    ...blueprint.rules.map((rule) =>
+      /^Write exactly/i.test(rule)
+        ? "Write only the single question requested."
+        : rule,
+    ),
+  ].join("\n");
+}
+
+/**
+ * Writes one full practice paper from the saved pathway, one question at a
+ * time. A whole-paper reply with two full essays can exceed the model's output
+ * budget and arrive truncated, so each call owns exactly one question and the
+ * finished questions are assembled in blueprint order.
+ */
 async function generatePaperQuestions(
   apiKeys: string[],
   course: PaperCourse,
   paperTitle: string,
-  // The structure the paper must follow.
   blueprint: PaperBlueprint,
-  // The qualification paper this practice paper covers, when the course is
-  // split into papers. The format is the same across papers; only the topics
-  // change, so the grouping is applied to the specification digest.
   chosenPaper?: { label: string; topicIds: string[] },
 ): Promise<GeneratedExam[]> {
   const slots = flattenPaperBlueprint(blueprint);
@@ -1633,69 +1663,102 @@ async function generatePaperQuestions(
   ]
     .filter(Boolean)
     .join(" ");
-
   const paperScope = chosenPaper
     ? `\n<paper>This is ${chosenPaper.label} of the qualification. Every question must come from the topics listed for that paper above, and no question may test a topic from another paper.</paper>\n`
     : "";
 
-  const basePrompt =
+  const commonPrompt =
     `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
     `<specification>\n${digest}\n</specification>\n${paperScope}\n` +
-    `<paper_format>\n${blueprintBrief(blueprint)}\n</paper_format>\n\n` +
-    `Write one complete practice paper titled "${paperTitle}" for this qualification, using only the specification above. ` +
-    `Write exactly ${slots.length} original exam-style question${slots.length === 1 ? "" : "s"} totalling ${blueprint.totalMarks} marks. ` +
-    "Do not add, remove, reorder or re-mark a question: the paper format above is fixed. " +
-    "Make every question unambiguous and answerable from the specification, and do not copy or paraphrase a published past paper. " +
-    "Each question needs a full-mark model answer and a marking guide written the way the board writes it. " +
-    "If a question needs data — readings, percentages, observations — include it in a `data` object with `columns` and `rows` and refer to it as \"the table below\". " +
+    `Write one original exam-style question for a practice paper titled "${paperTitle}". ` +
+    `The paper has ${slots.length} question${slots.length === 1 ? "" : "s"} in total; this request covers one of them. ` +
+    "Make the question unambiguous and answerable from the specification, and do not copy or paraphrase a published past paper. " +
+    "The question needs a full-mark model answer and a marking guide written the way the board writes it. " +
+    "Keep every model answer under 1,000 words, write it as plain prose without markdown headings or bold, and keep every marking guide to at most 12 bullets. " +
+    "If the question needs data — readings, percentages, observations — include it in a `data` object with `columns` and `rows` and refer to it as \"the table below\". " +
     "Never refer to a table, graph, chart, figure, diagram or photograph you have not supplied: a question that points at missing data cannot be answered. " +
     "Ask about the topics in the specification above and nothing else: a question on a topic the specification does not list cannot be revised for. " +
     `${schemeNotes} ` +
-    `Return JSON exactly like: {"questions":[{"question":"...","marks":${slots[0]?.marks ?? 3},"modelAnswer":"...","markingGuide":["the mark scheme"],"commandWord":"Outline","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]}`;
+    "Return only strict JSON with no markdown fences, commentary or extra keys.";
 
-  let mismatch = "";
-  // One retry is enough to recover a reply that drifted from the format, and
-  // costs a second call only when the first paper is unusable.
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const raw = await nvidiaChat(apiKeys, {
-      model: NVIDIA_TEXT_MODEL,
-      messages: [
-        { role: "system", content: PAPER_GENERATOR_SYSTEM_MESSAGE },
-        {
-          role: "user",
-          content:
-            basePrompt +
-            (attempt > 0
-              ? `\n\nFORMAT CORRECTION: the previous reply did not match the paper format. ${mismatch} Rewrite the complete paper with exactly the questions, marks and order listed above.`
-              : ""),
-        },
-      ],
-      maxTokens: 14000,
-      temperature: attempt === 0 ? 0.2 : 0.1,
-      topP: 1.0,
-      disableThinking: true,
-      // A whole paper with model answers and mark schemes is a long reply.
-      timeoutMs: 240_000,
-    });
+  const generated: GeneratedExam[] = [];
+  for (const slot of slots) {
+    const slotRequest =
+      `<paper_format>\n${slotBrief(blueprint, slot)}\n</paper_format>\n\n` +
+      `This request is for exactly one question: ${slot.label}, worth ${slot.marks} marks, in ${slot.section}. ` +
+      `Use the command word "${slot.command}". ${slot.ask} ` +
+      `Return JSON exactly like: {"questions":[{"question":"...","marks":${slot.marks},"modelAnswer":"...","markingGuide":["..."],"commandWord":"${slot.command}","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]} ` +
+      "The questions array must contain exactly this one entry. Do not write any other question from the paper.";
 
-    // The paper uses the same validated question shape as a study set's exam
-    // questions, so one parser keeps both honest. Parse more than the blueprint
-    // expects so an extra question is caught as a mismatch instead of being
-    // silently sliced off.
-    const questions = parseExams(raw, slots.length + 4);
-    mismatch = blueprintMismatch(questions, blueprint) ?? "";
-    if (!mismatch) {
-      return await ensureSelfContained(
-        apiKeys,
-        applyBlueprint(questions, blueprint),
-        qualification,
+    let mismatch = "";
+    let accepted: GeneratedExam | null = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const raw = await nvidiaChat(apiKeys, {
+        model: NVIDIA_TEXT_MODEL,
+        messages: [
+          { role: "system", content: PAPER_GENERATOR_SYSTEM_MESSAGE },
+          {
+            role: "user",
+            content:
+              commonPrompt +
+              "\n\n" +
+              slotRequest +
+              (attempt > 0
+                ? `\n\nFORMAT CORRECTION: the previous reply did not match this question. ${mismatch} Return exactly one JSON question with the marks and format above.`
+                : ""),
+          },
+        ],
+        maxTokens: 8000,
+        temperature: attempt === 0 ? 0.2 : 0.1,
+        topP: 1.0,
+        disableThinking: true,
+        timeoutMs: 180_000,
+      });
+
+      let parsed: GeneratedExam[];
+      try {
+        parsed = parseExams(raw, 2);
+      } catch {
+        mismatch =
+          "The previous reply was not valid JSON with a top-level questions array.";
+        continue;
+      }
+      const candidate =
+        parsed.find((question) => question.marks === slot.marks) ?? parsed[0];
+      if (!candidate) {
+        mismatch = `The reply for question ${slot.label} had no usable question.`;
+        continue;
+      }
+      if (candidate.marks !== slot.marks) {
+        mismatch = `Question ${slot.label} must be worth ${slot.marks} marks; this reply made it ${candidate.marks}.`;
+        continue;
+      }
+      accepted = {
+        ...candidate,
+        marks: slot.marks,
+        marking: slot.marking,
+        label: slot.label,
+        section: slot.section,
+        sectionInstruction: slot.sectionInstruction,
+        commandWord: slot.command,
+      };
+      break;
+    }
+
+    if (!accepted) {
+      console.error(
+        "Past paper question format mismatch after retries",
+        slot.label,
+        mismatch,
+      );
+      throw new Error(
+        `The paper came back in the wrong format for ${blueprint.summary}. Try building it again.`,
       );
     }
+    generated.push(accepted);
   }
 
-  throw new Error(
-    `The paper came back in the wrong format for ${blueprint.summary}. Try building it again.`,
-  );
+  return await ensureSelfContained(apiKeys, generated, qualification);
 }
 
 /** Builds one saved past paper for a course. Scheduled by `pastPapers.create`. */
@@ -1708,6 +1771,7 @@ export const buildPastPaper = internalAction({
 
     const claim = await ctx.runMutation(internal.pastPapers.claimBuild, { paperId });
     if (!claim.claimed) return { ok: false };
+    const startedAt = claim.startedAt;
 
     try {
       const course = await ctx.runQuery(internal.courses.getForBuild, {
@@ -1775,6 +1839,18 @@ export const buildPastPaper = internalAction({
       });
       return { ok: true };
     } catch (error) {
+      // A failed attempt must not use up the student's paper allowance. Refund
+      // only the row this build claimed, not a newer paper started meanwhile.
+      try {
+        await ctx.runMutation(internal.buildUsage.refund, {
+          userId: paper.userId,
+          kind: "paper",
+          before: startedAt,
+        });
+      } catch (refundError) {
+        console.error("Could not refund the failed paper allowance", refundError);
+      }
+
       // If the paper was deleted mid-build there is nothing to report: its page
       // is already gone. Everything else is logged and shown as a sentence.
       const stillThere = await ctx.runQuery(internal.pastPapers.isActive, {

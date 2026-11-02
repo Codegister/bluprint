@@ -32,5 +32,7 @@ describe("paper generator context", () => {
       "do not expand it to the full qualification duration",
     );
     expect(PAPER_GENERATOR_SYSTEM_MESSAGE).not.toContain("reference_paper");
+    expect(PAPER_GENERATOR_PROMPT).not.toContain('"paper_economy":');
+    expect(PAPER_GENERATOR_PROMPT).toContain("top-level \"questions\" array");
   });
 });

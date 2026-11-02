@@ -81,21 +81,11 @@ set, re-check that every referenced material is included, and re-check that no m
 scheme answer depends on content absent from the stimulus.
 
 STEP 10. RETURN THE RESULT
-Return a single JSON object:
-{
-  "status": "PASS" | "PARTIAL" | "FAIL",
-  "board": "", "level": "", "subject": "", "component": "",
-  "paper_economy": {"duration_min": 0, "total_marks": 0, "marks_per_min": 0,
-                    "question_count": 0, "sections": [], "tariffs": []},
-  "paper": {"front_matter": "", "rubric": "", "sections": [{"title": "",
-            "questions": [{"number": "", "stem": "", "marks": 0,
-            "command_word": "", "ao": "", "materials": []}]}]},
-  "mark_scheme": {"style": "", "questions": [{"number": "", "marks": 0,
-                  "criteria": []}], "total": 0},
-  "checks": [{"row_id": "", "check": "", "result": "Y|N|NA", "evidence": ""}],
-  "assumptions": [],
-  "flags": []
-}
+Return only the flat JSON object defined by the Bluprint integration contract at the
+end of this message: one top-level "questions" array with exactly one entry per
+question in the caller's grid. Do not return the older nested result envelope
+(status, paper_economy, paper, mark_scheme, checks, assumptions or flags); the
+integration contract replaces it.
 If the caller asks for prose instead of JSON, return the paper and mark scheme as
 formatted text, then append the checklist table and the assumptions.
 

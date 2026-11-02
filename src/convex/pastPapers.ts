@@ -317,14 +317,14 @@ export const claimBuild = internalMutation({
   args: { paperId: v.id("pastPapers") },
   handler: async (ctx, { paperId }) => {
     const paper = await ctx.db.get(paperId);
-    if (!paper || paper.status === "ready") return { claimed: false };
+    if (!paper || paper.status === "ready") return { claimed: false as const };
 
     const now = Date.now();
     const running =
       paper.status === "processing" &&
       paper.processingStartedAt !== undefined &&
       now - paper.processingStartedAt < STALE_MS;
-    if (running) return { claimed: false };
+    if (running) return { claimed: false as const };
 
     await ctx.db.patch(paperId, {
       status: "processing",
@@ -333,7 +333,7 @@ export const claimBuild = internalMutation({
       processingStartedAt: now,
       updatedAt: now,
     });
-    return { claimed: true };
+    return { claimed: true as const, startedAt: now };
   },
 });
 
