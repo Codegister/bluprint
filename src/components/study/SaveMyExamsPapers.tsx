@@ -1,26 +1,30 @@
 import { EASE, reveal } from "@/components/motion/Motion";
+import {
+  PaperViewerDialog,
+  type ViewedPaper,
+} from "@/components/study/PaperViewerDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { ExternalLink, FileText, RotateCcw } from "lucide-react";
+import { Eye, FileText, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
  * The real past papers Save My Exams indexes for a course.
  *
- * Each row links to the exam board's paper and mark scheme in a new tab.
- * Bluprint does not copy, proxy or redistribute the PDFs: no licence to do so
- * exists, and the publisher remains the host. The files belong to the exam
- * boards, not to Bluprint.
+ * Each row opens the exam board's paper or mark scheme inside Bluprint. The
+ * publisher remains the host: the file is embedded, not copied, proxied or
+ * redistributed. The original link is always available in the viewer.
  */
 export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
   const cached = useQuery(api.cognitoLibrary.getPastPapers, { courseId });
   const load = useAction(api.cognitoLibrary.loadPastPapers);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<ViewedPaper | null>(null);
   const started = useRef(false);
 
   const run = async () => {
@@ -64,9 +68,8 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
             The actual board papers
           </h2>
           <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
-            Indexed by Save My Exams for this course. Each paper opens the exam
-            board&apos;s own PDF in a new tab, where you can read the question paper
-            and check your answers against the mark scheme.
+            Indexed by Save My Exams for this course. Open the exam board&apos;s
+            question paper and mark scheme here, without leaving Bluprint.
           </p>
         </div>
         <span className="rounded-full bg-brand-panel px-3 py-1.5 text-[0.7rem] font-semibold text-chrome-7">
@@ -151,27 +154,37 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
-                        <a
-                          href={paper.questionUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label={`${year} ${paper.label} question paper listed by Save My Exams`}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setViewing({
+                              url: paper.questionUrl,
+                              title: `${year} · ${paper.label}`,
+                              kind: "Question paper",
+                            })
+                          }
+                          aria-label={`Open ${year} ${paper.label} question paper inside Bluprint`}
                           className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                         >
                           Question paper
-                          <ExternalLink className="size-3" aria-hidden />
-                        </a>
+                          <Eye className="size-3" aria-hidden />
+                        </button>
                         {paper.markSchemeUrl && (
-                          <a
-                            href={paper.markSchemeUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={`${year} ${paper.label} mark scheme listed by Save My Exams`}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setViewing({
+                                url: paper.markSchemeUrl!,
+                                title: `${year} · ${paper.label}`,
+                                kind: "Mark scheme",
+                              })
+                            }
+                            aria-label={`Open ${year} ${paper.label} mark scheme inside Bluprint`}
                             className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-3 text-[0.74rem] font-semibold text-[#0B6B45] shadow-none hover:bg-brand-panel"
                           >
                             Mark scheme
-                            <ExternalLink className="size-3" aria-hidden />
-                          </a>
+                            <Eye className="size-3" aria-hidden />
+                          </button>
                         )}
                       </div>
                     </li>
@@ -184,11 +197,11 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
 
       <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
         Papers and mark schemes are published by the exam boards; the list is
-        read from Save My Exams. These links open the publisher&apos;s own PDFs;
-        Bluprint does not host or redistribute the files, and all rights remain
-        with the publisher. For practice written for Bluprint, use the paper
-        builder above. Rights holders can request that a link be removed through
-        the{" "}
+        read from Save My Exams. These files stay on the publisher&apos;s server and
+        open inside Bluprint. Bluprint does not host or redistribute them, and
+        all rights remain with the publisher. For practice written for Bluprint,
+        use the paper builder above. Rights holders can request that a link be
+        removed through the{" "}
         <a
           href="https://github.com/Codegister/bluprint/issues"
           target="_blank"
@@ -200,6 +213,10 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
         .
       </p>
 
+      <PaperViewerDialog
+        paper={viewing}
+        onClose={() => setViewing(null)}
+      />
     </motion.section>
   );
 }

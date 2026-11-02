@@ -47,12 +47,18 @@ export function CoursePastPapers({
 }) {
   const navigate = useNavigate();
   const papers = useQuery(api.pastPapers.listForCourse, { courseId });
+  const referenceList = useQuery(api.cognitoLibrary.getPastPapers, { courseId });
   const createPaper = useMutation(api.pastPapers.create);
   const removePaper = useMutation(api.pastPapers.remove);
   const rebuildPaper = useMutation(api.pastPapers.rebuild);
   // Which paper of the qualification the next practice paper covers. No choice
   // means every topic is examinable, which is how a single-paper course works.
   const [chosenPaper, setChosenPaper] = useState<string | undefined>(undefined);
+  // undefined means "use the newest listed paper"; "none" is kept for a course
+  // whose cached list disappears between builds.
+  const [referenceChoice, setReferenceChoice] = useState<
+    string | "none" | undefined
+  >(undefined);
   const [building, setBuilding] = useState(false);
   const [rebuildingId, setRebuildingId] = useState<Id<"pastPapers"> | null>(
     null,
@@ -63,6 +69,15 @@ export function CoursePastPapers({
   const [removing, setRemoving] = useState(false);
 
   const list = papers ?? [];
+  const referencePapers = referenceList?.papers ?? [];
+  const selectedReference =
+    referenceChoice === "none"
+      ? undefined
+      : (referenceChoice ?? referencePapers[0]?.questionUrl);
+  const reference = referencePapers.find(
+    (paper) => paper.questionUrl === selectedReference,
+  );
+  const referencePending = referenceList === undefined;
   const inProgress = list.some(
     (paper) => paper.status === "queued" || paper.status === "processing",
   );
@@ -73,12 +88,15 @@ export function CoursePastPapers({
       const result = await createPaper({
         courseId,
         ...(chosenPaper ? { paper: chosenPaper } : {}),
+        ...(selectedReference ? { referenceUrl: selectedReference } : {}),
       });
       if (result.created) {
         toast.success(
-          chosenPaper
-            ? `Writing a ${chosenPaper} paper from that paper's topics.`
-            : "Writing a practice paper from your specification.",
+          reference
+            ? `Writing a paper that follows ${reference.year} · ${reference.label}.`
+            : chosenPaper
+              ? `Writing a ${chosenPaper} paper from that paper's topics.`
+              : "Writing a practice paper from your specification.",
         );
       }
       navigate(`/papers/${result.paperId}`);
@@ -181,19 +199,46 @@ export function CoursePastPapers({
               </p>
             </div>
           )}
+          {referencePapers.length > 0 && (
+            <div className="mt-3">
+              <label
+                htmlFor="reference-paper"
+                className="text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-[#8A5A12]"
+              >
+                Reference paper
+              </label>
+              <select
+                id="reference-paper"
+                value={selectedReference ?? ""}
+                onChange={(event) => setReferenceChoice(event.target.value || "none")}
+                className="mt-1.5 h-9 w-full max-w-md rounded-xl border border-border bg-white px-3 text-[0.78rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              >
+                {referencePapers.map((paper) => (
+                  <option key={paper.questionUrl} value={paper.questionUrl}>
+                    {paper.year} · {paper.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 max-w-xl text-[0.72rem] leading-relaxed text-muted-foreground">
+                Bluprint reads this real paper&apos;s question order, marks and
+                command words, then writes original questions in the same shape.
+                It never copies the paper&apos;s questions.
+              </p>
+            </div>
+          )}
         </div>
         <Button
           type="button"
           onClick={() => void handleBuild()}
-          disabled={building || inProgress || list.length >= 4}
+          disabled={building || inProgress || list.length >= 4 || referencePending}
           className="h-9 shrink-0 rounded-full bg-[#191B27] px-4 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
         >
-          {building ? (
+          {building || referencePending ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <Plus className="size-3.5" aria-hidden />
           )}
-          Build a past paper
+          {referencePending ? "Finding paper…" : "Build a past paper"}
         </Button>
       </div>
 
@@ -283,6 +328,13 @@ export function CoursePastPapers({
                         ? buildErrorMessage(paper.errorMessage).message
                         : paper.progress ?? "Waiting to start"}
                   </p>
+                  {paper.referencePaper && (
+                    <p className="mt-0.5 text-[0.7rem] font-medium text-[#8A5A12]">
+                      {paper.referenceFormatUsed === false
+                        ? `Reference ${paper.referencePaper.year} · ${paper.referencePaper.label} could not be read; board format used`
+                        : `Format follows ${paper.referencePaper.year} · ${paper.referencePaper.label}`}
+                    </p>
+                  )}
                   {ready && paper.questionCount > 0 && (
                     <div className="mt-2 flex items-center gap-2">
                       <Meter

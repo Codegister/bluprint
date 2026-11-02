@@ -106,10 +106,17 @@ import {
 } from "./lib/nvidiaConfig";
 import { buildPaperCover } from "./lib/paperFormat";
 import {
+  applyReferencePaper,
   buildPaperBlueprint,
   flattenPaperBlueprint,
   type PaperBlueprint,
 } from "./lib/paperBlueprint";
+import {
+  loadReferenceFormat,
+  referenceFormatBrief,
+  type ReferenceFormat,
+  type ReferencePaper,
+} from "./lib/referencePaper";
 
 type TextPart = { type: "text"; text: string };
 type ImagePart = { type: "image_url"; image_url: { url: string } };
@@ -1593,12 +1600,15 @@ async function generatePaperQuestions(
   apiKeys: string[],
   course: PaperCourse,
   paperTitle: string,
+  // The structure the paper must follow. Usually the subject blueprint, or a
+  // blueprint reshaped from a real reference paper.
+  blueprint: PaperBlueprint,
   // The qualification paper this practice paper covers, when the course is
   // split into papers. The format is the same across papers; only the topics
   // change, so the grouping is applied to the specification digest.
   chosenPaper?: { label: string; topicIds: string[] },
+  reference?: { paper: ReferencePaper; format: ReferenceFormat | null },
 ): Promise<GeneratedExam[]> {
-  const blueprint = buildPaperBlueprint(course);
   const slots = flattenPaperBlueprint(blueprint);
   const qualification = qualificationText({
     course: course.subject,
@@ -1636,10 +1646,14 @@ async function generatePaperQuestions(
     ? `\n<paper>This is ${chosenPaper.label} of the qualification. Every question must come from the topics listed for that paper above, and no question may test a topic from another paper.</paper>\n`
     : "";
 
+  const referenceBlock = reference
+    ? `\n<reference_paper>\n${reference.format ? referenceFormatBrief(reference.paper, reference.format) : `The selected reference is the real ${reference.paper.year} ${reference.paper.label} paper, but its PDF could not be read. Follow the board blueprint above.`}\n</reference_paper>\n`
+    : "";
+
   const basePrompt =
     `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
     `<specification>\n${digest}\n</specification>\n${paperScope}\n` +
-    `${blueprintBrief(blueprint)}\n\n` +
+    `${blueprintBrief(blueprint)}${referenceBlock}\n\n` +
     `Write one complete practice paper titled "${paperTitle}" for this qualification, using only the specification above. ` +
     `Write exactly ${slots.length} original exam-style question${slots.length === 1 ? "" : "s"} totalling ${blueprint.totalMarks} marks. ` +
     "Do not add, remove, reorder or re-mark a question: the paper format above is fixed. " +
@@ -1726,11 +1740,33 @@ export const buildPastPaper = internalAction({
       const chosenPaper = paper.paper
         ? course.pathway?.papers?.find((group) => group.label === paper.paper)
         : undefined;
+      const baseBlueprint = buildPaperBlueprint(course);
+      let referenceFormat: ReferenceFormat | null = null;
+      if (paper.referencePaper) {
+        await ctx.runMutation(internal.pastPapers.setProgress, {
+          paperId,
+          progress: "Reading the reference paper's structure…",
+        });
+        referenceFormat = await loadReferenceFormat(paper.referencePaper);
+        if (!referenceFormat) {
+          console.warn(
+            "Reference paper could not be read; using the subject blueprint",
+            paper.referencePaper.questionUrl,
+          );
+        }
+      }
+      const blueprint = referenceFormat
+        ? applyReferencePaper(course, baseBlueprint, referenceFormat)
+        : baseBlueprint;
       const questions = await generatePaperQuestions(
         apiKeys,
         course,
         paper.title,
+        blueprint,
         chosenPaper,
+        paper.referencePaper
+          ? { paper: paper.referencePaper, format: referenceFormat }
+          : undefined,
       );
       // Deleted while the paper was being written: stop instead of saving into
       // a paper that no longer exists.
@@ -1748,7 +1784,6 @@ export const buildPastPaper = internalAction({
         (sum, question) => sum + question.marks,
         0,
       );
-      const blueprint = buildPaperBlueprint(course);
       const cover = buildPaperCover(
         {
           subject: course.subject,
@@ -1769,6 +1804,7 @@ export const buildPastPaper = internalAction({
         formatId: blueprint.id,
         cover,
         questions,
+        referenceFormatUsed: Boolean(paper.referencePaper && referenceFormat),
       });
       return { ok: true };
     } catch (error) {
