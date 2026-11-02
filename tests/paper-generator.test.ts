@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  buildPaperBlueprint,
+  flattenPaperBlueprint,
+} from "../src/convex/lib/paperBlueprint";
+
+import {
   PAPER_CHECKLIST,
   PAPER_FORMAT_GUIDELINE,
   PAPER_GENERATOR_PROMPT,
@@ -34,5 +39,37 @@ describe("paper generator context", () => {
     expect(PAPER_GENERATOR_SYSTEM_MESSAGE).not.toContain("reference_paper");
     expect(PAPER_GENERATOR_PROMPT).not.toContain('"paper_economy":');
     expect(PAPER_GENERATOR_PROMPT).toContain("top-level \"questions\" array");
+  });
+});
+
+describe("AQA English Literature paper format", () => {
+  test("prints an extract for both 30-mark essays and names the set texts", () => {
+    const blueprint = buildPaperBlueprint({
+      subject: "English Literature",
+      level: "GCSE",
+      examBoard: "AQA",
+      tier: "Higher",
+      poetryTheme: "Love & Relationships",
+      // Older courses have no set-text fields; the pathway still names them.
+      pathway: {
+        units: [
+          { title: "Shakespeare", topics: [{ title: "Macbeth" }] },
+          { title: "The 19th Century Novel", topics: [{ title: "A Christmas Carol" }] },
+        ],
+      },
+    });
+    const slots = flattenPaperBlueprint(blueprint);
+
+    expect(blueprint.id).toBe("english-literature-aqa-extract");
+    expect(slots).toHaveLength(2);
+    expect(slots.every((slot) => slot.marks === 30)).toBe(true);
+    expect(slots.every((slot) => slot.extract === true)).toBe(true);
+    expect(slots[0]!.ask).toContain("Starting with this extract");
+    expect(slots[0]!.ask).toContain("Macbeth");
+    expect(slots[0]!.ask).toContain("whole play");
+    expect(slots[1]!.ask).toContain("A Christmas Carol");
+    expect(slots[1]!.ask).toContain("whole novel");
+    expect(blueprint.rules.join(" ")).toContain("150-250 words");
+    expect(blueprint.rules.join(" ")).not.toContain("Do not reproduce an extract");
   });
 });

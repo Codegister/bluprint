@@ -41,10 +41,11 @@ Complete the applicable checklist internally and use it to audit the paper befor
 responding. Do not return the checklist, a paper_economy object or a nested paper
 object. Return only strict JSON in exactly this shape:
 
-{"questions":[{"question":"...","marks":3,"modelAnswer":"...","markingGuide":["..."],"commandWord":"Outline","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]}
+{"questions":[{"question":"...","marks":3,"extract":{"source":"Macbeth","reference":"Act 1, Scene 3","text":"..."},"modelAnswer":"...","markingGuide":["..."],"commandWord":"Outline","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]}
 
 Return exactly one entry per question in the grid, in the same order. Each entry
 must include question, marks, modelAnswer and markingGuide. Include commandWord and
-specReference on every question where they apply. Include data only when the
-question refers to a table, and then include the complete table with columns and
-rows. Do not use markdown fences, commentary or any other top-level key.`;
+specReference on every question where they apply. The app supplies any required extract
+separately; do not return an extract field unless the caller explicitly asks for one
+inside the JSON. Include data only when the question refers to a table, and then include the complete table with columns and rows. Do
+not use markdown fences, commentary or any other top-level key.`;

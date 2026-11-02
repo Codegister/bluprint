@@ -36,6 +36,14 @@ const generatedQuestion = v.object({
   marking: v.optional(v.union(v.literal("points"), v.literal("levels"))),
   modelAnswer: v.string(),
   markingGuide: v.array(v.string()),
+  // A closed-book literature question prints an extract above its stem.
+  extract: v.optional(
+    v.object({
+      source: v.optional(v.string()),
+      reference: v.optional(v.string()),
+      text: v.string(),
+    }),
+  ),
   // The table a question refers to, when it needs one.
   data: v.optional(
     v.object({
@@ -360,6 +368,7 @@ export const completeBuild = internalMutation({
         marking: question.marking,
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
+        extract: question.extract,
         data: question.data,
         // The guide stored as discrete criteria, scaled to the question's
         // marks, so the marked page renders one row per mark and partial marks

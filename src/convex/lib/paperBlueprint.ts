@@ -1,4 +1,5 @@
 import { boardFamily } from "./paperFormat";
+import { literatureChoicesFor } from "./literatureChoices";
 
 /**
  * The question structure of a real paper, per subject.
@@ -32,6 +33,12 @@ export type PaperSlot = {
    * have a descriptor for each level, which is how long answers are marked.
    */
   marking: PaperMarking;
+  /** The question must print an extract from the set text above the stem. */
+  extract?: boolean;
+  /** The named text, author and form for that extract. */
+  extractSource?: string;
+  extractAuthor?: string;
+  extractKind?: "play" | "novel";
 };
 
 export type PaperSection = {
@@ -68,6 +75,14 @@ export type BlueprintCourse = {
   /** Route B's second Area of Study. */
   rsSpec2?: string | null;
   poetryTheme?: string | null;
+  /** GCSE English Literature set texts, when the student chose them. */
+  litShakespeare?: string | null;
+  litNovel?: string | null;
+  litModern?: string | null;
+  /** Used to recover the set text from older courses that predate the fields. */
+  pathway?: {
+    units: Array<{ title: string; topics: Array<{ title: string }> }>;
+  } | null;
 };
 
 /** One flattened question, exactly as it will be stored and displayed. */
@@ -79,6 +94,10 @@ export type FlatPaperSlot = {
   command: string;
   ask: string;
   marking: PaperMarking;
+  extract?: boolean;
+  extractSource?: string;
+  extractAuthor?: string;
+  extractKind?: "play" | "novel";
 };
 
 const POINT_RULE =
@@ -90,7 +109,14 @@ function q(
   marks: number,
   command: string,
   ask: string,
-  options: { part?: string; marking?: PaperMarking } = {},
+  options: {
+    part?: string;
+    marking?: PaperMarking;
+    extract?: boolean;
+    extractSource?: string;
+    extractAuthor?: string;
+    extractKind?: "play" | "novel";
+  } = {},
 ): PaperSlot {
   return {
     marks,
@@ -98,6 +124,10 @@ function q(
     ask,
     marking: options.marking ?? "points",
     ...(options.part ? { part: options.part } : {}),
+    ...(options.extract ? { extract: true } : {}),
+    ...(options.extractSource ? { extractSource: options.extractSource } : {}),
+    ...(options.extractAuthor ? { extractAuthor: options.extractAuthor } : {}),
+    ...(options.extractKind ? { extractKind: options.extractKind } : {}),
   };
 }
 
@@ -171,6 +201,10 @@ export function flattenPaperBlueprint(
         command: slot.command,
         ask: slot.ask,
         marking: slot.marking,
+        ...(slot.extract ? { extract: true } : {}),
+        ...(slot.extractSource ? { extractSource: slot.extractSource } : {}),
+        ...(slot.extractAuthor ? { extractAuthor: slot.extractAuthor } : {}),
+        ...(slot.extractKind ? { extractKind: slot.extractKind } : {}),
       });
     }
   });
@@ -546,43 +580,128 @@ function religiousStudies(course: BlueprintCourse): PaperBlueprint {
  * long essay on a text the course actually studies, never an extract, unseen
  * text or short-answer question the student has not prepared for.
  */
-function essaySections(
+type EssaySection = {
+  title: string;
+  focus: string;
+  text?: string;
+  author?: string;
+  form: "play" | "novel" | "poetry" | "text";
+  extract?: boolean;
+};
+
+function normalizedTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * The student's chosen text, or the text named in an older pathway. Courses
+ * created before the set-text fields existed still have Macbeth or A Christmas
+ * Carol in their topic list, so the extract names the actual text rather than
+ * saying "the play you have studied".
+ */
+function literatureText(
   course: BlueprintCourse,
-): Array<{ title: string; focus: string }> {
+  kind: "shakespeare" | "novel",
+): string | undefined {
+  const direct =
+    kind === "shakespeare" ? course.litShakespeare : course.litNovel;
+  if (direct?.trim()) return direct.trim();
+
+  const choices = literatureChoicesFor(course.examBoard)?.[kind] ?? [];
+  const titles =
+    course.pathway?.units.flatMap((unit) =>
+      unit.topics.map((topic) => normalizedTitle(topic.title)),
+    ) ?? [];
+  return choices.find((choice) => {
+    const wanted = normalizedTitle(choice);
+    return titles.some(
+      (title) => title.includes(wanted) || wanted.includes(title),
+    );
+  });
+}
+
+/** The author AQA would print above the extract. */
+function authorForText(text?: string): string | undefined {
+  if (!text) return undefined;
+  const value = normalizedTitle(text);
+  if (/macbeth|romeo|merchant|much ado|tempest|julius caesar|twelfth night/.test(value)) {
+    return "Shakespeare";
+  }
+  if (/christmas carol|great expectations|oliver twist|hard times|tale of two cities/.test(value)) {
+    return "Dickens";
+  }
+  if (/jekyll|hyde/.test(value)) return "Stevenson";
+  if (/jane eyre/.test(value)) return "Brontë";
+  if (/frankenstein/.test(value)) return "Shelley";
+  if (/pride and prejudice/.test(value)) return "Austen";
+  if (/sign of four/.test(value)) return "Conan Doyle";
+  if (/silas marner/.test(value)) return "Eliot";
+  if (/war of the worlds/.test(value)) return "Wells";
+  return undefined;
+}
+
+/**
+ * The two essay sections of this board's literature paper. AQA Paper 1 prints
+ * an extract from each named set text above a two-part question, so its
+ * sections carry both the text and the extract requirement.
+ */
+function essaySections(course: BlueprintCourse): EssaySection[] {
   const family = boardFamily(course.examBoard);
   const poetry = course.poetryTheme?.trim();
   if (isAdvanced(course.level)) {
     return [
-      { title: "Section A — Set text", focus: "the set text you have studied" },
+      {
+        title: "Section A — Set text",
+        focus: "the set text you have studied",
+        form: "text",
+      },
       {
         title: poetry ? `Section B — Poetry: ${poetry}` : "Section B — Poetry or second text",
         focus: poetry
           ? `a poem from the ${poetry} anthology`
           : "a poem or second text you have studied",
+        form: "poetry",
       },
     ];
   }
   switch (family) {
-    case "aqa":
+    case "aqa": {
+      const shakespeare = literatureText(course, "shakespeare");
+      const novel = literatureText(course, "novel");
       return [
         {
           title: "Section A — Shakespeare",
-          focus: "the Shakespeare play you have studied",
+          focus: shakespeare ?? "the Shakespeare play you have studied",
+          text: shakespeare,
+          author: authorForText(shakespeare),
+          form: "play",
+          extract: true,
         },
         {
           title: "Section B — 19th-century novel",
-          focus: "the 19th-century novel you have studied",
+          focus: novel ?? "the 19th-century novel you have studied",
+          text: novel,
+          author: authorForText(novel),
+          form: "novel",
+          extract: true,
         },
       ];
+    }
     case "edexcel":
       return [
         {
           title: "Section A — Shakespeare",
           focus: "the Shakespeare play you have studied",
+          form: "play",
         },
         {
           title: "Section B — Post-1914 literature",
           focus: "the post-1914 play or novel you have studied",
+          form: "text",
         },
       ];
     case "ocr":
@@ -590,10 +709,12 @@ function essaySections(
         {
           title: "Section A — Modern prose or drama",
           focus: "the modern prose or drama text you have studied",
+          form: "text",
         },
         {
           title: "Section B — 19th-century prose",
           focus: "the 19th-century prose text you have studied",
+          form: "novel",
         },
       ];
     case "wjec":
@@ -601,22 +722,25 @@ function essaySections(
         {
           title: "Section A — Shakespeare",
           focus: "the Shakespeare play you have studied",
+          form: "play",
         },
         {
           title: poetry ? `Section B — Poetry anthology: ${poetry}` : "Section B — Poetry anthology",
           focus: poetry
             ? `a poem from the ${poetry} anthology`
             : "a poem from the anthology you have studied",
+          form: "poetry",
         },
       ];
     default:
       return [
-        { title: "Section A — Set text", focus: "the set text you have studied" },
+        { title: "Section A — Set text", focus: "the set text you have studied", form: "text" },
         {
           title: poetry ? `Section B — Poetry: ${poetry}` : "Section B — Poetry",
           focus: poetry
             ? `a poem from the ${poetry} anthology`
             : "a poem you have studied",
+          form: "poetry",
         },
       ];
   }
@@ -631,6 +755,7 @@ function essaySections(
 function englishLiterature(course: BlueprintCourse): PaperBlueprint {
   const family = boardFamily(course.examBoard);
   const advanced = isAdvanced(course.level);
+  const aqaGcse = family === "aqa" && !advanced;
   const marks = advanced
     ? 25
     : family === "edexcel" || family === "ocr" || family === "wjec"
@@ -641,30 +766,49 @@ function englishLiterature(course: BlueprintCourse): PaperBlueprint {
   const twoPart = family === "edexcel" || family === "ocr";
 
   const blueprint = makeBlueprint(
-    "english-literature",
-    "English Literature format: two full essay questions, marked against level descriptors.",
-    essaySections(course).map((essay) =>
-      section(essay.title, "Answer the question.", [
-        q(
-          marks,
-          "Explore",
-          `Set one essay question on ${essay.focus}. If the specification names the text or poem, name it; otherwise say 'the text you have studied' and make the question work for any text in that unit. Use the board's essay wording (for example 'Explore how…', 'How does the writer…' or 'To what extent…'). Ask about a character, theme, relationship or the writer's methods, and require analysis of the writer's choices rather than plot summary.` +
-            (twoPart
-              ? " Combine close analysis of a key moment with the whole text in the same question."
-              : ""),
-          { marking: "levels" },
-        ),
-      ]),
-    ),
+    aqaGcse ? "english-literature-aqa-extract" : "english-literature",
+    aqaGcse
+      ? "AQA English Literature Paper 1 format: two 30-mark essays, each with an extract from the set text."
+      : "English Literature format: two full essay questions, marked against level descriptors.",
+    essaySections(course).map((essay) => {
+      const text = essay.text ?? essay.focus;
+      const author = essay.author ?? "the writer";
+      const form = essay.form;
+      const ask = aqaGcse && essay.extract
+        ? `Set one AQA Paper 1 essay question on ${text}. Start with "Starting with this extract, how does ${author} present [a theme, character or relationship]?" Then require the student to write about the extract and the whole ${form}. Choose a theme, character or relationship covered by the specification. The extract is supplied with the question, so do not tell the student to use their own copy.`
+        : `Set one essay question on ${essay.focus}. If the specification names the text or poem, name it; otherwise say 'the text you have studied' and make the question work for any text in that unit. Use the board's essay wording (for example 'Explore how…', 'How does the writer…' or 'To what extent…'). Ask about a character, theme, relationship or the writer's methods, and require analysis of the writer's choices rather than plot summary.` +
+          (twoPart
+            ? " Combine close analysis of a key moment with the whole text in the same question."
+            : "");
+      return section(essay.title, "Answer the question.", [
+        q(marks, "Explore", ask, {
+          marking: "levels",
+          extract: aqaGcse && essay.extract,
+          extractSource: essay.text,
+          extractAuthor: essay.author,
+          extractKind: essay.form === "novel" ? "novel" : "play",
+        }),
+      ]);
+    }),
     [
       `Write exactly two questions, worth ${marks} marks each. Each is an extended essay.`,
       "Do not write short-answer, recall, comprehension, multiple-choice, true/false or one-mark questions.",
       "Ask about a text or poem from the specification. Never invent a text, poem, character or scene; use 'the text you have studied' when the specification does not name one.",
-      "Each question must ask the student to analyse the writer's methods and support a line of argument with evidence from the whole text.",
-      "Do not reproduce an extract or a long quotation. Tell the student to use their own copy of the text.",
+      aqaGcse
+        ? "Each question must ask the student to analyse the writer's methods and support a line of argument with evidence from the extract and the whole text."
+        : "Each question must ask the student to analyse the writer's methods and support a line of argument with evidence from the whole text.",
+      ...(aqaGcse
+        ? [
+            "Both questions must include an `extract` object with `text` and a `reference` (for example 'Act 1, Scene 3' or 'Chapter 2'); set `source` to the named text. The extract must be 150-250 words.",
+            "The extract must come from the named set text. Do not substitute an extract from another text and do not invent a scene or passage that does not exist in that text.",
+            "Use the AQA two-part wording: 'Starting with this extract, how does [author] present [theme]?' followed by 'Write about: how [author] presents [theme] in this extract; how [author] presents [theme] in the whole play/novel.'",
+          ]
+        : [
+            "Do not reproduce an extract or a long quotation. Tell the student to use their own copy of the text.",
+          ]),
       LEVEL_RULE,
       "Each model answer must be a full essay with an introduction, developed paragraphs and a conclusion, not a list of points.",
-      ...(family === "aqa" && !advanced
+      ...(aqaGcse
         ? [
             "On the real AQA paper 4 extra marks are awarded for AO4 (SPaG); each practice essay is marked out of 30 for the essay itself.",
           ]
@@ -674,7 +818,12 @@ function englishLiterature(course: BlueprintCourse): PaperBlueprint {
   );
   // Say "essay", not "question": the format is the point the student needs to
   // see before building.
-  return { ...blueprint, summary: `2 essays · ${marks} marks each` };
+  return {
+    ...blueprint,
+    summary: aqaGcse
+      ? `2 extract essays · ${marks} marks each`
+      : `2 essays · ${marks} marks each`,
+  };
 }
 
 /** English Language is one extended writing task, not a reading quiz. */

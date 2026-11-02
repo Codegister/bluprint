@@ -231,6 +231,28 @@ export function PastPaperPractice({
                     {question.label?.trim() || position}
                   </span>
                   <div className="min-w-0">
+                    {question.extract && (
+                      <figure className="mb-4 overflow-hidden rounded-2xl border border-[#E8DFC8] bg-[#FFFCF4]">
+                        <figcaption className="flex flex-wrap items-baseline gap-x-2 border-b border-[#E8DFC8] px-4 py-2.5">
+                          <span className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12]">
+                            Extract
+                          </span>
+                          {question.extract.source && (
+                            <span className="text-[0.76rem] font-semibold text-brand-ink">
+                              from {question.extract.source}
+                            </span>
+                          )}
+                          {question.extract.reference && (
+                            <span className="text-[0.72rem] text-muted-foreground">
+                              {question.extract.reference}
+                            </span>
+                          )}
+                        </figcaption>
+                        <blockquote className="max-h-[26rem] overflow-y-auto whitespace-pre-wrap px-4 py-3 font-serif text-[0.92rem] leading-[1.75] text-brand-ink/90">
+                          {question.extract.text}
+                        </blockquote>
+                      </figure>
+                    )}
                     <p className="font-display text-[1.1rem] font-bold leading-snug text-brand-ink sm:text-[1.22rem]">
                       {question.question}
                     </p>

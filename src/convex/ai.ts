@@ -158,6 +158,12 @@ type GeneratedExam = {
   sectionInstruction?: string;
   commandWord?: string;
   specReference?: string;
+  /** Past papers only: an extract printed above the question. */
+  extract?: {
+    source?: string;
+    reference?: string;
+    text: string;
+  };
   /** Past papers only: the table the question refers to. */
   data?: {
     title?: string;
@@ -881,6 +887,23 @@ function parseQuestionData(value: unknown): GeneratedExam["data"] {
   };
 }
 
+/** The extract a closed-book literature question prints above its stem. */
+function parseQuestionExtract(value: unknown): GeneratedExam["extract"] {
+  if (typeof value === "string") {
+    const text = asText(value, 5000);
+    return text ? { text } : undefined;
+  }
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as { source?: unknown; reference?: unknown; text?: unknown };
+  const text = asText(row.text, 5000);
+  if (!text) return undefined;
+  return {
+    text,
+    source: optionalText(row.source, 80),
+    reference: optionalText(row.reference, 80),
+  };
+}
+
 function parseExams(raw: string, limit = 4): GeneratedExam[] {
   const items = collectionItems(
     raw,
@@ -918,6 +941,7 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
           sectionInstruction: optionalText(row.sectionInstruction, 240),
           commandWord: optionalText(row.commandWord, 40),
           specReference: optionalText(row.specReference, 40),
+          extract: parseQuestionExtract(row.extract),
           data: parseQuestionData(row.data),
         }),
       );
@@ -1411,6 +1435,9 @@ type PaperCourse = {
   rsReligion2?: string;
   rsSpec?: string;
   rsSpec2?: string;
+  litShakespeare?: string;
+  litNovel?: string;
+  litModern?: string;
   pathway?: {
     units: Array<{
       title: string;
@@ -1608,6 +1635,11 @@ function slotBrief(blueprint: PaperBlueprint, slot: FlatPaperSlot): string {
     slot.sectionInstruction,
     `${slot.label} — ${slot.marks} mark${slot.marks === 1 ? "" : "s"} — command word: ${slot.command} — ${slot.marking === "levels" ? "levels-marked" : "point-marked"}`,
     `  ${slot.ask}`,
+    ...(slot.extract
+      ? [
+          "  The app supplies the extract separately. Write the question so it refers to the extract and the whole text; do not return an extract field.",
+        ]
+      : []),
     "",
     "FORMAT RULES",
     ...blueprint.rules.map((rule) =>
@@ -1616,6 +1648,108 @@ function slotBrief(blueprint: PaperBlueprint, slot: FlatPaperSlot): string {
         : rule,
     ),
   ].join("\n");
+}
+
+/** A paper-sized extract: long enough to analyse, short enough to print. */
+const MIN_EXTRACT_WORDS = 80;
+const MAX_EXTRACT_WORDS = 350;
+
+function extractWordCount(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+/** Drop a stray next-chapter or next-act heading after the passage. */
+function cleanExtractText(text: string): string {
+  return text
+    .replace(/\n+\s*(?:chapter|act|scene)\s+[0-9ivxlcdm]+\b[^\n]*$/i, "")
+    .trim();
+}
+
+/** Keep the first complete sentences when a reply overshoots the extract size. */
+function shortenExtract(text: string, maxWords: number): string {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= maxWords) return text.trim();
+  const clipped = words.slice(0, maxWords).join(" ");
+  const lastStop = Math.max(
+    clipped.lastIndexOf(". "),
+    clipped.lastIndexOf("! "),
+    clipped.lastIndexOf("? "),
+  );
+  return lastStop > clipped.length * 0.55
+    ? clipped.slice(0, lastStop + 1)
+    : clipped;
+}
+
+/**
+ * Writes the reading passage for one closed-book literature question.
+ *
+ * This is deliberately separate from the question JSON. Extracts are full of
+ * quotation marks, and asking the model to escape them inside a large JSON
+ * string made otherwise-valid replies unparseable. A plain-text call has no
+ * escaping problem; the caller attaches the result to the stored question.
+ */
+async function generateLiteratureExtract(
+  apiKeys: string[],
+  slot: FlatPaperSlot,
+  question: string,
+): Promise<GeneratedExam["extract"] | null> {
+  const source = slot.extractSource ?? "the set text";
+  const author = slot.extractAuthor ?? "the writer";
+  const kind = slot.extractKind ?? "text";
+  let lastCount = 0;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const raw = await nvidiaChat(apiKeys, {
+      model: NVIDIA_TEXT_MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You supply the reading extract for an exam paper. Return plain text only: no JSON, markdown fences or commentary.",
+        },
+        {
+          role: "user",
+          content:
+            `Text: ${source}\nAuthor: ${author}\nForm: ${kind}\n` +
+            `Question: ${question}\n\n` +
+            `Write the extract that must be printed above this question. It must be a continuous passage from ${source}, in ${author}'s original words, 150-250 words. ` +
+            "Do not paraphrase, summarise or invent a passage. Choose a passage that lets the student answer the question, and give the act, scene or chapter reference. " +
+            "Use this exact plain-text format, with no other text:\n" +
+            "REFERENCE: Act 1, Scene 3\nEXTRACT:\n<the passage>\n\n" +
+            "If you do not know the exact words of the passage, choose a different passage from the same text that you do know rather than inventing one." +
+            (attempt > 0
+              ? `\n\nFORMAT CORRECTION: the previous extract was ${lastCount} words. Return only a continuous 150-250 word passage, ending on a complete sentence.`
+              : ""),
+        },
+      ],
+      maxTokens: 3000,
+      temperature: attempt === 0 ? 0.1 : 0,
+      topP: 1,
+      disableThinking: true,
+      timeoutMs: 120_000,
+    });
+
+    const cleaned = stripReasoning(raw)
+      .trim()
+      .replace(/^```(?:text)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+    const reference = /^(?:REFERENCE|Reference)\s*:\s*(.+)$/m.exec(cleaned)?.[1]?.trim();
+    const body = /^(?:EXTRACT|Extract)\s*:\s*([\s\S]+)$/m.exec(cleaned)?.[1]?.trim();
+    let text = cleanExtractText(asText(body ?? cleaned, 5000));
+    if (!text) continue;
+    lastCount = extractWordCount(text);
+    if (lastCount > MAX_EXTRACT_WORDS) {
+      if (attempt === 0) continue;
+      text = shortenExtract(text, 300);
+    }
+    if (extractWordCount(text) < MIN_EXTRACT_WORDS) continue;
+    return {
+      text,
+      source: slot.extractSource,
+      reference: reference ? asText(reference, 80) : undefined,
+    };
+  }
+  return null;
 }
 
 /**
@@ -1674,7 +1808,8 @@ async function generatePaperQuestions(
     `The paper has ${slots.length} question${slots.length === 1 ? "" : "s"} in total; this request covers one of them. ` +
     "Make the question unambiguous and answerable from the specification, and do not copy or paraphrase a published past paper. " +
     "The question needs a full-mark model answer and a marking guide written the way the board writes it. " +
-    "Keep every model answer under 1,000 words, write it as plain prose without markdown headings or bold, and keep every marking guide to at most 12 bullets. " +
+    "Keep every model answer under 900 words, write it as plain prose without markdown headings or bold, and keep every marking guide to at most 12 bullets. " +
+    `Escape every double quotation mark inside the extract and model answer as \\" so the reply is valid JSON. ` +
     "If the question needs data — readings, percentages, observations — include it in a `data` object with `columns` and `rows` and refer to it as \"the table below\". " +
     "Never refer to a table, graph, chart, figure, diagram or photograph you have not supplied: a question that points at missing data cannot be answered. " +
     "Ask about the topics in the specification above and nothing else: a question on a topic the specification does not list cannot be revised for. " +
@@ -1708,11 +1843,11 @@ async function generatePaperQuestions(
                 : ""),
           },
         ],
-        maxTokens: 8000,
+        maxTokens: 12000,
         temperature: attempt === 0 ? 0.2 : 0.1,
         topP: 1.0,
         disableThinking: true,
-        timeoutMs: 180_000,
+        timeoutMs: 240_000,
       });
 
       let parsed: GeneratedExam[];
@@ -1742,6 +1877,18 @@ async function generatePaperQuestions(
         sectionInstruction: slot.sectionInstruction,
         commandWord: slot.command,
       };
+      if (slot.extract) {
+        const extract = await generateLiteratureExtract(
+          apiKeys,
+          slot,
+          accepted.question,
+        );
+        if (!extract) {
+          mismatch = `Question ${slot.label} needs an extract from ${slot.extractSource ?? "the set text"}.`;
+          continue;
+        }
+        accepted = { ...accepted, extract };
+      }
       break;
     }
 

@@ -291,8 +291,8 @@ export default function PastPaper() {
           Written from the saved specification for this course and laid out in this
           subject's paper format, with the same question types and marks, cover rubric,
           numbering, mark notation and command words. The paper is checked against the
-          board's format and mark-scheme rules, and the questions are original and never
-          reproduced from a real paper.
+          board's format and mark-scheme rules; the questions are original, and any
+          extracts are short quotations from the named set texts.
         </p>
       </>
     );

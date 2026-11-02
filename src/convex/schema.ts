@@ -330,6 +330,15 @@ const schema = defineSchema(
       marking: v.optional(v.union(v.literal("points"), v.literal("levels"))),
       modelAnswer: v.string(),
       markingGuide: v.array(v.string()),
+      // A closed-book literature question prints an extract above its stem.
+      // Missing on papers built before extracts were generated.
+      extract: v.optional(
+        v.object({
+          source: v.optional(v.string()),
+          reference: v.optional(v.string()),
+          text: v.string(),
+        }),
+      ),
       // The table a question refers to, when it needs one (readings, percentage
       // cover, observations). A question that says "the table below" and has no
       // table is unanswerable, so this is generated and validated with the
