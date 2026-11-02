@@ -58,6 +58,14 @@ import {
   completeAnthology,
   type PathwayLike,
 } from "./lib/poetryAnthologies";
+import {
+  fetchSaveMyExamsPage,
+  outlineFromSaveMyExams,
+  parseSaveMyExamsNotesIndex,
+  resolveSaveMyExamsCourse,
+  type SaveMyExamsNotesIndex,
+} from "./lib/savemyexams";
+import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
 import { buildRsPathway } from "./lib/rsPathways";
 import {
   OPENROUTER_CHAT_URL,
@@ -2060,12 +2068,16 @@ type CoursePathway = {
   overview: string;
   examFormat: string;
   units: PathwayUnit[];
-  /** The notes page this map was read from, when it came from Cognito. */
+  /** Where the saved unit/topic shape was read from. */
+  source?: "savemyexams" | "cognito" | "bluprint" | "rs";
+  /** The notes page this map was read from. */
   sourceUrl?: string;
   /** The qualification's papers, when the specification publishes a split. */
   papers?: Array<{ label: string; topicIds: string[] }>;
-  /** Set once the Cognito links above have been read for this pathway. */
+  /** Set once the notes links above have been read for this pathway. */
   cognitoSyncedAt?: number;
+  /** Schema version used to rebuild courses saved by an older builder. */
+  version?: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -2239,7 +2251,7 @@ function buildPathwayFromOutline(
   };
 }
 
-/** The only source of a pathway: Cognito's published page for this course. */
+/** The fallback pathway: Cognito's published page for this course. */
 async function scrapePathway(course: PathwayCourse): Promise<CoursePathway | null> {
   const page = await fetchCognitoOutline(course);
   if (!page || page.sections.length === 0) return null;
@@ -2247,6 +2259,49 @@ async function scrapePathway(course: PathwayCourse): Promise<CoursePathway | nul
   // Topic notes are read from this course's own notes pages, so the address is
   // stored with the pathway instead of being rebuilt later.
   if (/\/notes$/i.test(page.sourceUrl)) pathway.sourceUrl = page.sourceUrl;
+  pathway.source = "cognito";
+  return pathway;
+}
+
+/**
+ * Builds the pathway from Save My Exams' own section -> topic -> subtopic tree.
+ * Keeping that tree is what makes the course page, the topic notes and the
+ * paper practice point at the same course instead of three different outlines.
+ */
+async function scrapeSaveMyExamsPathway(
+  course: PathwayCourse,
+): Promise<CoursePathway | null> {
+  const resolved = await resolveSaveMyExamsCourse({
+    level: course.level,
+    subject: course.subject,
+    examBoard: course.examBoard,
+    ...(course.tier ? { tier: course.tier } : {}),
+    ...(course.variant ? { variant: course.variant } : {}),
+  });
+  if (resolved.status !== "matched") return null;
+
+  const indexes: SaveMyExamsNotesIndex[] = [];
+  for (const path of resolved.course.notesIndexPaths) {
+    const page = await fetchSaveMyExamsPage(path);
+    if (page.status !== "ok") return null;
+    const index = parseSaveMyExamsNotesIndex(page.html);
+    if (!index) return null;
+    indexes.push(index);
+  }
+
+  const outline = outlineFromSaveMyExams(indexes);
+  if (!outline) return null;
+  const topicCount = outline.sections.reduce(
+    (sum, section) => sum + section.topics.length,
+    0,
+  );
+  const pathway = buildPathwayFromOutline(course, {
+    label: `${course.examBoard} ${course.level} ${course.subject}`,
+    intro: `A ${course.level} ${course.subject} pathway built from Save My Exams' published revision notes: ${outline.sections.length} units, ${topicCount} topics and ${outline.pageCount} note pages.`,
+    sections: outline.sections,
+  });
+  pathway.sourceUrl = outline.sourceUrl;
+  pathway.source = "savemyexams";
   return pathway;
 }
 
@@ -2388,6 +2443,8 @@ function fallbackPathway(course: {
   return {
     overview: `A starter revision pathway for ${level} ${subject}${tier} with ${board}. Open a topic to build a study set, or rebuild this map later for a fuller specification-specific version.`,
     examFormat: `Check the current ${board} specification for paper structure, durations and weightings.`,
+    source: "bluprint",
+    version: CURRENT_PATHWAY_VERSION,
     units: units.map((entry, unitIndex) => ({
       ...entry,
       topics: entry.topics.map((topic, topicIndex) => ({
@@ -2414,14 +2471,26 @@ async function generateCoursePathway(
   const religiousStudies = buildRsPathway(course);
   if (religiousStudies) {
     // RS is saved content, so there is no notes page or paper split to read.
-    return { ...religiousStudies, cognitoSyncedAt: Date.now() };
+    return {
+      ...religiousStudies,
+      source: "rs",
+      cognitoSyncedAt: Date.now(),
+      version: CURRENT_PATHWAY_VERSION,
+    };
   }
 
   let pathway: CoursePathway | null = null;
   try {
-    pathway = await scrapePathway(course);
+    pathway = await scrapeSaveMyExamsPathway(course);
   } catch {
-    // Fall through to the starter map.
+    // A temporary Save My Exams failure falls back to the old reader below.
+  }
+  if (!pathway) {
+    try {
+      pathway = await scrapePathway(course);
+    } catch {
+      // Fall through to the starter map.
+    }
   }
 
   if (!pathway) {
@@ -2433,20 +2502,25 @@ async function generateCoursePathway(
     pathway = fallbackPathway(course);
   }
 
-  // English Literature always ends up with the full published poetry cluster,
-  // exactly once, whatever the scrape happened to list.
-  const completed = completeAnthology(pathway as PathwayLike, course) as CoursePathway;
+  // Save My Exams already publishes each poetry cluster as a topic with its
+  // own notes. The Cognito/fallback maps still get Bluprint's complete saved
+  // anthology, exactly once, so none of their poems go missing.
+  const completed: CoursePathway =
+    pathway.source === "savemyexams"
+      ? pathway
+      : (completeAnthology(pathway as PathwayLike, course) as CoursePathway);
 
   // Papers are grouped only after the pathway is final, so the groups point at
-  // the topics the student can actually see. Religious Studies supplies its own
-  // groups from the saved Pearson content, and a subject whose specification
-  // does not publish a paper split keeps the plain whole-course paper.
-  if (!completed.papers) {
+  // the topics the student can actually see. Save My Exams' own topics are not
+  // Cognito spec references, so its maps use the whole-course paper instead of
+  // attaching the wrong groups.
+  if (!completed.papers && completed.source !== "savemyexams") {
     const paperMap = await fetchCognitoPaperMap(course).catch(() => null);
     const papers = derivePaperGroups(completed.units, paperMap);
     if (papers) completed.papers = papers;
   }
   completed.cognitoSyncedAt = Date.now();
+  completed.version = CURRENT_PATHWAY_VERSION;
   return completed;
 }
 

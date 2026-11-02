@@ -9,6 +9,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { BUILD_DEFAULTS } from "./lib/buildDefaults";
+import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
 import { consumeBuildAllowance } from "./buildUsage";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner, requireVerifiedUser } from "./lib/authorization";
@@ -114,6 +115,7 @@ export const listMine = query({
         errorMessage: course.errorMessage,
         processingStartedAt: course.processingStartedAt,
         topicCount: countTopics(course.pathway),
+        pathwayVersion: course.pathway?.version ?? 1,
         completedCount,
         unitCount: course.pathway?.units.length ?? 0,
         setCount: linked.length,
@@ -147,6 +149,7 @@ export const getDetails = query({
       course,
       completedCount: course.completedTopics.filter((id) => ids.has(id)).length,
       topicCount: countTopics(course.pathway),
+      pathwayVersion: course.pathway?.version ?? 1,
       sets: sets
         .filter((set) => set.userId === userId)
         .map((set) => ({
@@ -748,8 +751,17 @@ export const completeBuild = internalMutation({
     pathway: v.object({
       overview: v.string(),
       examFormat: v.string(),
+      source: v.optional(
+        v.union(
+          v.literal("savemyexams"),
+          v.literal("cognito"),
+          v.literal("bluprint"),
+          v.literal("rs"),
+        ),
+      ),
       sourceUrl: v.optional(v.string()),
       cognitoSyncedAt: v.optional(v.number()),
+      version: v.optional(v.number()),
       papers: v.optional(
         v.array(
           v.object({
@@ -886,11 +898,17 @@ export const recoverMine = mutation({
     let recovered = 0;
     for (const course of courses) {
       const stale = buildStalled(course, now);
-      if (course.status !== "error" && !stale) continue;
+      const needsFormat =
+        course.status === "ready" &&
+        Boolean(course.pathway) &&
+        (course.pathway?.version ?? 1) < CURRENT_PATHWAY_VERSION;
+      if (course.status !== "error" && !stale && !needsFormat) continue;
 
       await ctx.db.patch(course._id, {
         status: "queued",
-        progress: "Preparing a fresh pathway…",
+        progress: needsFormat
+          ? "Updating the course format…"
+          : "Preparing a fresh pathway…",
         errorMessage: undefined,
         processingStartedAt: undefined,
         updatedAt: now,
@@ -928,6 +946,7 @@ export const repairPathways = mutation({
     let repaired = 0;
     for (const course of courses) {
       if (course.status !== "ready" || !course.pathway) continue;
+      if ((course.pathway.version ?? 1) < CURRENT_PATHWAY_VERSION) continue;
       if (course.subject.trim().toLowerCase() !== "english literature") continue;
       if (!/gcse/i.test(course.level)) continue;
 
@@ -962,11 +981,17 @@ export const recoverAllFailed = internalMutation({
     let recovered = 0;
     for (const course of courses) {
       const stale = buildStalled(course, now);
-      if (course.status !== "error" && !stale) continue;
+      const needsFormat =
+        course.status === "ready" &&
+        Boolean(course.pathway) &&
+        (course.pathway?.version ?? 1) < CURRENT_PATHWAY_VERSION;
+      if (course.status !== "error" && !stale && !needsFormat) continue;
 
       await ctx.db.patch(course._id, {
         status: "queued",
-        progress: "Preparing a fresh pathway…",
+        progress: needsFormat
+          ? "Updating the course format…"
+          : "Preparing a fresh pathway…",
         errorMessage: undefined,
         processingStartedAt: undefined,
         updatedAt: now,

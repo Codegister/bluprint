@@ -6,6 +6,7 @@ import { Meter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
+import { CURRENT_PATHWAY_VERSION } from "@/convex/lib/pathwayVersion";
 import { percent } from "@/lib/format";
 import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
@@ -103,6 +104,8 @@ export default function Courses() {
     const now = Date.now();
     const needsRecovery = courseRows.some(
       (course) =>
+        (course.status === "ready" &&
+          course.pathwayVersion < CURRENT_PATHWAY_VERSION) ||
         course.status === "error" ||
         (course.status === "processing" &&
           (course.processingStartedAt === undefined ||

@@ -24,6 +24,7 @@ import { Counter, Meter, enter, reveal } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
+import { CURRENT_PATHWAY_VERSION } from "@/convex/lib/pathwayVersion";
 import { notifyError, readableError } from "@/lib/errors";
 import { CourseCoveragePanel } from "@/components/study/CourseCoveragePanel";
 import { percent, plural, relativeDate } from "@/lib/format";
@@ -279,6 +280,7 @@ export default function Course() {
   const linksRequested = useRef(false);
   useEffect(() => {
     if (!details || details.course.status !== "ready") return;
+    if (details.pathwayVersion < CURRENT_PATHWAY_VERSION) return;
     const pathway = details.course.pathway;
     if (!pathway || pathway.cognitoSyncedAt || linksRequested.current) return;
     linksRequested.current = true;
@@ -290,7 +292,14 @@ export default function Course() {
   const recoveryRequested = useRef(false);
   useEffect(() => {
     if (!details) return;
-    if (details.course.status !== "error" && !details.processingStale) {
+    const needsFormat =
+      details.course.status === "ready" &&
+      details.pathwayVersion < CURRENT_PATHWAY_VERSION;
+    if (
+      details.course.status !== "error" &&
+      !details.processingStale &&
+      !needsFormat
+    ) {
       recoveryRequested.current = false;
       return;
     }
@@ -307,6 +316,7 @@ export default function Course() {
   const repairRequested = useRef<string | null>(null);
   useEffect(() => {
     if (!details || details.course.status !== "ready") return;
+    if (details.pathwayVersion < CURRENT_PATHWAY_VERSION) return;
     if (details.course.subject.trim().toLowerCase() !== "english literature") {
       return;
     }

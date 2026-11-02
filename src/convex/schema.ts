@@ -161,9 +161,10 @@ const schema = defineSchema(
       .index("by_course", ["courseId", "updatedAt"]),
 
     // A course pathway is the second way into Bluprint: instead of uploading
-    // notes, a student picks their qualification and the AI lays out the whole
-    // specification as units and topics. Topics are ordered, tagged with the
-    // specification reference, and can be expanded into a study set on demand.
+    // notes, a student picks their qualification and the published course
+    // structure is mapped as units and topics. Topics are ordered, tagged with
+    // the specification reference where one exists, and can be expanded into a
+    // study set on demand.
     courses: defineTable({
       userId: v.id("users"),
       subject: v.string(),
@@ -200,14 +201,26 @@ const schema = defineSchema(
         v.object({
           overview: v.string(),
           examFormat: v.string(),
-          // The published notes page the pathway was read from. Topic notes and
-          // the real past-paper list are read from the same course on Cognito,
-          // so the address is kept instead of being guessed at read time.
+          // Where the saved unit/topic shape was read from. Save My Exams is
+          // preferred; Cognito, Bluprint's starter map and the saved RS content
+          // remain as fallbacks for courses Save My Exams does not cover.
+          source: v.optional(
+            v.union(
+              v.literal("savemyexams"),
+              v.literal("cognito"),
+              v.literal("bluprint"),
+              v.literal("rs"),
+            ),
+          ),
+          // The published notes page the pathway was read from.
           sourceUrl: v.optional(v.string()),
-          // When the topic-notes address and paper split were last read from
-          // Cognito. Courses built before those fields existed are filled in
-          // once on first visit; a timestamp keeps that from repeating.
+          // When the notes address and paper split were last read. Courses built
+          // before those fields existed are filled in once on first visit; a
+          // timestamp keeps that from repeating.
           cognitoSyncedAt: v.optional(v.number()),
+          // Bumped when the pathway source or shape changes. Older courses are
+          // rebuilt once so existing users receive the new structure.
+          version: v.optional(v.number()),
           // Papers the qualification is split into, with the topics each one
           // examines. Absent when the specification does not publish a split.
           papers: v.optional(

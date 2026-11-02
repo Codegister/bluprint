@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   findSaveMyExamsNotesPages,
+  outlineFromSaveMyExams,
   parseSaveMyExamsCourse,
   parseSaveMyExamsNotePage,
   parseSaveMyExamsNotesIndex,
@@ -152,7 +153,7 @@ const notesIndex = pageHtml({
         slug: "1-2-cell-division",
         order: 1,
       },
-      relationships: { section: { data: { id: "sec1" } } },
+      relationships: { section: { data: { id: "sec2" } } },
     },
   ],
   subtopics: [
@@ -213,6 +214,28 @@ describe("Save My Exams notes index", () => {
     });
     expect(parsed?.pages[0]?.url).toContain(
       "/1-cell-biology/1-1-cell-structure/1-1-1-eukaryotes--prokaryotes/",
+    );
+  });
+
+  test("turns the notes tree into pathway units and topics", () => {
+    const outline = outlineFromSaveMyExams(parsed ? [parsed] : []);
+    expect(outline?.sections.map((section) => section.title)).toEqual([
+      "Cell Biology",
+      "Organisation",
+    ]);
+    expect(
+      outline?.sections[0]?.topics.map((topic) => topic.title),
+    ).toEqual(["Cell Structure"]);
+    expect(
+      outline?.sections[1]?.topics.map((topic) => topic.title),
+    ).toEqual(["Cell Division"]);
+    expect(outline?.sections[0]?.topics[0]?.subtopics).toEqual([
+      "1.1.1 Eukaryotes & Prokaryotes",
+      "1.1.2 Animal & Plant Cells",
+    ]);
+    expect(outline?.pageCount).toBe(3);
+    expect(outline?.sourceUrl).toBe(
+      "https://www.savemyexams.com/gcse/biology/aqa/18/revision-notes/",
     );
   });
 

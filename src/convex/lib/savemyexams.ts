@@ -21,7 +21,9 @@ const PAGE_TIMEOUT_MS = 20_000;
 const MAX_HTML_CHARS = 8_000_000;
 const COURSE_CACHE_TTL = 10 * 60 * 1000;
 const MAX_NOTES_INDEXES = 6;
-const MAX_TOPIC_PAGES = 16;
+// A long Save My Exams topic such as An Inspector Calls publishes 20 note
+// pages; the cap must not silently drop the last of them.
+const MAX_TOPIC_PAGES = 24;
 const MAX_PAPERS = 60;
 
 type JsonObject = Record<string, unknown>;
@@ -519,6 +521,126 @@ export function parseSaveMyExamsNotesIndex(
   }
 
   return pages.length > 0 ? { basePath: pathWithSlash(basePath), pages } : null;
+}
+
+export type SaveMyExamsOutlineTopic = {
+  title: string;
+  reference?: string;
+  subtopics: string[];
+};
+
+export type SaveMyExamsOutlineSection = {
+  title: string;
+  topics: SaveMyExamsOutlineTopic[];
+};
+
+export type SaveMyExamsOutline = {
+  sections: SaveMyExamsOutlineSection[];
+  pageCount: number;
+  sourceUrl: string;
+};
+
+/** Sorts the numbered sections boards print as "1. Shakespeare". */
+function numberedSection(title: string): { number: number | null; text: string } {
+  const match = /^(\d+)[.)]?\s+(.+)$/.exec(title.trim());
+  if (!match) return { number: null, text: title.trim() };
+  return {
+    number: Number(match[1]),
+    text: (match[2] ?? "").trim() || title.trim(),
+  };
+}
+
+/**
+ * Turns the note-page hierarchy into the unit/topic/subtopic outline the course
+ * pathway renders. Saving this shape rather than inventing a separate syllabus
+ * is what keeps every pathway topic matched to its published notes.
+ */
+export function outlineFromSaveMyExams(
+  indexes: SaveMyExamsNotesIndex[],
+): SaveMyExamsOutline | null {
+  type TopicRow = {
+    title: string;
+    reference?: string;
+    subtopics: string[];
+    seen: Set<string>;
+    order: number;
+  };
+  type SectionRow = {
+    title: string;
+    number: number | null;
+    order: number;
+    topics: Map<string, TopicRow>;
+  };
+
+  const sections = new Map<string, SectionRow>();
+  let pageCount = 0;
+  let sourceUrl = "";
+
+  for (const index of indexes) {
+    if (!sourceUrl) sourceUrl = `${SITE}${index.basePath}`;
+    for (const page of index.pages) {
+      pageCount += 1;
+      const section = numberedSection(page.sectionTitle.trim() || "Course content");
+      const sectionKey = titleKey(section.text);
+      let sectionRow = sections.get(sectionKey);
+      if (!sectionRow) {
+        sectionRow = {
+          title: section.text,
+          number: section.number,
+          order: sections.size,
+          topics: new Map(),
+        };
+        sections.set(sectionKey, sectionRow);
+      }
+
+      const topicTitle = page.topicTitle.trim();
+      if (!topicTitle) continue;
+      const topicKey = titleKey(topicTitle);
+      let topic = sectionRow.topics.get(topicKey);
+      if (!topic) {
+        topic = {
+          title: topicTitle,
+          ...(page.topicReference ? { reference: page.topicReference } : {}),
+          subtopics: [],
+          seen: new Set(),
+          order: sectionRow.topics.size,
+        };
+        sectionRow.topics.set(topicKey, topic);
+      }
+      if (topic.seen.has(page.url)) continue;
+      topic.seen.add(page.url);
+      const label = [page.reference, page.title]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (label) topic.subtopics.push(label);
+    }
+  }
+
+  const ordered = [...sections.values()]
+    .sort((a, b) => {
+      if (a.number !== null && b.number !== null) {
+        return a.number - b.number || a.order - b.order;
+      }
+      if (a.number !== null) return -1;
+      if (b.number !== null) return 1;
+      return a.order - b.order;
+    })
+    .map((section) => ({
+      title: section.title,
+      topics: [...section.topics.values()]
+        .sort((a, b) => a.order - b.order)
+        .map((topic) => ({
+          title: topic.title,
+          ...(topic.reference ? { reference: topic.reference } : {}),
+          subtopics: [...topic.subtopics],
+        })),
+    }))
+    .filter((section) => section.topics.length > 0);
+
+  if (ordered.length === 0) return null;
+  return { sections: ordered, pageCount, sourceUrl: sourceUrl || SITE };
 }
 
 /**
