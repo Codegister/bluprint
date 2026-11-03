@@ -208,7 +208,7 @@ export const create = mutation({
       ? mine.filter((row) => row.paper === chosen).length
       : 0;
 
-    const blueprint = buildPaperBlueprint(course);
+    const blueprint = buildPaperBlueprint(course, chosen);
     const now = Date.now();
     const paperId = await ctx.db.insert("pastPapers", {
       userId,
@@ -245,7 +245,7 @@ export const rebuild = mutation({
     // Rebuilding writes a whole paper again, so it costs an allowance too.
     await consumeBuildAllowance(ctx, userId, "paper");
     const course = await ctx.db.get(paper.courseId);
-    const blueprint = course ? buildPaperBlueprint(course) : null;
+    const blueprint = course ? buildPaperBlueprint(course, paper.paper) : null;
 
     const questions = await ctx.db
       .query("pastPaperQuestions")

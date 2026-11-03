@@ -18,6 +18,50 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 
+/**
+ * Prints a generated paper from a dedicated copy at body level.
+ *
+ * Hiding the app around the live paper left the app's scroll layout and
+ * portals in the print snapshot. A clone lets the print stylesheet hide every
+ * other body child outright, while the student's typed answers are copied into
+ * its controls.
+ */
+function printGeneratedPaper() {
+  const source = document.querySelector<HTMLElement>(".print-paper");
+  if (!source) {
+    printWithClass("printing-paper");
+    return;
+  }
+
+  const clone = source.cloneNode(true) as HTMLElement;
+  clone.classList.add("print-paper-clone");
+
+  const sourceFields = source.querySelectorAll<
+    HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+  >("input, textarea, select");
+  const cloneFields = clone.querySelectorAll<
+    HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+  >("input, textarea, select");
+  sourceFields.forEach((field, index) => {
+    const target = cloneFields[index];
+    if (!target) return;
+    target.value = field.value;
+    if (field instanceof HTMLInputElement && target instanceof HTMLInputElement) {
+      target.checked = field.checked;
+    }
+  });
+
+  const sourceDetails = source.querySelectorAll("details");
+  const cloneDetails = clone.querySelectorAll("details");
+  sourceDetails.forEach((detail, index) => {
+    const target = cloneDetails[index];
+    if (target) target.open = detail.open;
+  });
+
+  document.body.appendChild(clone);
+  printWithClass("printing-paper-clone", () => clone.remove());
+}
+
 function MissingCard() {
   return (
     <div className="mx-auto mt-6 max-w-lg rounded-[2rem] border border-border bg-card p-8 text-center">
@@ -112,7 +156,7 @@ export default function PastPaper() {
       : undefined;
     // The structure the course uses now, shown on the paper and used to spot a
     // paper saved before that structure was corrected.
-    const blueprint = course ? buildPaperBlueprint(course) : null;
+    const blueprint = course ? buildPaperBlueprint(course, paper.paper) : null;
     const outdated =
       ready && blueprint !== null && paper.formatId !== blueprint.id;
 
@@ -148,7 +192,7 @@ export default function PastPaper() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => printWithClass("printing-paper")}
+              onClick={printGeneratedPaper}
               className="ml-auto h-9 shrink-0 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
             >
               <Printer className="size-3.5" aria-hidden />

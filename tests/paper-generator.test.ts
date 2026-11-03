@@ -110,3 +110,55 @@ describe("AQA English Literature paper format", () => {
     }
   });
 });
+
+describe("Edexcel RS paper split", () => {
+  const routeA = {
+    subject: "Religious Studies",
+    level: "GCSE",
+    examBoard: "Pearson Edexcel",
+    rsRoute: "Edexcel Religious Studies A",
+    rsReligion: "Catholic Christianity",
+    rsReligion2: "Judaism",
+  };
+
+  test("Paper 1 contains only the first religion", () => {
+    const whole = buildPaperBlueprint(routeA);
+    const paper1 = buildPaperBlueprint(routeA, "Paper 1");
+    const slots = flattenPaperBlueprint(paper1);
+
+    expect(whole.sections).toHaveLength(2);
+    expect(paper1.sections).toHaveLength(1);
+    expect(paper1.sections[0]!.title).toContain("Catholic Christianity");
+    expect(paper1.sections[0]!.title).not.toContain("Judaism");
+    expect(slots).toHaveLength(4);
+    expect(slots.map((slot) => slot.marks)).toEqual([3, 4, 5, 12]);
+    expect(paper1.id).toBe("rs-edexcel-a-p1");
+    expect(paper1.id).not.toBe(whole.id);
+  });
+
+  test("Paper 2 contains only the second religion", () => {
+    const paper2 = buildPaperBlueprint(routeA, "Paper 2");
+    expect(paper2.sections).toHaveLength(1);
+    expect(paper2.sections[0]!.title).toContain("Judaism");
+    expect(paper2.sections[0]!.title).not.toContain("Catholic Christianity");
+    expect(flattenPaperBlueprint(paper2)).toHaveLength(4);
+  });
+
+  test("Route B keeps each paper on its own Area of Study and religion", () => {
+    const routeB = {
+      ...routeA,
+      rsRoute: "Edexcel Religious Studies B",
+      rsSpec: "Religion and Ethics",
+      rsSpec2: "Religion, Peace and Conflict",
+    };
+    const paper1 = buildPaperBlueprint(routeB, "Paper 1");
+    const paper2 = buildPaperBlueprint(routeB, "Paper 2");
+
+    expect(paper1.id).toBe("rs-edexcel-b-p1");
+    expect(paper1.sections[0]!.title).toContain("Religion and Ethics");
+    expect(paper1.sections[0]!.title).toContain("Catholic Christianity");
+    expect(paper1.sections[0]!.title).not.toContain("Judaism");
+    expect(paper2.sections[0]!.title).toContain("Religion, Peace and Conflict");
+    expect(paper2.sections[0]!.title).toContain("Judaism");
+  });
+});

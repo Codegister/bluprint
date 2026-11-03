@@ -1248,6 +1248,9 @@ export default function Course() {
                 <CoursePastPapers
                   courseId={course._id}
                   formatId={buildPaperBlueprint(course).id}
+                  formatIdForPaper={(paper) =>
+                    buildPaperBlueprint(course, paper).id
+                  }
                   formatSummary={buildPaperBlueprint(course).summary}
                   papers={pathway.papers}
                 />

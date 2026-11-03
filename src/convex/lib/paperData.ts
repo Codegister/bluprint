@@ -37,6 +37,20 @@ export function isSelfContained(question: {
 }
 
 /**
+ * Removes a table the question never asks the student to use.
+ *
+ * Models sometimes return a revision table alongside a plain question. It is
+ * not stimulus, and rendering it gives away the answer before the student has
+ * attempted the question, so only data the wording actually references stays.
+ */
+export function dropUnusedData<T extends { question: string; data?: QuestionData }>(
+  question: T,
+): T {
+  if (!question.data || referencesData(question.question)) return question;
+  return { ...question, data: undefined };
+}
+
+/**
  * Makes a question's wording match what the page renders.
  *
  * Papers can only render tables, not diagrams or photographs. A model that

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   alignDataReference,
+  dropUnusedData,
   hasData,
   isSelfContained,
   referencesData,
@@ -61,6 +62,20 @@ describe("self-contained paper questions", () => {
     const question = "Use Figure 2 to describe the trend.";
     expect(alignDataReference({ question }).question).toBe(question);
     expect(isSelfContained({ question })).toBe(false);
+  });
+
+  test("drops a table the question never refers to", () => {
+    const cleaned = dropUnusedData({
+      question:
+        "Explain two Jewish beliefs about the afterlife, giving a reason or example for each.",
+      data: TABLE,
+    });
+    expect(cleaned.data).toBeUndefined();
+  });
+
+  test("keeps a table the question actually uses", () => {
+    const cleaned = dropUnusedData({ question: TABLE_QUESTION, data: TABLE });
+    expect(cleaned.data).toEqual(TABLE);
   });
 
   test("an empty or one-column table does not count as data", () => {

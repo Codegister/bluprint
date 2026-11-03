@@ -279,37 +279,71 @@ function edexcelRsGroup(): PaperSlot[] {
  * examines both religions through the Study of Religion, while Route B examines
  * one Area of Study through both religions.
  */
-function edexcelRs(course: BlueprintCourse): PaperBlueprint {
+function edexcelRs(course: BlueprintCourse, paper?: string): PaperBlueprint {
   const routeB = /studies b|route b/i.test(course.rsRoute ?? "");
   const religions = religionPair(course);
   const list = religions.length > 0 ? religions : ["the religion you study"];
   const area = course.rsSpec?.trim();
-  const sectionTitle = (religion: string, index: number) =>
-    routeB
-      ? `Section ${index + 1} — ${area ?? "Area of Study"} · ${religion}`
-      : `Section ${index + 1} — Study of Religion · ${religion}`;
+  const area2 = course.rsSpec2?.trim();
+  const paperNumber = paper?.match(/paper\s*(\d+)/i)?.[1];
+  const onePaper = paperNumber !== undefined;
+  const secondPaper = paperNumber === "2";
+  const paperReligion = secondPaper ? list[1] ?? "the second religion" : list[0]!;
+  const paperArea = secondPaper
+    ? area2 ?? "Area of Study"
+    : area ?? "Area of Study";
+  const paperTitle = routeB
+    ? `Paper ${paperNumber} — ${paperArea} · ${paperReligion}`
+    : paperNumber === "1" || paperNumber === "2"
+      ? `Paper ${paperNumber} — Study of Religion · ${paperReligion}`
+      : `Paper ${paperNumber} — ${area ?? "Philosophy and Ethics"} · ${paperReligion}`;
 
-  const sections = list.map((religion, index) =>
-    section(
-      sectionTitle(religion, index),
-      "Answer all questions. Answer in full sentences.",
-      edexcelRsGroup(),
-    ),
-  );
-  const groups = list.map((_, index) => `${index + 1} (a) to ${index + 1} (d)`);
+  const sections = onePaper
+    ? [
+        section(
+          paperTitle,
+          "Answer all questions. Answer in full sentences.",
+          edexcelRsGroup(),
+        ),
+      ]
+    : list.map((religion, index) =>
+        section(
+          routeB
+            ? `Section ${index + 1} — ${index === 0 ? area ?? "Area of Study" : area2 ?? "Area of Study"} · ${religion}`
+            : `Section ${index + 1} — Study of Religion · ${religion}`,
+          "Answer all questions. Answer in full sentences.",
+          edexcelRsGroup(),
+        ),
+      );
+  const groups = onePaper
+    ? ["1 (a) to 1 (d)"]
+    : list.map((_, index) => `${index + 1} (a) to ${index + 1} (d)`);
+  const baseId = routeB ? "rs-edexcel-b" : "rs-edexcel-a";
+  const id = onePaper ? `${baseId}-p${paperNumber}` : baseId;
+  const description = onePaper
+    ? routeB
+      ? `Edexcel Route B Paper ${paperNumber}: 3, 4, 5 and 12-mark questions on ${paperArea} through ${paperReligion}.`
+      : `Edexcel Route A Paper ${paperNumber}: 3, 4, 5 and 12-mark questions on ${paperReligion}.`
+    : routeB
+      ? "Edexcel Route B format: 3, 4, 5 and 12-mark questions for each religion in one Area of Study."
+      : "Edexcel Route A format: 3, 4, 5 and 12-mark questions for each religion.";
 
   return makeBlueprint(
-    routeB ? "rs-edexcel-b" : "rs-edexcel-a",
-    routeB
-      ? "Edexcel Route B format: 3, 4, 5 and 12-mark questions for each religion in one Area of Study."
-      : "Edexcel Route A format: 3, 4, 5 and 12-mark questions for each religion.",
+    id,
+    description,
     sections,
     [
-      `Write exactly ${sections.length * 4} questions, numbered ${groups.join(" and ")}.`,
+      onePaper
+        ? "Write exactly four questions, numbered 1 (a) to 1 (d)."
+        : `Write exactly ${sections.length * 4} questions, numbered ${groups.join(" and ")}.`,
       "Every group of four questions must be worth exactly 3, 4, 5 and 12 marks. Never change those marks.",
-      routeB
-        ? `Both sections examine ${area ?? "the same Area of Study"}: Section 1 through ${list[0]} and Section 2 through ${list[1] ?? "the second religion"}.`
-        : `Section 1 is on ${list[0]}${list[1] ? ` and Section 2 is on ${list[1]}` : ""}. Keep each question to one religion, and do not invent a religion.`,
+      onePaper
+        ? routeB
+          ? `Every question in this paper must be on ${paperArea} through ${paperReligion}. Keep the religion and Area of Study fixed, and do not invent another religion.`
+          : `Every question in this paper must be on ${paperReligion}. Do not use another religion.`
+        : routeB
+          ? `Section 1 is ${area ?? "the first Area of Study"} through ${list[0]}; Section 2 is ${area2 ?? "the second Area of Study"} through ${list[1] ?? "the second religion"}. Keep each section's religion and Area of Study fixed.`
+          : `Section 1 is on ${list[0]}${list[1] ? ` and Section 2 is on ${list[1]}` : ""}. Keep each question to one religion, and do not invent a religion.`,
       "Each 12-mark question must be a statement to evaluate, not an explain question. It must ask for a justified conclusion and must refer to non-religious beliefs.",
       POINT_RULE,
       LEVEL_RULE,
@@ -558,13 +592,16 @@ function genericRs(course: BlueprintCourse): PaperBlueprint {
   );
 }
 
-function religiousStudies(course: BlueprintCourse): PaperBlueprint {
+function religiousStudies(
+  course: BlueprintCourse,
+  paper?: string,
+): PaperBlueprint {
   if (isAdvanced(course.level)) return advancedRs();
   switch (boardFamily(course.examBoard)) {
     case "aqa":
       return aqaRs(course);
     case "edexcel":
-      return edexcelRs(course);
+      return edexcelRs(course, paper);
     case "wjec":
       return eduqasRs(course);
     case "ocr":
@@ -1206,6 +1243,7 @@ function generic(): PaperBlueprint {
  */
 export function buildPaperBlueprint(
   course: BlueprintCourse,
+  paper?: string,
 ): PaperBlueprint {
   const subject = course.subject.trim().toLowerCase();
   const level = course.level.trim();
@@ -1241,7 +1279,7 @@ export function buildPaperBlueprint(
   }
 
   if (/religious studies|religious education|\brs\b|philosophy and ethics/.test(subject)) {
-    return religiousStudies(course);
+    return religiousStudies(course, paper);
   }
   if (/english literature|literature/.test(subject)) {
     return englishLiterature(course);

@@ -1772,7 +1772,8 @@
    complete, off-screen copy into .pdf-print-root first, so every page is in the
    document before the browser takes its print snapshot.
    ------------------------------------------------------------------------- */
-.pdf-print-root {
+.pdf-print-root,
+.print-paper-clone {
   position: fixed;
   top: 0;
   left: -10000px;
@@ -1797,11 +1798,18 @@
     display: none !important;
   }
 
-  /* A generated paper lives inside the app. Keep only main, then only the
-     paper itself inside the route wrapper. Body-level portals (toasts,
-     dialogs) have nothing to contribute to a printed paper. */
-  body:has(.print-paper) > *:not(#root),
-  body.printing-paper > *:not(#root) {
+  /* A print clone is already at body level, so everything else can go. This
+     does not depend on :has() or on the app's nested layout. */
+  body:has(.print-paper-clone) > *:not(.print-paper-clone),
+  body.printing-paper-clone > *:not(.print-paper-clone) {
+    display: none !important;
+  }
+
+  /* The fallback path, for a paper that could not be cloned. Keep only main,
+     then only the paper itself inside the route wrapper. Body-level portals
+     (toasts, dialogs) have nothing to contribute to a printed paper. */
+  body:has(.print-paper) > *:not(#root):not(.print-paper-clone),
+  body.printing-paper > *:not(#root):not(.print-paper-clone) {
     display: none !important;
   }
 

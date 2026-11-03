@@ -35,6 +35,7 @@ export function CoursePastPapers({
   courseId,
   formatSummary,
   formatId,
+  formatIdForPaper,
   papers: qualificationPapers,
 }: {
   courseId: Id<"courses">;
@@ -42,6 +43,8 @@ export function CoursePastPapers({
   formatSummary?: string;
   /** The blueprint the course uses now, so an older paper can be flagged. */
   formatId?: string;
+  /** The blueprint for one selected paper, when a qualification is split. */
+  formatIdForPaper?: (paper?: string) => string;
   /** The papers this qualification is split into, if it publishes a split. */
   papers?: Array<{ label: string; topicIds: string[] }>;
 }) {
@@ -228,8 +231,11 @@ export function CoursePastPapers({
             // Papers saved before the subject's format changed keep the marks
             // and question types they were built with, so they are rebuilt on
             // request rather than silently showing the wrong paper.
+            const expectedFormatId = formatIdForPaper?.(paper.paper) ?? formatId;
             const outdated =
-              ready && Boolean(formatId) && paper.formatId !== formatId;
+              ready &&
+              Boolean(expectedFormatId) &&
+              paper.formatId !== expectedFormatId;
             const progress = Math.min(
               100,
               paper.questionCount > 0

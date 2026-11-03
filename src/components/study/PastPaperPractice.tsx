@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { criteriaFor, criterionText, feedbackSummary } from "@/convex/lib/markingCriteria";
+import { referencesData } from "@/convex/lib/paperData";
 import { boardFamily, markNotation, questionTotalLine } from "@/convex/lib/paperFormat";
 import { readableError } from "@/lib/errors";
 import { markLabel, pointLabel } from "@/lib/format";
@@ -288,7 +289,7 @@ export function PastPaperPractice({
 
                     {/* The data the question is about. Without it a question
                         that says "the table below" cannot be answered. */}
-                    {question.data && (
+                    {question.data && referencesData(question.question) && (
                       <figure className="mt-3 overflow-x-auto rounded-2xl border border-border">
                         {question.data.title && (
                           <figcaption className="border-b border-border bg-brand-panel px-3 py-2 text-[0.78rem] font-semibold text-brand-ink">

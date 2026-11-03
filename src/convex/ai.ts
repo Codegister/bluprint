@@ -21,7 +21,11 @@ import {
   shortfallSentence,
 } from "./lib/buildDefaults";
 import { materialLimits } from "./lib/buildCapacity";
-import { alignDataReference, isSelfContained } from "./lib/paperData";
+import {
+  alignDataReference,
+  dropUnusedData,
+  isSelfContained,
+} from "./lib/paperData";
 import { criteriaToGuide } from "./lib/realPaper";
 import { knownLiteratureExtract } from "./lib/literatureExtracts";
 import { filterGuideToNotes } from "./lib/noteSupport";
@@ -942,20 +946,22 @@ function parseExams(raw: string, limit = 4): GeneratedExam[] {
       markingGuide.length > 0
     ) {
       questions.push(
-        alignDataReference({
-          question,
-          marks,
-          modelAnswer,
-          markingGuide,
-          beyondNotes: beyondNotes(row.beyondNotes),
-          label: optionalText(row.label, 24),
-          section: optionalText(row.section, 80),
-          sectionInstruction: optionalText(row.sectionInstruction, 240),
-          commandWord: optionalText(row.commandWord, 40),
-          specReference: optionalText(row.specReference, 40),
-          extract: parseQuestionExtract(row.extract),
-          data: parseQuestionData(row.data),
-        }),
+        dropUnusedData(
+          alignDataReference({
+            question,
+            marks,
+            modelAnswer,
+            markingGuide,
+            beyondNotes: beyondNotes(row.beyondNotes),
+            label: optionalText(row.label, 24),
+            section: optionalText(row.section, 80),
+            sectionInstruction: optionalText(row.sectionInstruction, 240),
+            commandWord: optionalText(row.commandWord, 40),
+            specReference: optionalText(row.specReference, 40),
+            extract: parseQuestionExtract(row.extract),
+            data: parseQuestionData(row.data),
+          }),
+        ),
       );
     }
   }
@@ -1600,7 +1606,7 @@ async function repairQuestionData(
     markingGuide: repaired.markingGuide,
     data: repaired.data,
   };
-  return isSelfContained(merged) ? merged : null;
+  return isSelfContained(merged) ? dropUnusedData(merged) : null;
 }
 
 /**
@@ -1619,14 +1625,14 @@ async function ensureSelfContained(
   let repairs = 0;
   for (const question of questions) {
     if (isSelfContained(question)) {
-      kept.push(question);
+      kept.push(dropUnusedData(question));
       continue;
     }
     if (repairs < 3) {
       repairs += 1;
       const repaired = await repairQuestionData(apiKeys, question, qualification);
       if (repaired) {
-        kept.push(repaired);
+        kept.push(dropUnusedData(repaired));
         continue;
       }
     }
@@ -2059,7 +2065,7 @@ export const buildPastPaper = internalAction({
       const chosenPaper = paper.paper
         ? course.pathway?.papers?.find((group) => group.label === paper.paper)
         : undefined;
-      const blueprint = buildPaperBlueprint(course);
+      const blueprint = buildPaperBlueprint(course, paper.paper);
       const questions = await generatePaperQuestions(
         apiKeys,
         course,
