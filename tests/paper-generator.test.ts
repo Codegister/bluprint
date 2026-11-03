@@ -11,8 +11,10 @@ import {
   PAPER_CHECKLIST,
   PAPER_FORMAT_GUIDELINE,
   PAPER_GENERATOR_PROMPT,
-  PAPER_GENERATOR_SYSTEM_MESSAGE,
+  paperGeneratorSystemMessage,
 } from "../src/convex/lib/paperGenerator";
+
+const SYSTEM_MESSAGE = paperGeneratorSystemMessage(PAPER_CHECKLIST);
 
 describe("paper generator context", () => {
   test("includes the supplied prompt, guideline and every checklist row", () => {
@@ -29,19 +31,19 @@ describe("paper generator context", () => {
   });
 
   test("uses the supplied documents and keeps the paper grid authoritative", () => {
-    expect(PAPER_GENERATOR_SYSTEM_MESSAGE).toContain(
+    expect(SYSTEM_MESSAGE).toContain(
       "paper_format_guideline.txt",
     );
-    expect(PAPER_GENERATOR_SYSTEM_MESSAGE).toContain("paper_checklist.csv");
-    expect(PAPER_GENERATOR_SYSTEM_MESSAGE).toContain(
+    expect(SYSTEM_MESSAGE).toContain("paper_checklist.csv");
+    expect(SYSTEM_MESSAGE).toContain(
       "BLUPRINT INTEGRATION CONTRACT",
     );
-    expect(PAPER_GENERATOR_SYSTEM_MESSAGE).toContain(
+    expect(SYSTEM_MESSAGE).toContain(
       "not expand a paper beyond that grid",
     );
-    expect(PAPER_GENERATOR_SYSTEM_MESSAGE).not.toContain("reference_paper");
+    expect(SYSTEM_MESSAGE).not.toContain("reference_paper");
     expect(PAPER_GENERATOR_PROMPT).not.toContain('"paper_economy":');
-    expect(PAPER_GENERATOR_SYSTEM_MESSAGE).toContain('{"questions"');
+    expect(SYSTEM_MESSAGE).toContain('{"questions"');
   });
 });
 

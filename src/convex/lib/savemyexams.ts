@@ -103,9 +103,6 @@ export type SaveMyExamsCourse = {
   subjectSlug: string;
   boardSlug: string;
   title: string;
-  levelTitle: string;
-  subjectTitle: string;
-  boardTitle: string;
 };
 
 export type SaveMyExamsResolveResult =
@@ -169,20 +166,26 @@ function boardSlugFor(board: string): string | null {
   return BOARD_SLUGS.find((entry) => entry.match.test(board.trim()))?.slug ?? null;
 }
 
+function isEdexcelReligiousStudies(wanted: SaveMyExamsCourseRequest): boolean {
+  return (
+    normalise(wanted.subject) === "religious studies" &&
+    boardSlugFor(wanted.examBoard) === "edexcel"
+  );
+}
+
 /**
  * Save My Exams publishes Edexcel GCSE Religious Studies as two courses,
  * /religious-studies/edexcel/a/ and /b/. The route is part of the course, not a
  * tier, so it must be carried into every path we read.
  */
-function edexcelRsRouteAlias(
+function edexcelGcseRsRouteAlias(
   wanted: SaveMyExamsCourseRequest,
 ): "a" | "b" | null {
-  if (normalise(wanted.subject) !== "religious studies") return null;
-  if (boardSlugFor(wanted.examBoard) !== "edexcel") return null;
+  if (!isEdexcelReligiousStudies(wanted)) return null;
   // A-Level Edexcel RS is one course; only the GCSE specification is split.
   if (levelSlugFor(wanted.level) !== "gcse") return null;
   const route = /\b(?:religious studies|route)\s*([ab])\b/i.exec(
-    `${wanted.rsRoute ?? ""} ${wanted.variant ?? ""}`,
+    wanted.rsRoute ?? "",
   );
   return route ? (route[1]!.toLowerCase() as "a" | "b") : null;
 }
@@ -319,14 +322,16 @@ export function parseSaveMyExamsCourse(
   if (!subjectMatches(wanted.subject, subjectTitle)) return null;
   if (!boardMatches(wanted.examBoard, boardTitle)) return null;
 
-  const routeAlias = edexcelRsRouteAlias(wanted);
-  const edexcelRs =
-    normalise(wanted.subject) === "religious studies" &&
-    boardSlugFor(wanted.examBoard) === "edexcel";
+  const routeAlias = edexcelGcseRsRouteAlias(wanted);
   // Never fall into one route because the other was not checked. A route page
   // must carry the alias we asked for; a route page without a requested route
   // is ambiguous just like the OCR hub.
-  if (edexcelRs && subjectAlias !== (routeAlias ?? undefined)) return null;
+  if (
+    isEdexcelReligiousStudies(wanted) &&
+    subjectAlias !== (routeAlias ?? undefined)
+  ) {
+    return null;
+  }
 
   const routeSegment = routeAlias ? `${routeAlias}/` : "";
   const basePath = pathWithSlash(
@@ -363,11 +368,7 @@ export function parseSaveMyExamsCourse(
     title:
       asString(props.courseTitle) ??
       courseName ??
-      asString(asObject(asObject(props.course)?.attributes)?.name) ??
       `${boardTitle} ${levelTitle} ${subjectTitle}`,
-    levelTitle,
-    subjectTitle,
-    boardTitle,
   };
 }
 
@@ -432,7 +433,7 @@ export async function resolveSaveMyExamsCourse(
 
   let sawPage = false;
   let sawError = false;
-  const routeAlias = edexcelRsRouteAlias(wanted);
+  const routeAlias = edexcelGcseRsRouteAlias(wanted);
   for (const subjectSlug of subjectSlugCandidates(wanted.subject)) {
     // The RS hub has no single course, so go straight to the selected route.
     const page = await fetchPage(

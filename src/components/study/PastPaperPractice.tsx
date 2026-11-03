@@ -152,10 +152,10 @@ export function PastPaperPractice({
   let questionNumber = 0;
 
   return (
-    <div className="rise-stagger mx-auto w-full max-w-3xl space-y-4">
+    <div className="print-paper rise-stagger mx-auto w-full max-w-3xl space-y-4">
       {cover && <PaperCoverPage cover={cover} />}
 
-      <div className="rounded-[1.6rem] border border-border bg-white p-5">
+      <div className="print-hide rounded-[1.6rem] border border-border bg-white p-5">
         <p className="font-display text-base font-bold text-brand-ink">
           Attempt the paper, then mark each answer
         </p>
@@ -370,7 +370,7 @@ export function PastPaperPractice({
                   )}
                 />
 
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="print-hide mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs font-medium text-muted-foreground">
                     {isEssay
                       ? `${wordCount} words · write a full essay with a clear argument`
@@ -416,7 +416,7 @@ export function PastPaperPractice({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, ease: EASE }}
                     role="alert"
-                    className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
+                    className="print-hide mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[#FFEEF0] px-3.5 py-2.5 text-xs leading-relaxed text-[#A81F28]"
                   >
                     <span>{errors[question._id]}</span>
                     {!isGrading && (
@@ -437,7 +437,7 @@ export function PastPaperPractice({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.45, ease: EASE }}
-                    className="mt-4 rounded-2xl bg-[#F3FBF7] p-4 sm:p-5"
+                    className="print-hide mt-4 rounded-2xl bg-[#F3FBF7] p-4 sm:p-5"
                   >
                     <div>
                       <p className="text-xs font-semibold text-[#0B6B45]">

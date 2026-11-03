@@ -49,6 +49,7 @@ import {
   meaningAward,
   reconcilePasses,
   type AlternativeCredit,
+  type MarkCheck,
 } from "./lib/markingCriteria";
 import { requireUserId } from "./lib/requireUser";
 import {
@@ -3506,18 +3507,6 @@ async function askExaminer<T>(
 }
 
 /**
- * One marking-guide bullet: the marks it carries, the marks earned and the
- * student's own words that earned them ("absent" when it earned nothing). This
- * is what the exam page renders as the awarded-marks checklist.
- */
-type MarkCheck = {
-  point: string;
-  marks: number;
-  awarded: number;
-  evidence: string;
-};
-
-/**
  * One marked answer. `passes` holds the total each independent pass reached,
  * and `lowConfidence` is set when those totals disagreed — the result is then
  * flagged in the UI rather than presented as though it were certain.
@@ -3822,7 +3811,6 @@ function buildChecks(
  * what produced "Credited: - 1/1 · 1 mark: …" twice on the same card.
  */
 function checklistFeedback(
-  _checks: MarkCheck[],
   awardedMarks: number,
   marksAvailable: number,
 ): string {
@@ -4001,7 +3989,7 @@ async function alternativeCredits(
   awardedMarks: number,
   available: number,
 ): Promise<AlternativeCredit[]> {
-  const max = Math.min(4, Math.max(0, available));
+  const max = Math.max(0, Math.floor(available));
   if (max === 0) return [];
 
   return await askExaminer(
@@ -4108,7 +4096,7 @@ async function markExamAnswer(
       awardedMarks,
       feedback:
         "This answer reproduces the model answer, the full-mark answer for this question.\n\n" +
-        checklistFeedback(checklist, awardedMarks, exam.marks),
+        checklistFeedback(awardedMarks, exam.marks),
       checklist,
       // The exemplar is fixed text, so both passes agree by construction.
       lowConfidence: false,
@@ -4231,7 +4219,7 @@ async function markExamAnswer(
   const awardedMarks = awardedFromChecks(checks, exam.marks);
   return {
     awardedMarks,
-    feedback: checklistFeedback(checks, awardedMarks, exam.marks),
+    feedback: checklistFeedback(awardedMarks, exam.marks),
     checklist: checks,
     // A disagreement between the two passes is reported, never hidden. The
     // stored score is already the lower of the two.

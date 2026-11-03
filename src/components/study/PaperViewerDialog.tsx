@@ -1,4 +1,7 @@
-import { PdfViewer } from "@/components/study/PdfViewer";
+import {
+  PdfViewer,
+  type PdfViewerHandle,
+} from "@/components/study/PdfViewer";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +21,10 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  Printer,
   TriangleAlert,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type ViewedPaper = {
   url: string;
@@ -44,6 +48,7 @@ export function PaperViewerDialog({
   onClose: () => void;
 }) {
   const cachePaper = useAction(api.paperFiles.cachePaper);
+  const viewerRef = useRef<PdfViewerHandle>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [storedUrl, setStoredUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +155,7 @@ export function PaperViewerDialog({
           )}
           {paper && !busy && !error && storedUrl && (
             <PdfViewer
+              ref={viewerRef}
               key={storedUrl}
               url={storedUrl}
               title={`${paper.title} — ${paper.kind}`}
@@ -157,10 +163,21 @@ export function PaperViewerDialog({
           )}
         </div>
 
-        <p className="shrink-0 border-t border-border bg-brand-panel px-5 py-2.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-          A stored copy is served from Bluprint so this paper opens reliably.
-          Rights remain with the publisher; Open original opens their copy.
-        </p>
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-brand-panel px-5 py-2.5">
+          <p className="text-[0.7rem] leading-relaxed text-muted-foreground">
+            A stored copy is served from Bluprint so this paper opens reliably.
+            Rights remain with the publisher; Open original opens their copy.
+          </p>
+          <button
+            type="button"
+            onClick={() => viewerRef.current?.print()}
+            disabled={!storedUrl || busy}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-white px-3 text-[0.74rem] font-semibold text-brand-ink shadow-none transition-colors hover:bg-brand-panel disabled:opacity-50"
+          >
+            <Printer className="size-3" aria-hidden />
+            Print
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );

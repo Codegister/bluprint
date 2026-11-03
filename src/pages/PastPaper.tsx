@@ -12,7 +12,7 @@ import { markLabel, plural } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { Loader2 } from "lucide-react";
+import { Loader2, Printer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
@@ -143,6 +143,17 @@ export default function PastPaper() {
                 : "Course removed"}
             </motion.p>
           </div>
+          {ready && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => window.print()}
+              className="ml-auto h-9 shrink-0 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+            >
+              <Printer className="size-3.5" aria-hidden />
+              Print paper
+            </Button>
+          )}
         </div>
 
         <motion.section

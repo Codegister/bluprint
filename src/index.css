@@ -1764,3 +1764,98 @@
 }
 
 /* bluprint-focus-visible */
+
+
+/* ---------------------------------------------------------------------------
+   Printing
+   A saved paper prints from its own print-paper root. A stored PDF renders a
+   complete, off-screen copy into .pdf-print-root first, so every page is in the
+   document before the browser takes its print snapshot.
+   ------------------------------------------------------------------------- */
+.pdf-print-root {
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  width: 720px;
+  pointer-events: none;
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  body:has(.print-paper) *,
+  body:has(.pdf-print-root) * {
+    visibility: hidden;
+  }
+
+  .print-paper,
+  .print-paper *,
+  .pdf-print-root,
+  .pdf-print-root * {
+    visibility: visible;
+  }
+
+  .print-paper,
+  .pdf-print-root {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  .print-paper,
+  .print-paper * {
+    color: #111 !important;
+  }
+
+  .print-paper textarea {
+    height: auto !important;
+    min-height: 6rem !important;
+    overflow: visible !important;
+    resize: none !important;
+    border: 1px solid #999 !important;
+    background: #fff !important;
+  }
+
+  .print-paper textarea::placeholder {
+    color: transparent !important;
+  }
+
+  .print-paper blockquote,
+  .print-paper figure {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .print-paper figure,
+  .pdf-print-root figure {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .pdf-print-root figure {
+    margin: 0 auto 8mm;
+  }
+
+  .pdf-print-root figcaption {
+    display: none !important;
+  }
+
+  .pdf-print-root canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}

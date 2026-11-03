@@ -540,7 +540,11 @@ export type AlternativeCredit = {
   evidence: string;
 };
 
-export type CreditCheck = {
+/**
+ * One marking-guide bullet: the marks it carries, the marks earned and the
+ * student's own words that earned them ("absent" when it earned nothing).
+ */
+export type MarkCheck = {
   point: string;
   marks: number;
   awarded: number;
@@ -556,10 +560,10 @@ export type CreditCheck = {
  * still has to be quoted from the answer, and it can only take the unearned
  * rows, so this can add credit but cannot invent it or exceed the paper total.
  */
-export function applyAlternativeCredits<T extends CreditCheck>(
-  checks: T[],
+export function applyAlternativeCredits(
+  checks: MarkCheck[],
   alternatives: AlternativeCredit[],
-): T[] {
+): MarkCheck[] {
   if (alternatives.length === 0) return checks;
   let next = 0;
   return checks.map((check) => {
@@ -570,7 +574,7 @@ export function applyAlternativeCredits<T extends CreditCheck>(
     return {
       ...check,
       point: `${check.point} — accepted alternative: ${alternative.point}`,
-      awarded: Math.min(1, check.marks),
+      awarded: 1,
       evidence: alternative.evidence,
     };
   });

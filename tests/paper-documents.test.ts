@@ -5,8 +5,10 @@ import {
   PAPER_CHECKLIST_AQA_LIT,
   PAPER_FORMAT_GUIDELINE,
   PAPER_GENERATOR_PROMPT,
-  PAPER_GENERATOR_SYSTEM_MESSAGE,
+  paperGeneratorSystemMessage,
 } from "../src/convex/lib/paperGenerator";
+
+const SYSTEM_MESSAGE = paperGeneratorSystemMessage(PAPER_CHECKLIST);
 
 type Table = {
   header: string[];
@@ -126,7 +128,7 @@ describe("guideline and prompt corrections", () => {
     expect(PAPER_GENERATOR_PROMPT).toContain("Shape A - 35 columns");
     expect(PAPER_GENERATOR_PROMPT).toContain("Shape B - 57 columns");
     expect(PAPER_GENERATOR_PROMPT).toContain("Shape A has 14 ticks");
-    expect(PAPER_GENERATOR_SYSTEM_MESSAGE).toContain("row's authenticity checks");
-    expect(PAPER_GENERATOR_SYSTEM_MESSAGE).not.toContain("sixteen authenticity checks");
+    expect(SYSTEM_MESSAGE).toContain("row's authenticity checks");
+    expect(SYSTEM_MESSAGE).not.toContain("sixteen authenticity checks");
   });
 });

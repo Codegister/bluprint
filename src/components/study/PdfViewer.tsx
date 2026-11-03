@@ -7,10 +7,23 @@ import {
   type PDFDocumentProxy,
 } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 
 // The PDF is parsed in a worker so scrolling stays smooth on a long paper.
 GlobalWorkerOptions.workerSrc = workerUrl;
+
+export type PdfViewerHandle = {
+  /** Renders every page, then opens the browser's print dialog. */
+  print: () => void;
+};
 
 /**
  * Renders a PDF page by page.
@@ -24,11 +37,38 @@ GlobalWorkerOptions.workerSrc = workerUrl;
  * Pages are only drawn when they come near the viewport. A 30-page paper
  * would otherwise allocate tens of megabytes of canvas up front.
  */
-export function PdfViewer({ url, title }: { url: string; title: string }) {
+export const PdfViewer = forwardRef<
+  PdfViewerHandle,
+  { url: string; title: string }
+>(function PdfViewer({ url, title }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [width, setWidth] = useState(720);
+  const [printAll, setPrintAll] = useState(false);
+  const [readyPages, setReadyPages] = useState<Set<number>>(() => new Set());
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      print: () => {
+        // A new print run must wait for this run's canvases, not the canvases
+        // from a previous print.
+        setReadyPages(new Set());
+        setPrintAll(true);
+      },
+    }),
+    [],
+  );
+
+  const pageReady = useCallback((pageNumber: number) => {
+    setReadyPages((current) => {
+      if (current.has(pageNumber)) return current;
+      const next = new Set(current);
+      next.add(pageNumber);
+      return next;
+    });
+  }, []);
 
   // Load the file once per address. `disableRange` keeps the request a plain
   // GET to Bluprint's cached-paper route rather than a ranged CDN request.
@@ -36,6 +76,8 @@ export function PdfViewer({ url, title }: { url: string; title: string }) {
     let cancelled = false;
     setPdf(null);
     setError(null);
+    setPrintAll(false);
+    setReadyPages(new Set());
     const task = getDocument({ url, disableRange: true, disableStream: true });
     void (async () => {
       try {
@@ -73,8 +115,18 @@ export function PdfViewer({ url, title }: { url: string; title: string }) {
 
   const pageCount = pdf?.numPages ?? 0;
 
+  useEffect(() => {
+    if (!printAll || !pdf || readyPages.size < pdf.numPages) return;
+    const frame = window.requestAnimationFrame(() => {
+      window.print();
+      setPrintAll(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [printAll, pdf, readyPages]);
+
   return (
-    <div ref={containerRef} className="w-full">
+    <>
+      <div ref={containerRef} className="w-full">
       {error ? (
         <div className="mx-auto mt-6 max-w-md rounded-2xl bg-[#FFF6E5] px-4 py-4 text-center">
           <TriangleAlert className="mx-auto size-5 text-[#8A5D00]" aria-hidden />
@@ -121,9 +173,29 @@ export function PdfViewer({ url, title }: { url: string; title: string }) {
           ))}
         </div>
       )}
-    </div>
+      </div>
+      {printAll && pdf
+        ? createPortal(
+            <div className="pdf-print-root" aria-hidden="true">
+              {Array.from({ length: pdf.numPages }, (_, index) => (
+                <PdfPage
+                  key={`print-${index + 1}`}
+                  pdf={pdf}
+                  pageNumber={index + 1}
+                  pageCount={pdf.numPages}
+                  width={width}
+                  title={title}
+                  forceRender
+                  onReady={pageReady}
+                />
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
-}
+});
 
 function PdfPage({
   pdf,
@@ -131,21 +203,26 @@ function PdfPage({
   pageCount,
   width,
   title,
+  forceRender = false,
+  onReady,
 }: {
   pdf: PDFDocumentProxy;
   pageNumber: number;
   pageCount: number;
   width: number;
   title: string;
+  forceRender?: boolean;
+  onReady?: (pageNumber: number) => void;
 }) {
   const holderRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [near, setNear] = useState(pageNumber <= 2);
   const [drawing, setDrawing] = useState(false);
+  const shouldRender = near || forceRender;
 
   useEffect(() => {
     const node = holderRef.current;
-    if (!node || near) return;
+    if (!node || shouldRender) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
@@ -157,10 +234,10 @@ function PdfPage({
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [near]);
+  }, [shouldRender]);
 
   useEffect(() => {
-    if (!near) return;
+    if (!shouldRender) return;
     let cancelled = false;
     let task: { cancel: () => void; promise: Promise<void> } | null = null;
     setDrawing(true);
@@ -191,7 +268,10 @@ function PdfPage({
         // A cancelled render rejects; a page that genuinely fails to draw just
         // keeps its white placeholder rather than breaking the whole paper.
       } finally {
-        if (!cancelled) setDrawing(false);
+        if (!cancelled) {
+          setDrawing(false);
+          onReady?.(pageNumber);
+        }
       }
     })();
 
@@ -199,7 +279,7 @@ function PdfPage({
       cancelled = true;
       task?.cancel();
     };
-  }, [pdf, pageNumber, width, near]);
+  }, [pdf, pageNumber, width, shouldRender, onReady]);
 
   return (
     <figure className="mx-auto w-fit max-w-full">

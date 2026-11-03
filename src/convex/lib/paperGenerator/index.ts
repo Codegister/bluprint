@@ -9,7 +9,6 @@ export {
   PAPER_GENERATOR_PROMPT,
 };
 
-
 /** The checklist excerpt for a request: one authoritative row where possible. */
 export function paperChecklistFor(course: {
   subject: string;
@@ -67,6 +66,3 @@ extract separately; do not return an extract field. Include data only when the
 question refers to a table, and then include the complete table with columns and
 rows. Do not use markdown fences, commentary or any other top-level key.`;
 }
-
-export const PAPER_GENERATOR_SYSTEM_MESSAGE =
-  paperGeneratorSystemMessage(PAPER_CHECKLIST);
