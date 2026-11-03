@@ -71,10 +71,11 @@ thing generated papers most often get wrong.
     Maths, A-level: about 0.83 per minute
     (Edexcel 9MA0: 100 marks in 120 minutes, 0.83)
     Essay subjects, GCSE: about 0.55 to 0.7 per minute
-    (Edexcel GCSE History Paper 1: 52 marks in 75 minutes, 0.69)
+    (Edexcel GCSE History Paper 1: 52 marks in 80 minutes, 0.65 from summer 2025)
     Essay subjects, A-level: about 0.5 to 0.65 per minute
-    (AQA A-level Biology Paper 3 aside, humanities A-level papers typically
-    carry 80 marks in 150 minutes, 0.53)
+    (many humanities A-level papers carry about 80 marks in 150 minutes, 0.53;
+    check the row, because AQA A-level English Literature Paper 1 is 75 marks in
+    180 minutes)
     Scottish qualifications: lower, because reading load is higher
     (SQA National 5 Maths Paper 1: 40 marks in 60 minutes, 0.67;
     Paper 2: 50 marks in 90 minutes, 0.56)
@@ -102,7 +103,8 @@ Typical tariffs by level and family:
     tariff and uses levels of response.
     GCSE humanities: 4, 8, 12, 16, with 16 usually being an essay or a source
     evaluation.
-    GCSE English: 4, 8, 20, 40 for the large writing task.
+    GCSE English Language: reading tariffs vary by board; AQA uses 4, 8, 8, 20, 40
+    (Paper 1) and 4, 8, 12, 16, 40 (Paper 2), plus a 40-mark writing task.
     A-level sciences: 1 to 6 in structured questions, plus 25 for the essay.
     A-level humanities: 25 or 30 for essays, 10 to 20 for source or interpretation
     questions.
@@ -171,11 +173,16 @@ audience and purpose. Quote-based analysis answers use a "what, how, why" struct
 Writing tasks always carry a form, an audience and a purpose; omit any of the three
 and the task is not authentic.
 
-English Literature. Closed book at GCSE (AQA), so the question supplies the extract.
-A-level typically allows the text but not annotated copies. Essays combine an
-extract-based question with a whole-text question. Assessment objectives are split
-between the text, the writer's methods, context, and comparison; structure the
-question so each can be reached.
+English Literature. AQA GCSE English Literature (8702) is untiered. Paper 1 is
+105 minutes and 64 marks: Section A Shakespeare is 30 marks plus 4 SPaG, and
+Section B, the 19th-century novel, is 30 marks. Both questions are extract-based
+and the paper is closed book. Paper 2 is 135 minutes and 96 marks: Section A modern
+text is 30 marks plus 4 SPaG and has no extract; Section B is a named poem; Section
+C is unseen poetry. Open-book rules vary: AQA A-level English Literature Paper 1
+is open book in Section C only; Sections A and B are closed book. Check the row.
+Essays combine an extract-based question with a whole-text question. Assessment
+objectives are split between the text, the writer's methods, context, and
+comparison; structure the question so each can be reached.
 
 History. Source and interpretation questions have a fixed grammar: "How useful is
 Source A to an enquiry into..." (utility: provenance, content, purpose), "Explain
@@ -262,8 +269,10 @@ scheme that requires a point the source material cannot support.
 
 8. BOARDS: WHAT ACTUALLY DIFFERS
 
-AQA. Three-paper sciences at A-level, two at GCSE, tiered at GCSE, untiered at
-A-level. Papers are one continuous numbered sequence in sciences. Mark schemes use
+AQA. Three-paper sciences at A-level. At GCSE, separate sciences have two papers
+each, while Combined Science: Trilogy has six papers (two biology, two chemistry,
+two physics), each 1h15/70 marks; Combined Science: Synergy has four longer
+papers. Tiered at GCSE, untiered at A-level. Papers are one continuous numbered sequence in sciences. Mark schemes use
 levels of response with indicative content. Papers are typographically plain.
 
 Pearson Edexcel. Three papers for maths at both GCSE and A-level, with a formula
@@ -277,7 +286,8 @@ questions in Section A". Chemistry A at A-level uses named themes per paper
 chemistry). Mark schemes use levels of response with detailed indicative content.
 
 WJEC and Eduqas. Component-based rather than paper-based naming at GCSE. English
-Language runs two components with a 40/60 style split. Mark schemes accept a range of
+Language runs two components with a 40/60 split; Component 2 has six reading
+questions and two 20-mark transactional writing tasks. Mark schemes accept a range of
 valid responses and often invite examiner judgement.
 
 CCEA. Northern Irish context, with local case studies in geography and history.
@@ -288,8 +298,8 @@ lower marks-per-minute ratio and a separate assignment or added value unit. Mark
 instructions are written per question.
 
 Cambridge IGCSE. Core and Extended tiers with separate paper codes (for Maths 0580:
-Core Papers 1 and 3, Extended Papers 2 and 4, with Paper 4 carrying the larger mark
-total and longer duration). Mark schemes are point-marked and strict about accepted
+Core Papers 1 and 3 are 1h30/80 marks each; Extended Papers 2 and 4 are 2h/100
+marks each; each paper is 50% of its tier). Mark schemes are point-marked and strict about accepted
 answers.
 
 If the checklist does not state a board's habit, do not assume it. Flag it.

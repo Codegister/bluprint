@@ -98,6 +98,9 @@ export default function PastPaper() {
     if (details === null) return <MissingCard />;
 
     const { paper, course, questions } = details;
+    const displayCourse = course && /english literature/i.test(course.subject)
+      ? { ...course, tier: undefined }
+      : course;
     const ready = paper.status === "ready";
     const qualification = course
       ? qualificationLabel({
@@ -136,7 +139,7 @@ export default function PastPaper() {
               {...enter(0.1)}
             >
               {course
-                ? `${course.subject} · ${courseSubtitle(course)}`
+                ? `${course.subject} · ${courseSubtitle(displayCourse ?? course)}`
                 : "Course removed"}
             </motion.p>
           </div>

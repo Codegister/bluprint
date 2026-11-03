@@ -58,6 +58,53 @@ const mathsCourse =
   '<a href="/gcse/maths/aqa/22/higher/revision-notes/">Higher</a>' +
   '<a href="/gcse/maths/aqa/22/foundation/revision-notes/">Foundation</a>';
 
+const edexcelAlevelRsCourse =
+  pageHtml({
+    breadcrumbs: {
+      titles: { level: "A-Level", subject: "Religious Studies", board: "Edexcel" },
+      slugs: {
+        level: "a-level",
+        subject: "religious-studies",
+        board: "edexcel",
+        year: "16",
+      },
+    },
+    courseTitle: "Edexcel A-Level Religious Studies",
+    availableResources: {
+      "past-papers": "/a-level/religious-studies/edexcel/past-papers/",
+    },
+  }) +
+  '<a href="/a-level/religious-studies/edexcel/16/revision-notes/">Revision notes</a>';
+
+function edexcelRsCourse(route: "a" | "b"): string {
+  const title = `Edexcel GCSE Religious Studies ${route.toUpperCase()}`;
+  return (
+    pageHtml({
+      breadcrumbs: {
+        titles: {
+          level: "GCSE",
+          subject: "Religious Studies",
+          board: "Edexcel",
+          subjectAlias: `Religious Studies ${route.toUpperCase()}`,
+          year: "2016",
+        },
+        slugs: {
+          level: "gcse",
+          subject: "religious-studies",
+          board: "edexcel",
+          subjectAlias: route,
+          year: "16",
+        },
+      },
+      courseOrCourses: { attributes: { name: title } },
+      availableResources: {
+        "past-papers": `/gcse/religious-studies/edexcel/${route}/past-papers/`,
+      },
+    }) +
+    `<a href="/gcse/religious-studies/edexcel/${route}/16/revision-notes/">Revision notes</a>`
+  );
+}
+
 describe("Save My Exams course matching", () => {
   test("matches a course only when level, subject and board agree", () => {
     const course = parseSaveMyExamsCourse(biologyCourseWithLinks, {
@@ -130,6 +177,59 @@ describe("Save My Exams course matching", () => {
     expect(higher?.notesIndexPaths).toEqual([
       "/gcse/maths/aqa/22/higher/revision-notes/",
     ]);
+  });
+
+  test("uses the selected Edexcel Religious Studies route for A and B", () => {
+    for (const route of ["a", "b"] as const) {
+      const course = parseSaveMyExamsCourse(edexcelRsCourse(route), {
+        level: "GCSE",
+        subject: "Religious Studies",
+        examBoard: "Edexcel",
+        rsRoute: `Edexcel Religious Studies ${route.toUpperCase()}`,
+      });
+      expect(course?.basePath).toBe(
+        `/gcse/religious-studies/edexcel/${route}/16/`,
+      );
+      expect(course?.pastPapersPath).toBe(
+        `/gcse/religious-studies/edexcel/${route}/past-papers/`,
+      );
+      expect(course?.notesIndexPaths).toEqual([
+        `/gcse/religious-studies/edexcel/${route}/16/revision-notes/`,
+      ]);
+      expect(course?.title).toBe(
+        `Edexcel GCSE Religious Studies ${route.toUpperCase()}`,
+      );
+    }
+
+    // The route is not inferred from whichever page loaded.
+    expect(
+      parseSaveMyExamsCourse(edexcelRsCourse("a"), {
+        level: "GCSE",
+        subject: "Religious Studies",
+        examBoard: "Edexcel",
+        rsRoute: "Edexcel Religious Studies B",
+      }),
+    ).toBeNull();
+    expect(
+      parseSaveMyExamsCourse(edexcelRsCourse("a"), {
+        level: "GCSE",
+        subject: "Religious Studies",
+        examBoard: "Edexcel",
+      }),
+    ).toBeNull();
+  });
+
+  test("does not apply the GCSE A/B routes to A-Level Religious Studies", () => {
+    const course = parseSaveMyExamsCourse(edexcelAlevelRsCourse, {
+      level: "A-Level",
+      subject: "Religious Studies",
+      examBoard: "Edexcel",
+      rsRoute: "Edexcel Religious Studies A",
+    });
+    expect(course?.basePath).toBe("/a-level/religious-studies/edexcel/16/");
+    expect(course?.pastPapersPath).toBe(
+      "/a-level/religious-studies/edexcel/past-papers/",
+    );
   });
 
   test("does not guess between a hub's two courses", () => {

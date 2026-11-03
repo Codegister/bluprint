@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { criteriaFor, feedbackSummary } from "@/convex/lib/markingCriteria";
+import { criteriaFor, criterionText, feedbackSummary } from "@/convex/lib/markingCriteria";
 import { boardFamily, markNotation, questionTotalLine } from "@/convex/lib/paperFormat";
 import { readableError } from "@/lib/errors";
 import { markLabel, pointLabel } from "@/lib/format";
@@ -146,6 +146,9 @@ export function PastPaperPractice({
     }
   };
 
+  const contentMarks = questions.reduce((sum, question) => sum + question.marks, 0);
+  const spagMarks = Math.max(0, (cover?.totalMarks ?? contentMarks) - contentMarks);
+
   let questionNumber = 0;
 
   return (
@@ -162,6 +165,12 @@ export function PastPaperPractice({
           answer and mark scheme unlock after marking, so the score is what an
           examiner would give, not what looks familiar.
         </p>
+        {spagMarks > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {spagMarks} marks are for spelling, punctuation and grammar and are
+            not included in this practice marking.
+          </p>
+        )}
       </div>
 
       {sections.map((section, sectionIndex) => (
@@ -232,9 +241,9 @@ export function PastPaperPractice({
                   </span>
                   <div className="min-w-0">
                     {question.extract && (
-                      <figure className="mb-4 overflow-hidden rounded-2xl border border-[#E8DFC8] bg-[#FFFCF4]">
-                        <figcaption className="flex flex-wrap items-baseline gap-x-2 border-b border-[#E8DFC8] px-4 py-2.5">
-                          <span className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12]">
+                      <figure className="mb-4 overflow-hidden rounded-2xl border border-[#E8DFC8] bg-[#FFFCF4] dark:border-[#4B3F2C] dark:bg-[#1F1A13]">
+                        <figcaption className="flex flex-wrap items-baseline gap-x-2 border-b border-[#E8DFC8] px-4 py-2.5 dark:border-[#4B3F2C]">
+                          <span className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12] dark:text-[#E7B96B]">
                             Extract
                           </span>
                           {question.extract.source && (
@@ -248,7 +257,7 @@ export function PastPaperPractice({
                             </span>
                           )}
                         </figcaption>
-                        <blockquote className="max-h-[26rem] overflow-y-auto whitespace-pre-wrap px-4 py-3 font-serif text-[0.92rem] leading-[1.75] text-brand-ink/90">
+                        <blockquote className="max-h-[26rem] overflow-y-auto whitespace-pre-wrap px-4 py-3 font-serif text-[0.92rem] leading-[1.75] text-[#2E2418] dark:text-[#F5EBD8]">
                           {question.extract.text}
                         </blockquote>
                       </figure>
@@ -334,36 +343,6 @@ export function PastPaperPractice({
                     )}
                   </div>
                 </div>
-
-                {/* Visible before writing, not only after marking: the target
-                    is part of the question, not a surprise at the end. */}
-                {criteria.length > 0 && (
-                  <details
-                    open
-                    className="group mt-3 rounded-2xl border border-border bg-brand-panel/45 p-3"
-                  >
-                    <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold text-brand-ink">
-                      What earns the marks
-                      <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                    </summary>
-                    <ul className="mt-2 space-y-1">
-                      {criteria.map((criterion) => (
-                        <li
-                          key={criterion.id}
-                          className="flex items-start gap-2 text-[0.78rem] leading-relaxed text-brand-ink/70"
-                        >
-                          <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-lime" />
-                          <span>
-                            {criterion.text}
-                            <span className="ml-1 text-[0.68rem] text-muted-foreground">
-                              ({markLabel(criterion.marks)})
-                            </span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
 
                 <Textarea
                   value={answer}
@@ -524,7 +503,7 @@ export function PastPaperPractice({
                                 <div className="min-w-0 flex-1">
                                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                                     <p className="font-semibold text-brand-ink">
-                                      {criterion.text}
+                                      {criterionText(check?.point ?? criterion.text)}
                                     </p>
                                     <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[0.68rem] font-semibold tabular-nums text-brand-ink/70">
                                       {awarded}/{markLabel(criterion.marks)}

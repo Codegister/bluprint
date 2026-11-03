@@ -32,6 +32,10 @@ import {
  */
 
 /** Short, boring text fields used by courses. */
+function displayTier<T extends { subject: string; tier?: string }>(course: T): string | undefined {
+  return /english literature|eng lit/i.test(course.subject) ? undefined : course.tier;
+}
+
 function safeCourseLabel(value?: string): string | undefined {
   if (!value) return undefined;
   const trimmed = value.replace(/\x00/g, "").trim();
@@ -108,7 +112,7 @@ export const listMine = query({
         subject: course.subject,
         level: course.level,
         examBoard: course.examBoard,
-        tier: course.tier,
+        tier: displayTier(course),
         variant: course.variant,
         poetryTheme: course.poetryTheme,
         litShakespeare: course.litShakespeare,
@@ -150,7 +154,7 @@ export const getDetails = query({
 
     const ids = topicIds(course.pathway);
     return {
-      course,
+      course: { ...course, tier: displayTier(course) },
       completedCount: course.completedTopics.filter((id) => ids.has(id)).length,
       topicCount: countTopics(course.pathway),
       pathwayVersion: course.pathway?.version ?? 1,
@@ -230,7 +234,7 @@ export const createMany = mutation({
           isKs3
             ? "None"
             : safeCourseLabel(course.examBoard) || defaultBoard,
-        tier: isKs3
+        tier: isKs3 || /english literature|eng lit/i.test(course.subject ?? "")
           ? undefined
           : safeCourseLabel(course.tier) || defaultTier,
         variant:

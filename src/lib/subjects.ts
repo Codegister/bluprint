@@ -191,9 +191,14 @@ export type TierChoices = {
  * Tier choices depend on the qualification. Combined Science is already a
  * separate subject, so GCSE sciences do not need a Triple/Combined toggle.
  */
-export function tierChoices(level: string, _subject: string): TierChoices {
+export function tierChoices(level: string, subject: string): TierChoices {
   if (level === "GCSE") {
-    return { variants: [], tiers: ["Higher", "Foundation"] };
+    return {
+      variants: [],
+      tiers: /english literature|eng lit/i.test(subject)
+        ? []
+        : ["Higher", "Foundation"],
+    };
   }
   if (level === "IB") return { variants: ["HL", "SL"], tiers: [] };
   return { variants: [], tiers: [] };

@@ -354,6 +354,7 @@ export const loadTopicNotes = action({
       examBoard: course.examBoard,
       ...(course.tier ? { tier: course.tier } : {}),
       ...(course.variant ? { variant: course.variant } : {}),
+      ...(course.rsRoute ? { rsRoute: course.rsRoute } : {}),
     });
     if (resolved.status === "unavailable") {
       throw new Error(
@@ -427,6 +428,7 @@ export const loadPastPapers = action({
       examBoard: course.examBoard,
       ...(course.tier ? { tier: course.tier } : {}),
       ...(course.variant ? { variant: course.variant } : {}),
+      ...(course.rsRoute ? { rsRoute: course.rsRoute } : {}),
     });
     if (resolved.status === "unavailable") {
       throw new Error(

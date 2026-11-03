@@ -23,6 +23,7 @@ import {
 import { materialLimits } from "./lib/buildCapacity";
 import { alignDataReference, isSelfContained } from "./lib/paperData";
 import { criteriaToGuide } from "./lib/realPaper";
+import { knownLiteratureExtract } from "./lib/literatureExtracts";
 import { filterGuideToNotes } from "./lib/noteSupport";
 import {
   gradeVocabularyAnswer,
@@ -38,6 +39,7 @@ import {
 } from "./lib/topicNotes";
 import { cleanTopicTitle } from "./lib/titles";
 import {
+  applyAlternativeCredits,
   awardCriterion,
   criteriaFor,
   criterionText,
@@ -46,6 +48,7 @@ import {
   guideFromCriteria,
   meaningAward,
   reconcilePasses,
+  type AlternativeCredit,
 } from "./lib/markingCriteria";
 import { requireUserId } from "./lib/requireUser";
 import {
@@ -111,7 +114,10 @@ import {
   type FlatPaperSlot,
   type PaperBlueprint,
 } from "./lib/paperBlueprint";
-import { PAPER_GENERATOR_SYSTEM_MESSAGE } from "./lib/paperGenerator";
+import {
+  paperChecklistFor,
+  paperGeneratorSystemMessage,
+} from "./lib/paperGenerator";
 
 type TextPart = { type: "text"; text: string };
 type ImagePart = { type: "image_url"; image_url: { url: string } };
@@ -1651,8 +1657,10 @@ function slotBrief(blueprint: PaperBlueprint, slot: FlatPaperSlot): string {
 }
 
 /** A paper-sized extract: long enough to analyse, short enough to print. */
-const MIN_EXTRACT_WORDS = 80;
-const MAX_EXTRACT_WORDS = 350;
+const NOVEL_EXTRACT_MIN_WORDS = 300;
+const NOVEL_EXTRACT_MAX_WORDS = 420;
+const PLAY_EXTRACT_MIN_WORDS = 200;
+const PLAY_EXTRACT_MAX_WORDS = 320;
 
 function extractWordCount(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -1663,6 +1671,36 @@ function cleanExtractText(text: string): string {
   return text
     .replace(/\n+\s*(?:chapter|act|scene)\s+[0-9ivxlcdm]+\b[^\n]*$/i, "")
     .trim();
+}
+
+/**
+ * Keep only the text before the first repeated full sentence.
+ *
+ * Models occasionally print a paragraph and then paste it back, sometimes with
+ * a few words changed. That is not a larger extract; it is a broken one. A
+ * repeated sentence is a reliable signal to retry.
+ */
+function dedupeExtract(text: string): string {
+  const sentences = text.match(/[^.!?]+[.!?]+(?:["'”’)\]]+)?/g) ?? [];
+  if (sentences.length < 2) return text.trim();
+
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  for (const sentence of sentences) {
+    const key = sentence
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (key.length >= 40 && seen.has(key)) break;
+    if (key.length >= 40) seen.add(key);
+    kept.push(sentence);
+  }
+  return kept.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function endsCompleteSentence(text: string): boolean {
+  return /[.!?…]["'”’)\]]?\s*$/.test(text);
 }
 
 /** Keep the first complete sentences when a reply overshoots the extract size. */
@@ -1696,7 +1734,19 @@ async function generateLiteratureExtract(
   const source = slot.extractSource ?? "the set text";
   const author = slot.extractAuthor ?? "the writer";
   const kind = slot.extractKind ?? "text";
+
+  // Public-domain set texts use a checked passage. The model is never allowed
+  // to decide the exact words of a Dickens or Shakespeare extract.
+  const known = knownLiteratureExtract(slot.extractSource);
+  if (known) return known;
+
+  const minWords =
+    kind === "novel" ? NOVEL_EXTRACT_MIN_WORDS : PLAY_EXTRACT_MIN_WORDS;
+  const maxWords =
+    kind === "novel" ? NOVEL_EXTRACT_MAX_WORDS : PLAY_EXTRACT_MAX_WORDS;
   let lastCount = 0;
+  let lastProblem = "";
+
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const raw = await nvidiaChat(apiKeys, {
       model: NVIDIA_TEXT_MODEL,
@@ -1711,13 +1761,13 @@ async function generateLiteratureExtract(
           content:
             `Text: ${source}\nAuthor: ${author}\nForm: ${kind}\n` +
             `Question: ${question}\n\n` +
-            `Write the extract that must be printed above this question. It must be a continuous passage from ${source}, in ${author}'s original words, 150-250 words. ` +
-            "Do not paraphrase, summarise or invent a passage. Choose a passage that lets the student answer the question, and give the act, scene or chapter reference. " +
+            `Write the extract that must be printed above this question. It must be a continuous passage from ${source}, in ${author}'s original words, ${minWords}-${maxWords} words. ` +
+            "Do not paraphrase, summarise, invent or repeat a passage. Choose a passage that lets the student answer the question, and give the act, scene or chapter reference. " +
             "Use this exact plain-text format, with no other text:\n" +
             "REFERENCE: Act 1, Scene 3\nEXTRACT:\n<the passage>\n\n" +
             "If you do not know the exact words of the passage, choose a different passage from the same text that you do know rather than inventing one." +
             (attempt > 0
-              ? `\n\nFORMAT CORRECTION: the previous extract was ${lastCount} words. Return only a continuous 150-250 word passage, ending on a complete sentence.`
+              ? `\n\nFORMAT CORRECTION: ${lastProblem} The previous extract was ${lastCount} words. Return only a continuous ${minWords}-${maxWords} word passage, ending on a complete sentence, with no repeated sentence or paragraph.`
               : ""),
         },
       ],
@@ -1736,13 +1786,36 @@ async function generateLiteratureExtract(
     const reference = /^(?:REFERENCE|Reference)\s*:\s*(.+)$/m.exec(cleaned)?.[1]?.trim();
     const body = /^(?:EXTRACT|Extract)\s*:\s*([\s\S]+)$/m.exec(cleaned)?.[1]?.trim();
     let text = cleanExtractText(asText(body ?? cleaned, 5000));
-    if (!text) continue;
-    lastCount = extractWordCount(text);
-    if (lastCount > MAX_EXTRACT_WORDS) {
-      if (attempt === 0) continue;
-      text = shortenExtract(text, 300);
+    if (!text) {
+      lastProblem = "The previous reply contained no extract.";
+      continue;
     }
-    if (extractWordCount(text) < MIN_EXTRACT_WORDS) continue;
+
+    const rawCount = extractWordCount(text);
+    const deduped = dedupeExtract(text);
+    if (deduped !== text) {
+      lastCount = rawCount;
+      lastProblem = "The previous extract repeated a sentence or paragraph.";
+      if (attempt === 0) continue;
+      text = deduped;
+    }
+
+    lastCount = extractWordCount(text);
+    if (lastCount > maxWords) {
+      lastProblem = `The previous extract was too long (${lastCount} words).`;
+      if (attempt === 0) continue;
+      text = shortenExtract(text, maxWords);
+      lastCount = extractWordCount(text);
+    }
+    if (lastCount < minWords) {
+      lastProblem = `The previous extract was too short (${lastCount} words).`;
+      continue;
+    }
+    if (!endsCompleteSentence(text)) {
+      lastProblem = "The previous extract ended mid-sentence.";
+      continue;
+    }
+
     return {
       text,
       source: slot.extractSource,
@@ -1816,6 +1889,7 @@ async function generatePaperQuestions(
     `${schemeNotes} ` +
     "Return only strict JSON with no markdown fences, commentary or extra keys.";
 
+  const systemMessage = paperGeneratorSystemMessage(paperChecklistFor(course));
   const generated: GeneratedExam[] = [];
   for (const slot of slots) {
     const slotRequest =
@@ -1831,7 +1905,7 @@ async function generatePaperQuestions(
       const raw = await nvidiaChat(apiKeys, {
         model: NVIDIA_TEXT_MODEL,
         messages: [
-          { role: "system", content: PAPER_GENERATOR_SYSTEM_MESSAGE },
+          { role: "system", content: systemMessage },
           {
             role: "user",
             content:
@@ -1959,10 +2033,7 @@ export const buildPastPaper = internalAction({
       });
       // The cover is built from the marks the paper actually carries, so the
       // total it prints is the total the student can score.
-      const totalMarks = questions.reduce(
-        (sum, question) => sum + question.marks,
-        0,
-      );
+      const totalMarks = blueprint.totalMarks;
       const cover = buildPaperCover(
         {
           subject: course.subject,
@@ -2507,6 +2578,7 @@ async function scrapeSaveMyExamsPathway(
     examBoard: course.examBoard,
     ...(course.tier ? { tier: course.tier } : {}),
     ...(course.variant ? { variant: course.variant } : {}),
+    ...(course.rsRoute ? { rsRoute: course.rsRoute } : {}),
   });
   if (resolved.status !== "matched") return null;
 
@@ -3911,6 +3983,74 @@ async function meaningVerdicts(
 }
 
 /**
+ * Finds correct points the marking guide did not list.
+ *
+ * The guide is illustrative in questions such as "outline three beliefs"; a
+ * student can give a different correct belief and still deserve the mark. This
+ * pass is deliberately separate from the criterion-by-criterion pass: the
+ * latter must follow the guide, while this one asks whether the answer has a
+ * correct alternative the guide omitted. Every alternative needs a verbatim
+ * quote, and the caller fills only unearned one-mark rows with it.
+ */
+async function alternativeCredits(
+  apiKeys: string[],
+  exam: { question: string; marks: number; modelAnswer: string },
+  response: string,
+  qualification: string,
+  guide: string[],
+  awardedMarks: number,
+  available: number,
+): Promise<AlternativeCredit[]> {
+  const max = Math.min(4, Math.max(0, available));
+  if (max === 0) return [];
+
+  return await askExaminer(
+    apiKeys,
+    [
+      { role: "system", content: EXAMINER_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `<qualification>${qualification || "Not specified"}</qualification>\n` +
+          `<question>${exam.question}</question>\n` +
+          `<marks_available>${exam.marks}</marks_available>\n` +
+          `<marks_already_awarded>${awardedMarks}</marks_already_awarded>\n` +
+          `<marking_guide>\n${guide.join("\n")}\n</marking_guide>\n` +
+          `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
+          `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
+          `The marking guide is illustrative, not an exhaustive list. The answer is short of full marks. Identify up to ${max} correct points that answer this question but are not in the guide. ` +
+          "Accept a belief, example, reason, feature or explanation that is correct for this qualification, even when it is worded differently from the model answer. " +
+          "Do not accept a point that contradicts the guide, is outside the specification, repeats a credited point, or merely restates the question. " +
+          "Use this only for questions that ask for examples, beliefs, reasons, features or an outline; never use it for a closed calculation or a single right answer. " +
+          "Each point must be short and the evidence must be copied verbatim from the answer. If there are none, return an empty alternatives array.\n" +
+          'Return JSON exactly like: {"alternatives":[{"point":"God is benevolent","evidence":"God is benevolent"}]}. ' +
+          "Give one entry per correct alternative, in the order they appear in the answer, and no more than the number requested.\n\n" +
+          DATA_NOT_INSTRUCTIONS,
+      },
+    ],
+    900,
+    (raw) => {
+      const parsed = tryParseJson<{ alternatives?: unknown }>(raw);
+      if (!parsed || !Array.isArray(parsed.alternatives)) return null;
+      const seen = new Set<string>();
+      const rows: AlternativeCredit[] = [];
+      for (const rawRow of parsed.alternatives) {
+        const row = rawRow as { point?: unknown; evidence?: unknown };
+        const point = asText(row.point, 300);
+        const evidence = asText(row.evidence, 400);
+        if (!point || !quoteIsInAnswer(evidence, response)) continue;
+        const key = point.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        rows.push({ point, evidence });
+        if (rows.length >= max) break;
+      }
+      return rows;
+    },
+  );
+}
+
+/**
  * Sends one answer to NVIDIA for marking and counts the score from the
  * verdicts. Point-marked questions get one checklist row per guide bullet with
  * the student's quoted words; essays are marked against their level
@@ -4060,6 +4200,30 @@ async function markExamAnswer(
       if (award <= 0) return check;
       return { ...check, awarded: award, evidence: verdict.evidence };
     });
+  }
+
+  // A guide can be illustrative rather than exhaustive. If the answer is still
+  // short of full marks, look for a correct point the guide omitted and use it
+  // only for an unearned one-mark row. This is what lets "God is benevolent"
+  // earn the third mark in an "outline three beliefs" question whose guide
+  // happens to list "God is eternal" instead.
+  const beforeAlternatives = awardedFromChecks(checks, exam.marks);
+  const unearnedOneMarkRows = checks.filter(
+    (check) => check.awarded === 0 && check.marks === 1,
+  ).length;
+  if (beforeAlternatives < exam.marks && unearnedOneMarkRows > 0) {
+    const alternatives = await alternativeCredits(
+      apiKeys,
+      exam,
+      response,
+      qualification,
+      checks.map((check) => check.point),
+      beforeAlternatives,
+      Math.min(exam.marks - beforeAlternatives, unearnedOneMarkRows),
+    );
+    if (alternatives.length > 0) {
+      checks = applyAlternativeCredits(checks, alternatives);
+    }
   }
 
   // The score is counted from the checklist, so the same verdicts always

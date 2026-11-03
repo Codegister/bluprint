@@ -10,6 +10,7 @@ import {
 import { requireOwner } from "./lib/authorization";
 import { requireUserId } from "./lib/requireUser";
 import { consumeBuildAllowance } from "./buildUsage";
+import { buildPaperBlueprint } from "./lib/paperBlueprint";
 import { alignCriteria, toCriteria } from "./lib/markingCriteria";
 
 /**
@@ -20,8 +21,9 @@ import { alignCriteria, toCriteria } from "./lib/markingCriteria";
  * as questions so it is identical on every visit and can be scheduled in the
  * revision timetable.
  *
- * A paper is always one hour (PAPER_MINUTES): the timetable assumes that, and
- * the practice page states it, so the estimate is never invented per paper.
+ * Papers use the blueprint's real duration where it has one (AQA English
+ * Literature Paper 1 is 105 minutes); otherwise the one-hour practice default
+ * (PAPER_MINUTES) keeps the timetable estimate stable.
  */
 
 export const PAPER_MINUTES = 60;
@@ -206,6 +208,7 @@ export const create = mutation({
       ? mine.filter((row) => row.paper === chosen).length
       : 0;
 
+    const blueprint = buildPaperBlueprint(course);
     const now = Date.now();
     const paperId = await ctx.db.insert("pastPapers", {
       userId,
@@ -214,7 +217,7 @@ export const create = mutation({
         ? `${chosen} practice paper ${samePaper + 1}`
         : `Practice paper ${highest + 1}`,
       paper: chosen,
-      durationMinutes: PAPER_MINUTES,
+      durationMinutes: blueprint.durationMinutes ?? PAPER_MINUTES,
       totalMarks: 0,
       questionCount: 0,
       answeredCount: 0,
@@ -235,9 +238,14 @@ export const rebuild = mutation({
   args: { paperId: v.id("pastPapers") },
   handler: async (ctx, { paperId }) => {
     const userId = await requireUserId(ctx);
-    await requireOwner(await ctx.db.get(paperId), userId);
+    const paper = await requireOwner(
+      await ctx.db.get(paperId),
+      userId,
+    ) as Doc<"pastPapers">;
     // Rebuilding writes a whole paper again, so it costs an allowance too.
     await consumeBuildAllowance(ctx, userId, "paper");
+    const course = await ctx.db.get(paper.courseId);
+    const blueprint = course ? buildPaperBlueprint(course) : null;
 
     const questions = await ctx.db
       .query("pastPaperQuestions")
@@ -253,6 +261,7 @@ export const rebuild = mutation({
       errorMessage: undefined,
       questionCount: 0,
       totalMarks: 0,
+      durationMinutes: blueprint?.durationMinutes ?? PAPER_MINUTES,
       answeredCount: 0,
       earnedMarks: 0,
       processingStartedAt: undefined,
@@ -358,7 +367,6 @@ export const completeBuild = internalMutation({
     // into a paper that no longer exists.
     if (!paper) return { stored: false };
 
-    let totalMarks = 0;
     for (const [index, question] of questions.entries()) {
       await ctx.db.insert("pastPaperQuestions", {
         paperId,
@@ -381,7 +389,6 @@ export const completeBuild = internalMutation({
         commandWord: question.commandWord,
         specReference: question.specReference,
       });
-      totalMarks += question.marks;
     }
 
     await ctx.db.patch(paperId, {
@@ -391,7 +398,7 @@ export const completeBuild = internalMutation({
       formatId,
       cover,
       questionCount: questions.length,
-      totalMarks,
+      totalMarks: cover.totalMarks,
       answeredCount: 0,
       earnedMarks: 0,
       processingStartedAt: undefined,

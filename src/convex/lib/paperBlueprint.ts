@@ -58,6 +58,10 @@ export type PaperBlueprint = {
   questionCount: number;
   /** Rules appended to the generation prompt. */
   rules: string[];
+  /** SPaG marks carried by the paper but not by a question slot. */
+  spagMarks?: number;
+  /** Real exam duration; the app's practice default is used when absent. */
+  durationMinutes?: number;
 };
 
 /** The course fields a blueprint is chosen from. */
@@ -157,9 +161,11 @@ function makeBlueprint(
   description: string,
   sections: PaperSection[],
   rules: string[],
+  options: { spagMarks?: number; durationMinutes?: number } = {},
 ): PaperBlueprint {
   const slots = sections.flatMap((item) => item.slots);
-  const totalMarks = slots.reduce((sum, slot) => sum + slot.marks, 0);
+  const contentMarks = slots.reduce((sum, slot) => sum + slot.marks, 0);
+  const totalMarks = contentMarks + (options.spagMarks ?? 0);
   const questionCount = slots.length;
   return {
     id,
@@ -169,6 +175,8 @@ function makeBlueprint(
     questionCount,
     summary: `${questionCount} question${questionCount === 1 ? "" : "s"} · ${marksList(slots.map((slot) => slot.marks))}`,
     rules,
+    ...(options.spagMarks ? { spagMarks: options.spagMarks } : {}),
+    ...(options.durationMinutes ? { durationMinutes: options.durationMinutes } : {}),
   };
 }
 
@@ -780,7 +788,12 @@ function englishLiterature(course: BlueprintCourse): PaperBlueprint {
           (twoPart
             ? " Combine close analysis of a key moment with the whole text in the same question."
             : "");
-      return section(essay.title, "Answer the question.", [
+      return section(
+        essay.title,
+        aqaGcse && essay.title.includes("Section A")
+          ? "Answer the question. Section A also carries 4 marks for spelling, punctuation and grammar."
+          : "Answer the question.",
+        [
         q(marks, "Explore", ask, {
           marking: "levels",
           extract: aqaGcse && essay.extract,
@@ -788,7 +801,8 @@ function englishLiterature(course: BlueprintCourse): PaperBlueprint {
           extractAuthor: essay.author,
           extractKind: essay.form === "novel" ? "novel" : "play",
         }),
-      ]);
+        ],
+      );
     }),
     [
       `Write exactly two questions, worth ${marks} marks each. Each is an extended essay.`,
@@ -799,7 +813,7 @@ function englishLiterature(course: BlueprintCourse): PaperBlueprint {
         : "Each question must ask the student to analyse the writer's methods and support a line of argument with evidence from the whole text.",
       ...(aqaGcse
         ? [
-            "Both questions must include an `extract` object with `text` and a `reference` (for example 'Act 1, Scene 3' or 'Chapter 2'); set `source` to the named text. The extract must be 150-250 words.",
+            "Both questions must include an `extract` object with `text` and a `reference` (for example 'Act 1, Scene 3' or 'Chapter 2'); set `source` to the named text. The extract must be 300-400 words for a novel or 200-300 words for a play, and must not repeat a sentence or paragraph.",
             "The extract must come from the named set text. Do not substitute an extract from another text and do not invent a scene or passage that does not exist in that text.",
             "Use the AQA two-part wording: 'Starting with this extract, how does [author] present [theme]?' followed by 'Write about: how [author] presents [theme] in this extract; how [author] presents [theme] in the whole play/novel.'",
           ]
@@ -815,13 +829,17 @@ function englishLiterature(course: BlueprintCourse): PaperBlueprint {
         : []),
       "Do not write a mark notation, answer lines or a cover page; the app adds those.",
     ],
+    {
+      spagMarks: aqaGcse ? 4 : undefined,
+      durationMinutes: aqaGcse ? 105 : undefined,
+    },
   );
   // Say "essay", not "question": the format is the point the student needs to
   // see before building.
   return {
     ...blueprint,
     summary: aqaGcse
-      ? `2 extract essays · ${marks} marks each`
+      ? `2 extract essays · ${marks} marks each + 4 SPaG`
       : `2 essays · ${marks} marks each`,
   };
 }

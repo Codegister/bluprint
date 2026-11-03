@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  applyAlternativeCredits,
   awardCriterion,
   criteriaFor,
   distinctiveCoverage,
@@ -257,5 +258,41 @@ describe("partial marks", () => {
     );
     expect(total).toBeGreaterThan(0);
     expect(total).toBeLessThan(6);
+  });
+});
+
+
+describe("alternative correct points", () => {
+  test("a correct point omitted from the guide can fill the last one-mark row", () => {
+    const checks = [
+      { point: "God is omnipotent", marks: 1, awarded: 1, evidence: "God is omnipotent" },
+      { point: "God is omniscient", marks: 1, awarded: 1, evidence: "God is omniscient" },
+      { point: "God is eternal", marks: 1, awarded: 0, evidence: "absent" },
+    ];
+
+    const result = applyAlternativeCredits(checks, [
+      { point: "God is benevolent", evidence: "God is benevolent" },
+    ]);
+
+    expect(result[2]?.awarded).toBe(1);
+    expect(result[2]?.point).toContain("accepted alternative: God is benevolent");
+    expect(result[2]?.evidence).toBe("God is benevolent");
+    expect(result.reduce((sum, check) => sum + check.awarded, 0)).toBe(3);
+  });
+
+  test("an alternative cannot take a multi-mark row or an already-awarded row", () => {
+    const checks = [
+      { point: "Point one", marks: 2, awarded: 0, evidence: "absent" },
+      { point: "Point two", marks: 1, awarded: 1, evidence: "quoted" },
+      { point: "Point three", marks: 1, awarded: 0, evidence: "absent" },
+    ];
+
+    const result = applyAlternativeCredits(checks, [
+      { point: "A correct alternative", evidence: "A correct alternative" },
+    ]);
+
+    expect(result[0]?.awarded).toBe(0);
+    expect(result[1]?.awarded).toBe(1);
+    expect(result[2]?.awarded).toBe(1);
   });
 });

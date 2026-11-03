@@ -533,6 +533,49 @@ export function reconcilePasses(
   };
 }
 
+export type AlternativeCredit = {
+  /** The correct point the answer made but the guide did not list. */
+  point: string;
+  /** The student's own words, checked against the answer before use. */
+  evidence: string;
+};
+
+export type CreditCheck = {
+  point: string;
+  marks: number;
+  awarded: number;
+  evidence: string;
+};
+
+/**
+ * Fills unearned one-mark criteria with correct alternatives the guide omitted.
+ *
+ * A mark scheme is illustrative in open questions such as "outline three
+ * beliefs"; a student who gives a different correct belief should not lose a
+ * mark because the model answer happened to list another one. The alternative
+ * still has to be quoted from the answer, and it can only take the unearned
+ * rows, so this can add credit but cannot invent it or exceed the paper total.
+ */
+export function applyAlternativeCredits<T extends CreditCheck>(
+  checks: T[],
+  alternatives: AlternativeCredit[],
+): T[] {
+  if (alternatives.length === 0) return checks;
+  let next = 0;
+  return checks.map((check) => {
+    if (next >= alternatives.length || check.awarded > 0 || check.marks !== 1) {
+      return check;
+    }
+    const alternative = alternatives[next++]!;
+    return {
+      ...check,
+      point: `${check.point} — accepted alternative: ${alternative.point}`,
+      awarded: Math.min(1, check.marks),
+      evidence: alternative.evidence,
+    };
+  });
+}
+
 /**
  * The examiner feedback without the bullet-by-bullet list it used to embed.
  * The checklist renders those rows; keeping both repeated every mark twice.

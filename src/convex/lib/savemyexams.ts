@@ -89,6 +89,8 @@ export type SaveMyExamsCourseRequest = {
   examBoard: string;
   tier?: string;
   variant?: string;
+  /** Edexcel GCSE Religious Studies route A or B. These are separate courses. */
+  rsRoute?: string;
 };
 
 export type SaveMyExamsCourse = {
@@ -165,6 +167,24 @@ function levelSlugFor(level: string): string | null {
 function boardSlugFor(board: string): string | null {
   if (!board.trim() || /^none$/i.test(board.trim())) return null;
   return BOARD_SLUGS.find((entry) => entry.match.test(board.trim()))?.slug ?? null;
+}
+
+/**
+ * Save My Exams publishes Edexcel GCSE Religious Studies as two courses,
+ * /religious-studies/edexcel/a/ and /b/. The route is part of the course, not a
+ * tier, so it must be carried into every path we read.
+ */
+function edexcelRsRouteAlias(
+  wanted: SaveMyExamsCourseRequest,
+): "a" | "b" | null {
+  if (normalise(wanted.subject) !== "religious studies") return null;
+  if (boardSlugFor(wanted.examBoard) !== "edexcel") return null;
+  // A-Level Edexcel RS is one course; only the GCSE specification is split.
+  if (levelSlugFor(wanted.level) !== "gcse") return null;
+  const route = /\b(?:religious studies|route)\s*([ab])\b/i.exec(
+    `${wanted.rsRoute ?? ""} ${wanted.variant ?? ""}`,
+  );
+  return route ? (route[1]!.toLowerCase() as "a" | "b") : null;
 }
 
 function subjectSlugCandidates(subject: string): string[] {
@@ -286,6 +306,7 @@ export function parseSaveMyExamsCourse(
   const subjectSlug = asString(slugs.subject);
   const boardSlug = asString(slugs.board);
   const yearSlug = asString(slugs.year);
+  const subjectAlias = asString(slugs.subjectAlias);
   const levelTitle = asString(titles.level);
   const subjectTitle = asString(titles.subject);
   const boardTitle = asString(titles.board);
@@ -298,8 +319,18 @@ export function parseSaveMyExamsCourse(
   if (!subjectMatches(wanted.subject, subjectTitle)) return null;
   if (!boardMatches(wanted.examBoard, boardTitle)) return null;
 
+  const routeAlias = edexcelRsRouteAlias(wanted);
+  const edexcelRs =
+    normalise(wanted.subject) === "religious studies" &&
+    boardSlugFor(wanted.examBoard) === "edexcel";
+  // Never fall into one route because the other was not checked. A route page
+  // must carry the alias we asked for; a route page without a requested route
+  // is ambiguous just like the OCR hub.
+  if (edexcelRs && subjectAlias !== (routeAlias ?? undefined)) return null;
+
+  const routeSegment = routeAlias ? `${routeAlias}/` : "";
   const basePath = pathWithSlash(
-    `/${levelSlug}/${subjectSlug}/${boardSlug}/${yearSlug}`,
+    `/${levelSlug}/${subjectSlug}/${boardSlug}/${routeSegment}${yearSlug}`,
   );
   const indexes = notesIndexPaths(html, basePath, wanted.tier);
   if (indexes.length === 0) return null;
@@ -311,7 +342,16 @@ export function parseSaveMyExamsCourse(
   const pastPapersPath =
     resourcePastPapers && resourcePastPapers.startsWith(`/${levelSlug}/`)
       ? pathWithSlash(resourcePastPapers)
-      : pathWithSlash(`/${levelSlug}/${subjectSlug}/${boardSlug}/past-papers`);
+      : pathWithSlash(
+          `/${levelSlug}/${subjectSlug}/${boardSlug}/${routeSegment}past-papers`,
+        );
+
+  const courseEntity =
+    asObject(props.courseOrCourses) ??
+    asObject(asArray(props.courseOrCourses)[0]);
+  const courseName = courseEntity
+    ? asString(asObject(courseEntity.attributes)?.name)
+    : undefined;
 
   return {
     basePath,
@@ -322,6 +362,7 @@ export function parseSaveMyExamsCourse(
     boardSlug,
     title:
       asString(props.courseTitle) ??
+      courseName ??
       asString(asObject(asObject(props.course)?.attributes)?.name) ??
       `${boardTitle} ${levelTitle} ${subjectTitle}`,
     levelTitle,
@@ -380,6 +421,7 @@ export async function resolveSaveMyExamsCourse(
     wanted.examBoard,
     wanted.tier ?? "",
     wanted.variant ?? "",
+    wanted.rsRoute ?? "",
   ]
     .map((part) => part.trim().toLowerCase())
     .join("|");
@@ -390,9 +432,13 @@ export async function resolveSaveMyExamsCourse(
 
   let sawPage = false;
   let sawError = false;
+  const routeAlias = edexcelRsRouteAlias(wanted);
   for (const subjectSlug of subjectSlugCandidates(wanted.subject)) {
+    // The RS hub has no single course, so go straight to the selected route.
     const page = await fetchPage(
-      `${SITE}/${levelSlug}/${subjectSlug}/${boardSlug}/`,
+      routeAlias
+        ? `${SITE}/${levelSlug}/${subjectSlug}/${boardSlug}/${routeAlias}/`
+        : `${SITE}/${levelSlug}/${subjectSlug}/${boardSlug}/`,
     );
     if (page.status === "error") {
       sawError = true;
