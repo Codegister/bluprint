@@ -71,6 +71,10 @@ export function checkAllowance(args: {
       ? " Guests share this lower limit; add an email address to sign in and raise it."
       : "";
 
+  const plural = (count: number) => (count === 1 ? "" : "s");
+  const hourly = `${limit.perHour} ${limit.label}${plural(limit.perHour)} an hour`;
+  const daily = `${limit.perDay} ${limit.label}${plural(limit.perDay)} a day`;
+
   const inHour = spent.filter((at) => now - at < HOUR_MS);
   if (inHour.length >= limit.perHour) {
     const oldest = Math.min(...inHour);
@@ -81,8 +85,7 @@ export function checkAllowance(args: {
     return {
       allowed: false,
       message:
-        `You have reached the build limit for this hour (${limit.perHour} ${limit.label}` +
-        `${limit.perHour === 1 ? "" : "s"} an hour). Try again in about ${waitMinutes} ${
+        `You have reached the build limit: ${hourly} and ${daily}. The hourly limit resets in about ${waitMinutes} ${
           waitMinutes === 1 ? "minute" : "minutes"
         }.${guestNote} Nothing was built, so no tokens were spent.`,
     };
@@ -90,11 +93,14 @@ export function checkAllowance(args: {
 
   const inDay = spent.filter((at) => now - at < DAY_MS);
   if (inDay.length >= limit.perDay) {
+    const oldest = Math.min(...inDay);
+    const waitHours = Math.max(1, Math.ceil((DAY_MS - (now - oldest)) / HOUR_MS));
     return {
       allowed: false,
       message:
-        `You've reached today's build limit (${limit.perDay} ${limit.label}` +
-        `${limit.perDay === 1 ? "" : "s"} a day). Try again tomorrow.${guestNote}`,
+        `You have reached the build limit: ${daily}, with a maximum of ${hourly}. The daily limit resets in about ${waitHours} ${
+          waitHours === 1 ? "hour" : "hours"
+        }.${guestNote} Nothing was built, so no tokens were spent.`,
     };
   }
 

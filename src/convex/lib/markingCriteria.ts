@@ -2,11 +2,14 @@
  * Marking criteria.
  *
  * A mark scheme is a list of discrete creditable points, each carrying its own
- * marks. Generation still produces bullet strings ("1 mark: …"), so this module
- * turns them into criteria and, where a model collapsed several points into one
- * bullet, splits that bullet into separable criteria. Without the split, a
- * six-mark question whose guide was one string was graded all-or-nothing: a
- * temperature-only answer to "temperature and pH" could take all six marks.
+ * marks. Generation produces bullet strings ("1 mark: …"), so this module turns
+ * them into criteria without inventing marks to make a guide add up. A guide
+ * that does not match the question's tariff is rejected and regenerated; it is
+ * never silently divided into equal shares.
+ *
+ * Levels-of-response questions are kept as bands with mark ranges. They are
+ * marked by best fit, not as additive criteria, so converting a band into two
+ * or three equal marks would change the board's scheme into a different one.
  *
  * It also holds the deterministic evidence guard. The model proposes marks; a
  * criterion is only credited when its own key terms occur in the student's
@@ -20,6 +23,21 @@ export type MarkingCriterion = {
   marks: number;
   text: string;
 };
+
+export type MarkingBand = {
+  level: number;
+  minMarks: number;
+  maxMarks: number;
+  descriptor: string;
+};
+
+export type MarkingScheme =
+  | { kind: "points"; points: MarkingCriterion[] }
+  | { kind: "levels"; bands: MarkingBand[]; indicative: string[] };
+
+export type MarkingValidation =
+  | { ok: true; scheme: MarkingScheme }
+  | { ok: false; reason: string };
 
 /** "1 mark:", "2 marks -", "(3 marks)" — the prefix a board prints. */
 const MARK_PREFIX = /^\s*\(?(\d{1,2})\s*(?:marks?|mks?)\)?\s*[:.–—-]?\s*/i;
@@ -170,36 +188,14 @@ export function criterionText(point: string): string {
 }
 
 /**
- * Splits a single guide bullet into separable points. Bullets that carry one
- * mark are never split; multi-mark bullets are split on semicolons, sentence
- * boundaries and — when nothing else separates them — on " and ", because
- * "temperature and pH" is two creditable ideas.
+ * A guide bullet is one criterion. This deliberately does not split on " and ":
+ * "temperature and pH" is one required idea in a board's wording, not two.
+ * Splitting there used to manufacture criteria and then scale their marks.
  */
-export function splitCriteria(text: string, marks: number): string[] {
+export function splitCriteria(text: string): string[] {
   const cleaned = text.replace(/\s+/g, " ").trim();
   if (!cleaned) return [];
-  if (marks <= 1) return [cleaned];
-
-  const parts: string[] = [];
-  for (const sentence of cleaned.split(/(?<=[.!?])\s+|;\s*|\n+/)) {
-    const trimmed = sentence.trim().replace(/^[-•·]\s*/, "");
-    if (trimmed.length > 0) parts.push(trimmed);
-  }
-
-  const expanded: string[] = [];
-  for (const part of parts) {
-    if (
-      marks > 1 &&
-      /\s+and\s+/i.test(part) &&
-      part.split(/\s+and\s+/i).every((piece) => piece.trim().length >= 4)
-    ) {
-      expanded.push(...part.split(/\s+and\s+/i).map((piece) => piece.trim()));
-    } else {
-      expanded.push(part);
-    }
-  }
-
-  return expanded.filter(Boolean).slice(0, Math.max(marks, 1));
+  return [cleaned];
 }
 
 /** Distributes `total` marks across `parts` criteria, remainder to the first. */
@@ -212,63 +208,140 @@ export function distributeMarks(total: number, parts: number): number[] {
   );
 }
 
-/** One criterion per guide bullet, split where a bullet holds several ideas. */
+/** One criterion per guide bullet, with the marks the bullet declares. */
 export function toCriteria(guide: string[]): MarkingCriterion[] {
   const criteria: MarkingCriterion[] = [];
   for (const raw of guide) {
     const text = raw.trim();
+    if (!text) continue;
     const match = MARK_PREFIX.exec(text);
     const declared = match ? Number(match[1]) : 1;
     const marks = Math.max(1, Math.min(60, Number.isFinite(declared) ? declared : 1));
     const body = match ? text.slice(match[0].length).trim() : text;
-    for (const part of splitCriteria(body || text, marks)) {
-      criteria.push({
-        id: `c${criteria.length + 1}`,
-        marks: 1,
-        text: part,
-      });
-    }
+    criteria.push({
+      id: `c${criteria.length + 1}`,
+      marks,
+      text: body || text,
+    });
   }
   return criteria;
 }
 
 /**
- * Scales criteria marks so they add up to the marks the question is worth.
- * "6 marks" split into two ideas becomes 3 + 3, not 1 + 1; the score is then
- * the literal sum of credited marks out of the question's total.
+ * Post-processes stored criteria without changing what the board awarded. The
+ * old implementation rescaled every mark to the question total; that is exactly
+ * the re-marking this module now refuses to do.
  */
-export function alignCriteria(
-  criteria: MarkingCriterion[],
-  marksAvailable: number,
-): MarkingCriterion[] {
-  if (criteria.length === 0) return criteria;
-  const marks = Math.max(1, Math.round(marksAvailable));
-  const shares = distributeMarks(marks, criteria.length);
+export function alignCriteria(criteria: MarkingCriterion[]): MarkingCriterion[] {
   return criteria.map((criterion, index) => ({
     ...criterion,
     id: `c${index + 1}`,
-    marks: shares[index] ?? 1,
   }));
 }
 
 /**
- * The criteria for a question: stored structured rows when they are genuinely
- * granular, otherwise the same rows derived from the guide and scaled to the
- * question's marks. A single stored row for a six-mark question is re-derived,
- * because one row cannot express partial credit.
+ * The criteria for a point-marked question. Stored rows win; old rows without
+ * criteria fall back to the guide. No mark is invented or rescaled.
  */
 export function criteriaFor(question: {
   criteria?: MarkingCriterion[];
   markingGuide: string[];
   marks?: number;
+  marking?: "points" | "levels";
 }): MarkingCriterion[] {
-  const stored = question.criteria ?? [];
-  const marks = question.marks ?? 0;
-  const granular = stored.length > 1 || marks <= 1;
-  const base = granular && stored.length > 0
-    ? stored
-    : toCriteria(question.markingGuide);
-  return marks > 0 ? alignCriteria(base, marks) : base;
+  if (question.marking === "levels") return [];
+  if (question.criteria && question.criteria.length > 0) {
+    return alignCriteria(question.criteria);
+  }
+  return toCriteria(question.markingGuide);
+}
+
+/**
+ * Parses the bands of a levels-of-response guide. The range is the board's own
+ * mark range; descriptors remain separate from any per-criterion marks.
+ */
+export function parseLevelsGuide(
+  guide: string[],
+  marksAvailable: number,
+): MarkingBand[] {
+  const bands: MarkingBand[] = [];
+  const pattern =
+    /^\s*(?:level\s*(\d+)\s*)?\(?\s*(\d{1,2})\s*(?:[-–—]|to)\s*(\d{1,2})\s*marks?\s*\)?\s*:?\s*(.*)$/i;
+  for (const raw of guide) {
+    const text = raw.trim();
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const level = match[1] ? Number(match[1]) : 0;
+    const minMarks = Number(match[2]);
+    const maxMarks = Number(match[3]);
+    const descriptor = (match[4] ?? "").trim();
+    if (!Number.isFinite(minMarks) || !Number.isFinite(maxMarks)) continue;
+    if (minMarks < 0 || maxMarks < minMarks || maxMarks > marksAvailable) continue;
+    bands.push({ level, minMarks, maxMarks, descriptor });
+  }
+  return bands.sort((a, b) => b.maxMarks - a.maxMarks);
+}
+
+/**
+ * Checks a guide against the board's shape. Point-marked guides need one
+ * one-mark point per mark; levels guides need contiguous bands covering 0 to
+ * the available mark. A bad guide is rejected before it can be stored.
+ */
+export function validateMarkingGuide(
+  marking: "points" | "levels",
+  guide: string[],
+  marksAvailable: number,
+): MarkingValidation {
+  const marks = Math.max(0, Math.round(marksAvailable));
+  if (marking === "levels") {
+    const bands = parseLevelsGuide(guide, marks);
+    const scored = bands.filter((band) => band.maxMarks > 0);
+    if (scored.length < 2) {
+      return { ok: false, reason: "The levels guide needs at least two bands with mark ranges." };
+    }
+    if (bands[0]!.maxMarks !== marks) {
+      return { ok: false, reason: `The top band must reach ${marks} marks.` };
+    }
+    const sorted = [...bands].sort((a, b) => a.minMarks - b.minMarks);
+    // Most boards print 1-2, 3-4, 5-6 with zero implicit; some print an
+    // explicit 0 band. Both forms cover every mark.
+    let expected = sorted[0]!.minMarks === 1 ? 1 : 0;
+    for (const band of sorted) {
+      if (band.minMarks !== expected) {
+        return { ok: false, reason: "The bands must cover every mark without gaps." };
+      }
+      expected = band.maxMarks + 1;
+    }
+    if (expected !== marks + 1) {
+      return { ok: false, reason: "The bands must cover the available mark." };
+    }
+    return {
+      ok: true,
+      scheme: {
+        kind: "levels",
+        bands,
+        indicative: guide.filter((line) => !patternTest(line)),
+      },
+    };
+  }
+
+  const points = toCriteria(guide);
+  if (points.length === 0) {
+    return { ok: false, reason: "The marking guide is empty." };
+  }
+  if (points.length !== marks || points.some((point) => point.marks !== 1)) {
+    return {
+      ok: false,
+      reason: `A ${marks}-mark point question needs exactly ${marks} one-mark points; this guide has ${points.length} points totalling ${points.reduce((sum, point) => sum + point.marks, 0)} marks.`,
+    };
+  }
+  return { ok: true, scheme: { kind: "points", points } };
+}
+
+function patternTest(line: string): boolean {
+  return /^\s*(?:level\s*\d+\s*)?\(?\s*\d{1,2}\s*(?:[-–—]|to)\s*\d{1,2}\s*marks?\s*\)?/i.test(
+    line,
+  );
 }
 
 /** The guide strings the examiner prompt and checklist consume. */

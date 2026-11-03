@@ -278,8 +278,8 @@ const schema = defineSchema(
       // Missing means the whole qualification is examinable, which is how
       // papers built before a course was split into papers behave.
       paper: v.optional(v.string()),
-      // Every paper is one hour long. The timetable assumes 60 minutes per
-      // paper, so the duration is stored rather than guessed at render time.
+      // The real component duration where the blueprint knows it. Stored so
+      // the timetable never has to re-derive an economy from marks.
       durationMinutes: v.number(),
       totalMarks: v.number(),
       questionCount: v.number(),
@@ -304,12 +304,16 @@ const schema = defineSchema(
         v.object({
           paperLabel: v.string(),
           qualification: v.string(),
+          componentCode: v.optional(v.string()),
+          series: v.optional(v.string()),
           timeAllowed: v.string(),
           totalMarks: v.number(),
+          materialsHeading: v.optional(v.string()),
           materials: v.array(v.string()),
           instructions: v.array(v.string()),
           information: v.array(v.string()),
           advice: v.array(v.string()),
+          pageCount: v.optional(v.number()),
         }),
       ),
       createdAt: v.number(),
@@ -362,6 +366,20 @@ const schema = defineSchema(
           }),
         ),
       ),
+      // Levels-of-response bands, kept as ranges and descriptors. Optional on
+      // old rows; the UI falls back to `markingGuide`.
+      markingBands: v.optional(
+        v.array(
+          v.object({
+            level: v.number(),
+            minMarks: v.number(),
+            maxMarks: v.number(),
+            descriptor: v.string(),
+          }),
+        ),
+      ),
+      // True when this part carries SPaG inside the paper total.
+      spag: v.optional(v.boolean()),
       order: v.number(),
       // How the board lays the question out: its printed label ("1 (a)",
       // "0 1 . 1"), the section it belongs to, that section's instruction line,

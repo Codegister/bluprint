@@ -196,8 +196,10 @@ R3  Where a board prints an extract for a question, print the extract. Where it 
     not, do not add one. Paper 1 and Paper 2 of the same subject often differ here.
 R4  Preserve the two-part demand where the board uses it (extract, then whole text).
     Do not merge the parts, and do not drop the "Write about:" bullets.
-R5  Never offer a tier for an untiered subject. English, History, Geography and the
-    arts are untiered at GCSE.
+R5  Never offer a tier for an untiered subject. English Language, English
+    Literature, History, Geography, Religious Studies, Business, Music, Drama,
+    PE, Art, Media, D&T, Food, Sociology, Psychology, Law, Politics and
+    Philosophy are untiered at GCSE.
 R6  Never reuse a mark total from a different qualification. IGCSE science is 110
     marks; GCSE science is 100. A-level papers vary by board.
 R7  Figures: if the question refers to one, produce it or emit [FIGURE: ...].
@@ -214,6 +216,9 @@ R13 Do not add motivational text, emoji, hints or explanations to the paper itse
     Explanations belong in the mark scheme or a separate feedback block.
 R14 If the request conflicts with the row (e.g. 30 questions for an 80-mark paper),
     follow the row and say what you changed.
+R16 The grid may contain parent questions with several printed parts. Keep the
+    parent total and every part tariff exactly; never invent a section when the
+    grid's section title is blank.
 
 
 6. OUTPUT

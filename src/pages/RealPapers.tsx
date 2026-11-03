@@ -44,7 +44,7 @@ export default function RealPapers() {
 
   // The criteria are parsed here as well as on the server, so the student can
   // see what their scheme turned into before saving it.
-  const preview = parseMarkScheme(scheme, Number(marks) || 1);
+  const preview = parseMarkScheme(scheme);
 
   const readPhoto = async (file: File) => {
     setReading(true);

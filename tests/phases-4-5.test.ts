@@ -155,7 +155,7 @@ describe("real mark schemes", () => {
 1 mark: the active site changes shape so the substrate no longer fits`;
 
   test("a pasted scheme becomes one criterion per point, adding up to the marks", () => {
-    const criteria = parseMarkScheme(scheme, 4);
+    const criteria = parseMarkScheme(scheme);
     expect(criteria.length).toBe(4);
     expect(criteria.reduce((sum, criterion) => sum + criterion.marks, 0)).toBe(4);
     expect(criteria[0]!.text).toContain("kinetic energy");
@@ -163,19 +163,19 @@ describe("real mark schemes", () => {
   });
 
   test("a scheme with no marks stated is distributed to the question's total", () => {
-    const criteria = parseMarkScheme("Osmosis; active transport; diffusion", 3);
+    const criteria = parseMarkScheme("Osmosis; active transport; diffusion");
     expect(criteria.reduce((sum, criterion) => sum + criterion.marks, 0)).toBe(3);
   });
 
   test("headings are not credit points", () => {
-    const criteria = parseMarkScheme("Mark scheme\n1 mark: glucose is reabsorbed", 1);
+    const criteria = parseMarkScheme("Mark scheme\n1 mark: glucose is reabsorbed");
     expect(criteria.length).toBe(1);
     expect(criteria[0]!.text).toBe("glucose is reabsorbed");
   });
 
   test("an empty scheme is refused rather than stored", () => {
-    expect(schemeIsUsable(parseMarkScheme("", 4))).toBe(false);
-    expect(schemeIsUsable(parseMarkScheme("Mark scheme", 4))).toBe(false);
+    expect(schemeIsUsable(parseMarkScheme(""))).toBe(false);
+    expect(schemeIsUsable(parseMarkScheme("Mark scheme"))).toBe(false);
   });
 });
 

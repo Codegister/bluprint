@@ -52,6 +52,7 @@ import {
   guideFromCriteria,
   meaningAward,
   reconcilePasses,
+  validateMarkingGuide,
   type AlternativeCredit,
   type MarkCheck,
 } from "./lib/markingCriteria";
@@ -1499,73 +1500,6 @@ function specificationDigest(
 }
 
 /**
- * The blueprint as prompt text: every question the paper must contain, in the
- * board's numbering, with its marks and its command word. This is what stops
- * the model turning an English essay paper into short-answer questions.
- */
-function blueprintBrief(blueprint: PaperBlueprint): string {
-  const slots = flattenPaperBlueprint(blueprint);
-  const lines = [
-    "PAPER FORMAT — this is the subject's real question structure. Follow it exactly.",
-    `Total: ${slots.length} questions, ${blueprint.totalMarks} marks.`,
-  ];
-  let currentSection = "";
-  for (const slot of slots) {
-    if (slot.section !== currentSection) {
-      currentSection = slot.section;
-      lines.push("", `## ${slot.section}`, slot.sectionInstruction);
-    }
-    lines.push(
-      `${slot.label} — ${slot.marks} mark${slot.marks === 1 ? "" : "s"} — command word: ${slot.command} — ${slot.marking === "levels" ? "levels-marked" : "point-marked"}`,
-      `  ${slot.ask}`,
-    );
-  }
-  lines.push("", "FORMAT RULES", ...blueprint.rules.map((rule) => `- ${rule}`));
-  return lines.join("\n");
-}
-
-/** The first way a parsed paper differs from its blueprint, or null if it fits. */
-function blueprintMismatch(
-  questions: GeneratedExam[],
-  blueprint: PaperBlueprint,
-): string | null {
-  const slots = flattenPaperBlueprint(blueprint);
-  if (questions.length !== slots.length) {
-    return `The paper must have exactly ${slots.length} questions; this reply had ${questions.length}.`;
-  }
-  for (const [index, slot] of slots.entries()) {
-    if (questions[index]?.marks !== slot.marks) {
-      return `Question ${slot.label} must be worth ${slot.marks} marks; this reply made it ${questions[index]?.marks ?? "unmarked"}.`;
-    }
-  }
-  return null;
-}
-
-/**
- * Writes the questions in the blueprint's order, but keeps the blueprint's
- * labels, sections, marks and marking style. Those are the parts a student can
- * see, so they must be exact even if the model rounds a mark or forgets a label.
- */
-function applyBlueprint(
-  questions: GeneratedExam[],
-  blueprint: PaperBlueprint,
-): GeneratedExam[] {
-  const slots = flattenPaperBlueprint(blueprint);
-  return questions.map((question, index) => {
-    const slot = slots[index]!;
-    return {
-      ...question,
-      marks: slot.marks,
-      marking: slot.marking,
-      label: slot.label,
-      section: slot.section,
-      sectionInstruction: slot.sectionInstruction,
-      commandWord: slot.command,
-    };
-  });
-}
-
-/**
  * Rebuilds one question whose data did not arrive. The model is asked for the
  * data table, or for a version of the question that needs none. Marks, labels
  * and sections stay exactly as the blueprint set them.
@@ -1985,6 +1919,15 @@ async function generatePaperQuestions(
         mismatch = `Question ${slot.label} must be worth ${slot.marks} marks; this reply made it ${candidate.marks}.`;
         continue;
       }
+      const scheme = validateMarkingGuide(
+        slot.marking,
+        candidate.markingGuide,
+        slot.marks,
+      );
+      if (!scheme.ok) {
+        mismatch = `The marking guide for ${slot.label} is the wrong shape. ${scheme.reason}`;
+        continue;
+      }
       const earlier = generated.find(
         (question) =>
           question.section === slot.section &&
@@ -2031,7 +1974,13 @@ async function generatePaperQuestions(
     generated.push(accepted);
   }
 
-  return await ensureSelfContained(apiKeys, generated, qualification);
+  const complete = await ensureSelfContained(apiKeys, generated, qualification);
+  if (complete.length !== slots.length) {
+    throw new Error(
+      `The paper came back with ${complete.length} of ${slots.length} answerable parts. Try building it again.`,
+    );
+  }
+  return complete;
 }
 
 /** Builds one saved past paper for a course. Scheduled by `pastPapers.create`. */
@@ -2097,16 +2046,27 @@ export const buildPastPaper = internalAction({
           poetryTheme: course.poetryTheme,
           rsReligion: course.rsReligion,
           rsReligion2: course.rsReligion2,
+          paper: paper.paper,
+          componentCode: blueprint.componentCode,
+          spagMarks: blueprint.spagMarks,
+          questionCount: blueprint.questionCount,
         },
         paper.paper ? `${paper.paper} · ${paper.title}` : paper.title,
         totalMarks,
-        paper.durationMinutes,
+        blueprint.durationMinutes,
+        {
+          componentCode: blueprint.componentCode,
+          pageCount: blueprint.pageCount,
+          hasSpag: Boolean(blueprint.spagMarks),
+          notes: blueprint.coverNotes,
+        },
       );
       await ctx.runMutation(internal.pastPapers.completeBuild, {
         paperId,
         formatId: blueprint.id,
         cover,
         questions,
+        questionCount: blueprint.questionCount,
       });
       return { ok: true };
     } catch (error) {
@@ -3609,14 +3569,11 @@ const LEVELS_OUTPUT_SHAPE =
  * guide's own total, which is how a pasted model answer once scored 6/10.
  */
 function awardedFromChecks(checks: MarkCheck[], marksAvailable: number): number {
-  const guideTotal = checks.reduce((sum, check) => sum + check.marks, 0);
-  if (guideTotal <= 0) return marksAvailable;
   const earned = checks.reduce((sum, check) => sum + check.awarded, 0);
-  if (guideTotal === marksAvailable) return Math.min(marksAvailable, earned);
-  return Math.min(
-    marksAvailable,
-    Math.floor((earned / guideTotal) * marksAvailable),
-  );
+  // A guide that does not add up is rejected before storage. For a legacy row
+  // with a short guide, cap the earned marks rather than rescaling an invalid
+  // scheme into a different one.
+  return Math.max(0, Math.min(marksAvailable, earned));
 }
 
 /** Lowercased words that carry meaning, for comparing two answers. */

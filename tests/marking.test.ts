@@ -10,7 +10,9 @@ import {
   isSymbolicCriterion,
   meaningAward,
   reconcilePasses,
+  splitCriteria,
   toCriteria,
+  validateMarkingGuide,
 } from "../src/convex/lib/markingCriteria";
 
 const TEMPERATURE_ONLY =
@@ -100,16 +102,40 @@ describe("two marking passes", () => {
 });
 
 describe("partial marks", () => {
-  test("a six-mark single-string guide is expanded into discrete criteria", () => {
-    const criteria = criteriaFor({
-      markingGuide: ["6 marks: temperature and pH affect enzyme activity"],
-      marks: 6,
-    });
+  test("a six-mark single bullet is rejected, not split into invented points", () => {
+    const guide = ["6 marks: temperature and pH affect enzyme activity"];
+    const criteria = criteriaFor({ markingGuide: guide, marks: 6 });
+    const validation = validateMarkingGuide("points", guide, 6);
 
-    expect(criteria.length).toBeGreaterThan(1);
-    expect(criteria.reduce((sum, row) => sum + row.marks, 0)).toBe(6);
-    expect(criteria.map((row) => row.text).join(" ")).toContain("temperature");
-    expect(criteria.map((row) => row.text).join(" ")).toContain("pH");
+    expect(criteria).toHaveLength(1);
+    expect(criteria[0]!.marks).toBe(6);
+    expect(validation.ok).toBe(false);
+    expect(splitCriteria("temperature and pH")).toEqual(["temperature and pH"]);
+  });
+
+  test("levels bands stay bands and are not converted into additive criteria", () => {
+    const guide = [
+      "Level 3 (5-6 marks): detailed, linked explanation",
+      "Level 2 (3-4 marks): some linked explanation",
+      "Level 1 (1-2 marks): isolated relevant points",
+    ];
+    const validation = validateMarkingGuide("levels", guide, 6);
+
+    expect(validation.ok).toBe(true);
+    if (validation.ok && validation.scheme.kind === "levels") {
+      expect(validation.scheme.bands).toHaveLength(3);
+      expect(validation.scheme.bands.map((band) => band.maxMarks)).toEqual([6, 4, 2]);
+    }
+    expect(criteriaFor({ marking: "levels", markingGuide: guide, marks: 6 })).toEqual([]);
+  });
+
+  test("a point guide with the wrong number of one-mark points is rejected", () => {
+    expect(
+      validateMarkingGuide("points", ["2 marks: one idea", "2 marks: another idea"], 4).ok,
+    ).toBe(false);
+    expect(
+      validateMarkingGuide("points", ["1 mark: one", "1 mark: two"], 2).ok,
+    ).toBe(true);
   });
 
   test("a temperature-only answer scores exactly 3/6 and marks every pH point absent", () => {

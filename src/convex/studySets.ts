@@ -1343,8 +1343,8 @@ export const completeGeneration = internalMutation({
         // six-mark answer can score 3 and each award is its own row.
         criteria:
           question.criteria ?
-            alignCriteria(question.criteria, question.marks)
-          : alignCriteria(toCriteria(question.markingGuide), question.marks),
+            alignCriteria(question.criteria)
+          : alignCriteria(toCriteria(question.markingGuide)),
         order: index,
       });
     }

@@ -26,7 +26,13 @@ import {
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { notifyError, readableError } from "@/lib/errors";
-import { EXAM_BOARDS, STUDY_LEVELS, qualificationLabel } from "@/lib/examBoards";
+import {
+  EXAM_BOARDS,
+  STUDY_LEVELS,
+  qualificationLabel,
+  validBoardsForLevel,
+  validLevelsForBoard,
+} from "@/lib/examBoards";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -171,6 +177,8 @@ export function SetSettingsDialog({
   };
 
   const qualification = qualificationLabel({ examBoard, level, course });
+  const boardOptions = level ? validBoardsForLevel(level) : [...EXAM_BOARDS];
+  const levelOptions = examBoard ? validLevelsForBoard(examBoard) : [...STUDY_LEVELS];
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -251,7 +259,7 @@ export function SetSettingsDialog({
               Exam board <span className="font-normal text-muted-foreground">(optional)</span>
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {EXAM_BOARDS.map((board) => {
+              {boardOptions.map((board) => {
                 const selected = examBoard === board;
                 return (
                   <motion.button
@@ -262,7 +270,13 @@ export function SetSettingsDialog({
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.97 }}
                     transition={{ duration: 0.18, ease: EASE }}
-                    onClick={() => setExamBoard(selected ? "" : board)}
+                    onClick={() => {
+                      const next = selected ? "" : board;
+                      setExamBoard(next);
+                      if (next && level && !validBoardsForLevel(level).includes(next)) {
+                        setLevel("");
+                      }
+                    }}
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
                       selected
@@ -282,7 +296,7 @@ export function SetSettingsDialog({
               Level <span className="font-normal text-muted-foreground">(optional)</span>
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {STUDY_LEVELS.map((option) => {
+              {levelOptions.map((option) => {
                 const selected = level === option;
                 return (
                   <motion.button
@@ -293,7 +307,13 @@ export function SetSettingsDialog({
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.97 }}
                     transition={{ duration: 0.18, ease: EASE }}
-                    onClick={() => setLevel(selected ? "" : option)}
+                    onClick={() => {
+                      const next = selected ? "" : option;
+                      setLevel(next);
+                      if (next && examBoard && !validLevelsForBoard(examBoard).includes(next)) {
+                        setExamBoard("");
+                      }
+                    }}
                     className={cn(
                       "rounded-full border px-2.5 py-1.5 text-[0.72rem] font-semibold transition-colors",
                       selected

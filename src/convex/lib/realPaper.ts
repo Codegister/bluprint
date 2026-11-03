@@ -38,19 +38,16 @@ export function schemeLines(text: string): string[] {
 }
 
 /**
- * The criteria for a real question, from its scheme and the marks it is worth.
- * Marks the scheme states explicitly are kept; the rest are distributed so the
- * total always matches the question, which is what makes the score auditable.
+ * The criteria for a real question, from its scheme. Marks the scheme states
+ * explicitly are kept; nothing is distributed, scaled or invented.
  */
-export function parseMarkScheme(text: string, marks: number): MarkingCriterion[] {
+export function parseMarkScheme(text: string): MarkingCriterion[] {
   const lines = schemeLines(text).filter(
     // A heading ("Mark scheme", "Question 3") is not a creditable point.
     (line) => !/^(mark scheme|marks? scheme|question|total)\b/i.test(line),
   );
   if (lines.length === 0) return [];
-  const total = Math.max(1, Math.min(100, Math.round(marks)));
-  const derived = toCriteria(lines);
-  return alignCriteria(derived, total);
+  return alignCriteria(toCriteria(lines));
 }
 
 /** The guide strings the examiner prompt consumes for a real question. */

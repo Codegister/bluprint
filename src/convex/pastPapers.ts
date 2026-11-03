@@ -11,7 +11,8 @@ import { requireOwner } from "./lib/authorization";
 import { requireUserId } from "./lib/requireUser";
 import { consumeBuildAllowance } from "./buildUsage";
 import { buildPaperBlueprint } from "./lib/paperBlueprint";
-import { alignCriteria, toCriteria } from "./lib/markingCriteria";
+import { parseLevelsGuide, toCriteria } from "./lib/markingCriteria";
+import { displayPaperTitles } from "./lib/paperTitles";
 
 /**
  * Past papers.
@@ -21,9 +22,9 @@ import { alignCriteria, toCriteria } from "./lib/markingCriteria";
  * as questions so it is identical on every visit and can be scheduled in the
  * revision timetable.
  *
- * Papers use the blueprint's real duration where it has one (AQA English
- * Literature Paper 1 is 105 minutes); otherwise the one-hour practice default
- * (PAPER_MINUTES) keeps the timetable estimate stable.
+ * Every blueprint now carries a real duration and mark total. PAPER_MINUTES is
+ * only a last-resort fallback for a legacy course whose blueprint cannot be
+ * built at all; it is never used for a verified component.
  */
 
 export const PAPER_MINUTES = 60;
@@ -62,18 +63,23 @@ const generatedQuestion = v.object({
   sectionInstruction: v.optional(v.string()),
   commandWord: v.optional(v.string()),
   specReference: v.optional(v.string()),
+  spag: v.optional(v.boolean()),
 });
 
 /** The paper's cover page, built server-side from the board's own rubric. */
 const paperCover = v.object({
   paperLabel: v.string(),
   qualification: v.string(),
+  componentCode: v.optional(v.string()),
+  series: v.optional(v.string()),
   timeAllowed: v.string(),
   totalMarks: v.number(),
+  materialsHeading: v.optional(v.string()),
   materials: v.array(v.string()),
   instructions: v.array(v.string()),
   information: v.array(v.string()),
   advice: v.array(v.string()),
+  pageCount: v.optional(v.number()),
 });
 
 function stale(paper: Doc<"pastPapers">): boolean {
@@ -97,12 +103,13 @@ export const listForCourse = query({
       .withIndex("by_course", (q) => q.eq("courseId", courseId))
       .collect();
 
-    return papers
+    const ordered = papers
       .filter((paper) => paper.userId === userId)
-      .sort((a, b) => a.createdAt - b.createdAt)
-      .map((paper) => ({
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const titles = displayPaperTitles(ordered);
+    return ordered.map((paper, index) => ({
         _id: paper._id,
-        title: paper.title,
+        title: titles[index]!,
         paper: paper.paper,
         formatId: paper.formatId,
         status: paper.status,
@@ -129,16 +136,26 @@ export const getDetails = query({
     const paper = await ctx.db.get(paperId);
     if (!paper || paper.userId !== userId) return null;
 
-    const [course, questions] = await Promise.all([
+    const [course, questions, siblings] = await Promise.all([
       ctx.db.get(paper.courseId),
       ctx.db
         .query("pastPaperQuestions")
         .withIndex("by_paper", (q) => q.eq("paperId", paperId))
         .collect(),
+      ctx.db
+        .query("pastPapers")
+        .withIndex("by_course", (q) => q.eq("courseId", paper.courseId))
+        .collect(),
     ]);
+    const ordered = siblings
+      .filter((row) => row.userId === userId)
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const titles = displayPaperTitles(ordered);
+    const displayTitle =
+      titles[ordered.findIndex((row) => row._id === paper._id)] ?? paper.title;
 
     return {
-      paper,
+      paper: { ...paper, title: displayTitle },
       // Missing only when the course was deleted; the page still opens.
       course: course && course.userId === userId ? course : null,
       questions: questions.sort((a, b) => a.order - b.order),
@@ -209,6 +226,11 @@ export const create = mutation({
       : 0;
 
     const blueprint = buildPaperBlueprint(course, chosen);
+    if (blueprint.notAWrittenPaper) {
+      throw new Error(
+        `${course.subject} is assessed by non-examined assessment, not a timed written paper.`,
+      );
+    }
     const now = Date.now();
     const paperId = await ctx.db.insert("pastPapers", {
       userId,
@@ -217,7 +239,7 @@ export const create = mutation({
         ? `${chosen} practice paper ${samePaper + 1}`
         : `Practice paper ${highest + 1}`,
       paper: chosen,
-      durationMinutes: blueprint.durationMinutes ?? PAPER_MINUTES,
+      durationMinutes: blueprint.durationMinutes,
       totalMarks: 0,
       questionCount: 0,
       answeredCount: 0,
@@ -261,7 +283,8 @@ export const rebuild = mutation({
       errorMessage: undefined,
       questionCount: 0,
       totalMarks: 0,
-      durationMinutes: blueprint?.durationMinutes ?? PAPER_MINUTES,
+      durationMinutes:
+        blueprint?.durationMinutes ?? paper.durationMinutes ?? PAPER_MINUTES,
       answeredCount: 0,
       earnedMarks: 0,
       processingStartedAt: undefined,
@@ -360,8 +383,9 @@ export const completeBuild = internalMutation({
     formatId: v.string(),
     cover: paperCover,
     questions: v.array(generatedQuestion),
+    questionCount: v.optional(v.number()),
   },
-  handler: async (ctx, { paperId, formatId, cover, questions }) => {
+  handler: async (ctx, { paperId, formatId, cover, questions, questionCount }) => {
     const paper = await ctx.db.get(paperId);
     // Deleted while it was building: stop quietly instead of writing questions
     // into a paper that no longer exists.
@@ -378,10 +402,17 @@ export const completeBuild = internalMutation({
         markingGuide: question.markingGuide,
         extract: question.extract,
         data: question.data,
-        // The guide stored as discrete criteria, scaled to the question's
-        // marks, so the marked page renders one row per mark and partial marks
-        // are possible.
-        criteria: alignCriteria(toCriteria(question.markingGuide), question.marks),
+        // The guide stored as discrete criteria, with the marks the guide
+        // declares. It is never rescaled to make a bad guide add up.
+        criteria:
+          question.marking === "levels"
+            ? undefined
+            : toCriteria(question.markingGuide),
+        markingBands:
+          question.marking === "levels"
+            ? parseLevelsGuide(question.markingGuide, question.marks)
+            : undefined,
+        spag: question.spag,
         order: index,
         label: question.label,
         section: question.section,
@@ -397,7 +428,7 @@ export const completeBuild = internalMutation({
       errorMessage: undefined,
       formatId,
       cover,
-      questionCount: questions.length,
+      questionCount: questionCount ?? questions.length,
       totalMarks: cover.totalMarks,
       answeredCount: 0,
       earnedMarks: 0,

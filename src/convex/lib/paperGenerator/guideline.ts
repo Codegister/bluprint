@@ -174,9 +174,10 @@ Writing tasks always carry a form, an audience and a purpose; omit any of the th
 and the task is not authentic.
 
 English Literature. AQA GCSE English Literature (8702) is untiered. Paper 1 is
-105 minutes and 64 marks: Section A Shakespeare is 30 marks plus 4 SPaG, and
-Section B, the 19th-century novel, is 30 marks. Both questions are extract-based
-and the paper is closed book. Paper 2 is 135 minutes and 96 marks: Section A modern
+105 minutes and 64 marks: it prints 13 questions, six Shakespeare and seven
+19th-century novel questions. The candidate answers one from each section:
+Section A Shakespeare is 30 marks plus 4 SPaG, and Section B is 30 marks. Both
+sections are extract-based and the paper is closed book. Paper 2 is 135 minutes and 96 marks: Section A modern
 text is 30 marks plus 4 SPaG and has no extract; Section B is a named poem; Section
 C is unseen poetry. Open-book rules vary: AQA A-level English Literature Paper 1
 is open book in Section C only; Sections A and B are closed book. Check the row.
@@ -266,6 +267,11 @@ correct point", and explicit handling of common wrong answers.
 Always include: total marks for each question, the total for the paper, acceptable
 alternatives, and "any two from" phrasing where the board uses it. Never write a mark
 scheme that requires a point the source material cannot support.
+
+Never rescale a guide to make it add up. A point-marked guide needs exactly one
+one-mark point per mark. A levels guide keeps its bands and mark ranges, marked
+best-fit; indicators are stored separately. A guide that does not match the
+tariff is rejected and regenerated.
 
 8. BOARDS: WHAT ACTUALLY DIFFERS
 

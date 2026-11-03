@@ -49,7 +49,7 @@ export const create = mutation({
     }
 
     const marks = Math.max(1, Math.min(100, Math.round(args.marks)));
-    const criteria = parseMarkScheme(schemeText, marks);
+    const criteria = parseMarkScheme(schemeText);
     if (!schemeIsUsable(criteria)) {
       throw new Error(
         "That mark scheme did not read as any credit points. Put one point per line, like the board prints it.",

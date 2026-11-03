@@ -149,6 +149,9 @@ export function PastPaperPractice({
 
   const contentMarks = questions.reduce((sum, question) => sum + question.marks, 0);
   const spagMarks = Math.max(0, (cover?.totalMarks ?? contentMarks) - contentMarks);
+  const literature = /english literature/i.test(
+    cover?.qualification ?? qualification ?? "",
+  );
 
   let questionNumber = 0;
 
@@ -226,7 +229,10 @@ export function PastPaperPractice({
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70">
-                      {markNotation(family, question.marks)}
+                      {markNotation(family, question.marks, {
+                        literature,
+                        spag: question.spag,
+                      })}
                     </span>
                   </div>
                 </div>
@@ -605,7 +611,10 @@ export function PastPaperPractice({
  */
 function PaperCoverPage({ cover }: { cover: PaperCover }) {
   const blocks: Array<{ title: string; items: string[] }> = [
-    { title: "Materials", items: cover.materials },
+    {
+      title: cover.materialsHeading ?? "Materials",
+      items: cover.materials,
+    },
     { title: "Instructions", items: cover.instructions },
     { title: "Information", items: cover.information },
     { title: "Advice", items: cover.advice },
@@ -617,6 +626,11 @@ function PaperCoverPage({ cover }: { cover: PaperCover }) {
         <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-chrome-7">
           {cover.qualification}
         </p>
+        {cover.componentCode && (
+          <p className="mt-1 text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Component {cover.componentCode}
+          </p>
+        )}
         <h2 className="mt-2 font-display text-[1.5rem] font-bold uppercase tracking-[0.02em] text-brand-ink sm:text-[1.8rem]">
           {cover.paperLabel}
         </h2>

@@ -59,10 +59,12 @@ object. Return only strict JSON in exactly this shape:
 
 {"questions":[{"question":"...","marks":3,"modelAnswer":"...","markingGuide":["..."],"commandWord":"Outline","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]}
 
-Return exactly one entry per question in the grid, in the same order. Each entry
-must include question, marks, modelAnswer and markingGuide. Include commandWord and
-specReference on every question where they apply. The app supplies any required
-extract separately; do not return an extract field. Include data only when the
-question refers to a table, and then include the complete table with columns and
-rows. Do not use markdown fences, commentary or any other top-level key.`;
+Return exactly one entry per printed part in the grid, in the same order. Each
+entry must include question, marks, modelAnswer and markingGuide. Include
+commandWord and specReference on every part where they apply. The app re-attaches
+the grid's printed label, parent question and section after parsing, so do not
+invent a label or section of your own. The app supplies any required extract
+separately; do not return an extract field. Include data only when the question
+refers to a table, and then include the complete table with columns and rows. Do
+not use markdown fences, commentary or any other top-level key.`;
 }

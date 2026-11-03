@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { readableError } from "@/lib/errors";
-import { EXAM_BOARDS, STUDY_LEVELS } from "@/lib/examBoards";
+import {
+  STUDY_LEVELS,
+  validBoardsForLevel,
+} from "@/lib/examBoards";
 import {
   literatureChoicesFor,
   type LiteratureChoiceSet,
@@ -162,10 +165,14 @@ function litStepFor(draft?: CourseDraft, hasPoetry = false): LitStep | null {
 
 const levelHints: Record<string, string> = {
   GCSE: "Years 10–11",
+  IGCSE: "International GCSE",
   KS3: "Years 7–9",
+  AS: "First year of A-level",
   "A-Level": "Years 12–13",
   IB: "HL and SL",
   AP: "Advanced Placement",
+  "National 5": "SQA National 5",
+  Higher: "SQA Higher",
   Undergraduate: "University",
 };
 
@@ -178,6 +185,8 @@ function defaultBoardFor(level: string): string {
   if (level === "KS3") return "None";
   if (level === "IB") return "IB";
   if (level === "AP") return "College Board AP";
+  if (level === "IGCSE") return "Cambridge International";
+  if (level === "National 5" || level === "Higher") return "SQA";
   if (level === "Undergraduate") return "Other";
   return "AQA";
 }
@@ -202,7 +211,7 @@ function defaultTierFor(level: string, subject: string): string | undefined {
  */
 function questionsFor(level: string, subject: string, board?: string): Question[] {
   const questions: Question[] = [];
-  if (level === "GCSE" || level === "A-Level") questions.push("board");
+  if (["GCSE", "IGCSE", "AS", "A-Level"].includes(level)) questions.push("board");
   const { tiers, variants } = tierChoices(level, subject);
   if (tiers.length > 0 || variants.length > 0) questions.push("tier");
   if (
@@ -1026,7 +1035,7 @@ export default function CourseSetup() {
                       Choose the board your school enters you for in {active}.
                     </p>
                     <div className="rise-stagger mt-3 grid gap-1.5 sm:grid-cols-2">
-                      {EXAM_BOARDS.map((option) => {
+                      {validBoardsForLevel(level).map((option) => {
                         const chosen = activeDraft.examBoard === option;
                         return (
                           <button
