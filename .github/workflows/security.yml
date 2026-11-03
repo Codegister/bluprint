@@ -13,7 +13,7 @@ jobs:
     name: gitleaks and commit identity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history: a secret removed in a later commit is still leaked.
           fetch-depth: 0
@@ -56,7 +56,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Fail on a high-severity vulnerable dependency
         uses: actions/dependency-review-action@v4
