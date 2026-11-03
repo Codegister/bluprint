@@ -1,5 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { readableError } from "@/lib/errors";
+import { printWithClass } from "@/lib/print";
 import { TriangleAlert } from "lucide-react";
 import {
   GlobalWorkerOptions,
@@ -118,8 +119,12 @@ export const PdfViewer = forwardRef<
   useEffect(() => {
     if (!printAll || !pdf || readyPages.size < pdf.numPages) return;
     const frame = window.requestAnimationFrame(() => {
-      window.print();
-      setPrintAll(false);
+      // Keep every page mounted through afterprint. Removing the print root
+      // here instead lets the browser snapshot the app underneath it.
+      printWithClass("printing-pdf", () => {
+        setPrintAll(false);
+        setReadyPages(new Set());
+      });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [printAll, pdf, readyPages]);

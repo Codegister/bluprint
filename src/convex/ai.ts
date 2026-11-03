@@ -119,6 +119,11 @@ import {
   paperChecklistFor,
   paperGeneratorSystemMessage,
 } from "./lib/paperGenerator";
+import {
+  questionsTooSimilar,
+  seedFromString,
+  seededShuffle,
+} from "./lib/paperGenerator/variety";
 
 type TextPart = { type: "text"; text: string };
 type ImagePart = { type: "image_url"; image_url: { url: string } };
@@ -1463,15 +1468,22 @@ function specificationDigest(
   // When one paper is chosen, only the topics that paper examines are sent, so
   // the model cannot pull a question from the other papers.
   topicIds?: Set<string>,
+  variationSeed?: number,
 ): string {
   const lines: string[] = [];
-  for (const unit of course.pathway?.units ?? []) {
+  // A stable per-build order stops every paper opening on the first topic in
+  // the specification. The same saved paper keeps its order on reload.
+  for (const [unitIndex, unit] of (course.pathway?.units ?? []).entries()) {
     const topics = unit.topics.filter(
       (topic) => !topicIds || (topic.id !== undefined && topicIds.has(topic.id)),
     );
     if (topics.length === 0) continue;
+    const ordered =
+      variationSeed === undefined
+        ? topics
+        : seededShuffle(topics, variationSeed + unitIndex * 7919);
     lines.push(`## ${unit.title}`);
-    for (const topic of topics) {
+    for (const topic of ordered) {
       lines.push(
         `- ${topic.title}${topic.specReference ? ` [${topic.specReference}]` : ""}`,
       );
@@ -1838,6 +1850,7 @@ async function generatePaperQuestions(
   paperTitle: string,
   blueprint: PaperBlueprint,
   chosenPaper?: { label: string; topicIds: string[] },
+  variationSeed = 0,
 ): Promise<GeneratedExam[]> {
   const slots = flattenPaperBlueprint(blueprint);
   const qualification = qualificationText({
@@ -1848,6 +1861,13 @@ async function generatePaperQuestions(
   const religions = [course.rsReligion, course.rsReligion2]
     .map((value) => value?.trim())
     .filter((value): value is string => Boolean(value));
+  // Conceptual duplication matters most in RS, where one topic can become a
+  // 4-mark and 5-mark version of the same question. Other subjects legitimately
+  // repeat stems with different numbers or data, so they keep the prompt-level
+  // variety rule and the softer per-build rotation.
+  const distinctFocus = /religious studies|religious education|\brs\b|philosophy and ethics/i.test(
+    course.subject,
+  );
   const detail = [
     course.variant,
     course.tier,
@@ -1858,7 +1878,7 @@ async function generatePaperQuestions(
     .filter((part): part is string => Boolean(part))
     .join(" · ");
   const chosenTopicIds = chosenPaper ? new Set(chosenPaper.topicIds) : undefined;
-  const digest = specificationDigest(course, chosenTopicIds);
+  const digest = specificationDigest(course, chosenTopicIds, variationSeed);
   const hasPoints = slots.some((slot) => slot.marking === "points");
   const hasLevels = slots.some((slot) => slot.marking === "levels");
   const schemeNotes = [
@@ -1874,13 +1894,15 @@ async function generatePaperQuestions(
   const paperScope = chosenPaper
     ? `\n<paper>This is ${chosenPaper.label} of the qualification. Every question must come from the topics listed for that paper above, and no question may test a topic from another paper.</paper>\n`
     : "";
+  const variation = `\n<variation>Build variation ${variationSeed}. Use the specification order shown and choose a fresh mix of topics; do not default to the same first topic in every question.</variation>\n`;
 
   const commonPrompt =
     `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
-    `<specification>\n${digest}\n</specification>\n${paperScope}\n` +
+    `<specification>\n${digest}\n</specification>\n${paperScope}${variation}\n` +
     `Write one original exam-style question for a practice paper titled "${paperTitle}". ` +
     `The paper has ${slots.length} question${slots.length === 1 ? "" : "s"} in total; this request covers one of them. ` +
     "Make the question unambiguous and answerable from the specification, and do not copy or paraphrase a published past paper. " +
+    "Within each section, every question must test a different belief, practice, teaching or topic. Never reuse the same stem or focus with a different mark tariff. " +
     "The question needs a full-mark model answer and a marking guide written the way the board writes it. " +
     "Keep every model answer under 900 words, write it as plain prose without markdown headings or bold, and keep every marking guide to at most 12 bullets. " +
     `Escape every double quotation mark inside the extract and model answer as \\" so the reply is valid JSON. ` +
@@ -1893,16 +1915,24 @@ async function generatePaperQuestions(
   const systemMessage = paperGeneratorSystemMessage(paperChecklistFor(course));
   const generated: GeneratedExam[] = [];
   for (const slot of slots) {
+    const written = generated
+      .filter((question) => question.section === slot.section)
+      .map((question) => `- ${question.label ?? "?"}: ${question.question}`)
+      .join("\n");
+    const previous = written
+      ? `\n<already_written>\n${written}\n</already_written>\nDo not repeat or rephrase these questions. Choose a different belief, practice, teaching or topic for ${slot.label}.\n`
+      : "";
     const slotRequest =
       `<paper_format>\n${slotBrief(blueprint, slot)}\n</paper_format>\n\n` +
       `This request is for exactly one question: ${slot.label}, worth ${slot.marks} marks, in ${slot.section}. ` +
       `Use the command word "${slot.command}". ${slot.ask} ` +
+      previous +
       `Return JSON exactly like: {"questions":[{"question":"...","marks":${slot.marks},"modelAnswer":"...","markingGuide":["..."],"commandWord":"${slot.command}","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]} ` +
       "The questions array must contain exactly this one entry. Do not write any other question from the paper.";
 
     let mismatch = "";
     let accepted: GeneratedExam | null = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       const raw = await nvidiaChat(apiKeys, {
         model: NVIDIA_TEXT_MODEL,
         messages: [
@@ -1919,7 +1949,13 @@ async function generatePaperQuestions(
           },
         ],
         maxTokens: 12000,
-        temperature: attempt === 0 ? 0.2 : 0.1,
+        // A duplicate is a variety problem, so retry it with more freedom. A
+        // format problem gets a colder retry instead.
+        temperature: /repeats the focus/i.test(mismatch)
+          ? 0.55
+          : attempt === 0
+            ? 0.2
+            : 0.1,
         topP: 1.0,
         disableThinking: true,
         timeoutMs: 240_000,
@@ -1941,6 +1977,15 @@ async function generatePaperQuestions(
       }
       if (candidate.marks !== slot.marks) {
         mismatch = `Question ${slot.label} must be worth ${slot.marks} marks; this reply made it ${candidate.marks}.`;
+        continue;
+      }
+      const earlier = generated.find(
+        (question) =>
+          question.section === slot.section &&
+          questionsTooSimilar(question.question, candidate.question),
+      );
+      if (distinctFocus && earlier) {
+        mismatch = `Question ${slot.label} repeats the focus of ${earlier.label ?? "an earlier question"} ("${earlier.question}"). Choose a different belief, practice, teaching or topic; do not change only the command word or mark tariff.`;
         continue;
       }
       accepted = {
@@ -2021,6 +2066,7 @@ export const buildPastPaper = internalAction({
         paper.title,
         blueprint,
         chosenPaper,
+        seedFromString(`${paper._id}:${startedAt}`),
       );
       // Deleted while the paper was being written: stop instead of saving into
       // a paper that no longer exists.

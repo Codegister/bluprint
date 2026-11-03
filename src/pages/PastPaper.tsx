@@ -8,6 +8,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
+import { printWithClass } from "@/lib/print";
 import { markLabel, plural } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
 import { useMutation, useQuery } from "convex/react";
@@ -147,7 +148,7 @@ export default function PastPaper() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => window.print()}
+              onClick={() => printWithClass("printing-paper")}
               className="ml-auto h-9 shrink-0 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
             >
               <Printer className="size-3.5" aria-hidden />
