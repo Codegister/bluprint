@@ -418,3 +418,753 @@ export function recallGradeForCard(
     units: card.recallUnits,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Card and quiz content pipeline
+// ---------------------------------------------------------------------------
+
+/** A card back longer than this is a note, not a flashcard answer. */
+export const MAX_CARD_BACK_CHARS = 400;
+export const MAX_CARD_FRONT_CHARS = 240;
+export const MAX_KEY_POINT_CHARS = 260;
+
+const CONTENT_STOP_WORDS = new Set([
+  ...STUDY_STOP_WORDS,
+  "about",
+  "above",
+  "after",
+  "again",
+  "against",
+  "also",
+  "because",
+  "before",
+  "being",
+  "between",
+  "both",
+  "each",
+  "into",
+  "more",
+  "most",
+  "much",
+  "other",
+  "over",
+  "same",
+  "some",
+  "such",
+  "than",
+  "then",
+  "there",
+  "these",
+  "they",
+  "through",
+  "under",
+  "very",
+  "while",
+  "with",
+  "would",
+  "your",
+]);
+
+function contentWords(text: string): string[] {
+  return normalizeAnswer(text)
+    .split(/\s+/)
+    .filter((word) => word.length >= 4 && !CONTENT_STOP_WORDS.has(word));
+}
+
+function contentStem(word: string): string {
+  return word.length > 7 ? word.slice(0, 7) : word;
+}
+
+function contentStems(text: string): string[] {
+  return [...new Set(contentWords(text).map(contentStem))];
+}
+
+/**
+ * How much of a claim's own subject vocabulary appears in the notes. Function
+ * words are ignored, so a paraphrase can still match while an invented noun or
+ * figure cannot hide behind fluent wording.
+ */
+export function noteSupportScore(notes: string, claim: string): number {
+  const wanted = contentStems(claim);
+  if (wanted.length === 0) return 0;
+  const available = new Set(contentStems(notes));
+  return wanted.filter((word) => available.has(word)).length / wanted.length;
+}
+
+/** Whether a card back is a fact the source notes actually state. */
+export function isClaimSupportedByNotes(notes: string, claim: string): boolean {
+  const clean = normalizeAnswer(claim);
+  if (!clean) return false;
+  if (normalizeAnswer(notes).includes(clean)) return true;
+  const wanted = contentStems(claim);
+  if (wanted.length === 0) return false;
+  const score = noteSupportScore(notes, claim);
+  // A short answer can tolerate one paraphrase. A longer claim has to be
+  // mostly present as written; otherwise an invented adjective such as
+  // "target value" can hide behind the other words.
+  return wanted.length <= 2 ? score >= 0.6 : score >= 0.8;
+}
+
+/** The subject terms a card front is asking about, not its command words. */
+function frontSubjectTerms(front: string): string[] {
+  const questionWords = new Set([
+    "what",
+    "which",
+    "who",
+    "whom",
+    "whose",
+    "why",
+    "how",
+    "when",
+    "where",
+    "name",
+    "state",
+    "define",
+    "describe",
+    "explain",
+    "identify",
+    "give",
+    "list",
+    "suggest",
+    "calculate",
+    "does",
+    "do",
+    "did",
+    "can",
+    "could",
+    "should",
+    "would",
+    "will",
+    "is",
+    "are",
+    "was",
+    "were",
+  ]);
+  return contentWords(front).filter((word) => !questionWords.has(word) && word.length >= 5);
+}
+
+/**
+ * A card is grounded when its answer is in the notes and the thing its front
+ * asks about is also in the notes. The front check is deliberately one-term:
+ * a synonym in the question should not cost a card whose answer is supported.
+ */
+export function isCardGroundedInNotes(
+  notes: string,
+  card: Pick<CardLike, "front" | "back">,
+): boolean {
+  if (!isClaimSupportedByNotes(notes, card.back)) return false;
+  const asked = frontSubjectTerms(card.front);
+  if (asked.length === 0) return true;
+  const available = new Set(contentStems(notes));
+  return asked.some((word) => available.has(contentStem(word)));
+}
+
+function isDanglingTail(text: string): boolean {
+  const tail = normalizeAnswer(text).split(/\s+/).pop() ?? "";
+  return (
+    /^(?:a|an|the|of|to|in|on|at|for|and|or|but|so|as|by|with|from|that|this|it|its|is|are|was|were|be|been|being|does|do|did|has|have|had|he|she|they|we|you|i|than|then|when|where|which|who)$/.test(
+      tail,
+    ) || /[A-Za-z]-$/.test(text)
+  );
+}
+
+/**
+ * Cuts an overlong answer at a sentence boundary. A truncated sentence is
+ * worse than a short one: it reads as if the fact itself stops mid-thought, so
+ * the tail is dropped back to the last complete clause instead.
+ */
+export function repairCardAnswer(text: string, max = MAX_CARD_BACK_CHARS): string {
+  let clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max && !isDanglingTail(clean)) {
+    return /[.!?]$/.test(clean) ? clean : `${clean}.`;
+  }
+
+  if (clean.length > max) {
+    const window = clean.slice(0, max);
+    const sentenceEnd = Math.max(
+      window.lastIndexOf(". "),
+      window.lastIndexOf("! "),
+      window.lastIndexOf("? "),
+    );
+    if (sentenceEnd >= Math.max(80, max * 0.45)) {
+      clean = window.slice(0, sentenceEnd + 1).trim();
+    } else {
+      const clauseEnd = Math.max(
+        window.lastIndexOf("; "),
+        window.lastIndexOf(", "),
+        window.lastIndexOf(" and "),
+        window.lastIndexOf(" because "),
+      );
+      clean =
+        clauseEnd >= Math.max(80, max * 0.45)
+          ? window.slice(0, clauseEnd).trim()
+          : `${window.slice(0, window.lastIndexOf(" ")).trim()}.`;
+    }
+  }
+
+  if (isDanglingTail(clean)) {
+    const sentenceEnd = Math.max(
+      clean.lastIndexOf(". "),
+      clean.lastIndexOf("! "),
+      clean.lastIndexOf("? "),
+    );
+    if (sentenceEnd > 0) clean = clean.slice(0, sentenceEnd + 1).trim();
+    else clean = `${clean.replace(/\s+\S*$/, "").trim()}.`;
+  }
+
+  return /[.!?]$/.test(clean) ? clean : `${clean}.`;
+}
+
+/** A saved card that should be repaired or regenerated. */
+export function cardNeedsRepair(
+  card: Pick<CardLike, "front" | "back">,
+): boolean {
+  return (
+    card.back.length > MAX_CARD_BACK_CHARS ||
+    card.front.length > MAX_CARD_FRONT_CHARS ||
+    isDanglingTail(card.back) ||
+    /[A-Za-z]-$/.test(card.back)
+  );
+}
+
+/** A short, revision-ready label from a question, used for a key point. */
+function claimLabel(front: string): string {
+  let text = front.replace(/\?+\s*$/, "").trim();
+  text = text.replace(
+    /^(?:what|which|who|whom|whose|why|how|when|where|name|state|define|describe|explain|identify|give|list|suggest|calculate)\s+(?:is|are|was|were|does|do|did|can|could|should|would|will|has|have|had)\s+/i,
+    "",
+  );
+  text = text.replace(/^(?:what|which|who|why|how|when|where)\s+/i, "");
+  text = text.replace(/^(?:the|a|an)\s+/i, "");
+  text = text.replace(/\s+(?:do|does|did)$/i, "");
+  const words = text
+    .replace(/[^A-Za-z0-9\s'-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 5);
+  if (words.length === 0) return "";
+  const phrase = words.join(" ");
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
+/**
+ * One key point per card, in card order. The label comes from the question and
+ * the claim from the answer, so the summary is not a copy of a source sentence
+ * and cannot drift out of sync with the deck.
+ */
+export function keyPointForCard(card: Pick<CardLike, "front" | "back">): string {
+  const label = claimLabel(card.front);
+  const answer = repairCardAnswer(card.back, 220);
+  const point = label ? `${label}: ${answer}` : answer;
+  return point.length <= MAX_KEY_POINT_CHARS
+    ? point
+    : repairCardAnswer(point, MAX_KEY_POINT_CHARS);
+}
+
+export function keyPointsForCards(
+  cards: ReadonlyArray<Pick<CardLike, "front" | "back">>,
+): string[] {
+  return cards.map(keyPointForCard);
+}
+
+export type PreparedCard = {
+  front: string;
+  back: string;
+  keyPoint: string;
+  beyondNotes?: boolean;
+};
+
+/**
+ * Grounds, shortens and deduplicates cards before either storage or a count is
+ * reported. Returning `dropped` is important: the page must explain a shortfall,
+ * not quietly pretend the request was met.
+ */
+export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
+  cards: readonly T[],
+  notes: string,
+): { cards: PreparedCard[]; dropped: number } {
+  const kept: PreparedCard[] = [];
+  const units = sourceUnits(notes);
+  // The sentence a claim came from. Two cards that paraphrase the same sentence
+  // are one fact even when their wording barely overlaps.
+  const sourceUnitFor = (text: string): number => {
+    let best = -1;
+    let bestScore = 0;
+    units.forEach((unit, index) => {
+      const score = noteSupportScore(text, unit.text);
+      if (score > bestScore) {
+        bestScore = score;
+        best = index;
+      }
+    });
+    return bestScore >= 0.5 ? best : -1;
+  };
+  let dropped = 0;
+
+  for (const card of cards) {
+    const front = card.front.replace(/\s+/g, " ").trim().slice(0, MAX_CARD_FRONT_CHARS);
+    const back = repairCardAnswer(card.back, MAX_CARD_BACK_CHARS);
+    if (!front || !back || isSpecificationItem(front, back)) {
+      dropped += 1;
+      continue;
+    }
+    if (!isCardGroundedInNotes(notes, { front, back })) {
+      dropped += 1;
+      continue;
+    }
+    const candidate = { prompt: front, answer: back };
+    const unit = sourceUnitFor(back);
+    if (
+      kept.some(
+        (previous) =>
+          isNearDuplicateStudyItem(
+            { prompt: previous.front, answer: previous.back },
+            candidate,
+          ) ||
+          (unit >= 0 &&
+            sourceUnitFor(previous.back) === unit &&
+            (wordOverlap(previous.front, front) >= 0.2 ||
+              wordOverlap(previous.back, back) >= 0.4)),
+      )
+    ) {
+      dropped += 1;
+      continue;
+    }
+    kept.push({
+      front,
+      back,
+      keyPoint: keyPointForCard({ front, back }),
+      beyondNotes: card.beyondNotes,
+    });
+  }
+
+  return { cards: kept, dropped };
+}
+
+// ---------------------------------------------------------------------------
+// Quiz integrity
+// ---------------------------------------------------------------------------
+
+export function isClozeQuestion(item: Pick<QuizLike, "question" | "type">): boolean {
+  return item.type === "cloze" || /_{3,}/.test(item.question);
+}
+
+/** Options start with a capital and do not carry a stray full stop. */
+export function formatOption(option: string): string {
+  const clean = option.replace(/\s+/g, " ").trim().replace(/[.;]+$/, "");
+  if (!clean) return "";
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+function optionClauses(option: string): number {
+  return (
+    option
+      .split(/[,;:]|\b(?:because|while|whereas|although|so that)\b/i)
+      .map((part) => part.trim())
+      .filter(Boolean).length || 1
+  );
+}
+
+function stemTerms(question: string): Set<string> {
+  return new Set(
+    contentWords(question)
+      .filter((word) => word.length >= 6)
+      .map(contentStem),
+  );
+}
+
+/**
+ * The four giveaway patterns that let a student answer without knowing the
+ * subject. A question is rejected rather than stored with an obvious tell.
+ */
+export function mcqOptionIssue(item: QuizLike): string | null {
+  if (item.options.length !== 4) return "needs four options";
+  if (
+    !Number.isInteger(item.correctIndex) ||
+    item.correctIndex < 0 ||
+    item.correctIndex >= item.options.length
+  ) {
+    return "has an invalid correct answer";
+  }
+  const options = item.options.map(formatOption);
+  if (options.some((option) => !option)) return "has an empty option";
+
+  const correct = options[item.correctIndex]!;
+  const others = options.filter((_, index) => index !== item.correctIndex);
+  const lengths = others.map((option) => option.length);
+  const longestOther = Math.max(...lengths);
+  const shortestOther = Math.min(...lengths);
+  if (correct.length > longestOther * 1.2 + 2) return "correct option is longest";
+  if (correct.length < shortestOther / 1.2 - 2) return "correct option is shortest";
+
+  const otherClauses = Math.max(...others.map(optionClauses));
+  if (optionClauses(correct) > otherClauses && optionClauses(correct) >= 2) {
+    return "correct option is the only two-part one";
+  }
+
+  const terms = stemTerms(item.question);
+  if (terms.size > 0) {
+    const correctHas = [...terms].some((term) =>
+      contentStems(correct).includes(term),
+    );
+    const otherHas = others.some((option) =>
+      [...terms].some((term) => contentStems(option).includes(term)),
+    );
+    if (correctHas && !otherHas) return "correct option repeats the stem";
+  }
+
+  const article = item.question
+    .trim()
+    .match(/\b(a|an)\s+[A-Za-z][A-Za-z'-]*\s*\?*$/i)?.[1]
+    ?.toLowerCase();
+  if (article) {
+    const vowel = /^[aeiou]/i;
+    const fits = options.filter(
+      (option) => vowel.test(option) === (article === "an"),
+    );
+    if (fits.length === 1 && fits[0] === correct) {
+      return "correct option is the only grammatical fit";
+    }
+  }
+  if (/\bhow (?:many|much)\b/i.test(item.question)) {
+    const numeric = options.filter((option) => /\d/.test(option));
+    if (numeric.length === 1 && numeric[0] === correct) {
+      return "correct option is the only grammatical fit";
+    }
+  }
+
+  return null;
+}
+
+/** Removes a source-narrating opener; returns empty when nothing is left. */
+export function cleanExplanation(explanation: string): string {
+  let clean = explanation.replace(/\s+/g, " ").trim();
+  clean = clean.replace(
+    /^(?:the|this)\s+(?:material|notes?|text|source|passage|extract)\s+(?:states?|says?|defines?|mentions?|explains?|shows?|describes?)\s+(?:that\s+)?/i,
+    "",
+  );
+  clean = clean.replace(/^explicitly in the material,?\s*/i, "");
+  clean = clean.replace(/^according to the (?:material|notes?|text|source),?\s*/i, "");
+  if (
+    /^(?:the|this)\s+(?:material|notes?|text|source|passage|extract)\b/i.test(clean) ||
+    /\bexplicitly in the material\b/i.test(clean)
+  ) {
+    return "";
+  }
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+/** Whether one explanation gives away another question's correct answer. */
+export function explanationLeaksAnswer(
+  item: Pick<QuizLike, "explanation">,
+  other: QuizLike,
+): boolean {
+  const answer = normalizeAnswer(correctAnswerFor(other));
+  if (answer.length < 3) return false;
+  const explanation = normalizeAnswer(item.explanation);
+  if (explanation.includes(answer)) return true;
+  const words = contentStems(correctAnswerFor(other));
+  if (words.length < 2) return false;
+  const covered = words.filter((word) => contentStems(item.explanation).includes(word));
+  return covered.length / words.length >= 0.8;
+}
+
+/** The same fact asked from both ends, e.g. "what does a receptor detect?" */
+export function isInverseQuizPair(left: QuizLike, right: QuizLike): boolean {
+  const leftPrompt = normalizeAnswer(left.question);
+  const rightPrompt = normalizeAnswer(right.question);
+  const leftAnswer = normalizeAnswer(correctAnswerFor(left));
+  const rightAnswer = normalizeAnswer(correctAnswerFor(right));
+  if (!leftAnswer || !rightAnswer) return false;
+  const cross =
+    (leftPrompt.includes(rightAnswer) && rightPrompt.includes(leftAnswer)) ||
+    (rightPrompt.includes(leftAnswer) && leftPrompt.includes(rightAnswer));
+  if (cross) return true;
+  return (
+    wordOverlap(left.question, right.question) >= 0.5 &&
+    wordOverlap(correctAnswerFor(left), correctAnswerFor(right)) < 0.25 &&
+    (leftPrompt.includes(rightAnswer) || rightPrompt.includes(leftAnswer))
+  );
+}
+
+/**
+ * A quiz fact must not already be on a card. The deck and the quiz are two
+ * different retrieval opportunities, not the same answer asked twice.
+ */
+export function quizFactIsOnCard(item: QuizLike, cards: readonly CardLike[]): boolean {
+  const answer = correctAnswerFor(item);
+  if (!answer) return true;
+  const answerKey = normalizeAnswer(answer);
+  return cards.some((card) => {
+    if (normalizeAnswer(card.back).includes(answerKey)) return true;
+    if (
+      isNearDuplicateStudyItem(
+        { prompt: item.question, answer },
+        { prompt: card.front, answer: card.back },
+      )
+    ) {
+      return true;
+    }
+    const wanted = contentStems(answer);
+    if (wanted.length < 2) return false;
+    const carried = contentStems(`${card.front} ${card.back}`);
+    const matched = wanted.filter((word) => carried.includes(word)).length;
+    return matched / wanted.length >= 0.8 && wordOverlap(item.question, card.front) >= 0.2;
+  });
+}
+
+export type PreparedQuiz<T extends QuizLike> = T & {
+  sourceCardId?: string;
+  sourceCardIndex?: number;
+};
+
+function seededNumber(text: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function rotateCorrectAnswer<T extends QuizLike>(item: T, target: number): T {
+  if (item.options.length !== 4) return item;
+  const correct = item.options[item.correctIndex];
+  if (correct === undefined) return item;
+  const others = item.options.filter((_, index) => index !== item.correctIndex);
+  const options: string[] = [];
+  let cursor = 0;
+  for (let index = 0; index < 4; index += 1) {
+    options[index] = index === target ? correct : others[cursor++]!;
+  }
+  return { ...item, options, correctIndex: target };
+}
+
+/**
+ * Spreads correct answers across A–D. A deterministic hash keeps builds
+ * reproducible, and the 40% ceiling prevents a run from clustering on one
+ * letter even when the hash happens to be unlucky.
+ */
+export function spreadCorrectPositions<T extends QuizLike>(items: readonly T[]): T[] {
+  const mcq = items.filter((item) => (item.type ?? "mcq") === "mcq");
+  const ceiling = Math.max(1, Math.ceil(mcq.length * 0.4));
+  const counts = [0, 0, 0, 0];
+  const targets: number[] = [];
+
+  for (const item of mcq) {
+    let target = seededNumber(item.question) % 4;
+    if (counts[target]! >= ceiling) {
+      target = counts.indexOf(Math.min(...counts));
+    }
+    counts[target] = (counts[target] ?? 0) + 1;
+    targets.push(target);
+  }
+
+  let mcqIndex = 0;
+  return items.map((item) => {
+    if ((item.type ?? "mcq") !== "mcq") return item;
+    const target = targets[mcqIndex++] ?? 0;
+    return rotateCorrectAnswer(item, target);
+  });
+}
+
+/**
+ * Runs every quiz rule in one place. The generator uses it batch by batch, and
+ * `completeGeneration` runs it again before writing, so a prompt cannot quietly
+ * bypass the contract.
+ */
+export function prepareQuiz<T extends QuizLike>(
+  items: readonly T[],
+  cards: readonly CardLike[],
+  notes: string,
+  keyPoints: readonly string[] = [],
+  options: { level?: string; subject?: string } = {},
+): { items: Array<PreparedQuiz<T>>; dropped: number; reasons: string[] } {
+  const reasons: string[] = [];
+  let kept: Array<PreparedQuiz<T>> = [];
+
+  for (const item of items) {
+    const answer = correctAnswerFor(item);
+    const explanation = cleanExplanation(item.explanation);
+    if (isClozeQuestion(item)) {
+      reasons.push("cloze deletion");
+      continue;
+    }
+    if (!answer || !explanation) {
+      reasons.push("missing answer or explanation");
+      continue;
+    }
+    if (isSpecificationItem(item.question, answer)) {
+      reasons.push("specification meta");
+      continue;
+    }
+    if (isNegativeDiscrimination(item, keyPoints)) {
+      reasons.push("negative discrimination");
+      continue;
+    }
+    if (!isClaimSupportedByNotes(notes, answer)) {
+      reasons.push("answer not in notes");
+      continue;
+    }
+    if (findOffSpecTerm(answer, options.level, options.subject)) {
+      reasons.push("off-spec term");
+      continue;
+    }
+    if (quizFactIsOnCard(item, cards)) {
+      reasons.push("already on a card");
+      continue;
+    }
+    const normalised = {
+      ...item,
+      question: item.question.replace(/\s+/g, " ").trim(),
+      options: item.options.map(formatOption),
+      explanation,
+    };
+    if ((normalised.type ?? "mcq") === "mcq") {
+      const issue = mcqOptionIssue(normalised);
+      if (issue) {
+        reasons.push(issue);
+        continue;
+      }
+    }
+    if (
+      kept.some(
+        (previous) =>
+          isNearDuplicateStudyItem(
+            { prompt: previous.question, answer: correctAnswerFor(previous) },
+            { prompt: normalised.question, answer },
+          ) || isInverseQuizPair(previous, normalised),
+      )
+    ) {
+      reasons.push("duplicate or inverse question");
+      continue;
+    }
+    if (
+      kept.some(
+        (previous) =>
+          normalizeAnswer(correctAnswerFor(previous)) === normalizeAnswer(answer),
+      )
+    ) {
+      reasons.push("shared answer");
+      continue;
+    }
+    if (kept.some((previous) => explanationLeaksAnswer(normalised, previous))) {
+      reasons.push("explanation leaks another answer");
+      continue;
+    }
+    kept.push(normalised);
+  }
+
+  // An earlier explanation can leak a later answer. Drop the leaking item
+  // rather than accepting a question that teaches its neighbour's answer.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const next = kept.filter(
+      (item, index) =>
+        !kept.some(
+          (other, otherIndex) =>
+            index !== otherIndex && explanationLeaksAnswer(item, other),
+        ),
+    );
+    if (next.length !== kept.length) {
+      reasons.push("explanation leaks another answer");
+      kept = next;
+      changed = true;
+    }
+  }
+
+  return {
+    items: spreadCorrectPositions(kept),
+    dropped: items.length - kept.length,
+    reasons: [...new Set(reasons)],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Source coverage
+// ---------------------------------------------------------------------------
+
+type SourceUnit = { label: string; text: string };
+
+function sourceUnits(notes: string): SourceUnit[] {
+  const clean = notes.replace(/\r/g, "").trim();
+  if (!clean) return [];
+  const lines = clean
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const headings = lines.filter(
+    (line) =>
+      line.length >= 3 &&
+      line.length <= 80 &&
+      !/[.!?]$/.test(line) &&
+      !/^(?:the|a|an|this|these|those|it|there|in|on|at|for|and|but|so|when|if|as|by|to|of|from)\b/i.test(
+        line,
+      ),
+  );
+
+  if (headings.length >= 2) {
+    const units: SourceUnit[] = [];
+    let current: SourceUnit | null = null;
+    for (const line of lines) {
+      const heading = headings.includes(line);
+      if (heading) {
+        if (current) units.push(current);
+        current = { label: line.slice(0, 60), text: line };
+      } else if (current) {
+        current.text += ` ${line}`;
+      }
+    }
+    if (current) units.push(current);
+    return units;
+  }
+
+  return clean
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 24)
+    .map((sentence) => ({
+      label: sentence.split(/\s+/).slice(0, 7).join(" "),
+      text: sentence,
+    }));
+}
+
+/**
+ * Names source sections that no card, quiz or exam item covers. The build may
+ * legitimately build fewer cards than a long note contains, but it may not do
+ * that silently.
+ */
+export function sourceCoverage(
+  notes: string,
+  items: readonly string[],
+): { covered: string[]; omitted: string[]; note?: string } {
+  const units = sourceUnits(notes);
+  const covered: string[] = [];
+  const omitted: string[] = [];
+  for (const unit of units) {
+    const supported = items.some((item) => {
+      if (!item.trim()) return false;
+      if (normalizeAnswer(item).includes(normalizeAnswer(unit.label))) return true;
+      return noteSupportScore(item, unit.text) >= 0.35;
+    });
+    if (supported) covered.push(unit.label);
+    else omitted.push(unit.label);
+  }
+  const note =
+    omitted.length > 0
+      ? `Not covered by this build: ${omitted.slice(0, 4).join("; ")}${
+          omitted.length > 4 ? `; and ${omitted.length - 4} more` : ""
+        }. Add those notes or rebuild to include them.`
+      : undefined;
+  return { covered, omitted, note };
+}
+
+/** Exact quiz percentage, with a perfect score always 100. */
+export function quizScorePercent(score: number, total: number): number {
+  if (total <= 0) return 0;
+  if (score >= total) return 100;
+  return Math.floor((score / total) * 100);
+}

@@ -11,7 +11,7 @@
  */
 
 import { v } from "convex/values";
-import { cleanTopicTitle, shortTitle } from "./titles";
+import { cleanTopicTitle, dominantNounPhrase, shortTitle } from "./titles";
 
 export type Summary = {
   /** A short topic name, e.g. "Osmosis and Active Transport". */
@@ -116,7 +116,7 @@ function readObject(raw: string): Record<string, unknown> | null {
 /** A clean subject label to fall back on, never a sentence from the notes. */
 export function fallbackSummaryTitle(label?: string | null): string {
   const clean = shortTitle((label ?? "").trim());
-  return clean || "Study notes";
+  return clean || "Study topic";
 }
 
 /**
@@ -128,9 +128,10 @@ export function fallbackSummaryTitle(label?: string | null): string {
  */
 export function parseSummary(raw: string, fallbackLabel?: string | null): Summary {
   const parsed = readObject(raw) ?? {};
+  const fallback = fallbackSummaryTitle(fallbackLabel);
   const title = cleanTopicTitle(
     asText(parsed.title, 120),
-    fallbackSummaryTitle(fallbackLabel),
+    fallback === "Study topic" ? dominantNounPhrase(raw) : fallback,
   );
   const overview = asText(parsed.overview, 2500);
   const keyPoints = Array.isArray(parsed.keyPoints)

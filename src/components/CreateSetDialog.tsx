@@ -11,13 +11,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { EASE, EASE_EXIT } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { notifyError, readableError } from "@/lib/errors";
+import { createSetFailureMessage, notifyError, readableError } from "@/lib/errors";
 import { plural } from "@/lib/format";
 import {
   MAX_NOTE_CHARS,
   MAX_NOTE_CHARS_LABEL,
+  MIN_NOTE_CHARS,
   noteLimitMessage,
 } from "@/convex/lib/noteLimits";
+import { materialLimits } from "@/convex/lib/buildCapacity";
+import { buildLimit } from "@/convex/lib/buildLimits";
 import {
   BUILD_DEFAULTS,
   BUILD_MAX,
@@ -78,6 +81,7 @@ export function CreateSetDialog({
   const ai = useQuery(api.settings.aiStatus);
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   const createSet = useMutation(api.studySets.create);
+  const usage = useQuery(api.buildUsage.status);
   // A set can also come straight from a course topic, using the specification
   // notes Bluprint already mapped instead of a fresh upload.
   const courseRows = useQuery(api.courses.listMine);
@@ -97,6 +101,16 @@ export function CreateSetDialog({
   const [examCount, setExamCount] = useState<number>(BUILD_DEFAULTS.exam);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState("");
+  // Limits shown before anything is uploaded. For pasted notes the sliders use
+  // the real material ceiling; photos and video are sized after OCR, so they
+  // keep the account maximum and explain that the build may be smaller.
+  const noteLimits =
+    mode === "text" && text.trim().length >= MIN_NOTE_CHARS
+      ? materialLimits(text)
+      : null;
+  const maxCards = noteLimits?.cards ?? BUILD_MAX;
+  const maxQuiz = noteLimits?.quiz ?? BUILD_MAX;
+  const maxExam = noteLimits?.exam ?? BUILD_MAX;
   const [error, setError] = useState<string | null>(null);
   const [courseId, setCourseId] = useState("");
   const [topicId, setTopicId] = useState("");
@@ -130,6 +144,14 @@ export function CreateSetDialog({
       previewsRef.current = [];
     };
   }, []);
+
+  // A slider must not promise a count the notes cannot support. Clamp when the
+  // paste changes or a tab switch reveals the real ceiling.
+  useEffect(() => {
+    setCardCount((value) => Math.min(value, maxCards));
+    setQuizCount((value) => Math.min(value, maxQuiz));
+    setExamCount((value) => Math.min(value, maxExam));
+  }, [maxCards, maxQuiz, maxExam]);
 
   // With courses already set up, a course topic is the fastest route to a set:
   // open there, with photos and paste one tab away. This runs once per opening,
@@ -272,8 +294,14 @@ export function CreateSetDialog({
       setError("Choose a video to sample frames from.");
       return;
     }
-    if (mode === "text" && text.trim().length < 40) {
-      setError("Paste at least a few sentences so Bluprint has source material.");
+    if (mode === "text" && text.trim().length < MIN_NOTE_CHARS) {
+      setError(
+        `Paste at least ${MIN_NOTE_CHARS} characters of notes so Bluprint has source material.`,
+      );
+      return;
+    }
+    if (usage && !usage.canBuild) {
+      setError(usage.message ?? "You have reached the build limit. Nothing was built.");
       return;
     }
 
@@ -376,10 +404,11 @@ export function CreateSetDialog({
       onOpenChange(false);
       navigate(`/sets/${setId}`);
     } catch (submitError) {
-      const message = notifyError(
-        submitError,
-        "Could not create that set. Try again.",
-      );
+      const message = createSetFailureMessage(submitError, {
+        noteLength: mode === "text" ? text.trim().length : undefined,
+        requestedCards: cardCount,
+      });
+      console.error("Could not create that set.", submitError);
       setError(message);
     } finally {
       setIsLoading(false);
@@ -410,6 +439,31 @@ export function CreateSetDialog({
         </div>
 
         <div className="px-6 pb-6 sm:px-7">
+          {usage?.identity === "guest" && (
+            <div
+              className={cn(
+                "mb-4 rounded-2xl px-3.5 py-3 text-xs leading-relaxed",
+                usage.canBuild
+                  ? "bg-brand-panel text-brand-ink/75"
+                  : "bg-[#FFEEF0] text-[#A81F28]",
+              )}
+              role={usage.canBuild ? "note" : "alert"}
+            >
+              {usage.canBuild ? (
+                <>
+                  Guest workspace: {usage.perHour} new sets an hour ({usage.remainingHour}{" "}
+                  left this hour). Add an email to raise the cap to {buildLimit("set", "member").perHour}.
+                </>
+              ) : (
+                <>
+                  Guest set limit reached: {usage.perHour} new sets an hour. The limit
+                  resets in about {usage.retryMinutes} minute
+                  {usage.retryMinutes === 1 ? "" : "s"}. Add an email to raise it.
+                </>
+              )}
+            </div>
+          )}
+
           {ai?.configured === false && (
             <motion.div
               initial={{ opacity: 0, y: -6 }}
@@ -701,7 +755,7 @@ export function CreateSetDialog({
                 className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
               />
               <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
-                <span>A few sentences is enough to start</span>
+                <span>At least {MIN_NOTE_CHARS} characters; a few sentences is enough to start</span>
                 <span
                   className={cn(
                     text.length > MAX_NOTE_CHARS && "font-semibold text-[#A81F28]",
@@ -728,7 +782,9 @@ export function CreateSetDialog({
               </span>
             </summary>
             <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-              {`Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. If your notes cannot support the number, Bluprint says so on the set page in one sentence: “Built 6 of 10. Your notes supported 6.”`}
+              {noteLimits
+                ? `These notes support ${noteLimits.cards} cards, ${noteLimits.quiz} quiz questions and ${noteLimits.exam} exam questions. The account maximum is ${BUILD_MAX} of each; the notes are the real ceiling.`
+                : `Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. Photos and video are assessed after reading; if they support fewer, Bluprint says so on the set page in one sentence: “Built 6 of 10. Your notes supported 6.”`}
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -736,18 +792,21 @@ export function CreateSetDialog({
                 {
                   label: "Flashcards",
                   value: cardCount,
+                  max: maxCards,
                   onChange: setCardCount,
                   aria: "Number of flashcards",
                 },
                 {
                   label: "Quiz questions",
                   value: quizCount,
+                  max: maxQuiz,
                   onChange: setQuizCount,
                   aria: "Number of quiz questions",
                 },
                 {
                   label: "Exam-style questions",
                   value: examCount,
+                  max: maxExam,
                   onChange: setExamCount,
                   aria: "Number of exam-style questions",
                 },
@@ -762,7 +821,7 @@ export function CreateSetDialog({
                   <input
                     type="range"
                     min={BUILD_MIN}
-                    max={BUILD_MAX}
+                    max={control.max}
                     step={1}
                     value={control.value}
                     disabled={isLoading}
@@ -772,7 +831,7 @@ export function CreateSetDialog({
                   />
                   <span className="flex justify-between text-[0.62rem] font-medium text-muted-foreground">
                     <span>{BUILD_MIN}</span>
-                    <span>{BUILD_MAX}</span>
+                    <span>{control.max}</span>
                   </span>
                 </label>
               ))}

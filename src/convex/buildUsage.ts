@@ -13,10 +13,13 @@
 
 import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { requireUserId } from "./lib/requireUser";
 import {
   DAY_MS,
+  HOUR_MS,
+  buildLimit,
   checkAllowance,
   type BuildIdentity,
   type BuildKind,
@@ -140,6 +143,54 @@ export const myUsage = internalMutation({
       spent: rows
         .filter((row) => now - row.at < DAY_MS)
         .map((row) => ({ kind: row.kind, at: row.at })),
+    };
+  },
+});
+
+
+/**
+ * The student's remaining new-set allowance, read before the Add material
+ * dialog opens. The cap and the minimum material length are then stated up
+ * front instead of failing after an upload.
+ */
+export const status = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const now = Date.now();
+    const user = await ctx.db.get(userId);
+    const identity: BuildIdentity =
+      user !== null && (user as { isAnonymous?: boolean | null }).isAnonymous === true
+        ? "guest"
+        : "member";
+    const limit = buildLimit("set", identity);
+    const rows = await ctx.db
+      .query("buildUsage")
+      .withIndex("by_user_at", (q) => q.eq("userId", userId))
+      .collect();
+    const spent = rows.filter((row) => row.kind === "set").map((row) => row.at);
+    const inHour = spent.filter((at) => now - at < HOUR_MS);
+    const inDay = spent.filter((at) => now - at < DAY_MS);
+    const verdict = checkAllowance({
+      kind: "set",
+      identity,
+      now,
+      spent,
+    });
+    const oldestHour = inHour.length > 0 ? Math.min(...inHour) : now;
+    return {
+      identity,
+      perHour: limit.perHour,
+      perDay: limit.perDay,
+      usedThisHour: inHour.length,
+      usedToday: inDay.length,
+      remainingHour: Math.max(0, limit.perHour - inHour.length),
+      remainingToday: Math.max(0, limit.perDay - inDay.length),
+      canBuild: verdict.allowed,
+      retryMinutes: verdict.allowed
+        ? 0
+        : Math.max(1, Math.ceil((HOUR_MS - (now - oldestHour)) / 60_000)),
+      message: verdict.allowed ? undefined : verdict.message,
     };
   },
 });

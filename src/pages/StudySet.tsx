@@ -396,6 +396,12 @@ function SummaryView({
   return (
     <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
       <div className="space-y-3">
+        {set.coverageNote && (
+          <div className="rounded-2xl border border-[#F3E2C8] bg-[#FFF7E8] px-4 py-3 text-[0.8rem] leading-relaxed text-[#8A5D00]">
+            <span className="font-semibold">Source coverage.</span>{" "}
+            {set.coverageNote}
+          </div>
+        )}
         <section className="rounded-[2rem] border border-border bg-card p-6">
           <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
             Key points
@@ -588,6 +594,7 @@ export default function StudySet() {
     validId ? { setId: setId as Id<"studySets"> } : "skip",
   );
   const processSet = useAction(api.ai.processStudySet);
+  const regenerateSetCards = useAction(api.ai.regenerateCards);
   // Older links used `?tab=exam`; keep them working while every new link points
   // at the mode's own screen.
   const [searchParams] = useSearchParams();
@@ -602,6 +609,7 @@ export default function StudySet() {
         ? legacyTab
         : "summary";
   const [retrying, setRetrying] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const triggered = useRef<string | null>(null);
 
@@ -630,6 +638,23 @@ export default function StudySet() {
   const openTutor = () => {
     if (!validId) return;
     navigate(`/tutor?set=${setId}`);
+  };
+
+  const regenerateCards = async () => {
+    if (!details || regenerating) return;
+    const approved = window.confirm(
+      "Regenerate this set's cards? Cards are rebuilt from the notes, and review history for them is reset. The quiz is re-checked against the new deck.",
+    );
+    if (!approved) return;
+    setRegenerating(true);
+    try {
+      await regenerateSetCards({ setId: details.set._id });
+      toast.success("Regenerating grounded cards. This page will update when it finishes.");
+    } catch (error) {
+      notifyError(error, "Card regeneration could not start.");
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   const body = (() => {
@@ -707,6 +732,14 @@ export default function StudySet() {
                 {[
                   { label: "Ask the tutor", onClick: openTutor },
                   { label: "Edit set", onClick: () => setSettingsOpen(true) },
+                  ...(set.status === "ready"
+                    ? [
+                        {
+                          label: regenerating ? "Regenerating cards…" : "Regenerate cards",
+                          onClick: () => void regenerateCards(),
+                        },
+                      ]
+                    : []),
                 ].map((action) => (
                   <button
                     key={action.label}
@@ -776,6 +809,26 @@ export default function StudySet() {
             <span>Updated {relativeDate(set.updatedAt)}</span>
           </motion.p>
         </div>
+
+        {set.status === "ready" && details.cardRepairNeeded && (
+          <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-[#F3E2C8] bg-[#FFF7E8] px-4 py-3 text-[0.8rem] leading-relaxed text-[#8A5D00] sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              <span className="font-semibold">Some cards need rebuilding.</span>{" "}
+              Their answers are too long or end mid-sentence; the old set was
+              likely cut off while saving.
+            </p>
+            <Button
+              type="button"
+              onClick={() => void regenerateCards()}
+              disabled={regenerating}
+              variant="outline"
+              className="h-9 shrink-0 rounded-full border-[#E7C98B] bg-white px-4 text-[0.76rem] font-semibold text-[#8A5D00] shadow-none hover:bg-[#FFF1D8]"
+            >
+              {regenerating ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+              Regenerate cards
+            </Button>
+          </div>
+        )}
 
         {set.status === "ready" && (
           <nav

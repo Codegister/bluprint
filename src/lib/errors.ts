@@ -15,6 +15,7 @@
  */
 
 import { toast } from "sonner";
+import { MIN_NOTE_CHARS } from "@/convex/lib/noteLimits";
 
 /** What the app shows when it cannot name a cause a student can act on. */
 export const BUILD_FAILED_MESSAGE =
@@ -138,4 +139,32 @@ export function buildErrorMessage(raw?: string | null): {
 
   const safe = readableError(new Error(value), BUILD_FAILED_MESSAGE);
   return { message: safe, rateLimited: false };
+}
+
+
+/**
+ * A create-set failure a student can act on. The server already sends specific
+ * sentences for material and allowance problems; this catches the rest and
+ * names the cause instead of the old generic "try again".
+ */
+export function createSetFailureMessage(
+  error: unknown,
+  context: { noteLength?: number; requestedCards?: number } = {},
+): string {
+  const raw = error instanceof Error ? error.message : "";
+  if (/build limit|rate.?limit|too many requests/i.test(raw)) {
+    return readableError(error, "You have reached the build limit. Nothing was built.");
+  }
+  if (/paste at least|past at least|few sentences|readable text|too little|not enough readable/i.test(raw)) {
+    return context.noteLength !== undefined
+      ? `These notes are too short to build a set (${context.noteLength} characters). Add at least ${MIN_NOTE_CHARS} characters of real notes, then retry.`
+      : "There wasn't enough readable material to build a set. Add at least a few full sentences, then retry.";
+  }
+  if (/No flashcards could|No quiz questions could|did not return any usable material/i.test(raw)) {
+    return "Bluprint could not find facts it could turn into cards in these notes. Add at least two specific facts (not just a title or heading), then retry.";
+  }
+  if (/Failed to fetch|NetworkError|fetch failed|timeout|timed out/i.test(raw)) {
+    return "Bluprint could not reach the server. Check your connection and retry; your notes have not been sent yet.";
+  }
+  return "The server stopped while creating this set. Nothing was saved; retry in a moment, and if it repeats, add a little more detail to the notes.";
 }

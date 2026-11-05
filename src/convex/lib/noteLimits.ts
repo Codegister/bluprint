@@ -14,6 +14,9 @@
 /** The character limit for anything a student types or pastes. */
 export const MAX_NOTE_CHARS = 20_000;
 
+/** The minimum text length that can produce a study set. */
+export const MIN_NOTE_CHARS = 40;
+
 /** The same number as the UI writes it, so the counter and the copy agree. */
 export const MAX_NOTE_CHARS_LABEL = MAX_NOTE_CHARS.toLocaleString("en-US");
 

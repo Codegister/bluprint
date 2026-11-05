@@ -102,9 +102,11 @@ function SetRow({ set }: { set: SetSummary }) {
             <p className="mt-0.5">
               {set.pace
                 ? `${plural(set.pace.perDay, "card")}/day`
-                : set.lastStudiedAt
-                  ? `Studied ${relativeDate(set.lastStudiedAt)}`
-                  : "Not started"}
+                : set.quizAnswered > 0
+                  ? "Quiz in progress"
+                  : set.lastStudiedAt
+                    ? `Studied ${relativeDate(set.lastStudiedAt)}`
+                    : "Not started"}
             </p>
           </>
         ) : (

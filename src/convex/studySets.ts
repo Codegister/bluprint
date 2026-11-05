@@ -38,11 +38,18 @@ import { alignCriteria, toCriteria } from "./lib/markingCriteria";
 import { summaryValidator } from "./lib/summary";
 import { validateStudySelection } from "./lib/catalogue";
 import {
-  alignQuizToCards,
-  dedupeStudyItems,
+  MAX_CARD_BACK_CHARS,
+  MAX_CARD_FRONT_CHARS,
+  cardNeedsRepair,
   gradeQuizResponse,
+  keyPointsForCards,
   linkKeyPointsToSpecs,
+  prepareCards,
+  prepareQuiz,
+  repairCardAnswer,
+  sourceCoverage,
 } from "./lib/studySetQuality";
+import { shortfallFor, shortfallSentence } from "./lib/buildDefaults";
 import { cleanGeneratedText } from "./lib/register";
 
 const sourceType = v.union(
@@ -570,6 +577,7 @@ export const getDetails = query({
       dueCount: cards.filter((card) => isDue(card, now)).length,
       weakCardCount: cards.filter(isWeakCard).length,
       weakQuizCount: quiz.filter((question) => (question.missCount ?? 0) > 0).length,
+      cardRepairNeeded: cards.some(cardNeedsRepair),
       quizAnswered: quizSoFar.answered,
       quizCorrect: quizSoFar.correct,
       quizTotal: quizSoFar.total,
@@ -1265,6 +1273,24 @@ export const getForProcessing = internalQuery({
   },
 });
 
+/** Existing quiz and exam rows, reused when only the cards are rebuilt. */
+export const getContentForRepair = internalQuery({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const [quiz, exams] = await Promise.all([
+      ctx.db
+        .query("quizQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+      ctx.db
+        .query("examQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+    ]);
+    return { quiz: byOrder(quiz), exams: byOrder(exams) };
+  },
+});
+
 /**
  * Atomically takes ownership of a generation run. StrictMode in development
  * can fire the page effect twice, and two NVIDIA runs would waste quota.
@@ -1355,9 +1381,15 @@ export const completeGeneration = internalMutation({
     // A short topic name from the generator, applied only when the student has
     // not named the set themselves.
     title: v.optional(v.string()),
-    generationNote: v.optional(v.string()),
+    // The number the student asked for. The final note is computed after the
+    // filters run, so it always matches the rows that were actually stored.
+    requested: v.object({
+      cards: v.number(),
+      quiz: v.number(),
+      exams: v.number(),
+    }),
   },
-  handler: async (ctx, { setId, summary, cards, quiz, exams, title, generationNote }) => {
+  handler: async (ctx, { setId, summary, cards, quiz, exams, title, requested }) => {
     const set = await ctx.db.get(setId);
     // Deleted mid-build: stop quietly rather than writing into a missing set.
     if (!set) return { stored: false };
@@ -1380,18 +1412,6 @@ export const completeGeneration = internalMutation({
     const storedCards = cards.map((card) =>
       cleanGeneratedText(card, level, subject),
     );
-    // The generator is asked not to repeat itself, but a prompt is not a
-    // guarantee. Drop meta cards and reworded duplicates before any row is
-    // written, so the deck the student reviews is distinct.
-    const contentCards = dedupeStudyItems(
-      storedCards,
-      (card) => card.front,
-      (card) => card.back,
-      {
-        reject: (card) =>
-          card.front.trim().length === 0 || card.back.trim().length === 0,
-      },
-    ).items;
     const storedQuiz = quiz.map((question) =>
       cleanGeneratedText(question, level, subject),
     );
@@ -1399,11 +1419,16 @@ export const completeGeneration = internalMutation({
       cleanGeneratedText(question, level, subject),
     );
 
-    // Key points carry the specification statement each one covers. The links
-    // are the source of coverage; the old item-tag count is not used for it.
+    // A card is a fact from the notes, not a copy of them. This pass grounds,
+    // shortens and deduplicates the deck before any count is written.
+    const { cards: contentCards } = prepareCards(storedCards, set.notes);
+    // The summary and the deck cannot disagree: one key point per card, in the
+    // same order, each derived from that card's question and answer.
+    const keyPoints = keyPointsForCards(contentCards);
+
     const keyPointLinks =
       specPoints.length > 0
-        ? linkKeyPointsToSpecs(storedSummary.keyPoints, specPoints)
+        ? linkKeyPointsToSpecs(keyPoints, specPoints)
         : { links: [], missing: [] };
     const summaryToStore =
       keyPointLinks.links.length > 0
@@ -1415,8 +1440,8 @@ export const completeGeneration = internalMutation({
         : specPoints.length > 0
           ? // A set with a specification but no matching key points must report
             // zero coverage, not fall back to item tags.
-            { ...storedSummary, keyPointSpecs: [] as Array<{ text: string; specRef: string }> }
-          : storedSummary;
+            { ...storedSummary, keyPoints, keyPointSpecs: [] as Array<{ text: string; specRef: string }> }
+          : { ...storedSummary, keyPoints };
 
     // Each item is tagged to the specification statement it teaches, when the
     // set came from a course topic. Matching is deterministic, so the same item
@@ -1426,9 +1451,8 @@ export const completeGeneration = internalMutation({
         ? (matchSpecPoint(text, specPoints).id ?? undefined)
         : undefined;
 
-    const cardIds: Id<"flashcards">[] = [];
     for (const [index, card] of contentCards.entries()) {
-      const cardId = await ctx.db.insert("flashcards", {
+      await ctx.db.insert("flashcards", {
         setId,
         userId: set.userId,
         front: card.front,
@@ -1450,25 +1474,20 @@ export const completeGeneration = internalMutation({
         lapses: 0,
         reps: 0,
       });
-      cardIds.push(cardId);
     }
 
-    // A quiz item is only saved when a real card contains its answer. The
-    // generator's sourceCard is a hint; alignQuizToCards checks the text. Items
-    // with no card are dropped, so the quiz can be shorter but never contradicts
-    // the deck.
-    const cardLikes = contentCards.map((card, index) => ({
-      ...card,
-      id: cardIds[index]!,
-    }));
-    const alignedQuiz = alignQuizToCards(
+    // The quiz is a second retrieval opportunity, not a reworded card. It is
+    // grounded in the notes, disjoint from the deck, free of cloze, inverse
+    // pairs, shared answers, leaking explanations and giveaway options.
+    const preparedQuiz = prepareQuiz(
       storedQuiz,
-      cardLikes,
-      summaryToStore.keyPoints,
+      contentCards,
+      set.notes,
+      keyPoints,
       { level, subject },
     );
 
-    for (const [index, question] of alignedQuiz.items.entries()) {
+    for (const [index, question] of preparedQuiz.items.entries()) {
       await ctx.db.insert("quizQuestions", {
         setId,
         userId: set.userId,
@@ -1480,7 +1499,8 @@ export const completeGeneration = internalMutation({
         answer: question.answer,
         acceptedAnswers: question.acceptedAnswers,
         beyondNotes: question.beyondNotes,
-        sourceCardId: question.sourceCardId as Id<"flashcards">,
+        // Quiz facts are deliberately disjoint from cards, so there is no
+        // source card to link. The field stays optional for older rows.
         specRef: tag(
           `${question.question} ${question.answer ?? ""} ${question.explanation}`,
         ),
@@ -1509,16 +1529,59 @@ export const completeGeneration = internalMutation({
       });
     }
 
+    // One rule for every shortfall, using the numbers that were actually
+    // stored. The page never gets a second, contradictory explanation.
+    const generationNote = [
+      contentCards.length < requested.cards
+        ? shortfallSentence(contentCards.length, requested.cards)
+        : "",
+      preparedQuiz.items.length < requested.quiz
+        ? shortfallFor("quiz", preparedQuiz.items.length, requested.quiz)
+        : "",
+      storedExams.length < requested.exams
+        ? shortfallFor("exam", storedExams.length, requested.exams)
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    // If a section of the notes never made it into a card, question or exam
+    // item, say so on the set page instead of dropping it silently.
+    const coverage = sourceCoverage(set.notes, [
+      ...contentCards.map((card) => `${card.front} ${card.back}`),
+      ...preparedQuiz.items.map(
+        (question) =>
+          `${question.question} ${question.answer ?? ""} ${question.explanation}`,
+      ),
+      ...storedExams.map((question) => `${question.question} ${question.modelAnswer}`),
+    ]);
+    const summaryCoverage = sourceCoverage(set.notes, [
+      summaryToStore.overview,
+      ...summaryToStore.keyPoints,
+    ]);
+
     await ctx.db.patch(setId, {
       summary: summaryToStore,
       // The generator's short topic title replaces a name derived from the
       // upload, and leaves a name the student typed alone.
       ...(named ? { title: generatedTitle, titleSource: "auto" as const } : {}),
       cardCount: contentCards.length,
-      quizCount: alignedQuiz.items.length,
+      quizCount: preparedQuiz.items.length,
       examCount: storedExams.length,
       knownCount: 0,
-      generationNote,
+      generationNote: generationNote || undefined,
+      coverageNote: [
+        coverage.note,
+        summaryCoverage.omitted.length > 0
+          ? `The summary does not name: ${summaryCoverage.omitted.slice(0, 4).join("; ")}${
+              summaryCoverage.omitted.length > 4
+                ? `; and ${summaryCoverage.omitted.length - 4} more`
+                : ""
+            }. The cards still cover the parts they name.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ") || undefined,
       lastQuizScore: undefined,
       lastQuizTotal: undefined,
       status: "ready",
@@ -1528,6 +1591,77 @@ export const completeGeneration = internalMutation({
       updatedAt: now,
     });
     return { stored: true };
+  },
+});
+
+/**
+ * One-time repair for sets saved before answers were bounded. It only touches
+ * cards that are longer than a flashcard answer or end mid-word; every other
+ * card is left byte-for-byte alone. Review scheduling is preserved, while the
+ * recall units are rebuilt from the shortened answer.
+ */
+export const repairLegacyCards = internalMutation({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit }) => {
+    const all = await ctx.db.query("flashcards").collect();
+    const candidates = all
+      .filter(cardNeedsRepair)
+      .slice(0, Math.max(1, limit ?? 500));
+    const touched = new Set<Id<"studySets">>();
+
+    for (const card of candidates) {
+      const front = card.front.slice(0, MAX_CARD_FRONT_CHARS);
+      const back = repairCardAnswer(card.back, MAX_CARD_BACK_CHARS);
+      await ctx.db.patch(card._id, {
+        front,
+        back,
+        recallUnits: deriveRecallUnits(back),
+      });
+      touched.add(card.setId);
+    }
+
+    for (const setId of touched) {
+      const set = await ctx.db.get(setId);
+      if (!set) continue;
+      const cards = byOrder(
+        await ctx.db
+          .query("flashcards")
+          .withIndex("by_set", (q) => q.eq("setId", setId))
+          .collect(),
+      );
+      const keyPoints = keyPointsForCards(cards);
+      const existingSummary = set.summary ?? {
+        overview: "",
+        examFocus: [],
+        keyPoints: [],
+      };
+      const specPoints = set.specPoints ?? [];
+      const linked =
+        specPoints.length > 0
+          ? linkKeyPointsToSpecs(keyPoints, specPoints)
+          : null;
+      await ctx.db.patch(setId, {
+        summary: {
+          ...existingSummary,
+          overview: existingSummary.overview ?? "",
+          examFocus: existingSummary.examFocus ?? [],
+          keyPoints:
+            linked && linked.links.length > 0
+              ? linked.links.map((link) => link.text)
+              : keyPoints,
+          ...(linked ? { keyPointSpecs: linked.links } : {}),
+        },
+        updatedAt: Date.now(),
+      });
+    }
+
+    return {
+      scanned: all.length,
+      repaired: candidates.length,
+      sets: touched.size,
+      stillNeedingRepair:
+        all.filter(cardNeedsRepair).length - candidates.length,
+    };
   },
 });
 

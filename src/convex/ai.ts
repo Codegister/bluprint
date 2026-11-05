@@ -38,9 +38,11 @@ import {
 import {
   correctAnswerFor,
   isNearDuplicateStudyItem,
-  isSpecificationItem,
+  prepareCards,
+  prepareQuiz,
 } from "./lib/studySetQuality";
 import { parseSummary, type Summary } from "./lib/summary";
+import { dominantNounPhrase } from "./lib/titles";
 import {
   parseTopicNotes,
   type TopicNoteSection,
@@ -133,7 +135,13 @@ type ChatMessage = {
   content: string | ContentPart[];
 };
 
-type GeneratedCard = { front: string; back: string; beyondNotes?: boolean };
+type GeneratedCard = {
+  front: string;
+  back: string;
+  /** One revision-ready claim, never a copied source sentence. */
+  keyPoint?: string;
+  beyondNotes?: boolean;
+};
 type QuizKind = "mcq" | "cloze" | "typed";
 type GeneratedQuiz = {
   question: string;
@@ -789,7 +797,10 @@ function parseCards(raw: string, limit = 12): GeneratedCard[] {
       const row = card as Partial<GeneratedCard>;
       return {
         front: asText(row.front, 400),
-        back: asText(row.back, 1600),
+        // The pipeline repairs a model that ignores this cap, but 400 is a
+        // short answer, not a copied section of notes.
+        back: asText(row.back, 400),
+        keyPoint: asText(row.keyPoint, 260),
         beyondNotes: beyondNotes(row.beyondNotes),
       };
     })
@@ -1130,9 +1141,9 @@ async function summariseNotes(
     topP: 1.0,
     disableThinking: true,
   });
-  // The title falls back to the subject label, never to the first sentence of
-  // the notes: a sentence is not a name for a set.
-  return parseSummary(raw, context?.course);
+  // The title falls back to the notes' dominant noun phrase, never to the first
+  // sentence and never to the generic "Study notes".
+  return parseSummary(raw, context?.course || dominantNounPhrase(notes));
 }
 
 // Batches keep each JSON response short enough to finish. A 20-question quiz
@@ -1166,9 +1177,9 @@ function summaryFromNotes(notes: string, subject?: string): Summary {
     .slice(0, 8)
     .map((sentence) => sentence.slice(0, 220));
   return {
-    // The notes could not be summarised, so the set keeps a clean subject
-    // label. It is never named after its first sentence.
-    title: cleanTopicTitle("", subject ?? "Study notes"),
+    // The notes could not be summarised, so the set keeps a clean topic label
+    // derived from the notes. It is never named after its first sentence.
+    title: cleanTopicTitle("", subject ?? dominantNounPhrase(notes)),
     overview: overview.slice(0, 1500),
     keyPoints,
     examFocus: [],
@@ -1212,12 +1223,13 @@ async function generateCards(
             `${materialBlock(notes)}\n\n` +
             (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : `${GROUNDING_RULES}\n`) +
             `Create ${want} revision flashcards from this material. Cover the breadth of the material, but prioritise the niche, exam-distinguishing details a student could actually be tested on: exact figures and dates, names, formulas, precise definitions, exceptions to rules, named examples and case studies, cause-and-effect chains, and common confusions. ` +
-            "Each card must test one fact, not a list. Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific, unambiguous question. Backs must answer only that question in one to three sentences, with the precise detail and a caveat where one exists. " +
+            "Each card must test one fact, not a list. Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific, unambiguous question. Backs must answer only that question in at most two sentences and 40 words, with the precise detail and a caveat where one exists. Never copy a sentence from the material: restate the fact as a short answer. " +
+            "Every card also needs keyPoint: one revision-ready claim of at most 25 words, in the same order as the card, not a verbatim source sentence. If the material does not state the fact, do not write the card. " +
             CONTENT_NOT_SPEC_RULES + " " +
             (previous
               ? `These flashcards already exist; write different, non-overlapping ones. A reworded card is still a repeat:\n${previous}\n`
               : "") +
-            `Return JSON exactly like: {"cards":[{"front":"...","back":"..."}]}${BEYOND_NOTES_FIELD}`,
+            `Return JSON exactly like: {"cards":[{"front":"...","back":"...","keyPoint":"..."}]}${BEYOND_NOTES_FIELD}`,
         },
       ],
       maxTokens: 7000,
@@ -1236,11 +1248,11 @@ async function generateCards(
     }
 
     let added = 0;
-    for (const card of batch) {
-      // A prompt is not a guarantee. Drop qualification meta and paraphrased
-      // repeats here as well as before the final write, so a batch cannot fill
-      // the deck with the same fact under four different question stems.
-      if (isSpecificationItem(card.front, card.back)) continue;
+    // A prompt is not a guarantee. Ground and shorten the batch here, then
+    // drop paraphrased repeats across batches, so a card cannot assert a fact
+    // the notes never gave or fill the deck with the same answer twice.
+    const { cards: preparedBatch } = prepareCards(batch, notes);
+    for (const card of preparedBatch) {
       const key = card.front.toLowerCase();
       if (
         seen.has(key) ||
@@ -1287,12 +1299,14 @@ async function generateQuiz(
   onProgress?: BatchProgress,
   syllabus = false,
 ): Promise<GeneratedQuiz[]> {
-  const questions: GeneratedQuiz[] = [];
+  let questions: GeneratedQuiz[] = [];
   const seen = new Set<string>();
+  // Cards are the facts the deck already tests. The quiz must use different
+  // facts from the same notes, not reword a card.
   const cardBlock = cards
     .map(
       (card, index) =>
-        `[${index}] Q: ${card.front.slice(0, 240)}\nA: ${card.back.slice(0, 500)}`,
+        `[${index}] Q: ${card.front.slice(0, 200)}\nA: ${card.back.slice(0, 300)}`,
     )
     .join("\n\n");
 
@@ -1318,26 +1332,27 @@ async function generateQuiz(
           role: "user",
           content:
             `${materialBlock(notes)}\n\n` +
-            `<cards>\n${cardBlock}\n</cards>\n\n` +
+            (cards.length > 0
+              ? `<already_tested_by_cards>\n${cardBlock}\n</already_tested_by_cards>\n\n` +
+                "The cards above already test those facts. Do not ask about the same fact in any direction. Use a different, still-taught fact from the material. If no different fact remains, return fewer questions.\n\n"
+              : "") +
             (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
-            `Create ${want} quiz questions of increasing difficulty. Mix three kinds: roughly half multiple choice, a quarter cloze, and a quarter short typed answer. Each kind tests recall in a different way, so the quiz does not become four options to guess between. ` +
+            `Create ${want} quiz questions of increasing difficulty. Use only multiple-choice and short typed-answer questions: roughly half of each. Do not write cloze or fill-the-gap questions. ` +
             CONTENT_NOT_SPEC_RULES + " " +
-            "Every question must be answerable from exactly one card above, and that card must contain the answer. Put its zero-based index in sourceCard. If no card contains the answer, do not write that question. " +
+            "Every answer must be stated in the material above. Do not test a fact that a card already tests, and do not ask the same fact from the other direction (for example, receptor → stimulus and stimulus → receptor are one fact). " +
             "Do not ask which taught difference is absent while using the other taught differences as distractors; that is a negative-discrimination item and teaches the wrong thing. " +
             (syllabus ? "" : `${GROUNDING_RULES}\n`) +
             "Cover different parts of the material. Where the material gives data, a worked example or a case, ask the student to apply a concept to that — not to an example the material never mentions. " +
-            "A multiple-choice question needs exactly 4 plausible options and one correct index (0-3). " +
-            "A cloze question is one sentence from the material with the key term replaced by ____ (four underscores) and no options. " +
+            "A multiple-choice question needs exactly 4 plausible options and one correct index (0-3). All four options must be grammatically parallel, similar in length (within about 20%), and the same kind of phrase. The correct option must not be the longest, the only two-part option, or the only option repeating a distinctive word from the stem. Do not write an option that is obviously the only grammatical fit. " +
             "A typed question asks for a word or short phrase and must be answerable in a few words, with no options. " +
-            "Every question needs a 1-2 sentence explanation of why the answer is right. " +
-            "For cloze and typed questions list every wording that should be marked correct in acceptedAnswers, including abbreviations and common synonyms. " +
+            "Every question needs a 1-2 sentence explanation that teaches: why the correct answer is right and why at least one named distractor is wrong. Never open with 'The material states', 'The notes define' or 'explicitly in the material'. An explanation must not reveal the answer to any other question. " +
+            "For typed questions list every wording that should be marked correct in acceptedAnswers, including abbreviations and common synonyms. " +
             (previous
               ? `Do not repeat these existing questions. A reworded question with the same answer is still a repeat:\n${previous}\n`
               : "") +
             'Return JSON exactly like: {"questions":[' +
-            '{"question":"...","type":"mcq","options":["a","b","c","d"],"correctIndex":0,"explanation":"...","sourceCard":0},' +
-            '{"question":"The process by which water moves across a membrane is ____.","type":"cloze","answer":"osmosis","acceptedAnswers":["osmosis"],"explanation":"...","sourceCard":1},' +
-            '{"question":"Name the cell organelle where aerobic respiration happens.","type":"typed","answer":"mitochondria","acceptedAnswers":["mitochondrion","the mitochondria"],"explanation":"...","sourceCard":2}' +
+            '{"question":"...","type":"mcq","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."},' +
+            '{"question":"Name the cell organelle where aerobic respiration happens.","type":"typed","answer":"mitochondria","acceptedAnswers":["mitochondrion","the mitochondria"],"explanation":"..."}' +
             `]}${BEYOND_NOTES_FIELD}`,
         },
       ],
@@ -1356,30 +1371,13 @@ async function generateQuiz(
       continue;
     }
 
-    let added = 0;
-    for (const question of batch) {
-      const answer = correctAnswerFor(question);
-      const key = question.question.toLowerCase();
-      if (!answer || isSpecificationItem(question.question, answer)) continue;
-      if (
-        seen.has(key) ||
-        questions.some((previous) =>
-          isNearDuplicateStudyItem(
-            {
-              prompt: previous.question,
-              answer: correctAnswerFor(previous),
-            },
-            { prompt: question.question, answer },
-          ),
-        )
-      ) {
-        continue;
-      }
-      seen.add(key);
-      questions.push(question);
-      added += 1;
-      if (questions.length >= target) break;
-    }
+    // The batch is checked against the cards and every earlier question. This
+    // is where cloze, card overlap, inverse pairs, answer leakage, option
+    // giveaways and source-narrating explanations are rejected.
+    const prepared = prepareQuiz([...questions, ...batch], cards, notes);
+    questions = prepared.items;
+    const added = Math.max(0, prepared.items.length - seen.size);
+    for (const question of prepared.items) seen.add(question.question.toLowerCase());
     if (added > 0) {
       try {
         await onProgress?.(questions.length, target);
@@ -3057,23 +3055,6 @@ export const processStudySet = action({
         );
       }
 
-      // One rule for every shortfall, in the same words everywhere it appears:
-      // "Built X of Y. Your notes supported X." Nothing else is added, so the
-      // set page can never show a second, contradictory explanation.
-      const note = [
-        cards.length < requestedCards
-          ? shortfallSentence(cards.length, requestedCards)
-          : "",
-        quiz.length < requestedQuiz
-          ? shortfallFor("quiz", quiz.length, requestedQuiz)
-          : "",
-        exams.length < requestedExam
-          ? shortfallFor("exam", exams.length, requestedExam)
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
         progress: "Saving your set…",
@@ -3088,7 +3069,14 @@ export const processStudySet = action({
         // A short topic name replaces a name derived from the first line of the
         // upload. A name the student typed is never overwritten.
         title: summary.title,
-        generationNote: note || undefined,
+        // The mutation counts what it actually stores, after grounding,
+        // deduplication and quiz alignment. Computing the note here would make
+        // it lie whenever a filter dropped one more item.
+        requested: {
+          cards: requestedCards,
+          quiz: requestedQuiz,
+          exams: requestedExam,
+        },
       });
       return { started: true };
     } catch (error) {
@@ -3103,6 +3091,110 @@ export const processStudySet = action({
       // deployment's health sweep can alert on a repeated cause.
       console.error("Study set build failed", setId, error);
       await recordProviderIncident(ctx, "build", error);
+      const message = buildFailureMessage(error);
+      await ctx.runMutation(internal.studySets.failGeneration, { setId, message });
+      throw new Error(message);
+    }
+  },
+});
+
+/**
+ * Rebuilds only a set's cards. Used for a set whose stored answers are long
+ * enough to be notes, or cut off mid-word. The existing quiz is re-filtered
+ * against the new deck, so a card fact cannot reappear as a quiz question; exam
+ * questions are kept because they are already marked and revised separately.
+ */
+export const regenerateCards = action({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const userId = await requireUserId(ctx);
+    const existing = await ctx.runQuery(internal.studySets.getForProcessing, { setId });
+    if (!existing || existing.userId !== userId) {
+      throw new Error("Study set not found.");
+    }
+    await ctx.runMutation(internal.buildUsage.consume, {
+      userId,
+      kind: "rebuild",
+    });
+    const claim = await ctx.runMutation(internal.studySets.claimForProcessing, { setId });
+    if (!claim.claimed) return { started: false };
+
+    try {
+      const apiKeys = resolveNvidiaKeys();
+      const notes = existing.notes.trim();
+      if (!withinNoteLimit(notes) || notes.length < 40) {
+        throw new Error(
+          "These notes are too short or too long to rebuild cards. Trim them and try the full rebuild.",
+        );
+      }
+      const requested = Math.min(
+        MAX_REQUESTED_ITEMS,
+        Math.max(BUILD_MIN, existing.targetCardCount ?? BUILD_DEFAULTS.cards),
+      );
+      const limits = existing.courseId !== undefined
+        ? { cards: MAX_REQUESTED_ITEMS }
+        : materialLimits(notes);
+      const target = Math.min(requested, limits.cards);
+      const deadline = Date.now() + 4 * 60 * 1000;
+
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId,
+        progress: "Rewriting grounded flashcards…",
+        percent: 18,
+      });
+      const summary =
+        (await summariseNotes(
+          apiKeys,
+          notes,
+          { course: existing.course, examBoard: existing.examBoard, level: existing.level },
+          existing.courseId !== undefined,
+        ).catch(() => null)) ?? summaryFromNotes(notes, existing.course);
+      const cards = await generateCards(
+        apiKeys,
+        notes,
+        target,
+        deadline,
+        undefined,
+        existing.courseId !== undefined,
+      );
+      if (cards.length === 0) {
+        throw new Error(
+          "No cards could be rebuilt from these notes. Add at least two specific facts and retry.",
+        );
+      }
+      const content = await ctx.runQuery(internal.studySets.getContentForRepair, { setId });
+      await ctx.runMutation(internal.studySets.completeGeneration, {
+        setId,
+        summary,
+        cards,
+        quiz: content.quiz.map((question) => ({
+          question: question.question,
+          options: question.options,
+          correctIndex: question.correctIndex,
+          explanation: question.explanation,
+          type: question.type,
+          answer: question.answer,
+          acceptedAnswers: question.acceptedAnswers,
+          beyondNotes: question.beyondNotes,
+        })),
+        exams: content.exams.map((question) => ({
+          question: question.question,
+          marks: question.marks,
+          modelAnswer: question.modelAnswer,
+          markingGuide: question.markingGuide,
+          beyondNotes: question.beyondNotes,
+          criteria: question.criteria,
+        })),
+        title: summary.title,
+        requested: {
+          cards: requested,
+          quiz: existing.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+          exams: existing.targetExamCount ?? BUILD_DEFAULTS.exam,
+        },
+      });
+      return { started: true };
+    } catch (error) {
+      console.error("Card regeneration failed", setId, error);
       const message = buildFailureMessage(error);
       await ctx.runMutation(internal.studySets.failGeneration, { setId, message });
       throw new Error(message);

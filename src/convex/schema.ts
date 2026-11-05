@@ -121,6 +121,9 @@ const schema = defineSchema(
       // Explains a build that hit the material's realistic limit or where one
       // section failed, without hiding the sections that did generate.
       generationNote: v.optional(v.string()),
+      // Names source sections that were not represented by any card, quiz or
+      // exam item. A short build must not hide material it left out.
+      coverageNote: v.optional(v.string()),
       // The specification statements of the topic this set was built from, kept
       // with the set so coverage can still be reported after the course pathway
       // changes. Empty for sets built from pasted notes with no course.

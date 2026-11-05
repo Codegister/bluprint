@@ -23,6 +23,7 @@ import {
   BUILD_MAX,
   BUILD_MIN,
 } from "@/convex/lib/buildDefaults";
+import { materialLimits } from "@/convex/lib/buildCapacity";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { notifyError, readableError } from "@/lib/errors";
@@ -78,6 +79,10 @@ export function SetSettingsDialog({
     set.targetExamCount ?? BUILD_DEFAULTS.exam,
   );
   const [examDate, setExamDate] = useState(set.examDate ?? "");
+  const limits = materialLimits(set.notes);
+  const maxCards = Math.max(BUILD_MIN, limits.cards);
+  const maxQuiz = Math.max(BUILD_MIN, limits.quiz);
+  const maxExam = Math.max(BUILD_MIN, limits.exam);
   const [saving, setSaving] = useState<"save" | "rebuild" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -110,9 +115,9 @@ export function SetSettingsDialog({
     setCourse(set.course ?? "");
     setExamBoard(set.examBoard ?? "");
     setLevel(set.level ?? "");
-    setCardCount(set.targetCardCount ?? BUILD_DEFAULTS.cards);
-    setQuizCount(set.targetQuizCount ?? BUILD_DEFAULTS.quiz);
-    setExamCount(set.targetExamCount ?? BUILD_DEFAULTS.exam);
+    setCardCount(Math.min(set.targetCardCount ?? BUILD_DEFAULTS.cards, maxCards));
+    setQuizCount(Math.min(set.targetQuizCount ?? BUILD_DEFAULTS.quiz, maxQuiz));
+    setExamCount(Math.min(set.targetExamCount ?? BUILD_DEFAULTS.exam, maxExam));
     setExamDate(set.examDate ?? "");
     setError(null);
     deletedRef.current = false;
@@ -126,6 +131,9 @@ export function SetSettingsDialog({
     set.targetQuizCount,
     set.targetExamCount,
     set.examDate,
+    maxCards,
+    maxQuiz,
+    maxExam,
   ]);
 
   const save = async (rebuild: boolean) => {
@@ -356,25 +364,28 @@ export function SetSettingsDialog({
               Counts for the next rebuild
             </p>
             <p className="mt-0.5 text-[0.7rem] leading-relaxed text-muted-foreground">
-              {`${BUILD_MIN}–${BUILD_MAX} of each. These are targets for the next rebuild, not the current set. It currently holds ${set.cardCount} flashcard${set.cardCount === 1 ? "" : "s"}, ${set.quizCount} quiz question${set.quizCount === 1 ? "" : "s"} and ${set.examCount} exam question${set.examCount === 1 ? "" : "s"}.`}
+              {`These notes support up to ${maxCards} flashcards, ${maxQuiz} quiz questions and ${maxExam} exam questions; the account maximum is ${BUILD_MAX}. The sliders stop at the real ceiling. These are targets for the next rebuild, not the current set. It currently holds ${set.cardCount} flashcard${set.cardCount === 1 ? "" : "s"}, ${set.quizCount} quiz question${set.quizCount === 1 ? "" : "s"} and ${set.examCount} exam question${set.examCount === 1 ? "" : "s"}.`}
             </p>
             <div className="rise-stagger mt-3 grid gap-3 sm:grid-cols-3">
               {[
                 {
                   label: "Flashcards",
                   value: cardCount,
+                  max: maxCards,
                   current: set.cardCount,
                   onChange: setCardCount,
                 },
                 {
                   label: "Quiz questions",
                   value: quizCount,
+                  max: maxQuiz,
                   current: set.quizCount,
                   onChange: setQuizCount,
                 },
                 {
                   label: "Exam-style questions",
                   value: examCount,
+                  max: maxExam,
                   current: set.examCount,
                   onChange: setExamCount,
                 },
@@ -392,7 +403,7 @@ export function SetSettingsDialog({
                   <input
                     type="range"
                     min={BUILD_MIN}
-                    max={BUILD_MAX}
+                    max={control.max}
                     step={1}
                     value={control.value}
                     disabled={saving !== null}
