@@ -2,6 +2,7 @@ import { ExplainDialog } from "@/components/study/ExplainDialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
+import { quizScorePercent } from "@/convex/lib/studySetQuality";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { EASE, SPRING } from "@/components/motion/Motion";
 import { notifyError } from "@/lib/errors";
@@ -151,12 +152,9 @@ export function QuizRunner({
   }
 
   if (result) {
-    // A full score is exactly 100%, never a rounded 99.
-    const pct = result.total
-      ? result.score >= result.total
-        ? 100
-        : Math.round((result.score / result.total) * 100)
-      : 0;
+    // One exact-score rule, shared with the fixture tests. A full score is
+    // exactly 100%, never a rounded 99.
+    const pct = quizScorePercent(result.score, result.total);
     return (
       <motion.div
         initial={{ opacity: 0, y: 12 }}
