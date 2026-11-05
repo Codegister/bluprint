@@ -35,6 +35,11 @@ import {
   isShortAnswer,
   normalizeAnswer,
 } from "./lib/recall";
+import {
+  correctAnswerFor,
+  isNearDuplicateStudyItem,
+  isSpecificationItem,
+} from "./lib/studySetQuality";
 import { parseSummary, type Summary } from "./lib/summary";
 import {
   parseTopicNotes,
@@ -1006,6 +1011,18 @@ const GROUNDING_RULES =
   "If the material is too thin for the number asked for, write fewer items — a smaller set built from the notes is correct, and inventing extra material is not. " +
   "If one item genuinely needs a fact the material lacks, it is allowed, but mark it with \"beyondNotes\":true (at most one item in five) so the student knows to check it against their notes.";
 
+/**
+ * The questions a student should practise are about the subject, not about the
+ * document that lists it. A syllabus line names a scope; asking the student to
+ * repeat that scope is not retrieval of knowledge and makes a deck feel like a
+ * quiz on the exam board instead of on the material.
+ */
+const CONTENT_NOT_SPEC_RULES =
+  "CONTENT, NOT THE QUALIFICATION: test one concrete subject fact or idea at a time. " +
+  "Never ask what the specification, syllabus, exam board, paper, mark scheme or assessment objective says, covers, requires or rewards, and never ask how many marks, papers, hours or minutes. " +
+  "A front asks one unambiguous question; its back answers only that question. " +
+  "Do not repeat or reword an earlier item: a paraphrase of an existing question is still a repeat. If the material cannot support another distinct fact, return fewer items.";
+
 /** Cards, quiz questions and exam questions all carry the flag the same way. */
 const BEYOND_NOTES_FIELD = ' Include "beyondNotes":true only on an item that uses a fact from outside the material.';
 
@@ -1195,9 +1212,10 @@ async function generateCards(
             `${materialBlock(notes)}\n\n` +
             (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : `${GROUNDING_RULES}\n`) +
             `Create ${want} revision flashcards from this material. Cover the breadth of the material, but prioritise the niche, exam-distinguishing details a student could actually be tested on: exact figures and dates, names, formulas, precise definitions, exceptions to rules, named examples and case studies, cause-and-effect chains, and common confusions. ` +
-            "Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific question. Backs must be 2-4 sentences and include the precise detail, plus a caveat where one exists. " +
+            "Each card must test one fact, not a list. Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific, unambiguous question. Backs must answer only that question in one to three sentences, with the precise detail and a caveat where one exists. " +
+            CONTENT_NOT_SPEC_RULES + " " +
             (previous
-              ? `These flashcards already exist; write different, non-overlapping ones:\n${previous}\n`
+              ? `These flashcards already exist; write different, non-overlapping ones. A reworded card is still a repeat:\n${previous}\n`
               : "") +
             `Return JSON exactly like: {"cards":[{"front":"...","back":"..."}]}${BEYOND_NOTES_FIELD}`,
         },
@@ -1219,8 +1237,22 @@ async function generateCards(
 
     let added = 0;
     for (const card of batch) {
+      // A prompt is not a guarantee. Drop qualification meta and paraphrased
+      // repeats here as well as before the final write, so a batch cannot fill
+      // the deck with the same fact under four different question stems.
+      if (isSpecificationItem(card.front, card.back)) continue;
       const key = card.front.toLowerCase();
-      if (seen.has(key)) continue;
+      if (
+        seen.has(key) ||
+        cards.some((previous) =>
+          isNearDuplicateStudyItem(
+            { prompt: previous.front, answer: previous.back },
+            { prompt: card.front, answer: card.back },
+          ),
+        )
+      ) {
+        continue;
+      }
       seen.add(key);
       cards.push(card);
       added += 1;
@@ -1289,6 +1321,7 @@ async function generateQuiz(
             `<cards>\n${cardBlock}\n</cards>\n\n` +
             (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
             `Create ${want} quiz questions of increasing difficulty. Mix three kinds: roughly half multiple choice, a quarter cloze, and a quarter short typed answer. Each kind tests recall in a different way, so the quiz does not become four options to guess between. ` +
+            CONTENT_NOT_SPEC_RULES + " " +
             "Every question must be answerable from exactly one card above, and that card must contain the answer. Put its zero-based index in sourceCard. If no card contains the answer, do not write that question. " +
             "Do not ask which taught difference is absent while using the other taught differences as distractors; that is a negative-discrimination item and teaches the wrong thing. " +
             (syllabus ? "" : `${GROUNDING_RULES}\n`) +
@@ -1299,7 +1332,7 @@ async function generateQuiz(
             "Every question needs a 1-2 sentence explanation of why the answer is right. " +
             "For cloze and typed questions list every wording that should be marked correct in acceptedAnswers, including abbreviations and common synonyms. " +
             (previous
-              ? `Do not repeat these existing questions:\n${previous}\n`
+              ? `Do not repeat these existing questions. A reworded question with the same answer is still a repeat:\n${previous}\n`
               : "") +
             'Return JSON exactly like: {"questions":[' +
             '{"question":"...","type":"mcq","options":["a","b","c","d"],"correctIndex":0,"explanation":"...","sourceCard":0},' +
@@ -1325,8 +1358,23 @@ async function generateQuiz(
 
     let added = 0;
     for (const question of batch) {
+      const answer = correctAnswerFor(question);
       const key = question.question.toLowerCase();
-      if (seen.has(key)) continue;
+      if (!answer || isSpecificationItem(question.question, answer)) continue;
+      if (
+        seen.has(key) ||
+        questions.some((previous) =>
+          isNearDuplicateStudyItem(
+            {
+              prompt: previous.question,
+              answer: correctAnswerFor(previous),
+            },
+            { prompt: question.question, answer },
+          ),
+        )
+      ) {
+        continue;
+      }
       seen.add(key);
       questions.push(question);
       added += 1;

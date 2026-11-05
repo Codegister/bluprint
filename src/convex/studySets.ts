@@ -39,6 +39,7 @@ import { summaryValidator } from "./lib/summary";
 import { validateStudySelection } from "./lib/catalogue";
 import {
   alignQuizToCards,
+  dedupeStudyItems,
   gradeQuizResponse,
   linkKeyPointsToSpecs,
 } from "./lib/studySetQuality";
@@ -1379,6 +1380,18 @@ export const completeGeneration = internalMutation({
     const storedCards = cards.map((card) =>
       cleanGeneratedText(card, level, subject),
     );
+    // The generator is asked not to repeat itself, but a prompt is not a
+    // guarantee. Drop meta cards and reworded duplicates before any row is
+    // written, so the deck the student reviews is distinct.
+    const contentCards = dedupeStudyItems(
+      storedCards,
+      (card) => card.front,
+      (card) => card.back,
+      {
+        reject: (card) =>
+          card.front.trim().length === 0 || card.back.trim().length === 0,
+      },
+    ).items;
     const storedQuiz = quiz.map((question) =>
       cleanGeneratedText(question, level, subject),
     );
@@ -1414,7 +1427,7 @@ export const completeGeneration = internalMutation({
         : undefined;
 
     const cardIds: Id<"flashcards">[] = [];
-    for (const [index, card] of storedCards.entries()) {
+    for (const [index, card] of contentCards.entries()) {
       const cardId = await ctx.db.insert("flashcards", {
         setId,
         userId: set.userId,
@@ -1444,7 +1457,7 @@ export const completeGeneration = internalMutation({
     // generator's sourceCard is a hint; alignQuizToCards checks the text. Items
     // with no card are dropped, so the quiz can be shorter but never contradicts
     // the deck.
-    const cardLikes = storedCards.map((card, index) => ({
+    const cardLikes = contentCards.map((card, index) => ({
       ...card,
       id: cardIds[index]!,
     }));
@@ -1501,7 +1514,7 @@ export const completeGeneration = internalMutation({
       // The generator's short topic title replaces a name derived from the
       // upload, and leaves a name the student typed alone.
       ...(named ? { title: generatedTitle, titleSource: "auto" as const } : {}),
-      cardCount: storedCards.length,
+      cardCount: contentCards.length,
       quizCount: alignedQuiz.items.length,
       examCount: storedExams.length,
       knownCount: 0,

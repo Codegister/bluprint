@@ -82,6 +82,161 @@ export function correctAnswerFor(item: QuizLike): string {
   return item.answer ?? "";
 }
 
+/** Words that describe the question rather than the subject it tests. */
+const STUDY_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "of",
+  "to",
+  "in",
+  "on",
+  "at",
+  "for",
+  "and",
+  "or",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "by",
+  "with",
+  "that",
+  "this",
+  "it",
+  "as",
+  "from",
+  "what",
+  "which",
+  "who",
+  "whom",
+  "whose",
+  "why",
+  "how",
+  "when",
+  "where",
+  "does",
+  "do",
+  "did",
+  "can",
+  "could",
+  "should",
+  "would",
+  "will",
+  "state",
+  "name",
+  "give",
+  "describe",
+  "explain",
+  "define",
+  "identify",
+  "list",
+  "compare",
+  "calculate",
+  "suggest",
+]);
+
+function studyStem(word: string): string {
+  return /^\d+$/.test(word) || word.length <= 6 ? word : word.slice(0, 6);
+}
+
+function studyWords(text: string): string[] {
+  return normalizeAnswer(text)
+    .split(" ")
+    .filter((word) => word.length > 0 && !STUDY_STOP_WORDS.has(word))
+    .map(studyStem);
+}
+
+function wordOverlap(left: string, right: string): number {
+  const a = new Set(studyWords(left));
+  const b = new Set(studyWords(right));
+  if (a.size === 0 && b.size === 0) return 1;
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  for (const word of a) if (b.has(word)) shared += 1;
+  return shared / (a.size + b.size - shared);
+}
+
+/**
+ * True when a card or question is about the qualification rather than the
+ * subject. A specification is a map of what may be examined, not knowledge to
+ * memorise, so items about boards, papers, mark schemes, assessment objectives
+ * and mark counts are removed by the same rule everywhere.
+ */
+export function isSpecificationItem(prompt: string, answer = ""): boolean {
+  const text = `${prompt} ${answer}`.toLowerCase();
+  return [
+    /\b(?:according to|in|under|from)\s+(?:the\s+)?(?:[a-z]+\s+){0,2}(?:specification|syllabus)\b/,
+    /\b(?:specification|syllabus)\s+(?:says?|states?|requires?|lists?|covers?|expects?|specifies|mentions?|includes?|rewards?)\b/,
+    /\b(?:exam board|assessment objectives?|mark scheme|markscheme|paper structure|grade boundar(?:y|ies))\b/,
+    /\bhow many (?:marks|papers|hours|minutes)\b/,
+    /\bwhich (?:paper|board|specification|syllabus|assessment objective)\b/,
+    /\bwhat (?:must|should|do|does) (?:students|candidates|pupils) (?:know|learn|revise)\b/,
+    /\b(?:is|are) (?:this|these|it) (?:on|in) the (?:spec|specification|syllabus)\b/,
+  ].some((pattern) => pattern.test(text));
+}
+
+export type StudyItemText = { prompt: string; answer?: string };
+
+/**
+ * Two items are duplicates when their prompts say the same thing, or when one
+ * is a thin reword of the other and marks the same answer. Rewording a card or
+ * question is not a new retrieval, so it must not appear twice in a deck.
+ */
+export function isNearDuplicateStudyItem(
+  left: StudyItemText,
+  right: StudyItemText,
+): boolean {
+  const leftPrompt = normalizeAnswer(left.prompt);
+  const rightPrompt = normalizeAnswer(right.prompt);
+  if (!leftPrompt || !rightPrompt) return false;
+  if (leftPrompt === rightPrompt) return true;
+
+  const promptOverlap = wordOverlap(left.prompt, right.prompt);
+  const answerOverlap = wordOverlap(left.answer ?? "", right.answer ?? "");
+  return (
+    promptOverlap >= 0.75 ||
+    (answerOverlap >= 0.8 && promptOverlap >= 0.25)
+  );
+}
+
+/**
+ * Keeps the first copy of each content item. Items that ask about the
+ * specification are rejected before the duplicate check, so a meta question
+ * can never displace a real content question that happened to be later.
+ */
+export function dedupeStudyItems<T>(
+  items: readonly T[],
+  promptOf: (item: T) => string,
+  answerOf: (item: T) => string = () => "",
+  options: { reject?: (item: T) => boolean } = {},
+): { items: T[]; dropped: number } {
+  const kept: T[] = [];
+  let dropped = 0;
+
+  for (const item of items) {
+    const prompt = promptOf(item);
+    const candidate = { prompt, answer: answerOf(item) };
+    if (
+      options.reject?.(item) ||
+      isSpecificationItem(prompt, candidate.answer) ||
+      kept.some((previous) =>
+        isNearDuplicateStudyItem(
+          { prompt: promptOf(previous), answer: answerOf(previous) },
+          candidate,
+        ),
+      )
+    ) {
+      dropped += 1;
+      continue;
+    }
+    kept.push(item);
+  }
+
+  return { items: kept, dropped };
+}
+
 /**
  * A negative-discrimination item asks which taught difference is absent while
  * making the taught differences the distractors. It teaches the opposite of
@@ -121,7 +276,7 @@ export function alignQuizToCards<T extends QuizLike>(
   for (const item of items) {
     if (isNegativeDiscrimination(item, keyPoints)) continue;
     const answer = correctAnswerFor(item);
-    if (!answer) continue;
+    if (!answer || isSpecificationItem(item.question, answer)) continue;
     // A card can mention an off-spec term, but the quiz may not test it.
     if (findOffSpecTerm(answer, options.level, options.subject)) continue;
 
@@ -133,6 +288,16 @@ export function alignQuizToCards<T extends QuizLike>(
     const card = order.find((candidate) => cardContainsAnswer(candidate, answer));
     const cardId = card ? idOf(card) : undefined;
     if (!card || !cardId) continue;
+    if (
+      aligned.some((previous) =>
+        isNearDuplicateStudyItem(
+          { prompt: previous.question, answer: correctAnswerFor(previous) },
+          { prompt: item.question, answer },
+        ),
+      )
+    ) {
+      continue;
+    }
 
     aligned.push({
       ...item,

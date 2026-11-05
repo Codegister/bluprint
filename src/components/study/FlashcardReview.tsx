@@ -62,11 +62,10 @@ const RATINGS: Array<{
 ];
 
 /**
- * Typed recall is the default flashcard mode. The student says the answer out
- * loud (the browser turns it into text) or types it, then Bluprint reports the
- * model answer's concept units the answer covered and the ones it missed.
- * There is one marking model: the automatic unit-coverage check. The rating
- * buttons schedule the next showing; they do not replace the check.
+ * Flashcards open on the question, like an Anki card. The student can reveal
+ * the answer and rate it, or type/dictate an answer first for the automatic
+ * concept-unit check. The rating buttons schedule the next showing; they do
+ * not replace the check.
  *
  * Every finished card is scheduled by FSRS with one of four ratings, so the
  * next review date follows the memory rather than a fixed interval.
@@ -85,6 +84,7 @@ export function FlashcardReview({
   const checkByMeaning = useAction(api.ai.gradeRecallAnswer);
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
+  const [showInput, setShowInput] = useState(false);
   const [checked, setChecked] = useState(false);
   const [grade, setGrade] = useState<{
     correct: boolean;
@@ -147,7 +147,16 @@ export function FlashcardReview({
     dictation.stop();
     dictation.clear();
     setTyped("");
+    setShowInput(false);
     setChecked(false);
+    setGrade(null);
+    setGrading(false);
+  };
+
+  const reveal = () => {
+    if (!current || checked) return;
+    dictation.stop();
+    setChecked(true);
     setGrade(null);
     setGrading(false);
   };
@@ -342,7 +351,7 @@ export function FlashcardReview({
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-2.5 py-1 text-[0.7rem] font-semibold text-chrome-7">
             {dictation.supported ? <Mic className="size-3" /> : <Keyboard className="size-3" />}
-            Typed recall
+            Flashcard
           </span>
           <p className="text-sm font-semibold text-brand-ink">
             Card {index + 1} of {queue.length}
@@ -403,7 +412,32 @@ export function FlashcardReview({
           {current.front}
         </p>
 
-        {!checked ? (
+        {!checked && !showInput && (
+          <div className="mt-5 rounded-2xl border border-border bg-[#FCFBF8] p-4">
+            <p className="text-sm leading-relaxed text-brand-ink/75">
+              Try to recall the answer first. Reveal it when you are ready, then
+              rate how it felt — just like flipping an Anki card.
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <Button
+                onClick={reveal}
+                className="h-11 flex-1 rounded-full bg-[#191B27] text-sm font-semibold text-white hover:bg-[#2A2D3E]"
+              >
+                Show answer
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowInput(true)}
+                className="h-11 flex-1 rounded-full border-border bg-white text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+              >
+                Type answer instead
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!checked && showInput && (
           <>
             <div className="relative mt-5">
               <Textarea
@@ -469,13 +503,23 @@ export function FlashcardReview({
             >
               Check answer
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={reveal}
+              className="mt-2 h-10 w-full rounded-full border-border bg-white text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+            >
+              Show answer instead
+            </Button>
 
             <p className="mt-2 text-center text-[0.7rem] font-medium text-muted-foreground">
               Bluprint checks the key points your answer included and shows what
               was credited and what was missed.
             </p>
           </>
-        ) : (
+        )}
+
+        {checked && (
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}

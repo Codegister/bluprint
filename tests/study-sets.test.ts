@@ -18,10 +18,14 @@ import {
   alignQuizToCards,
   cardContainsAnswer,
   correctAnswerFor,
+  dedupeStudyItems,
   gradeQuizResponse,
+  isNearDuplicateStudyItem,
+  isSpecificationItem,
   keyPointCoverage,
   linkKeyPointsToSpecs,
 } from "../src/convex/lib/studySetQuality";
+import { DAY_MS, RELEARN_DELAY_MS, schedule } from "../src/convex/lib/fsrs";
 
 const CARD_BACK =
   "Eukaryotic cells contain membrane-bound organelles, including a nucleus that houses genetic material, whereas prokaryotic cells lack a nucleus and membrane-bound organelles, with their DNA located in a nucleoid region.";
@@ -208,6 +212,118 @@ describe("study set acceptance checks", () => {
     expect(stem).toContain("selectively permeable membrane");
     expect(explanation).toContain("selectively permeable membrane");
     expect(`${stem} ${explanation}`).not.toContain("partially permeable membrane");
+  });
+
+  test("12. content check: cards and questions test the subject, not the specification", () => {
+    expect(
+      isSpecificationItem(
+        "According to the AQA specification, what must students know about mitosis?",
+      ),
+    ).toBe(true);
+    expect(
+      isSpecificationItem("Which assessment objective does this question test?"),
+    ).toBe(true);
+    expect(isSpecificationItem("How many marks is the paper worth?")).toBe(true);
+    expect(isSpecificationItem("What is the role of the cell membrane?")).toBe(false);
+
+    const filtered = dedupeStudyItems(
+      [
+        {
+          front: "What does the specification say about mitosis?",
+          back: "Mitosis produces two genetically identical cells.",
+        },
+        {
+          front: "What is the role of the cell membrane?",
+          back: "It controls what enters and leaves the cell.",
+        },
+      ],
+      (item) => item.front,
+      (item) => item.back,
+    );
+    expect(filtered.items).toHaveLength(1);
+    expect(filtered.items[0]!.front).toContain("cell membrane");
+    expect(filtered.dropped).toBe(1);
+  });
+
+  test("13. repetition check: paraphrased cards and quiz questions collapse", () => {
+    const cards = dedupeStudyItems(
+      [
+        {
+          front: "What is the function of mitochondria?",
+          back: "Mitochondria release energy by aerobic respiration.",
+        },
+        {
+          front: "What job do mitochondria do?",
+          back: "Mitochondria release energy by aerobic respiration.",
+        },
+        {
+          front: "What is the function of ribosomes?",
+          back: "Ribosomes assemble proteins.",
+        },
+      ],
+      (item) => item.front,
+      (item) => item.back,
+    );
+    expect(cards.items).toHaveLength(2);
+    expect(cards.dropped).toBe(1);
+    expect(
+      isNearDuplicateStudyItem(
+        { prompt: "What is osmosis?", answer: "Water moves across a membrane." },
+        { prompt: "Define osmosis.", answer: "Water moves across a membrane." },
+      ),
+    ).toBe(true);
+
+    const quiz = alignQuizToCards(
+      [
+        {
+          question: "What is the function of mitochondria?",
+          options: ["Release energy", "Make proteins", "Store DNA"],
+          correctIndex: 0,
+          explanation: "Mitochondria release energy.",
+          type: "mcq" as const,
+        },
+        {
+          question: "What job do mitochondria do?",
+          options: ["Release energy", "Make proteins", "Store DNA"],
+          correctIndex: 0,
+          explanation: "Mitochondria release energy.",
+          type: "mcq" as const,
+        },
+      ],
+      [card("card-1", "Mitochondria", "Mitochondria release energy.")],
+    );
+    expect(quiz.items).toHaveLength(1);
+    expect(quiz.dropped).toBe(1);
+  });
+
+  test("14. Anki check: new cards learn quickly, then graduate to review", () => {
+    const now = 1_000_000;
+    const again = schedule({}, 1, now);
+    const hard = schedule({}, 2, now);
+    const good = schedule({}, 3, now);
+    const easy = schedule({}, 4, now);
+
+    expect(again.state).toBe("learning");
+    expect(again.dueAt - now).toBe(RELEARN_DELAY_MS);
+    expect(hard.dueAt - now).toBe(RELEARN_DELAY_MS);
+    expect(good.intervalDays).toBe(1);
+    expect(good.dueAt - now).toBe(DAY_MS);
+    expect(easy.intervalDays).toBe(4);
+    expect(easy.dueAt - now).toBe(4 * DAY_MS);
+
+    const stillLearning = schedule(
+      {
+        state: "learning",
+        stability: 1,
+        difficulty: 5,
+        lastReviewedAt: now - 1_000,
+        reps: 1,
+      },
+      2,
+      now,
+    );
+    expect(stillLearning.state).toBe("learning");
+    expect(stillLearning.dueAt - now).toBe(RELEARN_DELAY_MS);
   });
 
   test("stopword-only answers compare exactly instead of always failing", () => {

@@ -50,6 +50,10 @@ export const DAY_MS = 86_400_000;
 /** A failed card returns inside the same session, not tomorrow. */
 export const RELEARN_DELAY_MS = 10 * 60 * 1000;
 
+/** Anki-style graduation after the first successful recall. */
+const GRADUATING_INTERVAL_DAYS = 1;
+const EASY_INTERVAL_DAYS = 4;
+
 const MIN_STABILITY = 0.1;
 const MAX_INTERVAL_DAYS = 3650;
 
@@ -163,7 +167,12 @@ export function schedule(
       };
     }
 
-    const intervalDays = clamp(Math.round(stability), 1, MAX_INTERVAL_DAYS);
+    // A new card graduates after a short learning step. Good earns the first
+    // day; Easy skips ahead to four days. This is deliberately shorter than a
+    // raw FSRS stability estimate, matching the graduating interval Anki uses
+    // in its default learning steps instead of jumping straight to weeks.
+    const intervalDays =
+      rating === 4 ? EASY_INTERVAL_DAYS : GRADUATING_INTERVAL_DAYS;
     return {
       state: "review",
       stability,
@@ -202,14 +211,30 @@ export function schedule(
 
   // A card that was just failed (or just introduced) gets one short step first.
   // Without this a lapsed card with months of stability would be sent forward
-  // by its old stability after a single ten-minute re-look.
+  // by its old stability after a single ten-minute re-look. Hard repeats the
+  // step rather than graduating; Good and Easy move it into review, with Easy
+  // taking the longer interval.
   if (state === "learning" || state === "relearning") {
+    if (rating === 2) {
+      return {
+        state,
+        stability,
+        difficulty,
+        dueAt: now + RELEARN_DELAY_MS,
+        intervalDays: 0,
+        lapses,
+        reps,
+        retrievability: recall,
+      };
+    }
+    const intervalDays =
+      rating === 4 ? EASY_INTERVAL_DAYS : GRADUATING_INTERVAL_DAYS;
     return {
       state: "review",
       stability,
       difficulty,
-      dueAt: now + DAY_MS,
-      intervalDays: 1,
+      dueAt: now + intervalDays * DAY_MS,
+      intervalDays,
       lapses,
       reps,
       retrievability: recall,
