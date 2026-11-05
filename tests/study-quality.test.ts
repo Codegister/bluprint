@@ -12,6 +12,7 @@ import {
   formatOption,
   isClaimSupportedByNotes,
   isClozeQuestion,
+  isSubjectDeletionCloze,
   isInverseQuizPair,
   keyPointsForCards,
   mcqOptionIssue,
@@ -144,6 +145,7 @@ describe("Part 1 — grounded, distinct cards", () => {
       expect(point.length).toBeGreaterThan(10);
       expect(point).not.toBe("");
       expect(GLOSSARY_NOTES).not.toContain(point);
+      expect(isClaimSupportedByNotes(GLOSSARY_NOTES, point)).toBe(true);
     }
   });
 
@@ -313,6 +315,25 @@ Coordination centres process information and send instructions to effectors.`;
         type: "mcq",
       }),
     ).toBe(false);
+    expect(
+      isSubjectDeletionCloze(
+        {
+          question: "What process controls the water potential of the body?",
+          type: "mcq",
+        },
+        "Osmosis controls the water potential of the body.",
+      ),
+    ).toBe(true);
+    expect(
+      isSubjectDeletionCloze(
+        {
+          question:
+            "What component produces a response such as a muscle contracting or a gland secreting a hormone?",
+          type: "mcq",
+        },
+        "Effectors produce a response such as a muscle contracting or a gland secreting a hormone.",
+      ),
+    ).toBe(true);
   });
 
   test("2.6 correct positions stay under 40% on a long quiz", () => {

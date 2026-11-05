@@ -732,10 +732,15 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
       dropped += 1;
       continue;
     }
+    const keyPoint = keyPointForCard({ front, back });
+    if (!isClaimSupportedByNotes(notes, keyPoint)) {
+      dropped += 1;
+      continue;
+    }
     kept.push({
       front,
       back,
-      keyPoint: keyPointForCard({ front, back }),
+      keyPoint,
       beyondNotes: card.beyondNotes,
     });
   }
@@ -749,6 +754,31 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
 
 export function isClozeQuestion(item: Pick<QuizLike, "question" | "type">): boolean {
   return item.type === "cloze" || /_{3,}/.test(item.question);
+}
+
+/**
+ * Detects the unmarked form of cloze deletion: a source sentence with its
+ * subject replaced by "What process…" or "What component…". The tail still
+ * matches the note almost word for word, so the student only has to supply the
+ * deleted noun rather than use or discriminate between ideas.
+ */
+export function isSubjectDeletionCloze(
+  item: Pick<QuizLike, "question" | "type">,
+  notes: string,
+): boolean {
+  if (isClozeQuestion(item)) return true;
+  const stem = item.question.trim();
+  const match = stem.match(
+    /^(?:what|which)\s+(?:process|component|structure|mechanism|substance|organ|cell|tissue|molecule|part|stage|factor)\b/i,
+  );
+  if (!match) return false;
+  const tail = stem.slice(match[0].length).replace(/\?+$/, "").trim();
+  if (contentWords(tail).length < 3) return false;
+  const sentences = notes
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 24);
+  return sentences.some((sentence) => wordOverlap(tail, sentence) >= 0.7);
 }
 
 /** Options start with a capital and do not carry a stray full stop. */
@@ -988,7 +1018,7 @@ export function prepareQuiz<T extends QuizLike>(
   for (const item of items) {
     const answer = correctAnswerFor(item);
     const explanation = cleanExplanation(item.explanation);
-    if (isClozeQuestion(item)) {
+    if (isSubjectDeletionCloze(item, notes)) {
       reasons.push("cloze deletion");
       continue;
     }
