@@ -1,0 +1,9 @@
+# Python tooling used next to the app, not by it.
+#
+# The Respan Gateway (https://github.com/respanai/respan-gateway) is the local
+# OpenAI-compatible front door the app can send its AI calls through; see
+# "Run the AI calls through Respan Gateway" in README.md.
+#
+#   python3 -m venv .venv
+#   .venv/bin/python -m pip install --only-binary=:all: -r requirements.txt
+respan-gateway==0.3.0

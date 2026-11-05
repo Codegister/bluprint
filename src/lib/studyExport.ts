@@ -63,6 +63,17 @@ export type AccountExportSet = {
     awardedMarks?: number;
     checklist?: Array<{ point: string; marks: number; awarded: number; evidence: string }>;
   }>;
+  reviewHistory?: Array<{
+    cardId: string;
+    rating: number;
+    source: "automatic" | "self";
+    correct: boolean | null;
+    score: number | null;
+    coveredUnits: string[];
+    missedUnits: string[];
+    firstExposure: boolean;
+    reviewedAt: number;
+  }>;
 };
 
 /**

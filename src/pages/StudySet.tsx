@@ -520,7 +520,7 @@ function StudyActions({
       note:
         quizAnswered > 0
           ? `${quizAnswered}/${quizTotal} answered`
-          : "Multiple choice, with explanations",
+          : "Mixed format, with explanations",
       icon: CheckCircle2,
       tint: "bg-[#E6F7EF] text-[#0B6B45]",
     },

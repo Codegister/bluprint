@@ -1,0 +1,24 @@
+# Respan Gateway — local, OpenAI-compatible front door for the app's NVIDIA calls.
+#
+#   .venv/bin/respan-gateway            # serves this file on 127.0.0.1:8080
+#   RESPAN_GATEWAY_URL=http://127.0.0.1:8080  # tells the app to send AI calls here
+#
+# The gateway holds no secret of its own: the NVIDIA key stays in the
+# environment as NVIDIA_API_KEY, exactly as the deployment already sets it.
+# No Respan account, key or trace export is involved — this is the open-source
+# gateway using the developer's own provider key.
+listen = "127.0.0.1:8080"
+
+# NVIDIA is reached as any OpenAI-compatible endpoint. It is deliberately not
+# named "nvidia": a model id such as `nvidia/nemotron-3.5-lightning-30b-a3b`
+# would otherwise be read as provider "nvidia" plus a truncated model name.
+[providers.nvidia_upstream]
+formats = ["openai-chat"]
+base_url = "https://integrate.api.nvidia.com/v1"
+key = "env:NVIDIA_API_KEY"
+
+# Every model id the app asks for goes upstream unchanged, so the deployment's
+# model overrides (NVIDIA_TEXT_MODEL and friends) keep working through the
+# gateway without a second list to maintain.
+[routes."*"]
+to = "nvidia_upstream"

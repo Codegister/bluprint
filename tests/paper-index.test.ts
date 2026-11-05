@@ -8,6 +8,7 @@ import {
 import {
   assertActiveIndex,
   assertRow,
+  resolveCoursePaper,
   resolvePaperRequest,
   type PaperPlan,
 } from "../src/convex/lib/paperPlan";
@@ -200,6 +201,53 @@ describe("plan acceptance shapes", () => {
       sections: { I: "1 hour 30 minutes", II: "1 hour 30 minutes" },
     });
     expect(plan.sections.map((section) => section.marks)).toEqual([60, 50]);
+  });
+});
+
+describe("course-to-index mapping", () => {
+  test("AQA GCSE Biology Higher maps to the tiered index row", () => {
+    const result = resolveCoursePaper(
+      {
+        subject: "Biology",
+        level: "GCSE",
+        examBoard: "AQA",
+        tier: "Higher",
+      },
+      "Paper 1",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.key).toBe("AQA-GCSE-BIO-1-H");
+    expect(result.plan.minutes).toBe(105);
+  });
+
+  test("IB HL maps through the course variant", () => {
+    const result = resolveCoursePaper(
+      {
+        subject: "Biology",
+        level: "IB",
+        examBoard: "IB",
+        variant: "HL",
+      },
+      "Paper 1",
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.key).toBe("IB-IB-BIO-1-HL");
+    expect(result.plan.qs).toBe(45);
+  });
+
+  test("KS3 maps to the boardless ANY row and paper 0", () => {
+    const result = resolveCoursePaper({
+      subject: "Biology",
+      level: "KS3",
+      examBoard: "None",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.plan.key).toBe("KS3-KS3-ANY-0");
+    expect(result.plan.coverage.state).toBe("NO_EXTERNAL_BOARD");
+    expect(result.plan.marks).toBeGreaterThan(0);
   });
 });
 

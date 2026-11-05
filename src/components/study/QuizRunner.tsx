@@ -121,16 +121,26 @@ export function QuizRunner({
     null,
   );
   const [responses, setResponses] = useState<QuizResponse[]>([]);
-  const [result, setResult] = useState<{ score: number; total: number } | null>(
-    null,
-  );
+  const [result, setResult] = useState<{
+    score: number;
+    total: number;
+    results?: Array<{
+      questionId: string;
+      correct: boolean;
+      expected: string;
+      answered: boolean;
+    }>;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const question = quiz[index];
   const isLast = index + 1 >= quiz.length;
   const kind = question?.type ?? "mcq";
 
-  const answeredCount = useMemo(() => responses.length, [responses]);
+  const answeredCount = useMemo(
+    () => responses.filter(Boolean).length,
+    [responses],
+  );
 
   if (quiz.length === 0) {
     return (
@@ -166,6 +176,32 @@ export function QuizRunner({
         <h3 className="mt-5 font-display text-2xl font-bold text-brand-ink">
           {pct >= 80 ? "Strong recall." : pct >= 50 ? "Useful baseline." : "Run it again."}
         </h3>
+        {result.results && result.results.length > 0 && (
+          <div className="mx-auto mt-4 max-w-md space-y-1 text-left">
+            {result.results.map((item, position) => (
+              <div
+                key={item.questionId}
+                className="flex items-center justify-between gap-2 rounded-xl border border-border bg-white px-3 py-1.5 text-[0.76rem]"
+              >
+                <span className="font-semibold text-brand-ink">
+                  Question {position + 1}
+                </span>
+                <span
+                  className={cn(
+                    "font-semibold",
+                    item.correct
+                      ? "text-[#0B6B45]"
+                      : item.answered
+                        ? "text-[#A81F28]"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {item.correct ? "Correct" : item.answered ? "Missed" : "Skipped"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {result.score === result.total ? (
           <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
             Clean sweep — nothing to review.
@@ -216,10 +252,11 @@ export function QuizRunner({
 
     setChecking(true);
     try {
+      if (kind === "mcq" && selected === null) return;
       const verdict = await checkAnswer({
         questionId: question._id,
         ...(kind === "mcq"
-          ? { selectedIndex: selected ?? 0 }
+          ? { selectedIndex: selected! }
           : { text: typed }),
       });
       setFeedback(verdict);
@@ -228,7 +265,7 @@ export function QuizRunner({
         const next = [...current];
         next[index] =
           kind === "mcq"
-            ? { questionId: question._id, selectedIndex: selected ?? 0 }
+            ? { questionId: question._id, selectedIndex: selected! }
             : { questionId: question._id, text: typed };
         return next;
       });
@@ -252,14 +289,11 @@ export function QuizRunner({
 
     setSubmitting(true);
     try {
-      // Every question was checked on the way through, so every response is
-      // present. The fallback keeps an interrupted session submittable.
+      // A skipped item is sent with neither an option nor text. The server
+      // records it as unanswered, never as option A.
       const payload = quiz.map(
         (item, position): QuizResponse =>
-          responses[position] ?? {
-            questionId: item._id,
-            ...(item.type && item.type !== "mcq" ? { text: "" } : { selectedIndex: 0 }),
-          },
+          responses[position] ?? { questionId: item._id },
       );
       const saved = await submitQuiz({ setId, responses: payload });
       setResult(saved);
@@ -272,7 +306,9 @@ export function QuizRunner({
   };
 
   const correct = checked && feedback?.correct === true;
-  const progress = ((index + (checked ? 1 : 0)) / quiz.length) * 100;
+  // Count only committed responses; revealing the current item does not jump
+  // the bar before it is saved.
+  const progress = (answeredCount / quiz.length) * 100;
   const correctAnswer = feedback?.expected ?? "";
   const canCheck = kind === "mcq" ? selected !== null : typed.trim().length > 0;
 

@@ -33,6 +33,7 @@ import {
   validBoardsForLevel,
   validLevelsForBoard,
 } from "@/lib/examBoards";
+import { requiresBoardQuestion } from "@/convex/lib/catalogue";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -179,6 +180,7 @@ export function SetSettingsDialog({
   const qualification = qualificationLabel({ examBoard, level, course });
   const boardOptions = level ? validBoardsForLevel(level) : [...EXAM_BOARDS];
   const levelOptions = examBoard ? validLevelsForBoard(examBoard) : [...STUDY_LEVELS];
+  const showBoardQuestion = !level || requiresBoardQuestion(level);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -254,7 +256,7 @@ export function SetSettingsDialog({
             />
           </div>
 
-          <div className="mt-4">
+          <div className={showBoardQuestion ? "mt-4" : "mt-4 hidden"} aria-hidden={!showBoardQuestion}>
             <p className="text-xs font-semibold text-brand-ink">
               Exam board <span className="font-normal text-muted-foreground">(optional)</span>
             </p>

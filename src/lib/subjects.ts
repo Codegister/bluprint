@@ -37,6 +37,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { tierChoicesFor } from "@/convex/lib/catalogue";
+
 /**
  * The course picker's catalogue. Names match how exam boards label subjects so
  * the pathway prompt has unambiguous input. A free-text option covers anything
@@ -187,54 +189,11 @@ export type TierChoices = {
 };
 
 /**
- * GCSE subjects with a real Foundation/Higher tier. Everything else is
- * untiered: English, History, Geography, RS, Business, Music, Drama, PE, Art,
- * Media, D&T, Food, Sociology, Psychology, Law, Politics and Philosophy.
- * This is an allowlist so a new subject cannot accidentally acquire a tier.
- */
-const GCSE_TIERED_SUBJECTS = new Set([
-  "mathematics",
-  "maths",
-  "further mathematics",
-  "statistics",
-  "biology",
-  "chemistry",
-  "physics",
-  "combined science",
-  "french",
-  "spanish",
-  "german",
-  "mandarin",
-  "latin",
-  "italian",
-  "japanese",
-  "russian",
-  "arabic",
-]);
-
-/**
- * Tier choices depend on the qualification. Combined Science is already a
- * separate subject, so GCSE sciences do not need a Triple/Combined toggle.
- * IGCSE maths has Core/Extended tiers rather than Higher/Foundation.
+ * Tier choices now live in the server catalogue, so the picker and the
+ * create-course mutation agree about which subjects are tiered.
  */
 export function tierChoices(level: string, subject: string): TierChoices {
-  const key = subject.trim().toLowerCase();
-  if (level === "GCSE") {
-    return {
-      variants: [],
-      tiers: GCSE_TIERED_SUBJECTS.has(key) ? ["Higher", "Foundation"] : [],
-    };
-  }
-  if (level === "IGCSE") {
-    return {
-      variants: [],
-      tiers: /mathematics|maths|biology|chemistry|physics/.test(key)
-        ? ["Core", "Extended"]
-        : [],
-    };
-  }
-  if (level === "IB") return { variants: ["HL", "SL"], tiers: [] };
-  return { variants: [], tiers: [] };
+  return tierChoicesFor(level, subject);
 }
 
 /** "Higher tier" reads better in the picker than a bare "Higher". */

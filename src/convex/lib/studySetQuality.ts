@@ -1,0 +1,255 @@
+/**
+ * Deterministic study-set quality checks.
+ *
+ * These functions run at generation and save time. They are pure so the same
+ * rules can be exercised without a Convex deployment: every quiz item must
+ * point at a card that contains its answer, every key point must point at a
+ * specification statement, and a skipped quiz item is not option A.
+ */
+
+import {
+  deriveRecallUnits,
+  gradeRecall,
+  gradeShortAnswer,
+  normalizeAnswer,
+} from "./recall";
+import { findOffSpecTerm } from "./register";
+import { matchSpecPoint, type SpecPoint } from "./specMapping";
+
+export type CardLike = {
+  id?: string;
+  _id?: string;
+  front: string;
+  back: string;
+};
+
+export type QuizLike = {
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  type?: "mcq" | "cloze" | "typed";
+  answer?: string;
+  acceptedAnswers?: string[];
+  sourceCard?: number;
+  sourceCardId?: string;
+};
+
+export type QuizResponseLike = {
+  selectedIndex?: number | null;
+  text?: string;
+};
+
+export type QuizGrade = {
+  correct: boolean;
+  expected: string;
+  answered: boolean;
+};
+
+function idOf(card: CardLike): string | undefined {
+  return card.id ?? card._id;
+}
+
+function coveredBy(answer: string, text: string): number {
+  const units = deriveRecallUnits(answer);
+  if (units.length === 0) {
+    return normalizeAnswer(text).includes(normalizeAnswer(answer)) ? 1 : 0;
+  }
+  const offered = new Set(
+    deriveRecallUnits(text).map((unit) => (unit.length > 6 ? unit.slice(0, 6) : unit)),
+  );
+  const matched = units.filter((unit) =>
+    offered.has(unit.length > 6 ? unit.slice(0, 6) : unit),
+  ).length;
+  return matched / units.length;
+}
+
+/** Whether a card's own text carries the answer the question marks. */
+export function cardContainsAnswer(card: CardLike, answer: string): boolean {
+  const text = `${card.front} ${card.back}`;
+  const units = deriveRecallUnits(answer);
+  if (units.length === 0) return normalizeAnswer(text).includes(normalizeAnswer(answer));
+  // A one- or two-word answer must be completely present; a longer phrase can
+  // tolerate one paraphrase but still needs most of its terms.
+  return coveredBy(answer, text) >= (units.length <= 2 ? 1 : 0.75);
+}
+
+/** The answer a quiz item actually marks. */
+export function correctAnswerFor(item: QuizLike): string {
+  if ((item.type ?? "mcq") === "mcq") {
+    return item.options[item.correctIndex] ?? "";
+  }
+  return item.answer ?? "";
+}
+
+/**
+ * A negative-discrimination item asks which taught difference is absent while
+ * making the taught differences the distractors. It teaches the opposite of
+ * the deck, so it is dropped rather than rewritten.
+ */
+export function isNegativeDiscrimination(
+  item: QuizLike,
+  keyPoints: readonly string[] = [],
+): boolean {
+  const stem = item.question.toLowerCase();
+  if (!/\b(absent|not present|not found|except|not a difference)\b/.test(stem)) {
+    return false;
+  }
+  const answer = normalizeAnswer(correctAnswerFor(item));
+  if (!answer) return false;
+  return keyPoints.some((point) => normalizeAnswer(point).includes(answer));
+}
+
+export type AlignedQuiz<T extends QuizLike> = T & {
+  sourceCardId: string;
+  sourceCardIndex: number;
+};
+
+/**
+ * Drops any item that has no card containing its answer, and links the rest to
+ * that card. A model-supplied index is only a hint: if it points at a card that
+ * does not carry the answer, another card is searched and the item is dropped
+ * when none fits.
+ */
+export function alignQuizToCards<T extends QuizLike>(
+  items: readonly T[],
+  cards: readonly CardLike[],
+  keyPoints: readonly string[] = [],
+  options: { level?: string; subject?: string } = {},
+): { items: Array<AlignedQuiz<T>>; dropped: number } {
+  const aligned: Array<AlignedQuiz<T>> = [];
+  for (const item of items) {
+    if (isNegativeDiscrimination(item, keyPoints)) continue;
+    const answer = correctAnswerFor(item);
+    if (!answer) continue;
+    // A card can mention an off-spec term, but the quiz may not test it.
+    if (findOffSpecTerm(answer, options.level, options.subject)) continue;
+
+    const hinted =
+      item.sourceCard !== undefined ? cards[item.sourceCard] : undefined;
+    const order = hinted
+      ? [hinted, ...cards.filter((card) => card !== hinted)]
+      : [...cards];
+    const card = order.find((candidate) => cardContainsAnswer(candidate, answer));
+    const cardId = card ? idOf(card) : undefined;
+    if (!card || !cardId) continue;
+
+    aligned.push({
+      ...item,
+      sourceCardId: cardId,
+      sourceCardIndex: cards.indexOf(card),
+    });
+  }
+  return { items: aligned, dropped: items.length - aligned.length };
+}
+
+export type KeyPointLink = { text: string; specRef: string };
+
+/**
+ * Links key points to specification statements one-to-one. Each specification
+ * statement gets at most one key point; extra key points are left out rather
+ * than being counted against an unrelated statement. Missing statements are
+ * returned so the coverage panel can name them.
+ */
+export function linkKeyPointsToSpecs(
+  keyPoints: readonly string[],
+  specPoints: readonly SpecPoint[],
+): { links: KeyPointLink[]; missing: SpecPoint[] } {
+  if (specPoints.length === 0) return { links: [], missing: [] };
+  const unused = new Set(keyPoints.map((_, index) => index));
+  const links: KeyPointLink[] = [];
+  const missing: SpecPoint[] = [];
+
+  for (const point of specPoints) {
+    let bestIndex = -1;
+    let bestScore = 0;
+    for (const index of unused) {
+      const keyPoint = keyPoints[index]!;
+      const match = matchSpecPoint(keyPoint, [point]);
+      const score = match.id ? match.score : coveredBy(keyPoint, point.text);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    }
+    if (bestIndex < 0 || bestScore < 0.2) {
+      missing.push(point);
+      continue;
+    }
+    unused.delete(bestIndex);
+    links.push({ text: keyPoints[bestIndex]!, specRef: point.id });
+  }
+
+  return { links, missing };
+}
+
+/** Coverage from the key-point links, never from an item count elsewhere. */
+export function keyPointCoverage(
+  specPoints: readonly SpecPoint[],
+  links: readonly KeyPointLink[],
+): {
+  total: number;
+  covered: SpecPoint[];
+  uncovered: SpecPoint[];
+  percent: number;
+} {
+  const ids = new Set(links.map((link) => link.specRef));
+  const covered = specPoints.filter((point) => ids.has(point.id));
+  const uncovered = specPoints.filter((point) => !ids.has(point.id));
+  return {
+    total: specPoints.length,
+    covered,
+    uncovered,
+    percent:
+      specPoints.length > 0
+        ? Math.round((covered.length / specPoints.length) * 100)
+        : 0,
+  };
+}
+
+/**
+ * Grades one saved response. A missing selection is unanswered, not option A;
+ * an out-of-range index is also unanswered. The score can therefore be zero
+ * when every item is skipped, whatever the option order.
+ */
+export function gradeQuizResponse(
+  question: QuizLike,
+  response: QuizResponseLike,
+): QuizGrade {
+  const type = question.type ?? "mcq";
+  if (type === "mcq") {
+    const index = response.selectedIndex;
+    const answered =
+      typeof index === "number" &&
+      Number.isInteger(index) &&
+      index >= 0 &&
+      index < question.options.length;
+    return {
+      correct: answered && index === question.correctIndex,
+      expected: question.options[question.correctIndex] ?? "",
+      answered,
+    };
+  }
+
+  const text = response.text?.trim() ?? "";
+  const expected = question.answer ?? "";
+  return {
+    correct:
+      text.length > 0
+        ? gradeShortAnswer(expected, question.acceptedAnswers, text).correct
+        : false,
+    expected,
+    answered: text.length > 0,
+  };
+}
+
+/** A full-answer check used by the acceptance tests and the card screen. */
+export function recallGradeForCard(
+  card: { back: string; recallThreshold?: number; recallUnits?: string[] },
+  response: string,
+) {
+  return gradeRecall(card.back, response, {
+    threshold: card.recallThreshold ?? 0.75,
+    units: card.recallUnits,
+  });
+}

@@ -18,10 +18,11 @@ export const forSet = query({
     const set = await ctx.db.get(setId);
     if (!set || set.userId !== userId) return null;
 
-    const [cards, quiz, exam] = await Promise.all([
+    const [cards, quiz, exam, reviews] = await Promise.all([
       ctx.db.query("flashcards").withIndex("by_set", (q) => q.eq("setId", setId)).collect(),
       ctx.db.query("quizQuestions").withIndex("by_set", (q) => q.eq("setId", setId)).collect(),
       ctx.db.query("examQuestions").withIndex("by_set", (q) => q.eq("setId", setId)).collect(),
+      ctx.db.query("reviewEvents").withIndex("by_set", (q) => q.eq("setId", setId)).collect(),
     ]);
     const byOrder = <T extends { order: number }>(rows: T[]) =>
       [...rows].sort((a, b) => a.order - b.order);
@@ -58,6 +59,19 @@ export const forSet = query({
         awardedMarks: row.awardedMarks ?? null,
         checklist: row.checklist ?? [],
       })),
+      reviewHistory: [...reviews]
+        .sort((a, b) => a.reviewedAt - b.reviewedAt)
+        .map((review) => ({
+          cardId: review.cardId,
+          rating: review.rating,
+          source: review.source,
+          correct: review.correct ?? null,
+          score: review.score ?? null,
+          coveredUnits: review.coveredUnits ?? [],
+          missedUnits: review.missedUnits ?? [],
+          firstExposure: review.firstExposure,
+          reviewedAt: review.reviewedAt,
+        })),
     };
   },
 });
@@ -75,10 +89,11 @@ export const forAccount = query({
 
     const exported = [];
     for (const set of sets) {
-      const [cards, quiz, exam] = await Promise.all([
+      const [cards, quiz, exam, reviews] = await Promise.all([
         ctx.db.query("flashcards").withIndex("by_set", (q) => q.eq("setId", set._id)).collect(),
         ctx.db.query("quizQuestions").withIndex("by_set", (q) => q.eq("setId", set._id)).collect(),
         ctx.db.query("examQuestions").withIndex("by_set", (q) => q.eq("setId", set._id)).collect(),
+        ctx.db.query("reviewEvents").withIndex("by_set", (q) => q.eq("setId", set._id)).collect(),
       ]);
       const byOrder = <T extends { order: number }>(rows: T[]) =>
         [...rows].sort((a, b) => a.order - b.order);
@@ -116,6 +131,19 @@ export const forAccount = query({
             evidence: check.evidence,
           })),
         })),
+        reviewHistory: [...reviews]
+          .sort((a, b) => a.reviewedAt - b.reviewedAt)
+          .map((review) => ({
+            cardId: review.cardId,
+            rating: review.rating,
+            source: review.source,
+            correct: review.correct ?? null,
+            score: review.score ?? null,
+            coveredUnits: review.coveredUnits ?? [],
+            missedUnits: review.missedUnits ?? [],
+            firstExposure: review.firstExposure,
+            reviewedAt: review.reviewedAt,
+          })),
       });
     }
 

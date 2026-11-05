@@ -55,7 +55,11 @@ export function CoursePastPapers({
   const rebuildPaper = useMutation(api.pastPapers.rebuild);
   // Which paper of the qualification the next practice paper covers. No choice
   // means every topic is examinable, which is how a single-paper course works.
-  const [chosenPaper, setChosenPaper] = useState<string | undefined>(undefined);
+  const [chosenPaper, setChosenPaper] = useState<string | undefined>(
+    qualificationPapers && qualificationPapers.length > 1
+      ? qualificationPapers[0]?.label
+      : undefined,
+  );
   const [building, setBuilding] = useState(false);
   const [rebuildingId, setRebuildingId] = useState<Id<"pastPapers"> | null>(
     null,
@@ -147,19 +151,6 @@ export function CoursePastPapers({
                 Which paper?
               </p>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  aria-pressed={chosenPaper === undefined}
-                  onClick={() => setChosenPaper(undefined)}
-                  className={cn(
-                    "h-8 rounded-full border px-3 text-[0.74rem] font-semibold transition-colors",
-                    chosenPaper === undefined
-                      ? "border-[#191B27] bg-[#191B27] text-white"
-                      : "border-border bg-white text-[#8A5A12] hover:bg-brand-panel",
-                  )}
-                >
-                  Whole course
-                </button>
                 {qualificationPapers.map((group) => (
                   <button
                     key={group.label}

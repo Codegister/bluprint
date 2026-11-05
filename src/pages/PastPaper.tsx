@@ -5,7 +5,7 @@ import { PastPaperPractice } from "@/components/study/PastPaperPractice";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
+import { planSummary, resolveCoursePaper } from "@/convex/lib/paperPlan";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { printWithClass } from "@/lib/print";
@@ -156,9 +156,16 @@ export default function PastPaper() {
       : undefined;
     // The structure the course uses now, shown on the paper and used to spot a
     // paper saved before that structure was corrected.
-    const blueprint = course ? buildPaperBlueprint(course, paper.paper) : null;
+    const currentPlan = course
+      ? resolveCoursePaper(course, paper.paper)
+      : null;
+    const currentSummary = currentPlan?.ok
+      ? planSummary(currentPlan.plan)
+      : null;
     const outdated =
-      ready && blueprint !== null && paper.formatId !== blueprint.id;
+      ready &&
+      currentPlan?.ok === true &&
+      paper.formatId !== currentPlan.plan.key;
 
     return (
       <>
@@ -228,11 +235,11 @@ export default function PastPaper() {
               ? `, ${paper.earnedMarks} of ${markLabel(paper.totalMarks)} earned`
               : ""}
           </span>
-          {blueprint && (
+          {currentSummary && (
             <>
               <span aria-hidden>·</span>
               <span className="font-semibold text-brand-ink">
-                {blueprint.summary}
+                {currentSummary}
               </span>
             </>
           )}

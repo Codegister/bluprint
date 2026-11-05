@@ -662,7 +662,7 @@ export default function Landing() {
               label="Quiz"
               labelClass="text-brand-sky"
               title="Five questions with reasons"
-              copy="Multiple choice, with a short explanation for every option so a wrong answer still teaches you something."
+              copy="Mixed format, with a short explanation for every answer so a wrong one still teaches you something."
             >
               <div className="rounded-2xl bg-brand-panel/70 p-4">
                 <p className="text-[0.88rem] font-semibold leading-relaxed text-brand-ink/85">

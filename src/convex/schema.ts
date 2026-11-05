@@ -135,6 +135,11 @@ const schema = defineSchema(
           title: v.optional(v.string()),
           overview: v.string(),
           keyPoints: v.array(v.string()),
+          // One link per key point, assigned at build time. Coverage is read
+          // from these links, never from a separate key-point count.
+          keyPointSpecs: v.optional(
+            v.array(v.object({ text: v.string(), specRef: v.string() })),
+          ),
           examFocus: v.array(v.string()),
         }),
       ),
@@ -735,9 +740,33 @@ const schema = defineSchema(
       // The last rating (1 Again – 4 Easy), kept so weak spots can be read
       // without replaying every review.
       lastRating: v.optional(v.number()),
+      // Stored at generation time so grading never changes leniency with the
+      // model answer's length. 0.75 is the recall default.
+      recallThreshold: v.optional(v.number()),
+      // The distinct concept units the answer must cover. Stored with the card
+      // so both grading paths measure the same thing.
+      recallUnits: v.optional(v.array(v.string())),
       // Legacy SM-2 ease retained for old rows; the scheduler ignores it.
       ease: v.optional(v.number()),
     }).index("by_set", ["setId"]),
+
+    // One row per card review, kept separately from the card's latest state so
+    // the history can be exported and a self-rated pass can be audited.
+    reviewEvents: defineTable({
+      cardId: v.id("flashcards"),
+      setId: v.id("studySets"),
+      userId: v.id("users"),
+      rating: v.number(),
+      source: v.union(v.literal("automatic"), v.literal("self")),
+      correct: v.optional(v.boolean()),
+      score: v.optional(v.number()),
+      coveredUnits: v.optional(v.array(v.string())),
+      missedUnits: v.optional(v.array(v.string())),
+      firstExposure: v.boolean(),
+      reviewedAt: v.number(),
+    })
+      .index("by_set", ["setId"])
+      .index("by_card", ["cardId"]),
 
     quizQuestions: defineTable({
       setId: v.id("studySets"),
@@ -758,6 +787,9 @@ const schema = defineSchema(
       order: v.number(),
       // True when the question uses a fact the notes do not contain.
       beyondNotes: v.optional(v.boolean()),
+      // The card whose answer this item tests. Set at generation time; an item
+      // without a source card is dropped rather than saved.
+      sourceCardId: v.optional(v.id("flashcards")),
       // The specification statement this question tests, when known.
       specRef: v.optional(v.string()),
       // Per-question accuracy, so the weak-spot session can point at the
@@ -830,6 +862,20 @@ const schema = defineSchema(
       userId: v.id("users"),
       score: v.number(),
       total: v.number(),
+      // One row per item, so a disputed score can be reproduced. A skipped
+      // item is stored with answered: false, not as option A.
+      results: v.optional(
+        v.array(
+          v.object({
+            questionId: v.id("quizQuestions"),
+            correct: v.boolean(),
+            expected: v.string(),
+            answered: v.boolean(),
+            selectedIndex: v.optional(v.number()),
+            text: v.optional(v.string()),
+          }),
+        ),
+      ),
       completedAt: v.number(),
     }).index("by_set", ["setId"]),
 

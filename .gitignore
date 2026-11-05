@@ -5,3 +5,6 @@ src/convex/_generated
 # Local Convex export containing account data and uploaded notes.
 .convex-backup/
 /freebuff-sites-build/
+
+# Python tooling for the Respan Gateway (.venv is local only).
+.venv/

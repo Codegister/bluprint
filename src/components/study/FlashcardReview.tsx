@@ -63,11 +63,10 @@ const RATINGS: Array<{
 
 /**
  * Typed recall is the default flashcard mode. The student says the answer out
- * loud (the browser turns it into text) or types it, then Bluprint checks that
- * the answer means the same as the model answer rather than matching its words.
- * A word comparison is used when the answer is already exact, and as the
- * fallback when the meaning check cannot be reached. The self-mark toggle skips
- * the automatic comparison for when speaking or listening is not possible.
+ * loud (the browser turns it into text) or types it, then Bluprint reports the
+ * model answer's concept units the answer covered and the ones it missed.
+ * There is one marking model: the automatic unit-coverage check. The rating
+ * buttons schedule the next showing; they do not replace the check.
  *
  * Every finished card is scheduled by FSRS with one of four ratings, so the
  * next review date follows the memory rather than a fixed interval.
@@ -84,15 +83,16 @@ export function FlashcardReview({
 }) {
   const reviewCard = useMutation(api.studySets.reviewCard);
   const checkByMeaning = useAction(api.ai.gradeRecallAnswer);
-  const [selfMark, setSelfMark] = useState(false);
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
   const [checked, setChecked] = useState(false);
   const [grade, setGrade] = useState<{
     correct: boolean;
     score: number;
-    /** The meaning check's one-line explanation, or why it was not used. */
+    /** The check's one-line explanation, or why it was not used. */
     note?: string;
+    coveredUnits: string[];
+    missedUnits: string[];
   } | null>(null);
   // True while the answer is with the model, so the student sees that the card
   // is being marked instead of a rating row they might tap too early.
@@ -154,41 +154,49 @@ export function FlashcardReview({
 
   const handleCheck = async () => {
     if (!current || checked) return;
-    // Automatic marking needs an answer; self-mark only needs the answer shown.
-    if (!selfMark && typed.trim().length === 0) return;
+    if (typed.trim().length === 0) return;
     dictation.stop();
     setChecked(true);
-    if (selfMark) {
-      // No automatic marking: the student compares their answer and rates it.
-      setGrade(null);
-      return;
-    }
 
     const card = current;
     const answer = typed;
-    // An answer that matches the model answer word for word needs no model
-    // call. Everything else goes to the meaning check, including answers the
-    // word comparison already likes, because precision can look like recall.
+    const local = gradeRecall(card.back, answer, {
+      threshold: card.recallThreshold ?? 0.75,
+      units: card.recallUnits,
+    });
     if (normalizeAnswer(answer) === normalizeAnswer(card.back)) {
-      setGrade({ correct: true, score: 1, note: "Matches the model answer." });
+      setGrade({
+        correct: true,
+        score: 1,
+        note: "Matches the model answer.",
+        coveredUnits: local.coveredUnits ?? card.recallUnits ?? [],
+        missedUnits: [],
+      });
       return;
     }
 
     setGrading(true);
     try {
       const result = await checkByMeaning({ cardId: card._id, answer });
-      setGrade({ correct: result.correct, score: result.score, note: result.note });
+      setGrade({
+        correct: result.correct,
+        score: result.score,
+        note: result.note,
+        coveredUnits: result.coveredUnits,
+        missedUnits: result.missedUnits,
+      });
     } catch (error) {
-      // No key, a rate limit, or no connection: mark on words rather than
-      // blocking the session, and say that is what happened.
-      const local = gradeRecall(card.back, answer);
+      // The automatic check is unavailable: use the same unit-coverage rules
+      // locally rather than blocking the session.
       const reason = readableError(error, "");
       setGrade({
         correct: local.correct,
         score: local.score,
-        note: `Checked on words only — ${
-          (reason || "the meaning check could not be reached.").slice(0, 140)
+        note: `Checked on key points — ${
+          (reason || "the automatic check could not be reached.").slice(0, 140)
         }`,
+        coveredUnits: local.coveredUnits ?? [],
+        missedUnits: local.missedUnits ?? [],
       });
     } finally {
       setGrading(false);
@@ -202,7 +210,19 @@ export function FlashcardReview({
     setSession((value) => ({ ...value, [rating]: value[rating] + 1 }));
 
     try {
-      await reviewCard({ cardId: card._id, rating });
+      await reviewCard({
+        cardId: card._id,
+        rating,
+        source: grade ? "automatic" : "self",
+        ...(grade
+          ? {
+              correct: grade.correct,
+              score: grade.score,
+              coveredUnits: grade.coveredUnits,
+              missedUnits: grade.missedUnits,
+            }
+          : {}),
+      });
     } catch (error) {
       notifyError(error, "Could not save that review.");
     } finally {
@@ -335,26 +355,6 @@ export function FlashcardReview({
               {dueCount} due now
             </span>
           )}
-          <button
-            type="button"
-            aria-pressed={selfMark}
-            onClick={() => setSelfMark((value) => !value)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.7rem] font-semibold transition-colors",
-              selfMark
-                ? "border-chrome-4 bg-brand-panel text-chrome-7"
-                : "border-border bg-white text-brand-ink/60 hover:bg-brand-panel",
-            )}
-          >
-            <span
-              aria-hidden
-              className={cn(
-                "size-2 rounded-full",
-                selfMark ? "bg-chrome-8" : "bg-brand-ink/25",
-              )}
-            />
-            Self-mark
-          </button>
         </div>
       </div>
 
@@ -412,9 +412,7 @@ export function FlashcardReview({
                 placeholder={
                   dictation.listening
                     ? "Listening… speak your answer"
-                    : selfMark
-                      ? "Optional: type your answer, or reveal it and mark yourself"
-                      : "Say your answer, or type it here"
+                    : "Say your answer, or type it here"
                 }
                 rows={3}
                 aria-label="Your answer"
@@ -466,16 +464,15 @@ export function FlashcardReview({
 
             <Button
               onClick={handleCheck}
-              disabled={!selfMark && typed.trim().length === 0}
+              disabled={typed.trim().length === 0}
               className="mt-4 h-12 w-full rounded-full bg-[#191B27] text-sm font-semibold text-white hover:bg-[#2A2D3E] disabled:bg-[#191B27]/30"
             >
-              {selfMark ? "Reveal answer" : "Check answer"}
+              Check answer
             </Button>
 
             <p className="mt-2 text-center text-[0.7rem] font-medium text-muted-foreground">
-              {selfMark
-                ? "Self-mark is on: compare with the answer, then rate yourself."
-                : "Bluprint checks that your answer means the same as the model answer."}
+              Bluprint checks the key points your answer included and shows what
+              was credited and what was missed.
             </p>
           </>
         ) : (
@@ -522,14 +519,22 @@ export function FlashcardReview({
                 )}
                 <div>
                   <p className="font-semibold">
-                    {grade.correct ? "That means the same" : "Not quite"}
+                    {grade.correct ? "Key points credited" : "Not quite"}
                   </p>
                   <p className="mt-0.5">
                     {grade.note?.trim() ||
-                      (grade.correct
-                        ? "Say it once more in your own words to lock it in."
-                        : `You recalled ${Math.round(grade.score * 100)}% of the key words. Read the model answer, then rate how it felt.`)}
+                      `You included ${grade.coveredUnits.length} key points.`}
                   </p>
+                  {grade.coveredUnits.length > 0 && (
+                    <p className="mt-1.5 text-[0.72rem] font-semibold">
+                      Credited: {grade.coveredUnits.join(", ")}
+                    </p>
+                  )}
+                  {grade.missedUnits.length > 0 && (
+                    <p className="mt-1 text-[0.72rem] font-semibold opacity-80">
+                      Missed: {grade.missedUnits.join(", ")}
+                    </p>
+                  )}
                 </div>
               </motion.div>
             )}

@@ -61,6 +61,13 @@ export function SpecCoveragePanel({ setId }: { setId: Id<"studySets"> }) {
         {data.tagged.exam} of {data.tagged.examTotal} written questions carry a tag.
       </p>
 
+      {data.missingKeyPoints.length > 0 && (
+        <p className="mt-2 rounded-xl bg-[#FFF6E5] px-3 py-2 text-[0.74rem] leading-relaxed text-[#96650A]">
+          Missing a key point for:{" "}
+          {data.missingKeyPoints.map((point) => point.text).join("; ")}.
+        </p>
+      )}
+
       <ul className="mt-2 space-y-1">
         {coverage.covered.map((point) => (
           <li

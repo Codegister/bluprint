@@ -10,6 +10,13 @@ import {
 } from "./_generated/server";
 import { BUILD_DEFAULTS } from "./lib/buildDefaults";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
+import {
+  canonicalSubject,
+  defaultBoardFor,
+  normaliseStudyLevel,
+  tierChoicesFor,
+  validateStudySelection,
+} from "./lib/catalogue";
 import { literatureChoicesFor } from "./lib/literatureChoices";
 import { consumeBuildAllowance } from "./buildUsage";
 import { requireUserId } from "./lib/requireUser";
@@ -57,8 +64,8 @@ function countTopics(pathway: { units: Array<{ topics: Array<unknown> }> } | und
 }
 
 function normalizeLevel(value: string): string | undefined {
-  const trimmed = value.replace(/\x00/g, "").trim();
-  return trimmed.length > 0 ? trimmed.slice(0, 40) : undefined;
+  const trimmed = value.replace(/\x00/g, "").trim().slice(0, 40);
+  return normaliseStudyLevel(trimmed) ?? undefined;
 }
 
 /** A build that never started, or one that stopped part-way through. */
@@ -216,49 +223,79 @@ export const createMany = mutation({
     await requireVerifiedUser(ctx, userId);
 
     const level = normalizeLevel(args.level);
-    const defaultBoard = safeCourseLabel(args.examBoard);
     if (!level) {
-      throw new Error("Choose your level first.");
+      throw new Error("Choose a qualification from the catalogue first.");
     }
 
-    // GCSE defaults to Higher. The picker sends this explicitly, but enforcing
-    // it here keeps older clients and direct calls consistent. GCSE routes are
-    // separate subjects now, so drop any legacy Triple/Combined variant.
-    const defaultTier = level === "GCSE" ? "Higher" : undefined;
-    // KS3 sits below GCSE and has no exam board or tier at all.
-    const isKs3 = level === "KS3";
     const requested = args.courses
-      .map((course) => ({
-        subject: safeCourseLabel(course.subject),
-        examBoard:
-          isKs3
-            ? "None"
-            : safeCourseLabel(course.examBoard) || defaultBoard,
-        tier: isKs3 || /english literature|eng lit/i.test(course.subject ?? "")
-          ? undefined
-          : safeCourseLabel(course.tier) || defaultTier,
-        variant:
-          level === "GCSE" || isKs3
+      .filter((course) => (course.subject ?? "").trim().length > 0)
+      .slice(0, MAX_COURSES_PER_SETUP)
+      .map((course) => {
+        const rawSubject = safeCourseLabel(course.subject);
+        if (!rawSubject) {
+          throw new Error("Give every course a subject.");
+        }
+        // A renamed qualification stores the awarding body's real name, so
+        // the pathway prompt asks for the qualification that exists.
+        const subject = canonicalSubject(
+          level,
+          rawSubject,
+        );
+        const choices = tierChoicesFor(level, subject);
+        const requestedBoard =
+          safeCourseLabel(course.examBoard) || defaultBoardFor(level);
+        const tierDefault =
+          choices.tiers.includes("Higher")
+            ? "Higher"
+            : choices.tiers[0];
+        const tier =
+          level === "IB" ||
+          /english literature|eng lit/i.test(subject)
             ? undefined
-            : safeCourseLabel(course.variant),
-        rsRoute: isKs3 ? undefined : safeCourseLabel(course.rsRoute),
-        rsReligion: isKs3 ? undefined : safeCourseLabel(course.rsReligion),
-        rsReligion2: isKs3 ? undefined : safeCourseLabel(course.rsReligion2),
-        rsSpec: isKs3 ? undefined : safeCourseLabel(course.rsSpec),
-        rsSpec2: isKs3 ? undefined : safeCourseLabel(course.rsSpec2),
-        litShakespeare: isKs3 ? undefined : safeCourseLabel(course.litShakespeare),
-        litNovel: isKs3 ? undefined : safeCourseLabel(course.litNovel),
-        litModern: isKs3 ? undefined : safeCourseLabel(course.litModern),
-        poetryTheme: isKs3 ? undefined : safeCourseLabel(course.poetryTheme),
-      }))
-      .filter((course) => course.subject?.length ?? 0 > 0)
-      .slice(0, MAX_COURSES_PER_SETUP);
+            : safeCourseLabel(course.tier) || tierDefault;
+        const variant =
+          level === "GCSE" || level === "KS3"
+            ? undefined
+            : safeCourseLabel(course.variant);
+
+        const validated = validateStudySelection({
+          level,
+          subject,
+          examBoard: requestedBoard,
+          tier,
+          variant,
+        });
+
+        return {
+          subject: validated.subject,
+          examBoard: validated.examBoard,
+          tier:
+            validated.level === "IB" ||
+            /english literature|eng lit/i.test(validated.subject)
+              ? undefined
+              : tier,
+          variant,
+          rsRoute: validated.level === "KS3" ? undefined : safeCourseLabel(course.rsRoute),
+          rsReligion:
+            validated.level === "KS3" ? undefined : safeCourseLabel(course.rsReligion),
+          rsReligion2:
+            validated.level === "KS3" ? undefined : safeCourseLabel(course.rsReligion2),
+          rsSpec: validated.level === "KS3" ? undefined : safeCourseLabel(course.rsSpec),
+          rsSpec2:
+            validated.level === "KS3" ? undefined : safeCourseLabel(course.rsSpec2),
+          litShakespeare:
+            validated.level === "KS3" ? undefined : safeCourseLabel(course.litShakespeare),
+          litNovel:
+            validated.level === "KS3" ? undefined : safeCourseLabel(course.litNovel),
+          litModern:
+            validated.level === "KS3" ? undefined : safeCourseLabel(course.litModern),
+          poetryTheme:
+            validated.level === "KS3" ? undefined : safeCourseLabel(course.poetryTheme),
+        };
+      });
 
     if (requested.length === 0) {
       throw new Error("Pick at least one course.");
-    }
-    if (requested.some((course) => !course.examBoard)) {
-      throw new Error("Choose an exam board for every course.");
     }
 
     const existing = await ctx.db

@@ -33,9 +33,16 @@ import {
   examTimestamp,
   goalFromExam,
 } from "./lib/studyMetrics";
-import { gradeShortAnswer } from "./lib/recall";
+import { deriveRecallUnits, gradeShortAnswer } from "./lib/recall";
 import { alignCriteria, toCriteria } from "./lib/markingCriteria";
 import { summaryValidator } from "./lib/summary";
+import { validateStudySelection } from "./lib/catalogue";
+import {
+  alignQuizToCards,
+  gradeQuizResponse,
+  linkKeyPointsToSpecs,
+} from "./lib/studySetQuality";
+import { cleanGeneratedText } from "./lib/register";
 
 const sourceType = v.union(
   v.literal("text"),
@@ -66,6 +73,9 @@ const quizInput = v.object({
   ),
   answer: v.optional(v.string()),
   acceptedAnswers: v.optional(v.array(v.string())),
+  // Zero-based card index the generator used. Treated as a hint and checked
+  // against the card's text before it is stored.
+  sourceCard: v.optional(v.number()),
 });
 const examInput = v.object({
   question: v.string(),
@@ -235,11 +245,14 @@ function byStudyPriority(
 }
 
 export async function deleteStudySetContent(ctx: MutationCtx, setId: Id<"studySets">) {
-  const sets: Array<"flashcards" | "quizQuestions" | "examQuestions" | "quizAttempts"> = [
+  const sets: Array<
+    "flashcards" | "quizQuestions" | "examQuestions" | "quizAttempts" | "reviewEvents"
+  > = [
     "flashcards",
     "quizQuestions",
     "examQuestions",
     "quizAttempts",
+    "reviewEvents",
   ];
   for (const table of sets) {
     const rows = await ctx.db
@@ -817,6 +830,23 @@ export const updateDetails = mutation({
     const nextTitle = normalizeStudyText(title);
     if (nextTitle.length < 2) throw new Error("Give the set a name first.");
 
+    // Settings are a second write path, so they use the same catalogue guard as
+    // creating a course. A direct caller cannot move a set to a qualification
+    // or subject that does not exist.
+    if (level !== undefined || examBoard !== undefined || course !== undefined) {
+      const nextLevel = level !== undefined ? safeLabel(level) : set.level;
+      const nextCourse = course !== undefined ? safeLabel(course) : set.course;
+      const nextBoard =
+        examBoard !== undefined ? safeLabel(examBoard) : set.examBoard;
+      if (nextLevel && nextCourse) {
+        validateStudySelection({
+          level: nextLevel,
+          subject: nextCourse,
+          examBoard: nextBoard,
+        });
+      }
+    }
+
     // Only the fields the caller actually sent are patched. An inline rename
     // sends just the title, and must not clear the course, board or counts.
     await ctx.db.patch(setId, {
@@ -926,6 +956,13 @@ async function applyReview(
   userId: Id<"users">,
   cardId: Id<"flashcards">,
   rating: Rating,
+  review?: {
+    source?: "automatic" | "self";
+    correct?: boolean;
+    score?: number;
+    coveredUnits?: string[];
+    missedUnits?: string[];
+  },
 ) {
   const card = await ctx.db.get(cardId);
   if (!card || card.userId !== userId) throw new Error("Flashcard not found.");
@@ -933,6 +970,13 @@ async function applyReview(
   if (!set || set.userId !== userId) throw new Error("Study set not found.");
 
   const now = Date.now();
+  const source = review?.source ?? "self";
+  const firstExposure = card.reviewCount === 0;
+  // A self-rated pass on the first sighting cannot earn more than Hard. The
+  // automatic check is the evidence; tapping Good without one should not skip
+  // the learning step FSRS would otherwise require.
+  const effectiveRating: Rating =
+    source === "self" && firstExposure && rating >= 3 ? 2 : rating;
   const next = schedule(
     {
       state: card.fsrsState,
@@ -942,13 +986,13 @@ async function applyReview(
       lapses: card.lapses,
       reps: card.reps,
     },
-    rating,
+    effectiveRating,
     now,
   );
 
   await ctx.db.patch(cardId, {
     // Hard is still a successful recall in FSRS; only Again is a lapse.
-    status: rating >= 2 ? "known" : "again",
+    status: effectiveRating >= 2 ? "known" : "again",
     reviewCount: card.reviewCount + 1,
     lastReviewedAt: now,
     dueAt: next.dueAt,
@@ -958,12 +1002,26 @@ async function applyReview(
     difficulty: next.difficulty,
     lapses: next.lapses,
     reps: next.reps,
-    lastRating: rating,
+    lastRating: effectiveRating,
+  });
+
+  await ctx.db.insert("reviewEvents", {
+    cardId,
+    setId: card.setId,
+    userId,
+    rating: effectiveRating,
+    source,
+    correct: review?.correct,
+    score: review?.score,
+    coveredUnits: review?.coveredUnits,
+    missedUnits: review?.missedUnits,
+    firstExposure,
+    reviewedAt: now,
   });
 
   let knownCount = set.knownCount;
-  if (rating >= 2 && card.status !== "known") knownCount += 1;
-  if (rating === 1 && card.status === "known") knownCount -= 1;
+  if (effectiveRating >= 2 && card.status !== "known") knownCount += 1;
+  if (effectiveRating === 1 && card.status === "known") knownCount -= 1;
 
   await ctx.db.patch(set._id, {
     knownCount: Math.max(0, Math.min(set.cardCount, knownCount)),
@@ -978,6 +1036,8 @@ async function applyReview(
     intervalDays: next.intervalDays,
     stability: next.stability,
     state: next.state,
+    source,
+    effectiveRating,
   };
 }
 
@@ -986,11 +1046,24 @@ export const reviewCard = mutation({
   args: {
     cardId: v.id("flashcards"),
     rating: v.union(v.literal(1), v.literal(2), v.literal(3), v.literal(4)),
+    // The card screen records whether the pass came from the automatic check
+    // or from the student's own rating.
+    source: v.optional(v.union(v.literal("automatic"), v.literal("self"))),
+    correct: v.optional(v.boolean()),
+    score: v.optional(v.number()),
+    coveredUnits: v.optional(v.array(v.string())),
+    missedUnits: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, { cardId, rating }) => {
+  handler: async (ctx, { cardId, rating, ...review }) => {
     const userId = await requireUserId(ctx);
     await requireOwner(await ctx.db.get(cardId), userId);
-    return await applyReview(ctx, userId, cardId, rating as Rating);
+    return await applyReview(
+      ctx,
+      userId,
+      cardId,
+      rating as Rating,
+      review,
+    );
   },
 });
 
@@ -1016,18 +1089,8 @@ function quizProgress(rows: Array<{ lastAnsweredAt?: number; lastCorrect?: boole
 function gradeQuizQuestion(
   question: Doc<"quizQuestions">,
   response: { selectedIndex?: number; text?: string },
-): { correct: boolean; expected: string } {
-  const type = question.type ?? "mcq";
-  if (type === "mcq") {
-    return {
-      correct: response.selectedIndex === question.correctIndex,
-      expected: question.options[question.correctIndex] ?? "",
-    };
-  }
-
-  const expected = question.answer ?? "";
-  const grade = gradeShortAnswer(expected, question.acceptedAnswers, response.text ?? "");
-  return { correct: grade.correct, expected };
+) {
+  return gradeQuizResponse(question, response);
 }
 
 /**
@@ -1105,6 +1168,9 @@ export const submitQuiz = mutation({
       questionId: Id<"quizQuestions">;
       correct: boolean;
       expected: string;
+      answered: boolean;
+      selectedIndex?: number;
+      text?: string;
     }> = [];
     let score = 0;
     let newlyAnswered = 0;
@@ -1117,30 +1183,49 @@ export const submitQuiz = mutation({
 
       const grade = gradeQuizQuestion(question, response);
       if (grade.correct) score += 1;
-      results.push({ questionId: question._id, ...grade });
-
-      // Per-question accuracy powers the weak-spot session. A correct answer
-      // slowly works a question out of the list: one miss needs one correct
-      // attempt to clear, rather than staying flagged forever.
-      await ctx.db.patch(question._id, {
-        correctCount:
-          (question.correctCount ?? 0) + (grade.correct ? 1 : 0),
-        missCount: grade.correct
-          ? Math.max(0, (question.missCount ?? 0) - 1)
-          : (question.missCount ?? 0) + 1,
-        lastMissedAt: grade.correct ? question.lastMissedAt : now,
-        lastAnswer:
-          response.text === undefined
-            ? question.lastAnswer
-            : response.text.slice(0, 2000),
-        lastSelectedIndex:
-          response.selectedIndex === undefined
-            ? question.lastSelectedIndex
-            : response.selectedIndex,
-        lastCorrect: grade.correct,
-        lastAnsweredAt: now,
+      results.push({
+        questionId: question._id,
+        ...grade,
+        ...(response.selectedIndex === undefined
+          ? {}
+          : { selectedIndex: response.selectedIndex }),
+        ...(response.text === undefined
+          ? {}
+          : { text: response.text.slice(0, 2000) }),
       });
-      if (question.lastAnsweredAt === undefined) newlyAnswered += 1;
+
+      if (grade.answered) {
+        // Per-question accuracy powers the weak-spot session. A correct answer
+        // slowly works a question out of the list.
+        await ctx.db.patch(question._id, {
+          correctCount:
+            (question.correctCount ?? 0) + (grade.correct ? 1 : 0),
+          missCount: grade.correct
+            ? Math.max(0, (question.missCount ?? 0) - 1)
+            : (question.missCount ?? 0) + 1,
+          lastMissedAt: grade.correct ? question.lastMissedAt : now,
+          lastAnswer:
+            response.text === undefined
+              ? question.lastAnswer
+              : response.text.slice(0, 2000),
+          lastSelectedIndex:
+            response.selectedIndex === undefined
+              ? question.lastSelectedIndex
+              : response.selectedIndex,
+          lastCorrect: grade.correct,
+          lastAnsweredAt: now,
+        });
+      } else {
+        // A skipped item is unanswered, not option A. Clearing the last answer
+        // keeps progress and the weak-spot list honest too.
+        await ctx.db.patch(question._id, {
+          lastAnswer: undefined,
+          lastSelectedIndex: undefined,
+          lastCorrect: false,
+          lastAnsweredAt: undefined,
+        });
+      }
+      if (grade.answered && question.lastAnsweredAt === undefined) newlyAnswered += 1;
     }
 
     await ctx.db.insert("quizAttempts", {
@@ -1148,6 +1233,7 @@ export const submitQuiz = mutation({
       userId,
       score,
       total: questions.length,
+      results,
       completedAt: now,
     });
     await ctx.db.patch(setId, {
@@ -1282,22 +1368,65 @@ export const completeGeneration = internalMutation({
     await deleteStudySetContent(ctx, setId);
 
     const now = Date.now();
-  // Each item is tagged to the specification statement it teaches, when the
-  // set came from a course topic. Matching is deterministic (see
-  // lib/specMapping.ts), so the same item always carries the same tag.
-  const specPoints = set.specPoints ?? [];
-  const tag = (text: string): string | undefined =>
-    specPoints.length > 0 ? (matchSpecPoint(text, specPoints).id ?? undefined) : undefined;
+    const specPoints = set.specPoints ?? [];
+    const level = set.level;
+    const subject = set.course;
 
-  for (const [index, card] of cards.entries()) {
-    await ctx.db.insert("flashcards", {
-      setId,
-      userId: set.userId,
-      front: card.front,
-      back: card.back,
-      order: index,
-      beyondNotes: card.beyondNotes,
-      specRef: tag(`${card.front} ${card.back}`),
+    // Register and glossary replacements run before anything is stored, so a
+    // GCSE set cannot carry A-Level wording and one concept keeps one name
+    // across its stem and explanation.
+    const storedSummary = cleanGeneratedText(summary, level, subject);
+    const storedCards = cards.map((card) =>
+      cleanGeneratedText(card, level, subject),
+    );
+    const storedQuiz = quiz.map((question) =>
+      cleanGeneratedText(question, level, subject),
+    );
+    const storedExams = exams.map((question) =>
+      cleanGeneratedText(question, level, subject),
+    );
+
+    // Key points carry the specification statement each one covers. The links
+    // are the source of coverage; the old item-tag count is not used for it.
+    const keyPointLinks =
+      specPoints.length > 0
+        ? linkKeyPointsToSpecs(storedSummary.keyPoints, specPoints)
+        : { links: [], missing: [] };
+    const summaryToStore =
+      keyPointLinks.links.length > 0
+        ? {
+            ...storedSummary,
+            keyPoints: keyPointLinks.links.map((link) => link.text),
+            keyPointSpecs: keyPointLinks.links,
+          }
+        : specPoints.length > 0
+          ? // A set with a specification but no matching key points must report
+            // zero coverage, not fall back to item tags.
+            { ...storedSummary, keyPointSpecs: [] as Array<{ text: string; specRef: string }> }
+          : storedSummary;
+
+    // Each item is tagged to the specification statement it teaches, when the
+    // set came from a course topic. Matching is deterministic, so the same item
+    // always carries the same tag.
+    const tag = (text: string): string | undefined =>
+      specPoints.length > 0
+        ? (matchSpecPoint(text, specPoints).id ?? undefined)
+        : undefined;
+
+    const cardIds: Id<"flashcards">[] = [];
+    for (const [index, card] of storedCards.entries()) {
+      const cardId = await ctx.db.insert("flashcards", {
+        setId,
+        userId: set.userId,
+        front: card.front,
+        back: card.back,
+        order: index,
+        beyondNotes: card.beyondNotes,
+        specRef: tag(`${card.front} ${card.back}`),
+        // Stored at generation, never derived from the answer's length at
+        // grading time.
+        recallThreshold: 0.75,
+        recallUnits: deriveRecallUnits(card.back),
         status: "new",
         reviewCount: 0,
         // New cards are due immediately and have no memory state yet. FSRS
@@ -1308,8 +1437,25 @@ export const completeGeneration = internalMutation({
         lapses: 0,
         reps: 0,
       });
+      cardIds.push(cardId);
     }
-    for (const [index, question] of quiz.entries()) {
+
+    // A quiz item is only saved when a real card contains its answer. The
+    // generator's sourceCard is a hint; alignQuizToCards checks the text. Items
+    // with no card are dropped, so the quiz can be shorter but never contradicts
+    // the deck.
+    const cardLikes = storedCards.map((card, index) => ({
+      ...card,
+      id: cardIds[index]!,
+    }));
+    const alignedQuiz = alignQuizToCards(
+      storedQuiz,
+      cardLikes,
+      summaryToStore.keyPoints,
+      { level, subject },
+    );
+
+    for (const [index, question] of alignedQuiz.items.entries()) {
       await ctx.db.insert("quizQuestions", {
         setId,
         userId: set.userId,
@@ -1321,6 +1467,7 @@ export const completeGeneration = internalMutation({
         answer: question.answer,
         acceptedAnswers: question.acceptedAnswers,
         beyondNotes: question.beyondNotes,
+        sourceCardId: question.sourceCardId as Id<"flashcards">,
         specRef: tag(
           `${question.question} ${question.answer ?? ""} ${question.explanation}`,
         ),
@@ -1329,7 +1476,8 @@ export const completeGeneration = internalMutation({
         correctCount: 0,
       });
     }
-    for (const [index, question] of exams.entries()) {
+
+    for (const [index, question] of storedExams.entries()) {
       await ctx.db.insert("examQuestions", {
         setId,
         userId: set.userId,
@@ -1339,24 +1487,23 @@ export const completeGeneration = internalMutation({
         markingGuide: question.markingGuide,
         beyondNotes: question.beyondNotes,
         specRef: tag(`${question.question} ${question.modelAnswer}`),
-        // Stored as discrete criteria, scaled to the question's marks, so a
-        // six-mark answer can score 3 and each award is its own row.
+        // Stored as discrete criteria, with the marks the guide declares.
         criteria:
-          question.criteria ?
-            alignCriteria(question.criteria)
-          : alignCriteria(toCriteria(question.markingGuide)),
+          question.criteria
+            ? alignCriteria(question.criteria)
+            : alignCriteria(toCriteria(question.markingGuide)),
         order: index,
       });
     }
 
     await ctx.db.patch(setId, {
-      summary,
+      summary: summaryToStore,
       // The generator's short topic title replaces a name derived from the
       // upload, and leaves a name the student typed alone.
       ...(named ? { title: generatedTitle, titleSource: "auto" as const } : {}),
-      cardCount: cards.length,
-      quizCount: quiz.length,
-      examCount: exams.length,
+      cardCount: storedCards.length,
+      quizCount: alignedQuiz.items.length,
+      examCount: storedExams.length,
       knownCount: 0,
       generationNote,
       lastQuizScore: undefined,

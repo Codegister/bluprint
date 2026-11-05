@@ -106,6 +106,7 @@ const BOARD_ALIASES: Record<string, CoverageBoard> = {
   wjec: "WJEC",
   eduqas: "WJEC",
   "wjec / eduqas": "WJEC",
+  "wjec/eduqas": "WJEC",
   caie: "CAIE",
   "cambridge international": "CAIE",
   "cambridge international examinations": "CAIE",
@@ -457,37 +458,81 @@ export function resolvePaperRequest(request: PlanRequest): PlanResult {
   return { ok: true, plan: selected };
 }
 
-/** Resolve the paper shown on a course's paper tab. */
-export function resolveCoursePaper(course: {
+/** The course fields needed to resolve the exact paper row. */
+export type CoursePaperFields = {
   subject: string;
   level: string;
   examBoard: string;
   tier?: string | null;
   variant?: string | null;
   paper?: string | null;
-}): PlanResult {
+};
+
+/**
+ * The request for one course's paper. `paper` is the course's paper grouping
+ * label ("Paper 1") when it has one; the index accepts both that label and the
+ * bare paper number.
+ */
+export function coursePaperRequest(
+  course: CoursePaperFields,
+  paperChoice?: string | null,
+  instanceSeed = "default",
+): PlanRequest {
   const level = normaliseLevel(course.level);
   const board = normaliseBoard(course.examBoard);
-  if (!level || !board) {
-    return refusal("", "KEY_NOT_IN_INDEX", ["level", "board"]);
-  }
   const code = normaliseSubjectCode(course.subject);
-  if (!code) {
-    return refusal("", "KEY_NOT_IN_INDEX", ["subject code"], []);
-  }
-  const paper = course.paper ?? "1";
   const tier = course.tier?.toLowerCase().includes("foundation")
     ? "F"
     : course.tier?.toLowerCase().includes("higher")
       ? "H"
       : course.variant?.toUpperCase();
-  return resolvePaperRequest({
-    level,
-    board,
+  const defaultPaper =
+    level === "AP" || level === "KS3" || level === "Undergraduate"
+      ? "0"
+      : "1";
+  const rawPaper = (paperChoice ?? course.paper ?? defaultPaper).trim();
+  const paper = PAPER_ALIASES[rawPaper.toLowerCase()] ?? rawPaper.toUpperCase();
+  const tierSuffix = tier && /^(H|F|HL|SL)$/.test(tier) ? `-${tier}` : "";
+  const boardKey =
+    level === "KS3"
+      ? "KS3"
+      : level === "Undergraduate"
+        ? "UG"
+        : board;
+  const subjectCode =
+    level === "KS3" || level === "Undergraduate" ? "ANY" : code;
+  const key =
+    level && boardKey && subjectCode
+      ? `${boardKey}-${qualFor(level)}-${subjectCode}-${paper}${tierSuffix}`
+      : undefined;
+  return {
+    ...(key ? { key } : {}),
+    level: level ?? course.level,
+    board: board ?? course.examBoard,
     subject: course.subject,
-    paper,
-    tier,
-  });
+    paper: rawPaper,
+    ...(tier ? { tier } : {}),
+    instanceSeed,
+  };
+}
+
+/** Resolve the paper shown on a course's paper tab. */
+export function resolveCoursePaper(
+  course: CoursePaperFields,
+  paperChoice?: string | null,
+  instanceSeed = "default",
+): PlanResult {
+  return resolvePaperRequest(coursePaperRequest(course, paperChoice, instanceSeed));
+}
+
+/** One line for the course page, e.g. "8 questions · 1, 2, 3, 4 and 6 marks". */
+export function planSummary(plan: PaperPlan): string {
+  const marks = [...new Set(plan.ladder)].sort((a, b) => a - b);
+  const list =
+    marks.length > 1
+      ? `${marks.slice(0, -1).join(", ")} and ${marks[marks.length - 1]}`
+      : String(marks[0] ?? 0);
+  return `${plan.qs} question${plan.qs === 1 ? "" : "s"} · ${list} mark${marks.length === 1 && marks[0] === 1 ? "" : "s"}`;
 }
 
 export function assertPlan(plan: PaperPlan): void {

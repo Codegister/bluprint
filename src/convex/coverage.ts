@@ -11,6 +11,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import { specCoverage, type SpecPoint } from "./lib/specMapping";
+import { keyPointCoverage } from "./lib/studySetQuality";
 
 async function itemsForSet(
   ctx: { db: { query: (table: "flashcards" | "quizQuestions" | "examQuestions") => any } },
@@ -35,12 +36,21 @@ export const forSet = query({
 
     const points = (set.specPoints ?? []) as SpecPoint[];
     const { cards, quiz, exam } = await itemsForSet(ctx, setId);
-    const coverage = specCoverage(points, [...cards, ...quiz, ...exam]);
+    // New sets carry one explicit link per key point. That link is the source
+    // of coverage; a set built before links existed still uses item tags.
+    const linkedKeyPoints = set.summary?.keyPointSpecs;
+    const coverage =
+      linkedKeyPoints !== undefined
+        ? keyPointCoverage(points, linkedKeyPoints)
+        : specCoverage(points, [...cards, ...quiz, ...exam]);
+    const linkedIds = new Set((linkedKeyPoints ?? []).map((link) => link.specRef));
     const tagged = (rows: Array<{ specRef?: string }>) =>
       rows.filter((row) => (row.specRef ?? "").length > 0).length;
 
     return {
       points,
+      keyPoints: linkedKeyPoints,
+      missingKeyPoints: points.filter((point) => !linkedIds.has(point.id)),
       coverage,
       tagged: {
         cards: tagged(cards),

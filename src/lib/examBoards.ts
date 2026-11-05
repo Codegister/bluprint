@@ -1,81 +1,38 @@
 /**
  * Exam-board metadata shared by the pickers and display labels.
  *
- * A set stores its board and level as plain strings so older sets (created
- * before boards existed) and custom qualifications still load. The AI prompts
- * in `convex/ai.ts` decide how each board's mark scheme is written; this file
- * only describes the choices offered in the UI.
+ * The catalogue in `convex/lib/catalogue.ts` is the single source of truth for
+ * qualifications, subject availability, boards and tiers. This module keeps the
+ * frontend-facing names that older screens import.
  */
+import {
+  QUALIFICATIONS,
+  STUDY_LEVELS,
+  boardsForLevel,
+  defaultBoardFor,
+} from "@/convex/lib/catalogue";
+
+export { STUDY_LEVELS, defaultBoardFor };
+
+/** Every body named by any qualification, for legacy free-text settings. */
 export const EXAM_BOARDS = [
-  "AQA",
-  "Pearson Edexcel",
-  "OCR",
-  "WJEC / Eduqas",
-  "Cambridge International",
-  "IB",
-  "SQA",
-  "College Board AP",
-  "Other",
-] as const;
+  ...new Set(QUALIFICATIONS.flatMap((entry) => entry.boards)),
+];
 
-export const STUDY_LEVELS = [
-  "GCSE",
-  "IGCSE",
-  "KS3",
-  "AS",
-  "A-Level",
-  "IB",
-  "AP",
-  "National 5",
-  "Higher",
-  "Undergraduate",
-] as const;
-
-/**
- * Board/level pairs the picker may offer. IB and College Board AP are levels,
- * not boards that can be combined with GCSE or AQA; the checklist rows for
- * National 5 and Higher are reachable only through SQA.
- */
+/** Boards the qualification actually uses. A single body is still returned. */
 export function validBoardsForLevel(level: string): string[] {
-  switch (level) {
-    case "GCSE":
-      return ["AQA", "Pearson Edexcel", "OCR", "WJEC / Eduqas", "Other"];
-    case "IGCSE":
-      return ["Pearson Edexcel", "Cambridge International", "Other"];
-    case "AS":
-    case "A-Level":
-      return [
-        "AQA",
-        "Pearson Edexcel",
-        "OCR",
-        "WJEC / Eduqas",
-        "Cambridge International",
-        "Other",
-      ];
-    case "IB":
-      return ["IB"];
-    case "AP":
-      return ["College Board AP"];
-    case "National 5":
-    case "Higher":
-      return ["SQA"];
-    case "KS3":
-    case "Undergraduate":
-      return ["Other"];
-    default:
-      return [...EXAM_BOARDS];
-  }
+  return boardsForLevel(level);
 }
 
 /** The inverse filter, used when the board is chosen before the level. */
 export function validLevelsForBoard(board: string): string[] {
-  return STUDY_LEVELS.filter((level) => validBoardsForLevel(level).includes(board));
+  return STUDY_LEVELS.filter((level) => boardsForLevel(level).includes(board));
 }
 
 /** Whether the pair is a real qualification rather than a picker collision. */
 export function isBoardLevelValid(board: string, level: string): boolean {
   if (!board || !level) return true;
-  return validBoardsForLevel(level).includes(board);
+  return boardsForLevel(level).includes(board);
 }
 
 /**

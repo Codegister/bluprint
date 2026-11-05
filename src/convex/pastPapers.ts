@@ -10,7 +10,7 @@ import {
 import { requireOwner } from "./lib/authorization";
 import { requireUserId } from "./lib/requireUser";
 import { consumeBuildAllowance } from "./buildUsage";
-import { buildPaperBlueprint } from "./lib/paperBlueprint";
+import { resolveCoursePaper } from "./lib/paperPlan";
 import { parseLevelsGuide, toCriteria } from "./lib/markingCriteria";
 import { displayPaperTitles } from "./lib/paperTitles";
 
@@ -196,6 +196,20 @@ export const create = mutation({
     );
     if (building) return { paperId: building._id, created: false };
 
+    // A paper choice must be one the specification publishes, so a paper is
+    // never labelled with a "Paper 9" the course does not have. A course with
+    // a published split but no explicit choice builds its first paper; a
+    // single-paper course leaves `paper` unset.
+    const groups = course.pathway.papers ?? [];
+    const chosen = paper?.trim();
+    if (chosen && !groups.some((group) => group.label === chosen)) {
+      throw new Error("Choose one of the papers this course is examined in.");
+    }
+    const paperChoice = chosen ?? (groups.length > 1 ? groups[0]?.label : undefined);
+    const planned = resolveCoursePaper(course, paperChoice);
+    if (!planned.ok) throw new Error(planned.message);
+    const plan = planned.plan;
+
     // Rate limit before anything is written or generated. A past paper is the
     // most expensive build in the app, so guests get the tightest allowance.
     await consumeBuildAllowance(ctx, userId, "paper");
@@ -208,38 +222,24 @@ export const create = mutation({
       );
     }
 
-    // A paper choice must be one the specification publishes, so a paper is
-    // never labelled with a "Paper 9" the course does not have.
-    const groups = course.pathway.papers ?? [];
-    const chosen = paper?.trim();
-    if (chosen && !groups.some((group) => group.label === chosen)) {
-      throw new Error("Choose one of the papers this course is examined in.");
-    }
-
     // Keep numbering stable when an older paper has been removed.
     const highest = mine.reduce((max, row) => {
       const match = /practice paper (\d+)/i.exec(row.title);
       return Math.max(max, match ? Number(match[1]) : 0);
     }, 0);
-    const samePaper = chosen
-      ? mine.filter((row) => row.paper === chosen).length
+    const samePaper = paperChoice
+      ? mine.filter((row) => row.paper === paperChoice).length
       : 0;
 
-    const blueprint = buildPaperBlueprint(course, chosen);
-    if (blueprint.notAWrittenPaper) {
-      throw new Error(
-        `${course.subject} is assessed by non-examined assessment, not a timed written paper.`,
-      );
-    }
     const now = Date.now();
     const paperId = await ctx.db.insert("pastPapers", {
       userId,
       courseId,
-      title: chosen
-        ? `${chosen} practice paper ${samePaper + 1}`
+      title: paperChoice
+        ? `${paperChoice} practice paper ${samePaper + 1}`
         : `Practice paper ${highest + 1}`,
-      paper: chosen,
-      durationMinutes: blueprint.durationMinutes,
+      paper: paperChoice,
+      durationMinutes: plan.minutes,
       totalMarks: 0,
       questionCount: 0,
       answeredCount: 0,
@@ -264,10 +264,12 @@ export const rebuild = mutation({
       await ctx.db.get(paperId),
       userId,
     ) as Doc<"pastPapers">;
+    const course = await ctx.db.get(paper.courseId);
+    if (!course) throw new Error("The course for this paper no longer exists.");
+    const planned = resolveCoursePaper(course, paper.paper);
+    if (!planned.ok) throw new Error(planned.message);
     // Rebuilding writes a whole paper again, so it costs an allowance too.
     await consumeBuildAllowance(ctx, userId, "paper");
-    const course = await ctx.db.get(paper.courseId);
-    const blueprint = course ? buildPaperBlueprint(course, paper.paper) : null;
 
     const questions = await ctx.db
       .query("pastPaperQuestions")
@@ -283,8 +285,7 @@ export const rebuild = mutation({
       errorMessage: undefined,
       questionCount: 0,
       totalMarks: 0,
-      durationMinutes:
-        blueprint?.durationMinutes ?? paper.durationMinutes ?? PAPER_MINUTES,
+      durationMinutes: planned.plan.minutes,
       answeredCount: 0,
       earnedMarks: 0,
       processingStartedAt: undefined,
@@ -384,8 +385,12 @@ export const completeBuild = internalMutation({
     cover: paperCover,
     questions: v.array(generatedQuestion),
     questionCount: v.optional(v.number()),
+    durationMinutes: v.optional(v.number()),
   },
-  handler: async (ctx, { paperId, formatId, cover, questions, questionCount }) => {
+  handler: async (
+    ctx,
+    { paperId, formatId, cover, questions, questionCount, durationMinutes },
+  ) => {
     const paper = await ctx.db.get(paperId);
     // Deleted while it was building: stop quietly instead of writing questions
     // into a paper that no longer exists.
@@ -430,6 +435,7 @@ export const completeBuild = internalMutation({
       cover,
       questionCount: questionCount ?? questions.length,
       totalMarks: cover.totalMarks,
+      durationMinutes: durationMinutes ?? paper.durationMinutes,
       answeredCount: 0,
       earnedMarks: 0,
       processingStartedAt: undefined,

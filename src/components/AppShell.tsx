@@ -311,7 +311,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               {displayName(user?.name, user?.email)}
             </p>
             <p className="truncate text-[0.72rem] text-muted-foreground">
-              {user?.email ?? "Private account"}
+              {user?.email ?? "Guest"}
             </p>
           </div>
           {/* A preference, not a destination: it belongs with the account. */}
@@ -433,20 +433,22 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 /** A standing reminder for guests once they have work worth losing. */
 function GuestNotice() {
   const { user } = useAuth();
-  const sets = useQuery(api.studySets.listMine);
-  if (!user?.isAnonymous || !sets || sets.length === 0) return null;
+  if (!user?.isAnonymous) return null;
 
+  // The warning sits at the point of creation, before the first deck exists,
+  // so nobody builds work under the impression it is already safe.
   return (
     <div className="mb-4 rounded-2xl border border-[#E8D3A3] bg-[#FFF8E8] px-4 py-3 text-[0.8rem] leading-relaxed text-[#7A5200]">
-      <span className="font-semibold">Guest workspace.</span> Your sets live
-      only in this browser. Signing out or clearing site data removes them.{" "}
+      <span className="font-semibold">Guest workspace.</span> Before your first
+      build, add an email: sets made as a guest live only in this browser and
+      are removed by signing out or clearing site data.{" "}
       <Link
-        to="/auth?link=1&returnTo=%2Ftutor"
+        to="/auth?link=1&returnTo=%2Fsets"
         className="font-semibold underline decoration-[#7A5200]/40 underline-offset-2 hover:text-brand-ink"
       >
-        Add an email to keep them
+        Add an email before you build
       </Link>
-      , or export anything you want to keep first.
+      . You can also export any set, including its quiz and review history.
     </div>
   );
 }

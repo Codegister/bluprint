@@ -267,18 +267,55 @@ function contentWords(value: string): string[] {
     .filter((word) => word.length > 0 && !STOP_WORDS.has(word));
 }
 
-/** Whether every number in the expected answer appears in the response. */
+/** Reads one number, including fractions and percentages, ignoring units. */
+export function parseNumericValue(value: string): number | null {
+  const text = normalizeAnswer(value);
+  const fractionMatch = value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .match(/(-?\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/);
+  if (fractionMatch) {
+    const numerator = Number(fractionMatch[1]);
+    const denominator = Number(fractionMatch[2]);
+    if (Number.isFinite(numerator) && Number.isFinite(denominator) && denominator !== 0) {
+      return numerator / denominator;
+    }
+  }
+  const percentMatch = value.match(/(-?\d+(?:\.\d+)?)\s*%/);
+  if (percentMatch) return Number(percentMatch[1]) / 100;
+  const number = text.match(/-?\d+(?:\.\d+)?/);
+  if (!number) return null;
+  const parsed = Number(number[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Two answers that are the same number, whatever their notation. */
+export function numericEquivalent(expected: string, response: string): boolean {
+  const left = parseNumericValue(expected);
+  const right = parseNumericValue(response);
+  if (left === null || right === null) return false;
+  const tolerance = Math.max(1e-9, Math.abs(left) * 1e-6);
+  return Math.abs(left - right) <= tolerance;
+}
+
+/** Whether every number in the expected answer has a numeric match. */
 function numbersMatch(expected: string, response: string): boolean {
-  const wanted = normalizeAnswer(expected).match(/\b\d+(?:\.\d+)?\b/g) ?? [];
+  const wanted = expected.match(/-?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?|\s*%)?/g) ?? [];
   if (wanted.length === 0) return true;
-  const offered = new Set(normalizeAnswer(response).match(/\b\d+(?:\.\d+)?\b/g) ?? []);
-  return wanted.every((number) => offered.has(number));
+  const offered = response.match(/-?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?|\s*%)?/g) ?? [];
+  return wanted.every((want) => offered.some((got) => numericEquivalent(want, got)));
 }
 
 export type ShortAnswerGrade = {
   correct: boolean;
-  /** 0–1 share of the expected answer's content words that were recalled. */
+  /** 0–1 share of the required concept units that were recalled. */
   score: number;
+  /** Required units the student supplied, in the model answer's words. */
+  coveredUnits?: string[];
+  /** Required units the student missed. */
+  missedUnits?: string[];
+  /** Why the answer passed or failed, for the card screen. */
+  method?: "exact" | "units" | "numeric" | "none";
 };
 
 /**
@@ -301,21 +338,36 @@ export function gradeShortAnswer(
   let best = 0;
   for (const option of options) {
     const optionClean = normalizeAnswer(option);
-    if (cleaned === optionClean) return { correct: true, score: 1 };
+    if (cleaned === optionClean) {
+      return { correct: true, score: 1, method: "exact" };
+    }
+    if (numericEquivalent(option, response)) {
+      return { correct: true, score: 1, method: "numeric" };
+    }
 
     const wanted = contentWords(option);
-    if (wanted.length === 0) continue;
-    const offered = new Set(contentWords(response));
+    // If stop-word filtering empties either side, compare the normalised
+    // strings and never fail an answer merely because nothing survived.
+    if (wanted.length === 0) {
+      if (cleaned === optionClean) return { correct: true, score: 1 };
+      continue;
+    }
+    const offeredWords = contentWords(response);
+    if (offeredWords.length === 0) {
+      if (cleaned === optionClean) return { correct: true, score: 1 };
+      continue;
+    }
+    const offered = new Set(offeredWords);
     const hits = wanted.filter((word) => offered.has(word)).length;
     const score = hits / wanted.length;
 
     if (score > best) best = score;
     if (numbersMatch(option, response) && score >= (wanted.length <= 2 ? 1 : 0.6)) {
-      return { correct: true, score: Math.max(score, 0.6) };
+      return { correct: true, score: Math.max(score, 0.6), method: "units" };
     }
   }
 
-  return { correct: false, score: best };
+  return { correct: false, score: best, method: "none" };
 }
 
 /** True when the course is a modern or classical language. */
@@ -346,28 +398,93 @@ export function gradeVocabularyAnswer(
   return gradeShortAnswer(wanted || expected, [], offered || response);
 }
 
+/** The concept units a card answer requires, de-duplicated and stemmed. */
+export function deriveRecallUnits(answer: string): string[] {
+  const seen = new Set<string>();
+  const units: string[] = [];
+  for (const word of contentWords(answer)) {
+    const stem = word.length > 6 ? word.slice(0, 6) : word;
+    if (seen.has(stem)) continue;
+    seen.add(stem);
+    units.push(word);
+  }
+  return units;
+}
+
+function unitsCovered(
+  required: readonly string[],
+  response: string,
+): { covered: string[]; missed: string[] } {
+  const offered = new Set(
+    contentWords(response).map((word) => (word.length > 6 ? word.slice(0, 6) : word)),
+  );
+  const covered: string[] = [];
+  const missed: string[] = [];
+  for (const unit of required) {
+    const stem = unit.length > 6 ? unit.slice(0, 6) : unit;
+    if (offered.has(stem)) covered.push(unit);
+    else missed.push(unit);
+  }
+  return { covered, missed };
+}
+
 /**
- * Marks a spoken card answer, which is usually a sentence rather than a single
- * term. A full model answer has too many content words to require all of them,
- * so a concise answer that stays on the model answer's vocabulary is accepted:
- * precision (how much of the student's answer is in the model) matters as much
- * as recall. The student still chooses the FSRS rating afterwards.
+ * Marks a spoken card answer.
+ *
+ * The score is the share of the model answer's required concept units the
+ * student supplied. Two words taken from a long model answer therefore score
+ * two units out of eighteen, not 100%. The threshold is stored on the card at
+ * generation time (0.75 by default), so a longer answer is not automatically
+ * easier to pass. The minimum word floor stops a one- or two-word answer from
+ * passing a sentence-length card even when those words happen to be exact.
  */
 export function gradeRecall(
   expected: string,
   response: string,
+  options?: {
+    threshold?: number;
+    units?: readonly string[];
+  },
 ): ShortAnswerGrade {
-  const strict = gradeShortAnswer(expected, [], response);
-  if (strict.correct) return strict;
+  const threshold = Math.max(0.1, Math.min(1, options?.threshold ?? 0.75));
+  const required =
+    options?.units && options.units.length > 0
+      ? [...options.units]
+      : deriveRecallUnits(expected);
+  const cleaned = normalizeAnswer(response);
+  if (cleaned.length === 0 || required.length === 0) {
+    const exact = cleaned.length > 0 && cleaned === normalizeAnswer(expected);
+    return {
+      correct: exact,
+      score: exact ? 1 : 0,
+      coveredUnits: exact ? required : [],
+      missedUnits: exact ? [] : required,
+      method: exact ? "exact" : "none",
+    };
+  }
 
-  const wanted = contentWords(expected);
-  const offered = contentWords(response);
-  if (wanted.length === 0 || offered.length === 0) return strict;
+  if (numericEquivalent(expected, response)) {
+    return {
+      correct: true,
+      score: 1,
+      coveredUnits: required,
+      missedUnits: [],
+      method: "numeric",
+    };
+  }
 
-  const offeredInExpected =
-    offered.filter((word) => wanted.includes(word)).length / offered.length;
-  const score = Math.max(strict.score, offeredInExpected);
-  const threshold = wanted.length >= 6 ? 0.5 : 0.8;
-  return { correct: score >= threshold, score };
+  const { covered, missed } = unitsCovered(required, response);
+  const score = covered.length / required.length;
+  const minWords = Math.max(2, Math.ceil(contentWords(expected).length * 0.25));
+  const enough = contentWords(response).length >= minWords;
+  // Below the minimum content floor no unit is credited. This is what makes a
+  // two-word answer against a sentence card report zero credited units instead
+  // of two lucky words.
+  return {
+    correct: enough && score >= threshold,
+    score,
+    coveredUnits: enough ? covered : [],
+    missedUnits: enough ? missed : required,
+    method: "units",
+  };
 }
-

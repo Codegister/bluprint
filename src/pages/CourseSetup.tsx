@@ -9,6 +9,11 @@ import {
   validBoardsForLevel,
 } from "@/lib/examBoards";
 import {
+  isSubjectOffered,
+  requiresBoardQuestion,
+  subjectAvailability,
+} from "@/convex/lib/catalogue";
+import {
   literatureChoicesFor,
   type LiteratureChoiceSet,
 } from "@/convex/lib/literatureChoices";
@@ -184,7 +189,7 @@ function boardLabel(board: string): string {
 function defaultBoardFor(level: string): string {
   if (level === "KS3") return "None";
   if (level === "IB") return "IB";
-  if (level === "AP") return "College Board AP";
+  if (level === "AP") return "College Board";
   if (level === "IGCSE") return "Cambridge International";
   if (level === "National 5" || level === "Higher") return "SQA";
   if (level === "Undergraduate") return "Other";
@@ -211,7 +216,7 @@ function defaultTierFor(level: string, subject: string): string | undefined {
  */
 function questionsFor(level: string, subject: string, board?: string): Question[] {
   const questions: Question[] = [];
-  if (["GCSE", "IGCSE", "AS", "A-Level"].includes(level)) questions.push("board");
+  if (requiresBoardQuestion(level)) questions.push("board");
   const { tiers, variants } = tierChoices(level, subject);
   if (tiers.length > 0 || variants.length > 0) questions.push("tier");
   if (
@@ -241,6 +246,7 @@ function SubjectRow({
   active,
   isDefault,
   flashed,
+  availability,
   onOpen,
 }: {
   name: string;
@@ -250,11 +256,14 @@ function SubjectRow({
   isDefault: boolean;
   /** Briefly ring the row when it was just added without questions. */
   flashed: boolean;
+  availability: ReturnType<typeof subjectAvailability>;
   onOpen: () => void;
 }) {
   const meta = subjectMeta(name);
   const Icon = meta.icon;
   const selected = Boolean(draft);
+  const unavailable = availability.state === "not-offered";
+  const renamed = availability.state === "renamed" ? availability : null;
   const detail = draft
     ? [
         boardLabel(draft.examBoard),
@@ -291,12 +300,16 @@ function SubjectRow({
     <motion.button
       type="button"
       onClick={onOpen}
+      disabled={unavailable}
       aria-pressed={selected}
-      whileHover={{ x: 2 }}
-      whileTap={{ scale: 0.995 }}
+      aria-disabled={unavailable}
+      title={unavailable ? availability.note : renamed?.note}
+      whileHover={unavailable ? undefined : { x: 2 }}
+      whileTap={unavailable ? undefined : { scale: 0.995 }}
       transition={SPRING}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
+        unavailable && "cursor-not-allowed opacity-45",
         active
           ? "border-chrome-6/50 bg-white shadow-[0_8px_20px_-18px_rgba(22,24,31,0.6)]"
           : flashed
@@ -316,7 +329,11 @@ function SubjectRow({
         {/* The detail line is always present, even when empty, so selecting a
             course fills it in without making the row taller than its neighbours. */}
         <span className="mt-0.5 flex min-h-4 min-w-0 items-center gap-1 text-[0.68rem] text-muted-foreground">
-          {detail || choiceDetail ? (
+          {unavailable || renamed ? (
+            <span className="min-w-0 truncate">
+              {unavailable ? availability.note : renamed!.note}
+            </span>
+          ) : detail || choiceDetail ? (
             <>
               {isDefault && (
                 <>
@@ -543,10 +560,12 @@ export default function CourseSetup() {
     // reset to the new qualification's defaults rather than kept stale.
     setSelected((current) =>
       Object.fromEntries(
-        Object.keys(current).map((name) => [
-          name,
-          { examBoard: nextBoard, tier: defaultTierFor(next, name) },
-        ]),
+        Object.entries(current)
+          .filter(([name]) => isSubjectOffered(next, name))
+          .map(([name]) => [
+            name,
+            { examBoard: nextBoard, tier: defaultTierFor(next, name) },
+          ]),
       ),
     );
     setActive(null);
@@ -629,6 +648,11 @@ export default function CourseSetup() {
   const openSubject = (name: string) => {
     const clean = name.trim().slice(0, 80);
     if (clean.length < 2 || !level) return;
+    const availability = subjectAvailability(level, clean);
+    if (availability.state === "not-offered") {
+      toast.error(availability.note);
+      return;
+    }
     const existing = clean in selected;
     if (!existing && selectedNames.length >= MAX_COURSES) {
       toast.error(`You can set up ${MAX_COURSES} courses at a time.`);
@@ -1380,6 +1404,7 @@ export default function CourseSetup() {
                         )}
                         <SubjectRow
                           name={subject.name}
+                          availability={subjectAvailability(level, subject.name)}
                           draft={selected[subject.name]}
                           active={false}
                           isDefault={usesDefaults(selected[subject.name])}

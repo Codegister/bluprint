@@ -24,7 +24,7 @@ import { Counter, Meter, enter, reveal } from "@/components/motion/Motion";
 
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { buildPaperBlueprint } from "@/convex/lib/paperBlueprint";
+import { planSummary, resolveCoursePaper } from "@/convex/lib/paperPlan";
 import { CURRENT_PATHWAY_VERSION } from "@/convex/lib/pathwayVersion";
 import { notifyError, readableError } from "@/lib/errors";
 import { CourseCoveragePanel } from "@/components/study/CourseCoveragePanel";
@@ -66,6 +66,14 @@ const PATH_COLORS = [
  * notes, practice, and the sets built from it.
  */
 type CourseSection = "pathway" | "spec" | "notes" | "practice" | "sets";
+
+/** The current paper format for the course page, from the index row itself. */
+function coursePaperFormat(course: Doc<"courses">, paper?: string) {
+  const plan = resolveCoursePaper(course, paper);
+  return plan.ok
+    ? { id: plan.plan.key, summary: planSummary(plan.plan) }
+    : null;
+}
 
 const COURSE_SECTIONS: Array<{ value: CourseSection; label: string }> = [
   { value: "pathway", label: "Pathway" },
@@ -1247,11 +1255,11 @@ export default function Course() {
             {currentSection === "practice" && practiceTab === "papers" && (<>
                 <CoursePastPapers
                   courseId={course._id}
-                  formatId={buildPaperBlueprint(course).id}
+                  formatId={coursePaperFormat(course)?.id}
                   formatIdForPaper={(paper) =>
-                    buildPaperBlueprint(course, paper).id
+                    coursePaperFormat(course, paper)?.id ?? ""
                   }
-                  formatSummary={buildPaperBlueprint(course).summary}
+                  formatSummary={coursePaperFormat(course)?.summary}
                   papers={pathway.papers}
                 />
 

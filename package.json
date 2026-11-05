@@ -9,7 +9,8 @@
     "test": "bun test",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gateway:smoke": "bun run scripts/gateway-smoke.ts"
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.90",

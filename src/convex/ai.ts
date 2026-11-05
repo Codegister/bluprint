@@ -6,6 +6,9 @@
  * Keys are read from the `NVIDIA_API_KEY` environment variable, which may hold
  * a comma- or newline-separated pool. They are never returned, logged, or sent
  * to the browser. Keep it that way when extending this file.
+ *
+ * Set `RESPAN_GATEWAY_URL` to send these calls through a local Respan Gateway
+ * instead of straight to NVIDIA; see `gateway.toml` and the README.
  */
 
 import { v } from "convex/values";
@@ -21,15 +24,12 @@ import {
   shortfallSentence,
 } from "./lib/buildDefaults";
 import { materialLimits } from "./lib/buildCapacity";
-import {
-  alignDataReference,
-  dropUnusedData,
-  isSelfContained,
-} from "./lib/paperData";
+import { chatCompletionsUrl } from "./lib/gatewayConfig";
+import { alignDataReference, dropUnusedData } from "./lib/paperData";
 import { criteriaToGuide } from "./lib/realPaper";
-import { knownLiteratureExtract } from "./lib/literatureExtracts";
 import { filterGuideToNotes } from "./lib/noteSupport";
 import {
+  gradeRecall,
   gradeVocabularyAnswer,
   isLanguageCourse,
   isShortAnswer,
@@ -52,7 +52,6 @@ import {
   guideFromCriteria,
   meaningAward,
   reconcilePasses,
-  validateMarkingGuide,
   type AlternativeCredit,
   type MarkCheck,
 } from "./lib/markingCriteria";
@@ -113,22 +112,10 @@ import {
   visionModelCandidates,
   type TutorTier,
 } from "./lib/nvidiaConfig";
-import { buildPaperCover } from "./lib/paperFormat";
-import {
-  buildPaperBlueprint,
-  flattenPaperBlueprint,
-  type FlatPaperSlot,
-  type PaperBlueprint,
-} from "./lib/paperBlueprint";
-import {
-  paperChecklistFor,
-  paperGeneratorSystemMessage,
-} from "./lib/paperGenerator";
-import {
-  questionsTooSimilar,
-  seedFromString,
-  seededShuffle,
-} from "./lib/paperGenerator/variety";
+import { buildPaper } from "./lib/paperPipeline";
+import { coursePaperRequest } from "./lib/paperPlan";
+import { PAPER_SYSTEM_PROMPT } from "./lib/paperPrompt";
+import { seedFromString, seededShuffle } from "./lib/paperGenerator/variety";
 
 type TextPart = { type: "text"; text: string };
 type ImagePart = { type: "image_url"; image_url: { url: string } };
@@ -156,6 +143,8 @@ type GeneratedQuiz = {
   acceptedAnswers?: string[];
   /** True when the item uses a fact the student's notes do not contain. */
   beyondNotes?: boolean;
+  /** Zero-based index of the card that contains this item's answer. */
+  sourceCard?: number;
 };
 type GeneratedExam = {
   question: string;
@@ -351,6 +340,19 @@ async function withProviderGuard<T>(
 const MODEL_RETRY_MS = 30 * 60 * 1000;
 const unavailableModels = new Map<string, number>();
 
+/**
+ * The chat completions URL this process posts to.
+ *
+ * `RESPAN_GATEWAY_URL` names a local Respan Gateway; when it is set, routing,
+ * retries and the request log live there instead of in this file, and the
+ * gateway forwards to NVIDIA with the same `NVIDIA_API_KEY`. Unset (the
+ * default) keeps the direct NVIDIA URL, so the gateway is opt-in per
+ * deployment and nothing changes for one that has not started it.
+ */
+function gatewayChatUrl(): string {
+  return chatCompletionsUrl(process.env.RESPAN_GATEWAY_URL, NVIDIA_CHAT_URL);
+}
+
 /** Whether a fallback model is out of its end-of-life cooling window. */
 function modelUsable(model: string, now: number): boolean {
   const until = unavailableModels.get(model);
@@ -436,7 +438,7 @@ async function nvidiaChat(
     const model = models[Math.min(modelIndex, models.length - 1)]!;
     let response: Response;
     try {
-      response = await fetch(NVIDIA_CHAT_URL, {
+      response = await fetch(gatewayChatUrl(), {
         method: "POST",
         headers: {
           // Each key only exists in this process memory / request header.
@@ -800,6 +802,11 @@ function quizKind(value: unknown): QuizKind {
   return "mcq";
 }
 
+function integerOrUndefined(value: unknown): number | undefined {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : undefined;
+}
+
 function parseQuiz(raw: string, limit = 6): GeneratedQuiz[] {
   const items = collectionItems(
     raw,
@@ -833,6 +840,7 @@ function parseQuiz(raw: string, limit = 6): GeneratedQuiz[] {
           explanation,
           type,
           beyondNotes: beyondNotes(row.beyondNotes),
+          sourceCard: integerOrUndefined(row.sourceCard),
         });
       }
       continue;
@@ -859,6 +867,7 @@ function parseQuiz(raw: string, limit = 6): GeneratedQuiz[] {
       answer,
       acceptedAnswers,
       beyondNotes: beyondNotes(row.beyondNotes),
+      sourceCard: integerOrUndefined(row.sourceCard),
     });
   }
   return questions.slice(0, limit);
@@ -1240,6 +1249,7 @@ async function generateCards(
 async function generateQuiz(
   apiKeys: string[],
   notes: string,
+  cards: Array<{ front: string; back: string }>,
   target: number,
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
@@ -1247,6 +1257,12 @@ async function generateQuiz(
 ): Promise<GeneratedQuiz[]> {
   const questions: GeneratedQuiz[] = [];
   const seen = new Set<string>();
+  const cardBlock = cards
+    .map(
+      (card, index) =>
+        `[${index}] Q: ${card.front.slice(0, 240)}\nA: ${card.back.slice(0, 500)}`,
+    )
+    .join("\n\n");
 
   const maxAttempts = Math.min(8, Math.ceil(target / QUIZ_BATCH_SIZE) + 2);
   for (
@@ -1270,8 +1286,11 @@ async function generateQuiz(
           role: "user",
           content:
             `${materialBlock(notes)}\n\n` +
+            `<cards>\n${cardBlock}\n</cards>\n\n` +
             (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
             `Create ${want} quiz questions of increasing difficulty. Mix three kinds: roughly half multiple choice, a quarter cloze, and a quarter short typed answer. Each kind tests recall in a different way, so the quiz does not become four options to guess between. ` +
+            "Every question must be answerable from exactly one card above, and that card must contain the answer. Put its zero-based index in sourceCard. If no card contains the answer, do not write that question. " +
+            "Do not ask which taught difference is absent while using the other taught differences as distractors; that is a negative-discrimination item and teaches the wrong thing. " +
             (syllabus ? "" : `${GROUNDING_RULES}\n`) +
             "Cover different parts of the material. Where the material gives data, a worked example or a case, ask the student to apply a concept to that — not to an example the material never mentions. " +
             "A multiple-choice question needs exactly 4 plausible options and one correct index (0-3). " +
@@ -1283,9 +1302,9 @@ async function generateQuiz(
               ? `Do not repeat these existing questions:\n${previous}\n`
               : "") +
             'Return JSON exactly like: {"questions":[' +
-            '{"question":"...","type":"mcq","options":["a","b","c","d"],"correctIndex":0,"explanation":"..."},' +
-            '{"question":"The process by which water moves across a membrane is ____.","type":"cloze","answer":"osmosis","acceptedAnswers":["osmosis"],"explanation":"..."},' +
-            '{"question":"Name the cell organelle where aerobic respiration happens.","type":"typed","answer":"mitochondria","acceptedAnswers":["mitochondrion","the mitochondria"],"explanation":"..."}' +
+            '{"question":"...","type":"mcq","options":["a","b","c","d"],"correctIndex":0,"explanation":"...","sourceCard":0},' +
+            '{"question":"The process by which water moves across a membrane is ____.","type":"cloze","answer":"osmosis","acceptedAnswers":["osmosis"],"explanation":"...","sourceCard":1},' +
+            '{"question":"Name the cell organelle where aerobic respiration happens.","type":"typed","answer":"mitochondria","acceptedAnswers":["mitochondrion","the mitochondria"],"explanation":"...","sourceCard":2}' +
             `]}${BEYOND_NOTES_FIELD}`,
         },
       ],
@@ -1499,488 +1518,27 @@ function specificationDigest(
   return lines.join("\n").slice(0, 9000);
 }
 
-/**
- * Rebuilds one question whose data did not arrive. The model is asked for the
- * data table, or for a version of the question that needs none. Marks, labels
- * and sections stay exactly as the blueprint set them.
- */
-async function repairQuestionData(
-  apiKeys: string[],
-  question: GeneratedExam,
-  qualification: string,
-): Promise<GeneratedExam | null> {
-  const raw = await nvidiaChat(apiKeys, {
-    model: NVIDIA_TEXT_MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content:
-          `<qualification>${qualification || "Not specified"}</qualification>\n` +
-          `<question>${question.question}</question>\n` +
-          `<marks>${question.marks}</marks>\n\n` +
-          "This exam question refers to data that is not there, so it cannot be answered. " +
-          "Either supply the data as `data` with `columns` and `rows` (short cell values, one row per item), or rewrite the question so it needs no data at all. " +
-          "The question must stay worth the same marks and ask about the same idea. Keep the model answer and marking guide consistent with the question you return.\n" +
-          'Return JSON exactly like: {"question":"...","data":{"title":"...","columns":["..."],"rows":[["..."]]},"modelAnswer":"...","markingGuide":["1 mark: ..."]}. ' +
-          "Omit `data` only if the rewritten question needs none.",
-      },
-    ],
-    maxTokens: 2200,
-    temperature: 0,
-    disableThinking: true,
-  });
-
-  const repaired = parseExams(raw, 1)[0];
-  if (!repaired) return null;
-  const merged: GeneratedExam = {
-    ...question,
-    question: repaired.question,
-    modelAnswer: repaired.modelAnswer,
-    markingGuide: repaired.markingGuide,
-    data: repaired.data,
-  };
-  return isSelfContained(merged) ? dropUnusedData(merged) : null;
-}
-
-/**
- * Checks every question is self-contained, repairing the ones that are not and
- * dropping any that cannot be repaired. A slightly shorter paper is better than
- * a question nobody can answer.
- */
-async function ensureSelfContained(
-  apiKeys: string[],
-  questions: GeneratedExam[],
-  qualification: string,
-): Promise<GeneratedExam[]> {
-  const kept: GeneratedExam[] = [];
-  // One repair call per broken question, capped so a bad reply cannot turn into
-  // a long chain of paid calls.
-  let repairs = 0;
-  for (const question of questions) {
-    if (isSelfContained(question)) {
-      kept.push(dropUnusedData(question));
-      continue;
-    }
-    if (repairs < 3) {
-      repairs += 1;
-      const repaired = await repairQuestionData(apiKeys, question, qualification);
-      if (repaired) {
-        kept.push(dropUnusedData(repaired));
-        continue;
-      }
-    }
-    console.error(
-      "Dropped a past-paper question that referred to data it did not include",
-      question.label ?? "",
-    );
+/** A refused index row is shown to the student, not retried as a provider fault. */
+class PaperRefusalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PaperRefusalError";
   }
-  return kept;
 }
 
-/**
- * Writes one full practice paper from the saved pathway. The questions are
- * original — published papers and mark schemes are copyrighted — but the
- * subject's real question types, marks, command words and marking style are
- * fixed by the blueprint.
- */
-/** A one-question format brief, so a per-question call cannot write the whole paper. */
-function slotBrief(blueprint: PaperBlueprint, slot: FlatPaperSlot): string {
-  return [
-    "PAPER FORMAT — this request is one question from the subject's real paper.",
-    `Total: 1 question, ${slot.marks} marks.`,
-    "",
-    `## ${slot.section}`,
-    slot.sectionInstruction,
-    `${slot.label} — ${slot.marks} mark${slot.marks === 1 ? "" : "s"} — command word: ${slot.command} — ${slot.marking === "levels" ? "levels-marked" : "point-marked"}`,
-    `  ${slot.ask}`,
-    ...(slot.extract
-      ? [
-          "  The app supplies the extract separately. Write the question so it refers to the extract and the whole text; do not return an extract field.",
-        ]
-      : []),
-    "",
-    "FORMAT RULES",
-    ...blueprint.rules.map((rule) =>
-      /^Write exactly/i.test(rule)
-        ? "Write only the single question requested."
-        : rule,
-    ),
-  ].join("\n");
-}
-
-/** A paper-sized extract: long enough to analyse, short enough to print. */
-const NOVEL_EXTRACT_MIN_WORDS = 300;
-const NOVEL_EXTRACT_MAX_WORDS = 420;
-const PLAY_EXTRACT_MIN_WORDS = 200;
-const PLAY_EXTRACT_MAX_WORDS = 320;
-
-function extractWordCount(text: string): number {
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
-
-/** Drop a stray next-chapter or next-act heading after the passage. */
-function cleanExtractText(text: string): string {
-  return text
-    .replace(/\n+\s*(?:chapter|act|scene)\s+[0-9ivxlcdm]+\b[^\n]*$/i, "")
-    .trim();
-}
-
-/**
- * Keep only the text before the first repeated full sentence.
- *
- * Models occasionally print a paragraph and then paste it back, sometimes with
- * a few words changed. That is not a larger extract; it is a broken one. A
- * repeated sentence is a reliable signal to retry.
- */
-function dedupeExtract(text: string): string {
-  const sentences = text.match(/[^.!?]+[.!?]+(?:["'”’)\]]+)?/g) ?? [];
-  if (sentences.length < 2) return text.trim();
-
-  const seen = new Set<string>();
-  const kept: string[] = [];
-  for (const sentence of sentences) {
-    const key = sentence
-      .toLowerCase()
-      .replace(/[^a-z0-9 ]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (key.length >= 40 && seen.has(key)) break;
-    if (key.length >= 40) seen.add(key);
-    kept.push(sentence);
-  }
-  return kept.join(" ").replace(/\s+/g, " ").trim();
-}
-
-function endsCompleteSentence(text: string): boolean {
-  return /[.!?…]["'”’)\]]?\s*$/.test(text);
-}
-
-/** Keep the first complete sentences when a reply overshoots the extract size. */
-function shortenExtract(text: string, maxWords: number): string {
-  const words = text.trim().split(/\s+/);
-  if (words.length <= maxWords) return text.trim();
-  const clipped = words.slice(0, maxWords).join(" ");
-  const lastStop = Math.max(
-    clipped.lastIndexOf(". "),
-    clipped.lastIndexOf("! "),
-    clipped.lastIndexOf("? "),
-  );
-  return lastStop > clipped.length * 0.55
-    ? clipped.slice(0, lastStop + 1)
-    : clipped;
-}
-
-/**
- * Writes the reading passage for one closed-book literature question.
- *
- * This is deliberately separate from the question JSON. Extracts are full of
- * quotation marks, and asking the model to escape them inside a large JSON
- * string made otherwise-valid replies unparseable. A plain-text call has no
- * escaping problem; the caller attaches the result to the stored question.
- */
-async function generateLiteratureExtract(
-  apiKeys: string[],
-  slot: FlatPaperSlot,
-  question: string,
-): Promise<GeneratedExam["extract"] | null> {
-  const source = slot.extractSource ?? "the set text";
-  const author = slot.extractAuthor ?? "the writer";
-  const kind = slot.extractKind ?? "text";
-
-  // Public-domain set texts use a checked passage. The model is never allowed
-  // to decide the exact words of a Dickens or Shakespeare extract.
-  const known = knownLiteratureExtract(slot.extractSource);
-  if (known) return known;
-
-  const minWords =
-    kind === "novel" ? NOVEL_EXTRACT_MIN_WORDS : PLAY_EXTRACT_MIN_WORDS;
-  const maxWords =
-    kind === "novel" ? NOVEL_EXTRACT_MAX_WORDS : PLAY_EXTRACT_MAX_WORDS;
-  let lastCount = 0;
-  let lastProblem = "";
-
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const raw = await nvidiaChat(apiKeys, {
-      model: NVIDIA_TEXT_MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You supply the reading extract for an exam paper. Return plain text only: no JSON, markdown fences or commentary.",
-        },
-        {
-          role: "user",
-          content:
-            `Text: ${source}\nAuthor: ${author}\nForm: ${kind}\n` +
-            `Question: ${question}\n\n` +
-            `Write the extract that must be printed above this question. It must be a continuous passage from ${source}, in ${author}'s original words, ${minWords}-${maxWords} words. ` +
-            "Do not paraphrase, summarise, invent or repeat a passage. Choose a passage that lets the student answer the question, and give the act, scene or chapter reference. " +
-            "Use this exact plain-text format, with no other text:\n" +
-            "REFERENCE: Act 1, Scene 3\nEXTRACT:\n<the passage>\n\n" +
-            "If you do not know the exact words of the passage, choose a different passage from the same text that you do know rather than inventing one." +
-            (attempt > 0
-              ? `\n\nFORMAT CORRECTION: ${lastProblem} The previous extract was ${lastCount} words. Return only a continuous ${minWords}-${maxWords} word passage, ending on a complete sentence, with no repeated sentence or paragraph.`
-              : ""),
-        },
-      ],
-      maxTokens: 3000,
-      temperature: attempt === 0 ? 0.1 : 0,
-      topP: 1,
-      disableThinking: true,
-      timeoutMs: 120_000,
-    });
-
-    const cleaned = stripReasoning(raw)
-      .trim()
-      .replace(/^```(?:text)?\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
-    const reference = /^(?:REFERENCE|Reference)\s*:\s*(.+)$/m.exec(cleaned)?.[1]?.trim();
-    const body = /^(?:EXTRACT|Extract)\s*:\s*([\s\S]+)$/m.exec(cleaned)?.[1]?.trim();
-    let text = cleanExtractText(asText(body ?? cleaned, 5000));
-    if (!text) {
-      lastProblem = "The previous reply contained no extract.";
-      continue;
-    }
-
-    const rawCount = extractWordCount(text);
-    const deduped = dedupeExtract(text);
-    if (deduped !== text) {
-      lastCount = rawCount;
-      lastProblem = "The previous extract repeated a sentence or paragraph.";
-      if (attempt === 0) continue;
-      text = deduped;
-    }
-
-    lastCount = extractWordCount(text);
-    if (lastCount > maxWords) {
-      lastProblem = `The previous extract was too long (${lastCount} words).`;
-      if (attempt === 0) continue;
-      text = shortenExtract(text, maxWords);
-      lastCount = extractWordCount(text);
-    }
-    if (lastCount < minWords) {
-      lastProblem = `The previous extract was too short (${lastCount} words).`;
-      continue;
-    }
-    if (!endsCompleteSentence(text)) {
-      lastProblem = "The previous extract ended mid-sentence.";
-      continue;
-    }
-
-    return {
-      text,
-      source: slot.extractSource,
-      reference: reference ? asText(reference, 80) : undefined,
-    };
-  }
-  return null;
-}
-
-/**
- * Writes one full practice paper from the saved pathway, one question at a
- * time. A whole-paper reply with two full essays can exceed the model's output
- * budget and arrive truncated, so each call owns exactly one question and the
- * finished questions are assembled in blueprint order.
- */
-async function generatePaperQuestions(
-  apiKeys: string[],
-  course: PaperCourse,
-  paperTitle: string,
-  blueprint: PaperBlueprint,
-  chosenPaper?: { label: string; topicIds: string[] },
-  variationSeed = 0,
-): Promise<GeneratedExam[]> {
-  const slots = flattenPaperBlueprint(blueprint);
-  const qualification = qualificationText({
-    course: course.subject,
-    examBoard: course.examBoard,
-    level: course.level,
-  });
-  const religions = [course.rsReligion, course.rsReligion2]
-    .map((value) => value?.trim())
-    .filter((value): value is string => Boolean(value));
-  // Conceptual duplication matters most in RS, where one topic can become a
-  // 4-mark and 5-mark version of the same question. Other subjects legitimately
-  // repeat stems with different numbers or data, so they keep the prompt-level
-  // variety rule and the softer per-build rotation.
-  const distinctFocus = /religious studies|religious education|\brs\b|philosophy and ethics/i.test(
-    course.subject,
-  );
-  const detail = [
-    course.variant,
-    course.tier,
-    course.poetryTheme,
-    religions.length > 0 ? religions.join(" and ") : undefined,
-    course.rsSpec,
-  ]
-    .filter((part): part is string => Boolean(part))
-    .join(" · ");
-  const chosenTopicIds = chosenPaper ? new Set(chosenPaper.topicIds) : undefined;
-  const digest = specificationDigest(course, chosenTopicIds, variationSeed);
-  const hasPoints = slots.some((slot) => slot.marking === "points");
-  const hasLevels = slots.some((slot) => slot.marking === "levels");
-  const schemeNotes = [
-    hasPoints
-      ? `For point-marked questions: ${markSchemeStyle(course.examBoard)}`
-      : "",
-    hasLevels
-      ? "Levels-marked questions use level descriptors with mark ranges, not one mark per bullet."
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const paperScope = chosenPaper
-    ? `\n<paper>This is ${chosenPaper.label} of the qualification. Every question must come from the topics listed for that paper above, and no question may test a topic from another paper.</paper>\n`
+/** A readable full-mark outline from the rendered mark scheme. */
+function answerOutlineFromMarkScheme(guide: string[]): string {
+  const points = guide
+    .map((row) =>
+      row
+        .replace(/^\d+\s+marks?\s*:\s*/i, "")
+        .replace(/^Level\s+\d+\s+\([^)]*\)\s*:\s*/i, "")
+        .trim(),
+    )
+    .filter(Boolean);
+  return points.length > 0
+    ? `A full-mark answer covers these points:\n${points.map((point) => `- ${point}`).join("\n")}`
     : "";
-  const variation = `\n<variation>Build variation ${variationSeed}. Use the specification order shown and choose a fresh mix of topics; do not default to the same first topic in every question.</variation>\n`;
-
-  const commonPrompt =
-    `<qualification>${qualification}${detail ? ` · ${detail}` : ""}</qualification>\n` +
-    `<specification>\n${digest}\n</specification>\n${paperScope}${variation}\n` +
-    `Write one original exam-style question for a practice paper titled "${paperTitle}". ` +
-    `The paper has ${slots.length} question${slots.length === 1 ? "" : "s"} in total; this request covers one of them. ` +
-    "Make the question unambiguous and answerable from the specification, and do not copy or paraphrase a published past paper. " +
-    "Within each section, every question must test a different belief, practice, teaching or topic. Never reuse the same stem or focus with a different mark tariff. " +
-    "The question needs a full-mark model answer and a marking guide written the way the board writes it. " +
-    "Keep every model answer under 900 words, write it as plain prose without markdown headings or bold, and keep every marking guide to at most 12 bullets. " +
-    `Escape every double quotation mark inside the extract and model answer as \\" so the reply is valid JSON. ` +
-    "If the question needs data — readings, percentages, observations — include it in a `data` object with `columns` and `rows` and refer to it as \"the table below\". " +
-    "Never refer to a table, graph, chart, figure, diagram or photograph you have not supplied: a question that points at missing data cannot be answered. " +
-    "Ask about the topics in the specification above and nothing else: a question on a topic the specification does not list cannot be revised for. " +
-    `${schemeNotes} ` +
-    "Return only strict JSON with no markdown fences, commentary or extra keys.";
-
-  const systemMessage = paperGeneratorSystemMessage(paperChecklistFor(course));
-  const generated: GeneratedExam[] = [];
-  for (const slot of slots) {
-    const written = generated
-      .filter((question) => question.section === slot.section)
-      .map((question) => `- ${question.label ?? "?"}: ${question.question}`)
-      .join("\n");
-    const previous = written
-      ? `\n<already_written>\n${written}\n</already_written>\nDo not repeat or rephrase these questions. Choose a different belief, practice, teaching or topic for ${slot.label}.\n`
-      : "";
-    const slotRequest =
-      `<paper_format>\n${slotBrief(blueprint, slot)}\n</paper_format>\n\n` +
-      `This request is for exactly one question: ${slot.label}, worth ${slot.marks} marks, in ${slot.section}. ` +
-      `Use the command word "${slot.command}". ${slot.ask} ` +
-      previous +
-      `Return JSON exactly like: {"questions":[{"question":"...","marks":${slot.marks},"modelAnswer":"...","markingGuide":["..."],"commandWord":"${slot.command}","specReference":"1.1","data":{"title":"...","columns":["..."],"rows":[["..."]]}}]} ` +
-      "The questions array must contain exactly this one entry. Do not write any other question from the paper.";
-
-    let mismatch = "";
-    let accepted: GeneratedExam | null = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const raw = await nvidiaChat(apiKeys, {
-        model: NVIDIA_TEXT_MODEL,
-        messages: [
-          { role: "system", content: systemMessage },
-          {
-            role: "user",
-            content:
-              commonPrompt +
-              "\n\n" +
-              slotRequest +
-              (attempt > 0
-                ? `\n\nFORMAT CORRECTION: the previous reply did not match this question. ${mismatch} Return exactly one JSON question with the marks and format above.`
-                : ""),
-          },
-        ],
-        maxTokens: 12000,
-        // A duplicate is a variety problem, so retry it with more freedom. A
-        // format problem gets a colder retry instead.
-        temperature: /repeats the focus/i.test(mismatch)
-          ? 0.55
-          : attempt === 0
-            ? 0.2
-            : 0.1,
-        topP: 1.0,
-        disableThinking: true,
-        timeoutMs: 240_000,
-      });
-
-      let parsed: GeneratedExam[];
-      try {
-        parsed = parseExams(raw, 2);
-      } catch {
-        mismatch =
-          "The previous reply was not valid JSON with a top-level questions array.";
-        continue;
-      }
-      const candidate =
-        parsed.find((question) => question.marks === slot.marks) ?? parsed[0];
-      if (!candidate) {
-        mismatch = `The reply for question ${slot.label} had no usable question.`;
-        continue;
-      }
-      if (candidate.marks !== slot.marks) {
-        mismatch = `Question ${slot.label} must be worth ${slot.marks} marks; this reply made it ${candidate.marks}.`;
-        continue;
-      }
-      const scheme = validateMarkingGuide(
-        slot.marking,
-        candidate.markingGuide,
-        slot.marks,
-      );
-      if (!scheme.ok) {
-        mismatch = `The marking guide for ${slot.label} is the wrong shape. ${scheme.reason}`;
-        continue;
-      }
-      const earlier = generated.find(
-        (question) =>
-          question.section === slot.section &&
-          questionsTooSimilar(question.question, candidate.question),
-      );
-      if (distinctFocus && earlier) {
-        mismatch = `Question ${slot.label} repeats the focus of ${earlier.label ?? "an earlier question"} ("${earlier.question}"). Choose a different belief, practice, teaching or topic; do not change only the command word or mark tariff.`;
-        continue;
-      }
-      accepted = {
-        ...candidate,
-        marks: slot.marks,
-        marking: slot.marking,
-        label: slot.label,
-        section: slot.section,
-        sectionInstruction: slot.sectionInstruction,
-        commandWord: slot.command,
-      };
-      if (slot.extract) {
-        const extract = await generateLiteratureExtract(
-          apiKeys,
-          slot,
-          accepted.question,
-        );
-        if (!extract) {
-          mismatch = `Question ${slot.label} needs an extract from ${slot.extractSource ?? "the set text"}.`;
-          continue;
-        }
-        accepted = { ...accepted, extract };
-      }
-      break;
-    }
-
-    if (!accepted) {
-      console.error(
-        "Past paper question format mismatch after retries",
-        slot.label,
-        mismatch,
-      );
-      throw new Error(
-        `The paper came back in the wrong format for ${blueprint.summary}. Try building it again.`,
-      );
-    }
-    generated.push(accepted);
-  }
-
-  const complete = await ensureSelfContained(apiKeys, generated, qualification);
-  if (complete.length !== slots.length) {
-    throw new Error(
-      `The paper came back with ${complete.length} of ${slots.length} answerable parts. Try building it again.`,
-    );
-  }
-  return complete;
 }
 
 /** Builds one saved past paper for a course. Scheduled by `pastPapers.create`. */
@@ -2014,15 +1572,47 @@ export const buildPastPaper = internalAction({
       const chosenPaper = paper.paper
         ? course.pathway?.papers?.find((group) => group.label === paper.paper)
         : undefined;
-      const blueprint = buildPaperBlueprint(course, paper.paper);
-      const questions = await generatePaperQuestions(
-        apiKeys,
-        course,
-        paper.title,
-        blueprint,
-        chosenPaper,
-        seedFromString(`${paper._id}:${startedAt}`),
+      const seed = `${paper._id}:${startedAt}`;
+      const specificationExtract = [
+        [course.examBoard, course.level, course.subject, paper.paper]
+          .filter(Boolean)
+          .join(" · "),
+        specificationDigest(
+          course,
+          chosenPaper ? new Set(chosenPaper.topicIds) : undefined,
+          seedFromString(seed),
+        ),
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      // The index fixes every mark, question count and section before the model
+      // is called. Each reply fills exactly one blueprint line; the gates run in
+      // code before anything can be stored.
+      const built = await buildPaper(
+        coursePaperRequest(course, paper.paper, seed),
+        async ({ plan, line, prompt }) => {
+          await ctx.runMutation(internal.pastPapers.setProgress, {
+            paperId,
+            progress: `Writing question ${line.line} of ${plan.qs}…`,
+          });
+          return nvidiaChat(apiKeys, {
+            model: NVIDIA_TEXT_MODEL,
+            messages: [
+              { role: "system", content: PAPER_SYSTEM_PROMPT },
+              { role: "user", content: prompt },
+            ],
+            maxTokens: 12_000,
+            temperature: 0.2,
+            topP: 1,
+            disableThinking: true,
+            timeoutMs: 240_000,
+          });
+        },
+        { specificationExtract },
       );
+      if (!built.ok) throw new PaperRefusalError(built.message);
+
       // Deleted while the paper was being written: stop instead of saving into
       // a paper that no longer exists.
       const stillThere = await ctx.runQuery(internal.pastPapers.isActive, {
@@ -2033,40 +1623,75 @@ export const buildPastPaper = internalAction({
         paperId,
         progress: "Laying out the paper and its cover…",
       });
-      // The cover is built from the marks the paper actually carries, so the
-      // total it prints is the total the student can score.
-      const totalMarks = blueprint.totalMarks;
-      const cover = buildPaperCover(
-        {
-          subject: course.subject,
-          level: course.level,
-          examBoard: course.examBoard,
-          tier: course.tier,
-          variant: course.variant,
-          poetryTheme: course.poetryTheme,
-          rsReligion: course.rsReligion,
-          rsReligion2: course.rsReligion2,
-          paper: paper.paper,
-          componentCode: blueprint.componentCode,
-          spagMarks: blueprint.spagMarks,
-          questionCount: blueprint.questionCount,
-        },
-        paper.paper ? `${paper.paper} · ${paper.title}` : paper.title,
-        totalMarks,
-        blueprint.durationMinutes,
-        {
-          componentCode: blueprint.componentCode,
-          pageCount: blueprint.pageCount,
-          hasSpag: Boolean(blueprint.spagMarks),
-          notes: blueprint.coverNotes,
-        },
-      );
+
+      const sectionLabel = (id: string) =>
+        built.plan.sections.find((section) => section.id === id)?.label ?? undefined;
+      const questions: GeneratedExam[] = built.paper.sections
+        .flatMap((section) => section.questions)
+        .map((question, index) => {
+          const line = built.plan.blueprint[index]!;
+          const levels =
+            line.type === "essay" ||
+            (line.command === "Evaluate" && line.tariff >= 6);
+          // The rendered total line belongs in the printed paper, not in the
+          // stored criteria: toCriteria would otherwise count it as a mark.
+          const markingGuide = question.markScheme.filter(
+            (row) => !/^Total for Question\b/i.test(row),
+          );
+          const text = [
+            question.stem,
+            question.stimulus ? `\n\n${question.stimulus}` : "",
+            ...(question.parts ?? []).map(
+              (part) => `\n\n(${part.label}) ${part.stem}`,
+            ),
+          ].join("");
+          return {
+            question: text,
+            marks: question.marks,
+            marking: levels ? ("levels" as const) : ("points" as const),
+            modelAnswer: answerOutlineFromMarkScheme(markingGuide),
+            markingGuide,
+            label: question.label,
+            section: sectionLabel(question.section),
+            commandWord: line.command,
+            ...(line.parts?.some((part) => part.spag) ? { spag: true } : {}),
+          };
+        });
+
+      const renderedCover = built.paper.cover;
+      const cover = {
+        paperLabel: paper.paper ? `${paper.paper} · ${paper.title}` : paper.title,
+        qualification: [
+          qualificationText({
+            course: course.subject,
+            examBoard: course.examBoard,
+            level: course.level,
+          }),
+          course.tier,
+          course.variant,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        ...(renderedCover.componentCode
+          ? { componentCode: renderedCover.componentCode }
+          : {}),
+        timeAllowed: renderedCover.time,
+        totalMarks: renderedCover.totalMarks,
+        ...(renderedCover.materials.length > 0
+          ? { materialsHeading: "Materials" }
+          : {}),
+        materials: renderedCover.materials,
+        instructions: renderedCover.instructions,
+        information: renderedCover.information,
+        advice: renderedCover.advice,
+      };
       await ctx.runMutation(internal.pastPapers.completeBuild, {
         paperId,
-        formatId: blueprint.id,
+        formatId: built.plan.key,
         cover,
         questions,
-        questionCount: blueprint.questionCount,
+        questionCount: questions.length,
+        durationMinutes: built.plan.minutes,
       });
       return { ok: true };
     } catch (error) {
@@ -2090,9 +1715,12 @@ export const buildPastPaper = internalAction({
       if (!stillThere) return { ok: false };
       console.error("Past paper build failed", paperId, error);
       await recordProviderIncident(ctx, "paper", error);
-      const message = isRateLimit(error)
-        ? "The AI is rate-limiting Bluprint right now. Wait about a minute, then rebuild this paper."
-        : "We couldn't finish this paper. Your course is saved — try again.";
+      const message =
+        error instanceof PaperRefusalError
+          ? error.message
+          : isRateLimit(error)
+            ? "The AI is rate-limiting Bluprint right now. Wait about a minute, then rebuild this paper."
+            : "We couldn't finish this paper. Your course is saved — try again.";
       await ctx.runMutation(internal.pastPapers.failBuild, { paperId, message });
       return { ok: false };
     }
@@ -3322,7 +2950,16 @@ export const processStudySet = action({
         });
       };
       const quiz = await stage(
-        () => generateQuiz(apiKeys, notes, targetQuiz, deadline, reportQuiz, syllabus),
+        () =>
+          generateQuiz(
+            apiKeys,
+            notes,
+            cards,
+            targetQuiz,
+            deadline,
+            reportQuiz,
+            syllabus,
+          ),
         [],
       );
 
@@ -4517,7 +4154,14 @@ export const gradeRecallAnswer = action({
   handler: async (
     ctx,
     { cardId, answer },
-  ): Promise<{ correct: boolean; score: number; note: string }> => {
+  ): Promise<{
+    correct: boolean;
+    score: number;
+    note: string;
+    coveredUnits: string[];
+    missedUnits: string[];
+    method: string;
+  }> => {
     const userId = await requireUserId(ctx);
     const response = answer.trim();
     if (response.length === 0) {
@@ -4532,73 +4176,46 @@ export const gradeRecallAnswer = action({
     }
 
     const { card, set } = data;
-    // A short vocabulary card is checked without the model. The model is good
-    // at paraphrase, but a different Spanish word is not a paraphrase of the
-    // card, and a confident model verdict must not turn it into a mark.
     if (isLanguageCourse(set.course) && isShortAnswer(card.back)) {
       const local = gradeVocabularyAnswer(card.back, response);
       return {
         correct: local.correct,
         score: local.score,
         note: local.correct
-          ? "That matches the card."
+          ? "You matched the card."
           : `You said “${response.slice(0, 80)}”. The card says “${card.back}”. A different word is a different fact.`,
+        coveredUnits: local.correct ? [card.back] : [],
+        missedUnits: local.correct ? [] : [card.back],
+        method: "exact",
       };
     }
-    const qualification = qualificationText({
-      course: set.course,
-      examBoard: set.examBoard,
-      level: set.level,
+
+    // One measure in every path: the share of the model answer's concept units
+    // the student supplied. The threshold is stored on the card, not derived
+    // from the answer's length here.
+    const local = gradeRecall(card.back, response, {
+      threshold: card.recallThreshold ?? 0.75,
+      units: card.recallUnits,
     });
-    const apiKeys = resolveNvidiaKeys();
-    // A provider failure here reads as Bluprint's AI having trouble; the card
-    // screen then falls back to its own word comparison for the answer.
-    const raw = await withProviderGuard(ctx, "recall", () =>
-      nvidiaChat(apiKeys, {
-      model: NVIDIA_TEXT_MODEL,
-      messages: [
-        { role: "system", content: RECALL_MARKER_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content:
-            (qualification ? `<qualification>${qualification}</qualification>\n` : "") +
-            `<question>${card.front}</question>\n` +
-            `<model_answer>${card.back}</model_answer>\n` +
-            `<student_answer>${response.slice(0, 3000)}</student_answer>\n\n` +
-            `${RECALL_MARKER_RULES}\n\n` +
-            RECALL_MARKER_OUTPUT_SHAPE,
-        },
-      ],
-      // A verdict plus a one-line note; a decisive temperature keeps the same
-      // answer marking the same way twice.
-      maxTokens: 400,
-      temperature: 0,
-      disableThinking: true,
-      }),
-    );
-
-    const parsed = parseModelJson<{
-      correct?: unknown;
-      score?: unknown;
-      note?: unknown;
-    }>(raw);
-    const claimed = Number(parsed.score);
-    const score = Number.isFinite(claimed)
-      ? Math.max(0, Math.min(1, claimed))
-      : parsed.correct === true
-        ? 1
-        : 0;
-    // The model’s verdict and its own score must agree. Previously a reply
-    // with correct:true and a low score was shown as a pass.
-    const correct = parsed.correct === true && score >= 0.75;
-    const note = studentVoice(asText(parsed.note, 300));
-    if (typeof parsed.correct !== "boolean" || !note) {
-      throw new Error(
-        "The meaning check did not return a usable mark. Try again, or use self-mark.",
-      );
-    }
-
-    return { correct, score, note };
+    const covered = local.coveredUnits ?? [];
+    const missed = local.missedUnits ?? [];
+    const note = local.correct
+      ? `You included ${covered.length} of ${covered.length + missed.length} key units.`
+      : `You included ${covered.length} of ${
+          covered.length + missed.length
+        } key units. ${
+          missed.length > 0
+            ? `Missing: ${missed.slice(0, 5).join(", ")}.`
+            : "Add more of the model answer's key points."
+        }`;
+    return {
+      correct: local.correct,
+      score: local.score,
+      note,
+      coveredUnits: covered,
+      missedUnits: missed,
+      method: local.method ?? "units",
+    };
   },
 });
 
@@ -4913,7 +4530,7 @@ async function streamNvidiaAnswer(
     const model = models[Math.min(modelIndex, models.length - 1)]!;
     let response: Response;
     try {
-      response = await fetch(NVIDIA_CHAT_URL, {
+      response = await fetch(gatewayChatUrl(), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,

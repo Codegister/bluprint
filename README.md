@@ -618,6 +618,58 @@ same prompt on `nvidia/nemotron-3.5-bolt-e4b` and then
 `nvidia/nemotron-3-ultra-550b-a55b`. The student sees a friendly "the tutor is having
 trouble" message, never the provider's text.
 
+### Run the AI calls through Respan Gateway (optional)
+
+[Respan Gateway](https://github.com/respanai/respan-gateway?utm_source=freebuff&utm_medium=paid&utm_campaign=respan-gateway&bfcid=bfc_1.eyJpZCI6ImUwNzkyMDYzLWNlY2YtNDJmOS04N2E2LTY5NWE3YmVjOGY3MCIsImMiOiIyMDM2ODZkZS1mMzg0LTQ4NTQtYmViNC1hYzBiYWRmNmM1NTUiLCJrIjoiM2IxMGE4YmUtNzgyOS00MmJhLWFmNmEtYmI0YWUxZTRhY2Y4IiwiaWF0IjoxNzkzODY5NTYxfQ.8o0EP320T8gDdz6iQeiViHmSat7eiNGGukahLJEwP9A)
+is an open-source, OpenAI-compatible front door for model calls. It is wired in
+as an **optional** local transport: with it running, study-set building, marking and the
+tutor go through the gateway's routing, retries and request log; without it the app calls
+NVIDIA directly exactly as before. It runs on the developer's own `NVIDIA_API_KEY`, so no
+Respan account, hosted credit or trace export is involved.
+
+`gateway.toml` in the repository root is the configuration: it serves on
+`127.0.0.1:8080`, reaches NVIDIA as any OpenAI-compatible endpoint through
+`base_url = "https://integrate.api.nvidia.com/v1"`, and forwards every model id unchanged,
+so the `NVIDIA_*_MODEL` overrides above keep working. The key is a reference
+(`key = "env:NVIDIA_API_KEY"`), never a literal.
+
+Install it once, in a local Python environment beside the app:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --only-binary=:all: -r requirements.txt   # respan-gateway==0.3.0
+```
+
+Restart command (leave it running in its own terminal while developing):
+
+```bash
+NVIDIA_API_KEY="nvapi-..." .venv/bin/respan-gateway
+```
+
+Then point the app at it — the same variable in `.env.local` for a local Convex deployment,
+or on the deployment itself with `npx convex env set RESPAN_GATEWAY_URL "http://127.0.0.1:8080"`:
+
+```bash
+# .env.local
+RESPAN_GATEWAY_URL=http://127.0.0.1:8080
+```
+
+`src/convex/lib/gatewayConfig.ts` accepts `host:port`, `.../v1` or the full
+`.../v1/chat/completions` URL, and an empty value means "no gateway". The browser never
+sees this URL or either key: the requests are still built in `src/convex/ai.ts`.
+
+A hosted Convex deployment cannot reach `127.0.0.1` on your laptop, so this is a local
+development path — a tunnel or a gateway on the same host is the hosted equivalent.
+
+**Observed result.** `bun run gateway:smoke` starts an OpenAI-compatible fixture on
+loopback, serves it through this `gateway.toml` with `respan-gateway`, and sends the
+transport's own chat-completions request through the app's resolved URL. It passed:
+the gateway answered HTTP 200, the reply came back through it, the upstream received the
+full model id (`nvidia/nemotron-3.5-lightning-30b-a3b`), and the upstream saw the gateway's
+provider key rather than the key the app sent. **No live provider request was verified** —
+the reply came from the local fixture, so the first real NVIDIA call is the developer's
+first normal run (`bun dev`). No server is left running by the check.
+
 ### AI provider health alerts
 
 Every failed NVIDIA call is recorded in `aiIncidents` (feature, model id, HTTP status —

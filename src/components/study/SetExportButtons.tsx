@@ -52,7 +52,7 @@ export function SetExportButtons({ setId }: { setId: Id<"studySets"> }) {
       </summary>
       <p className="mt-2 text-[0.76rem] leading-relaxed text-muted-foreground">
         CSV for a spreadsheet, an Anki import file for spaced repetition, or the
-        full set as JSON including your answers and marks.
+        full set as JSON including your answers, marks and review history.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         {(
