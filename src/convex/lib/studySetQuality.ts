@@ -720,7 +720,10 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
       continue;
     }
     const candidate = { prompt: front, answer: back };
-    const unit = sourceUnitFor(back);
+    // The source-unit rule exists to stop one note sentence being carded twice.
+    // A scope brief has no facts of its own, so mapping cards back to its lines
+    // would make unrelated facts look like one source sentence.
+    const unit = ground ? sourceUnitFor(back) : -1;
     if (
       kept.some(
         (previous) =>
@@ -746,7 +749,10 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
       front,
       back,
       keyPoint,
-      beyondNotes: card.beyondNotes,
+      // "Beyond your notes" describes an upload that strayed outside its
+      // source. A course card is supposed to add subject content the scope
+      // never contained, so the warning would be untrue.
+      beyondNotes: ground ? card.beyondNotes : undefined,
     });
   }
 
@@ -1135,7 +1141,10 @@ export function prepareQuiz<T extends QuizLike>(
   for (const item of items) {
     const answer = correctAnswerFor(item);
     const explanation = repairQuizExplanation(item.explanation, item);
-    if (isSubjectDeletionCloze(item, notes)) {
+    if (
+      isClozeQuestion(item) ||
+      (ground && isSubjectDeletionCloze(item, notes))
+    ) {
       reasons.push("cloze deletion");
       continue;
     }
@@ -1172,6 +1181,7 @@ export function prepareQuiz<T extends QuizLike>(
       question: item.question.replace(/\s+/g, " ").trim(),
       options: item.options.map(formatOption),
       explanation,
+      ...(ground ? {} : { beyondNotes: undefined }),
     };
     if ((normalised.type ?? "mcq") === "mcq") {
       const issue = mcqOptionIssue(normalised);

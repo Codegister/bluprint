@@ -42,6 +42,14 @@ import {
   prepareQuiz,
 } from "./lib/studySetQuality";
 import { parseSummary, type Summary } from "./lib/summary";
+import {
+  SYLLABUS_CONTENT_SOURCE,
+  cardSourceRule,
+  contentNotSpecRule,
+  examSourceRule,
+  quizSourceRule,
+  summaryFidelityRule,
+} from "./lib/syllabusPrompt";
 import { dominantNounPhrase } from "./lib/titles";
 import {
   parseTopicNotes,
@@ -1022,18 +1030,6 @@ const GROUNDING_RULES =
   "If the material is too thin for the number asked for, write fewer items — a smaller set built from the notes is correct, and inventing extra material is not. " +
   "If one item genuinely needs a fact the material lacks, it is allowed, but mark it with \"beyondNotes\":true (at most one item in five) so the student knows to check it against their notes.";
 
-/**
- * The questions a student should practise are about the subject, not about the
- * document that lists it. A syllabus line names a scope; asking the student to
- * repeat that scope is not retrieval of knowledge and makes a deck feel like a
- * quiz on the exam board instead of on the material.
- */
-const CONTENT_NOT_SPEC_RULES =
-  "CONTENT, NOT THE QUALIFICATION: test one concrete subject fact or idea at a time. " +
-  "Never ask what the specification, syllabus, exam board, paper, mark scheme or assessment objective says, covers, requires or rewards, and never ask how many marks, papers, hours or minutes. " +
-  "A front asks one unambiguous question; its back answers only that question. " +
-  "Do not repeat or reword an earlier item: a paraphrase of an existing question is still a repeat. If the material cannot support another distinct fact, return fewer items.";
-
 /** Cards, quiz questions and exam questions all carry the flag the same way. */
 const BEYOND_NOTES_FIELD = ' Include "beyondNotes":true only on an item that uses a fact from outside the material.';
 
@@ -1129,11 +1125,15 @@ async function summariseNotes(
           (qualification
             ? `This material is for ${qualification}. Angle the exam focus at that qualification and use its command words.\n`
             : "") +
-          (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
-          "Create a revision summary of the material. Return JSON shaped exactly like:\n" +
+          (syllabus
+            ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n`
+            : "") +
+          (syllabus
+            ? "Create a revision summary of the subject content these topics cover. Return JSON shaped exactly like:\n"
+            : "Create a revision summary of the material. Return JSON shaped exactly like:\n") +
           '{"title":"2-5 word topic name","overview":"3-5 sentence overview","keyPoints":["6-10 specific points worth remembering"],"examFocus":["3-5 likely exam angles or things to memorise"]}\n' +
           "The title names the topic, the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. " +
-          "Be concrete and faithful to the material. No markdown inside values.",
+          `${summaryFidelityRule(syllabus)} No markdown inside values.`,
       },
     ],
     maxTokens: 2200,
@@ -1221,15 +1221,19 @@ async function generateCards(
           role: "user",
           content:
             `${materialBlock(notes)}\n\n` +
-            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : `${GROUNDING_RULES}\n`) +
-            `Create ${want} revision flashcards from this material. Cover the breadth of the material, but prioritise the niche, exam-distinguishing details a student could actually be tested on: exact figures and dates, names, formulas, precise definitions, exceptions to rules, named examples and case studies, cause-and-effect chains, and common confusions. ` +
+            (syllabus
+              ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n`
+              : `${GROUNDING_RULES}\n`) +
+            `Create ${want} revision flashcards from ${syllabus ? "this scope" : "this material"}. Cover the breadth of ${syllabus ? "the topics" : "the material"}, but prioritise the niche, exam-distinguishing details a student could actually be tested on: exact figures and dates, names, formulas, precise definitions, exceptions to rules, named examples and case studies, cause-and-effect chains, and common confusions. ` +
             "Each card must test one fact, not a list. Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific, unambiguous question. Backs must answer only that question in at most two sentences and 40 words, with the precise detail and a caveat where one exists. Never copy a sentence from the material: restate the fact as a short answer. " +
-            "Every card also needs keyPoint: one revision-ready claim of at most 25 words, in the same order as the card, not a verbatim source sentence. If the material does not state the fact, do not write the card. " +
-            CONTENT_NOT_SPEC_RULES + " " +
+            "Every card also needs keyPoint: one revision-ready claim of at most 25 words, in the same order as the card, not a verbatim source sentence. " +
+            `${cardSourceRule(syllabus)} ` +
+            contentNotSpecRule(syllabus) +
+            " " +
             (previous
               ? `These flashcards already exist; write different, non-overlapping ones. A reworded card is still a repeat:\n${previous}\n`
               : "") +
-            `Return JSON exactly like: {"cards":[{"front":"...","back":"...","keyPoint":"..."}]}${BEYOND_NOTES_FIELD}`,
+            `Return JSON exactly like: {"cards":[{"front":"...","back":"...","keyPoint":"..."}]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
       ],
       maxTokens: 7000,
@@ -1334,15 +1338,23 @@ async function generateQuiz(
             `${materialBlock(notes)}\n\n` +
             (cards.length > 0
               ? `<already_tested_by_cards>\n${cardBlock}\n</already_tested_by_cards>\n\n` +
-                "The cards above already test those facts. Do not ask about the same fact in any direction. Use a different, still-taught fact from the material. If no different fact remains, return fewer questions.\n\n"
+                "The cards above already test those facts. Do not ask about the same fact in any direction. " +
+                (syllabus
+                  ? "Use a different fact from the subject content. If no different fact remains, return fewer questions.\n\n"
+                  : "Use a different, still-taught fact from the material. If no different fact remains, return fewer questions.\n\n")
               : "") +
-            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : "") +
+            (syllabus
+              ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n`
+              : "") +
             `Create ${want} quiz questions of increasing difficulty. Use only multiple-choice and short typed-answer questions: roughly half of each. Do not write cloze or fill-the-gap questions. ` +
-            CONTENT_NOT_SPEC_RULES + " " +
-            "Every answer must be stated in the material above. Do not test a fact that a card already tests, and do not ask the same fact from the other direction (for example, receptor → stimulus and stimulus → receptor are one fact). " +
+            contentNotSpecRule(syllabus) +
+            " " +
+            `${quizSourceRule(syllabus)} Do not test a fact that a card already tests, and do not ask the same fact from the other direction (for example, receptor → stimulus and stimulus → receptor are one fact). ` +
             "Do not ask which taught difference is absent while using the other taught differences as distractors; that is a negative-discrimination item and teaches the wrong thing. " +
             (syllabus ? "" : `${GROUNDING_RULES}\n`) +
-            "Cover different parts of the material. Where the material gives data, a worked example or a case, ask the student to apply a concept to that — not to an example the material never mentions. " +
+            (syllabus
+              ? "Cover different topics. Where the qualification calls for applying a concept, ask the student to apply it to a worked example or case from the course. "
+              : "Cover different parts of the material. Where the material gives data, a worked example or a case, ask the student to apply a concept to that — not to an example the material never mentions. ") +
             "A multiple-choice question needs exactly 4 plausible options and one correct index (0-3). All four options must be grammatically parallel, similar in length (within about 20%), and the same kind of phrase. The correct option must not be the longest, the only two-part option, or the only option repeating a distinctive word from the stem. Do not write an option that is obviously the only grammatical fit. " +
             "A typed question asks for a word or short phrase and must be answerable in a few words, with no options. " +
             "Every question needs a 1-2 sentence explanation that teaches: why the correct answer is right and why at least one named distractor is wrong. Never open with 'The material states', 'The notes define' or 'explicitly in the material'. An explanation must not reveal the answer to any other question. " +
@@ -1353,7 +1365,7 @@ async function generateQuiz(
             'Return JSON exactly like: {"questions":[' +
             '{"question":"...","type":"mcq","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."},' +
             '{"question":"Name the cell organelle where aerobic respiration happens.","type":"typed","answer":"mitochondria","acceptedAnswers":["mitochondrion","the mitochondria"],"explanation":"..."}' +
-            `]}${BEYOND_NOTES_FIELD}`,
+            `]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
       ],
       // A batch of eight with explanations needs far more room than the old
@@ -1432,16 +1444,18 @@ async function generateExams(
           content:
             `${materialBlock(notes)}\n\n` +
             (qualification ? `This set is for ${qualification}.\n` : "") +
-            (syllabus ? `${PATHWAY_MATERIAL_RULES}\n` : `${GROUNDING_RULES}\n`) +
+            (syllabus
+              ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n`
+              : `${GROUNDING_RULES}\n`) +
             "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
             `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
             "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
-            "Every bullet must be directly supported by the material above; never introduce a fact, example or mechanism the material does not contain. If the material cannot support the marks you planned, lower the question's marks so the bullets still add up exactly. " +
+            `${examSourceRule(syllabus)} ` +
             "Include a full-mark model answer that hits each bullet. " +
             (previous
               ? `Do not repeat these existing questions:\n${previous}\n`
               : "") +
-            `Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}${BEYOND_NOTES_FIELD}`,
+            `Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
       ],
       maxTokens: 9000,

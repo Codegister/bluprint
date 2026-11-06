@@ -51,6 +51,7 @@ import {
 } from "./lib/studySetQuality";
 import { shortfallFor, shortfallSentence } from "./lib/buildDefaults";
 import { cleanGeneratedText } from "./lib/register";
+import { isSyllabusOutline } from "./lib/syllabusOutline";
 
 const sourceType = v.union(
   v.literal("text"),
@@ -1402,6 +1403,7 @@ export const completeGeneration = internalMutation({
 
     const now = Date.now();
     const specPoints = set.specPoints ?? [];
+    const syllabusOutline = isSyllabusOutline(set.notes);
     const level = set.level;
     const subject = set.course;
 
@@ -1498,7 +1500,7 @@ export const completeGeneration = internalMutation({
         type: question.type,
         answer: question.answer,
         acceptedAnswers: question.acceptedAnswers,
-        beyondNotes: question.beyondNotes,
+        beyondNotes: syllabusOutline ? undefined : question.beyondNotes,
         // Quiz facts are deliberately disjoint from cards, so there is no
         // source card to link. The field stays optional for older rows.
         specRef: tag(
@@ -1518,7 +1520,7 @@ export const completeGeneration = internalMutation({
         marks: question.marks,
         modelAnswer: question.modelAnswer,
         markingGuide: question.markingGuide,
-        beyondNotes: question.beyondNotes,
+        beyondNotes: syllabusOutline ? undefined : question.beyondNotes,
         specRef: tag(`${question.question} ${question.modelAnswer}`),
         // Stored as discrete criteria, with the marks the guide declares.
         criteria:
@@ -1570,18 +1572,20 @@ export const completeGeneration = internalMutation({
       examCount: storedExams.length,
       knownCount: 0,
       generationNote: generationNote || undefined,
-      coverageNote: [
-        coverage.note,
-        summaryCoverage.omitted.length > 0
-          ? `The summary does not name: ${summaryCoverage.omitted.slice(0, 4).join("; ")}${
-              summaryCoverage.omitted.length > 4
-                ? `; and ${summaryCoverage.omitted.length - 4} more`
-                : ""
-            }. The cards still cover the parts they name.`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ") || undefined,
+      coverageNote: syllabusOutline
+        ? undefined
+        : [
+            coverage.note,
+            summaryCoverage.omitted.length > 0
+              ? `The summary does not name: ${summaryCoverage.omitted.slice(0, 4).join("; ")}${
+                  summaryCoverage.omitted.length > 4
+                    ? `; and ${summaryCoverage.omitted.length - 4} more`
+                    : ""
+                }. The cards still cover the parts they name.`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined,
       lastQuizScore: undefined,
       lastQuizTotal: undefined,
       status: "ready",
