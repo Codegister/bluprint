@@ -304,8 +304,12 @@ it, so the tab doubles as the list of what is still missing.
 and it is the one place a course cannot be missing: where the subject publishes notes they
 are shown as published, and where it does not — Edexcel GCSE Religious Studies, AQA GCSE
 Spanish, and any topic whose note pages do not line up — Bluprint writes detailed notes
-from the specification and the panel says so. A study set opens on its **Overview**, with tabs for
-**Flashcards**, **Quiz**, **Exam practice** and **Needs work** (when there is any). A
+from the specification and the panel says so. A study set opens on its **Overview**, which is
+just the specification points the set was built from, each one ticked once cards or questions
+cover it; its tabs are **Flashcards**, **Quiz**, **Exam practice** and **Needs work** (when
+there is any). A set built from your own uploads has no specification to list, so its
+Overview lists the key points the build wrote, one per card, beside the
+material they came from. A
 single **Continue studying** button picks the recommended mode — due cards first, then the
 quiz if it has never been taken — and _Edit set_ and _Ask the tutor_ sit in the `⋯` menu.
 Sets built from a course topic link back to that course.

@@ -9,6 +9,8 @@ import {
   cardNeedsRepair,
   cleanExplanation,
   explanationLeaksAnswer,
+  explanationTeaches,
+  repairQuizExplanation,
   formatOption,
   isClaimSupportedByNotes,
   isClozeQuestion,
@@ -23,6 +25,7 @@ import {
   sourceCoverage,
   spreadCorrectPositions,
 } from "../src/convex/lib/studySetQuality";
+import { SYLLABUS_SCOPE_HEADER } from "../src/convex/lib/syllabusOutline";
 import { cleanTopicTitle, dominantNounPhrase } from "../src/convex/lib/titles";
 import { createSetFailureMessage } from "../src/lib/errors";
 
@@ -174,6 +177,53 @@ describe("Part 1 — grounded, distinct cards", () => {
     expect(note).toBe("Built 7 of 25. Your notes supported 7.");
     expect(note.match(/7/g)).toHaveLength(2);
     expect(note.match(/25/g)).toHaveLength(1);
+  });
+
+  test("1.7 a syllabus outline keeps the content it asks the model to write", () => {
+    // Course sets send a scope brief, not teaching material, and the generator
+    // is told to write the subject content itself. Grounding those items in the
+    // brief dropped the whole deck, so a pathway build stored no cards and no
+    // quiz questions at all.
+    const outline = [
+      "Course: GCSE Chemistry",
+      "Exam board: Pearson Edexcel · Higher",
+      "",
+      SYLLABUS_SCOPE_HEADER,
+      "",
+      "Topic: Atomic Structure (specification 1.1)",
+      "Unit: Atomic Structure",
+      "Covers:",
+      "- 1.1.1 Changing Models of the Atom",
+      "- 1.1.2 Atomic Structure",
+      "- 1.1.4 Isotopes",
+    ].join("\n");
+    const card = {
+      front: "What is an isotope?",
+      back: "Atoms of the same element with different numbers of neutrons.",
+    };
+    // The brief only names the topic; it does not state the fact.
+    expect(isClaimSupportedByNotes(outline, card.back)).toBe(false);
+    expect(prepareCards([card], outline).cards).toHaveLength(1);
+
+    const question = {
+      question: "Name the subatomic particle whose number differs between isotopes.",
+      options: [],
+      correctIndex: 0,
+      type: "typed" as const,
+      answer: "Neutrons",
+      acceptedAnswers: [],
+      explanation:
+        "Isotopes have the same number of protons because their neutron number differs.",
+    };
+    expect(prepareQuiz([question], [], outline).items).toHaveLength(1);
+    // Uploaded notes still have to support the answer: the rule is unchanged.
+    expect(
+      prepareQuiz(
+        [question],
+        [],
+        "Isotopes have the same number of protons but different numbers of neutrons.",
+      ).items,
+    ).toHaveLength(1);
   });
 });
 
@@ -353,12 +403,27 @@ Coordination centres process information and send instructions to effectors.`;
     expect(Math.max(...counts)).toBeLessThanOrEqual(8);
   });
 
-  test("2.7 explanations never narrate the source", () => {
-    const cleaned = cleanExplanation(
-      "The material states that receptors detect stimuli.",
+  test("2.7 explanations justify the answer and name a wrong option", () => {
+    const item = {
+      question: "Which gas is released when a leaf photosynthesises?",
+      options: ["Oxygen gas", "Nitrogen gas", "Methane gas", "Argon gas"],
+      correctIndex: 0,
+      explanation: "Oxygen is produced by the light-dependent reactions.",
+      type: "mcq" as const,
+    };
+    // This explanation used to pass: it is accurate and does not narrate the
+    // source, but it never says why a distractor is wrong.
+    expect(explanationTeaches(item.explanation, item)).toBe(false);
+    const repaired = repairQuizExplanation(item.explanation, item);
+    expect(repaired).toMatch(/Oxygen is produced/i);
+    expect(repaired).toMatch(/Nitrogen gas is not correct/i);
+    expect(explanationTeaches(repaired, item)).toBe(true);
+
+    const narrating = cleanExplanation(
+      "The material states that oxygen is produced by the light reactions, unlike nitrogen gas.",
     );
-    expect(cleaned).not.toMatch(/material|states/i);
-    expect(cleaned).toMatch(/receptors detect stimuli/i);
+    expect(narrating).not.toMatch(/material|states/i);
+    expect(explanationTeaches(narrating, item)).toBe(true);
     expect(formatOption("  oxygen gas. ")).toBe("Oxygen gas");
   });
 
@@ -366,6 +431,24 @@ Coordination centres process information and send instructions to effectors.`;
     expect(quizScorePercent(5, 5)).toBe(100);
     expect(quizScorePercent(4, 5)).toBe(80);
     expect(quizScorePercent(0, 0)).toBe(0);
+  });
+
+  test("2.9 numeric answers are not judged on word matching", () => {
+    const item = {
+      question: "How many hydrogen atoms form one hydrogen molecule?",
+      options: ["2", "3", "4", "5"],
+      correctIndex: 0,
+      explanation:
+        "Two hydrogen atoms bond together, so 3 and 4 are not correct.",
+      type: "mcq" as const,
+    };
+    // The answer is spelled out as a word and a distractor is a bare number, so
+    // neither can be matched against the explanation's vocabulary. Dropping
+    // this as "explanation does not teach" removed every numeric question.
+    expect(explanationTeaches(item.explanation, item)).toBe(true);
+    expect(explanationTeaches("3 atoms.", item)).toBe(false);
+    const outline = `${SYLLABUS_SCOPE_HEADER}\nTopic: Atomic Structure`;
+    expect(prepareQuiz([item], [], outline).items).toHaveLength(1);
   });
 });
 
@@ -576,7 +659,8 @@ describe("Part 5 — fixture sign-off", () => {
           question: "Which year did the Spanish Armada sail?",
           options: [],
           correctIndex: 0,
-          explanation: "The Armada sailed in 1588.",
+          explanation:
+            "The Spanish Armada sailed in 1588 as part of an attempted invasion of England.",
           type: "typed",
           answer: "1588",
         },
@@ -584,7 +668,8 @@ describe("Part 5 — fixture sign-off", () => {
           question: "When did the English Civil War begin?",
           options: [],
           correctIndex: 0,
-          explanation: "The Civil War began in 1642.",
+          explanation:
+            "The English Civil War began in 1642 after a conflict between the Crown and Parliament.",
           type: "typed",
           answer: "1642",
         },

@@ -15,6 +15,7 @@ import {
 } from "./recall";
 import { findOffSpecTerm } from "./register";
 import { matchSpecPoint, type SpecPoint } from "./specMapping";
+import { isSyllabusOutline } from "./syllabusOutline";
 
 export type CardLike = {
   id?: string;
@@ -686,6 +687,10 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
   notes: string,
 ): { cards: PreparedCard[]; dropped: number } {
   const kept: PreparedCard[] = [];
+  // A course set is built from a syllabus outline, so its notes name the scope
+  // rather than the facts. Grounding against them would drop every card the
+  // model was asked to write; the deck-level checks still run.
+  const ground = !isSyllabusOutline(notes);
   const units = sourceUnits(notes);
   // The sentence a claim came from. Two cards that paraphrase the same sentence
   // are one fact even when their wording barely overlaps.
@@ -710,7 +715,7 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
       dropped += 1;
       continue;
     }
-    if (!isCardGroundedInNotes(notes, { front, back })) {
+    if (ground && !isCardGroundedInNotes(notes, { front, back })) {
       dropped += 1;
       continue;
     }
@@ -733,7 +738,7 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
       continue;
     }
     const keyPoint = keyPointForCard({ front, back });
-    if (!isClaimSupportedByNotes(notes, keyPoint)) {
+    if (ground && !isClaimSupportedByNotes(notes, keyPoint)) {
       dropped += 1;
       continue;
     }
@@ -886,6 +891,116 @@ export function cleanExplanation(explanation: string): string {
   return clean.charAt(0).toUpperCase() + clean.slice(1);
 }
 
+/** Markers that a named option is being rejected, not merely mentioned. */
+const WRONG_OPTION_MARKERS =
+  /\b(?:not|never|isn't|aren't|doesn't|don't|cannot|can't|wrong|incorrect|unlike|rather than|instead of)\b/i;
+
+/** Options that cannot be negated in a sentence without inverting its sense. */
+const UNNAMEABLE_OPTION =
+  /^(?:none of|neither\b|not sure|don'?t know|no idea)/i;
+
+/** Markers that an explanation gives a reason, not just a label. */
+const REASON_MARKERS =
+  /\b(?:because|since|therefore|which|allows|causes|needs?|requires?|produce(?:s|d|ing)?|release(?:s|d|ing)?|absorb(?:s|ed|ing)?|control(?:s|led|ling)?|maintain(?:s|ed|ing)?|prevent(?:s|ed|ing)?|makes?|gives?|leads?|speeds?|balances?|process(?:es|ed|ing)?|pass(?:es|ed|ing)?|send(?:s|ing)?|sent|sailed|began|started|occurred|took|store(?:s|d|ing)?|form(?:s|ed|ing)?)\b/i;
+
+function optionContentStems(option: string): string[] {
+  return contentStems(option).filter((term) => term.length >= 4);
+}
+
+/**
+ * Whether an explanation explicitly identifies at least one wrong option as
+ * wrong. Merely mentioning the distractor is not enough: a negation or
+ * contrast marker must occur near that option's own vocabulary.
+ */
+export function explanationNamesWrongOption(
+  explanation: string,
+  options: readonly string[],
+  correctIndex: number,
+): boolean {
+  const text = normalizeAnswer(explanation);
+  if (!text) return false;
+  for (const [index, option] of options.entries()) {
+    if (index === correctIndex) continue;
+    for (const term of optionContentStems(option)) {
+      let from = 0;
+      while (true) {
+        const at = text.indexOf(term, from);
+        if (at < 0) break;
+        const window = text.slice(Math.max(0, at - 100), at + term.length + 100);
+        if (WRONG_OPTION_MARKERS.test(window)) return true;
+        from = at + term.length;
+      }
+    }
+  }
+  return false;
+}
+
+/** The corrected answer must be present, with a reason, before the item ships. */
+export function explanationJustifiesCorrect(
+  explanation: string,
+  item: Pick<QuizLike, "options" | "correctIndex" | "answer" | "type">,
+): boolean {
+  const answer = correctAnswerFor(item as QuizLike);
+  if (!answer || contentWords(explanation).length < 5) return false;
+  const text = normalizeAnswer(explanation);
+  const answerText = normalizeAnswer(answer);
+  const mentioned =
+    text.includes(answerText) ||
+    optionContentStems(answer).some((term) => text.includes(term));
+  return mentioned && REASON_MARKERS.test(text);
+}
+
+export type TeachingQuizLike = QuizLike & Pick<QuizLike, "options" | "correctIndex">;
+
+/** Full teaching check used before a question is stored. */
+export function explanationTeaches(
+  explanation: string,
+  item: TeachingQuizLike,
+): boolean {
+  const clean = cleanExplanation(explanation);
+  if (!clean) return false;
+  // A numeric answer ("2", "1588") cannot be matched against prose: the
+  // explanation may spell it out ("two atoms") and a numeric distractor has no
+  // vocabulary of its own to name. Judge those items on having a real
+  // explanation rather than dropping every numeric question.
+  if (!/[a-z]/i.test(correctAnswerFor(item))) {
+    return contentWords(clean).length >= 5;
+  }
+  if ((item.type ?? "mcq") !== "mcq") {
+    return explanationJustifiesCorrect(clean, item);
+  }
+  return (
+    explanationJustifiesCorrect(clean, item) &&
+    explanationNamesWrongOption(clean, item.options, item.correctIndex)
+  );
+}
+
+/**
+ * Repairs the common case: the explanation justifies the correct answer but
+ * forgets to say why a distractor is wrong. The name is taken from the actual
+ * options, never invented.
+ */
+export function repairQuizExplanation(
+  explanation: string,
+  item: TeachingQuizLike,
+): string {
+  const clean = cleanExplanation(explanation);
+  if (!clean) return "";
+  if ((item.type ?? "mcq") !== "mcq") return clean;
+  if (!explanationJustifiesCorrect(clean, item)) return clean;
+  if (explanationNamesWrongOption(clean, item.options, item.correctIndex)) {
+    return clean;
+  }
+  const wrong = item.options.find(
+    (option, index) =>
+      index !== item.correctIndex &&
+      !UNNAMEABLE_OPTION.test(formatOption(option)) &&
+      optionContentStems(option).length > 0,
+  );
+  if (!wrong) return clean;
+  return `${clean.replace(/[.!?]+$/, "")}. ${formatOption(wrong)} is not correct.`;
+}
+
 /** Whether one explanation gives away another question's correct answer. */
 export function explanationLeaksAnswer(
   item: Pick<QuizLike, "explanation">,
@@ -1013,17 +1128,23 @@ export function prepareQuiz<T extends QuizLike>(
   options: { level?: string; subject?: string } = {},
 ): { items: Array<PreparedQuiz<T>>; dropped: number; reasons: string[] } {
   const reasons: string[] = [];
+  // A syllabus outline cannot support the facts it asks for; see prepareCards.
+  const ground = !isSyllabusOutline(notes);
   let kept: Array<PreparedQuiz<T>> = [];
 
   for (const item of items) {
     const answer = correctAnswerFor(item);
-    const explanation = cleanExplanation(item.explanation);
+    const explanation = repairQuizExplanation(item.explanation, item);
     if (isSubjectDeletionCloze(item, notes)) {
       reasons.push("cloze deletion");
       continue;
     }
     if (!answer || !explanation) {
       reasons.push("missing answer or explanation");
+      continue;
+    }
+    if (!explanationTeaches(explanation, item)) {
+      reasons.push("explanation does not teach");
       continue;
     }
     if (isSpecificationItem(item.question, answer)) {
@@ -1034,7 +1155,7 @@ export function prepareQuiz<T extends QuizLike>(
       reasons.push("negative discrimination");
       continue;
     }
-    if (!isClaimSupportedByNotes(notes, answer)) {
+    if (ground && !isClaimSupportedByNotes(notes, answer)) {
       reasons.push("answer not in notes");
       continue;
     }

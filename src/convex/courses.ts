@@ -20,6 +20,7 @@ import {
 import { literatureChoicesFor } from "./lib/literatureChoices";
 import { consumeBuildAllowance } from "./buildUsage";
 import { requireUserId } from "./lib/requireUser";
+import { SYLLABUS_SCOPE_HEADER } from "./lib/syllabusOutline";
 import { requireOwner, requireVerifiedUser } from "./lib/authorization";
 import {
   clusterForTheme,
@@ -762,7 +763,7 @@ function buildTopicNotes(
     `Exam board: ${course.examBoard}${course.variant ? ` · ${course.variant}` : ""}${course.tier ? ` · ${course.tier}` : ""}`,
     course.poetryTheme ? `Poetry theme: ${course.poetryTheme}` : "",
     "",
-    "Syllabus scope for this set:",
+    SYLLABUS_SCOPE_HEADER,
   ];
 
   // The topic's exam skill is technique, not subject content: sending it to the

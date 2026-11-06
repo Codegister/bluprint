@@ -9,7 +9,6 @@ import { QuizRunner } from "@/components/study/QuizRunner";
 import { ReadinessPanel } from "@/components/study/ReadinessPanel";
 import { SetSettingsDialog } from "@/components/study/SetSettingsDialog";
 import { SetExportButtons } from "@/components/study/SetExportButtons";
-import { SpecCoveragePanel } from "@/components/study/SpecCoveragePanel";
 import { WeakSpots } from "@/components/study/WeakSpots";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -17,7 +16,7 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
 import { buildErrorMessage, notifyError, readableError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
-import { percent, relativeDate, sourceLabel } from "@/lib/format";
+import { percent, plural, relativeDate, sourceLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -25,6 +24,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  CircleDashed,
   Layers3,
   Loader2,
   Pencil,
@@ -376,8 +376,13 @@ function ErrorPanel({
   );
 }
 
-/** The summary and its source material, which is the set overview's focus. */
-function SummaryView({
+/**
+ * A set built from the student's own uploads has no specification to list, so
+ * its overview is the points the build wrote — one per card — and the material
+ * they were drawn from. Coverage cannot be ticked here: every key point has a
+ * card behind it by construction, and there is no syllabus to fall short of.
+ */
+function UploadOverview({
   set,
   sourceImages,
 }: {
@@ -403,9 +408,19 @@ function SummaryView({
           </div>
         )}
         <section className="rounded-[2rem] border border-border bg-card p-6">
-          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-            Key points
-          </h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
+              Key points
+            </h2>
+            <span className="rounded-full bg-brand-panel px-2.5 py-0.5 text-[0.7rem] font-bold tabular-nums text-brand-ink/70">
+              {plural(summary.keyPoints.length, "point")}
+            </span>
+          </div>
+          <p className="mt-1 text-[0.78rem] leading-relaxed text-muted-foreground">
+            This set was built from your own material, so there is no
+            specification to tick off. These are the points it teaches, one per
+            card.
+          </p>
           <ol className="mt-4 space-y-3">
             {summary.keyPoints.map((point, index) => (
               <li key={point} className="flex items-start gap-3">
@@ -417,35 +432,9 @@ function SummaryView({
             ))}
           </ol>
         </section>
-
-        <section className="rounded-[2rem] border border-border bg-card p-6">
-          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-            Overview
-          </h2>
-          <p className="mt-3 whitespace-pre-wrap text-[0.94rem] leading-relaxed text-brand-ink/80">
-            {summary.overview}
-          </p>
-        </section>
       </div>
 
       <aside className="space-y-3">
-        <section className="rounded-[2rem] border border-border bg-card p-6">
-          <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-            Exam focus
-          </h2>
-          <ul className="mt-3 space-y-2.5">
-            {summary.examFocus.map((point) => (
-              <li
-                key={point}
-                className="flex items-start gap-2 text-[0.9rem] leading-relaxed text-brand-ink/75"
-              >
-                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-brand-sky" />
-                {point}
-              </li>
-            ))}
-          </ul>
-        </section>
-
         <section className="rounded-[2rem] border border-border bg-card p-6">
           <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
             Source material
@@ -487,6 +476,82 @@ function SummaryView({
         </section>
       </aside>
     </div>
+  );
+}
+
+/**
+ * The set's overview is the points it was built from: for a course set, the
+ * specification statements, each marked with whether the set has cards or
+ * questions behind it. A set built from a student's own material has no
+ * specification, so it lists the key points the build wrote instead.
+ */
+function OverviewView({
+  setId,
+  set,
+  sourceImages,
+}: {
+  setId: Id<"studySets">;
+  set: Doc<"studySets">;
+  sourceImages: Array<{ id: Id<"_storage">; url: string }>;
+}) {
+  const data = useQuery(api.coverage.forSet, { setId });
+
+  if (data === undefined) {
+    return (
+      <div className="h-32 w-full animate-pulse rounded-[2rem] bg-brand-panel" />
+    );
+  }
+
+  if (!data || data.unmapped) {
+    return <UploadOverview set={set} sourceImages={sourceImages} />;
+  }
+
+  const coveredIds = new Set(data.coverage.covered.map((point) => point.id));
+
+  return (
+    <section className="rounded-[2rem] border border-border bg-card p-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
+          Specification points
+        </h2>
+        <span className="rounded-full bg-brand-panel px-2.5 py-0.5 text-[0.7rem] font-bold tabular-nums text-brand-ink/70">
+          {coveredIds.size} of {data.points.length} covered
+        </span>
+      </div>
+      <p className="mt-1 text-[0.78rem] leading-relaxed text-muted-foreground">
+        The statements this set was built from. Ticked points already have cards
+        or questions behind them.
+      </p>
+      <ol className="mt-4 space-y-2">
+        {data.points.map((point) => {
+          const isCovered = coveredIds.has(point.id);
+          return (
+            <li
+              key={point.id}
+              className={cn(
+                "flex items-start gap-2.5 rounded-xl px-3 py-2 text-[0.86rem] leading-relaxed",
+                isCovered
+                  ? "bg-[#F3FBF7] text-brand-ink/85"
+                  : "bg-brand-panel/60 text-muted-foreground",
+              )}
+            >
+              {isCovered ? (
+                <CheckCircle2
+                  className="mt-0.5 size-4 shrink-0 text-[#0B6B45]"
+                  aria-hidden
+                />
+              ) : (
+                <CircleDashed className="mt-0.5 size-4 shrink-0" aria-hidden />
+              )}
+              <span>{point.text}</span>
+              <span className="sr-only">
+                {isCovered ? "Covered" : "Not covered"}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
@@ -1041,14 +1106,17 @@ export default function StudySet() {
             </div>
 
             <div className="mt-6">
-              <SummaryView set={set} sourceImages={details.sourceImages} />
+              <OverviewView
+                setId={set._id}
+                set={set}
+                sourceImages={details.sourceImages}
+              />
             </div>
 
             {/* Specification coverage, export and the timed mock: the three
                 things a student needs when the set is done, not while building
                 it. Each is one expansion away. */}
             <div className="mt-4 space-y-3">
-              <SpecCoveragePanel setId={set._id} />
               <SetExportButtons setId={set._id} />
               <Link
                 to={`/sets/${set._id}/mock`}
