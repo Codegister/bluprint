@@ -123,12 +123,13 @@ topic and subtopic in the specification reaches the map,
 then writes a summary, key points and an exam skill for each topic.
 
 Each course gets its own workspace in the course library, with topic-level progress. Open any
-topic and **Study this topic** asks how many sections of the pathway the set should cover
-(one topic, or a run of up to twelve), then creates a normal study set from those topics'
-summaries, key points, and exam skills — a long summary, 20 detail-heavy cards, a
-ten-question quiz, and four exam questions — linked back to the course. Ticking topics off
-tracks course progress; the next unrevised topic is always offered at the top of the course
-page.
+topic and **Study this topic** immediately creates a normal study set from that topic's
+summary, key points, and exam skill — a summary, ten detail-heavy cards, five quiz questions,
+and three exam questions — linked back to the course. To revise a run of topics together,
+choose **Combine** next to a topic and pick how many of the following topics to include; the
+picker only offers topics that actually remain on the pathway. A combined set scales the
+build per topic. Ticking topics off tracks course progress; the next unrevised topic is
+always offered at the top of the course page.
 
 Every unit and topic has its own **remove** control. Removing something edits only the
 pathway: study sets already built from it stay in the library, and a rebuild brings the
