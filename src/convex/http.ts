@@ -1,4 +1,5 @@
 import { httpRouter } from "convex/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
@@ -31,9 +32,26 @@ http.route({
       });
     }
 
+    const storageId = id as Id<"_storage">;
+    // Storage ids are capability-like, but they are not a public API: an
+    // uploaded note photo must never be fetchable just because its id leaked.
+    // Serve only blobs recorded by the paper cache.
+    let paper: { storageId: Id<"_storage"> } | null = null;
+    try {
+      paper = await ctx.runQuery(internal.paperFiles.findByStorage, { storageId });
+    } catch {
+      paper = null;
+    }
+    if (!paper) {
+      return new Response("Not found", {
+        status: 404,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
+    }
+
     let blob: Blob | null = null;
     try {
-      blob = await ctx.storage.get(id as Id<"_storage">);
+      blob = await ctx.storage.get(paper.storageId);
     } catch {
       blob = null;
     }

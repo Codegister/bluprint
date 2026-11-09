@@ -559,8 +559,17 @@ export const getDetails = query({
     const projected = examAt
       ? examReadiness({ cards, quiz: quizPart, exam: examPart, at: examAt })
       : readiness;
+    // The page filters due cards against this single server timestamp rather
+    // than reading the browser clock during render. It also lets an all-caught-
+    // up screen say when the next card is actually coming back.
+    const nextDueAt = cards.reduce<number | undefined>((next, card) => {
+      if (card.dueAt === undefined || card.dueAt <= now) return next;
+      return next === undefined || card.dueAt < next ? card.dueAt : next;
+    }, undefined);
 
     return {
+      asOf: now,
+      nextDueAt,
       set,
       cards: byOrder(cards),
       quiz: byOrder(quiz),

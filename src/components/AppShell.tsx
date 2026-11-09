@@ -439,14 +439,15 @@ function GuestNotice() {
   // so nobody builds work under the impression it is already safe.
   return (
     <div className="mb-4 rounded-2xl border border-[#E8D3A3] bg-[#FFF8E8] px-4 py-3 text-[0.8rem] leading-relaxed text-[#7A5200]">
-      <span className="font-semibold">Guest workspace.</span> Before your first
-      build, add an email: sets made as a guest live only in this browser and
-      are removed by signing out or clearing site data.{" "}
+      <span className="font-semibold">Guest workspace.</span> Guest sets live
+      only in this browser and are removed when you sign out or clear site data.
+      Guest builds are limited; add an email to keep your work and raise the
+      limit.{" "}
       <Link
         to="/auth?link=1&returnTo=%2Fsets"
         className="font-semibold underline decoration-[#7A5200]/40 underline-offset-2 hover:text-brand-ink"
       >
-        Add an email before you build
+        Add an email to keep my work
       </Link>
       . You can also export any set, including its quiz and review history.
     </div>

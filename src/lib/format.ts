@@ -16,6 +16,18 @@ export function relativeDate(timestamp: number): string {
   });
 }
 
+/** A short future-facing interval for the next scheduled review. */
+export function timeUntil(timestamp: number): string {
+  const diff = timestamp - Date.now();
+  if (diff <= 0) return "now";
+  const minutes = Math.ceil(diff / 60_000);
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.ceil(minutes / 60);
+  if (hours < 24) return `in ${hours}h`;
+  const days = Math.ceil(hours / 24);
+  return days === 1 ? "tomorrow" : `in ${days} days`;
+}
+
 export function sourceLabel(sourceType: "text" | "photos" | "video"): string {
   if (sourceType === "photos") return "Photos";
   if (sourceType === "video") return "Video";

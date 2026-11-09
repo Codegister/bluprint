@@ -27,6 +27,7 @@ import {
   saveTutorWebScope,
   tutorScopeCaption,
 } from "@/lib/tutorScope";
+import { hostOf, safeExternalUrl } from "@/lib/safeExternalUrl";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -55,16 +56,16 @@ function SourceList({ sources }: { sources: Array<{ title: string; url: string }
             {index + 1}
           </span>
           <a
-            href={source.url}
+            href={safeExternalUrl(source.url) ?? undefined}
             target="_blank"
             rel="noopener noreferrer"
             className="min-w-0 truncate text-chrome-6 underline decoration-chrome-4 underline-offset-2 hover:text-chrome-8"
             title={source.title}
           >
-            {source.title || new URL(source.url).hostname.replace(/^www\./, "")}
+            {source.title || hostOf(source.url)}
           </a>
           <span className="shrink-0 text-brand-ink/65">
-            {new URL(source.url).hostname.replace(/^www\./, "")}
+            {hostOf(source.url)}
           </span>
         </li>
       ))}

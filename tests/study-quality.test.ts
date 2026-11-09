@@ -17,6 +17,7 @@ import {
   isSubjectDeletionCloze,
   isInverseQuizPair,
   keyPointsForCards,
+  lowValueCardReason,
   mcqOptionIssue,
   prepareCards,
   prepareQuiz,
@@ -150,6 +151,32 @@ describe("Part 1 — grounded, distinct cards", () => {
       expect(GLOSSARY_NOTES).not.toContain(point);
       expect(isClaimSupportedByNotes(GLOSSARY_NOTES, point)).toBe(true);
     }
+  });
+
+  test("1.4 yes/no and answer-in-question cards are rejected", () => {
+    expect(
+      lowValueCardReason({ front: "Is osmosis passive?", back: "Yes." }),
+    ).toBe("answer is yes/no");
+    expect(
+      lowValueCardReason({
+        front: "What is osmosis? Osmosis",
+        back: "Osmosis",
+      }),
+    ).toBe("answer is in the question");
+    expect(
+      lowValueCardReason({
+        front: "What is osmosis?",
+        back: "The movement of water across a partially permeable membrane.",
+      }),
+    ).toBeNull();
+    // A short numeric answer must be compared as a whole token, not as a
+    // substring of a formula such as CO2.
+    expect(
+      lowValueCardReason({
+        front: "How many oxygen atoms are in CO2?",
+        back: "2",
+      }),
+    ).toBeNull();
   });
 
   test("1.4 source coverage is named when the fertiliser section is absent", () => {

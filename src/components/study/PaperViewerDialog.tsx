@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import { CONVEX_SITE_URL } from "@/lib/convexSite";
 import { readableError } from "@/lib/errors";
+import { safeExternalUrl } from "@/lib/safeExternalUrl";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
 import {
@@ -122,7 +123,7 @@ export function PaperViewerDialog({
             <span>{paper?.kind} from the exam board.</span>
             {paper && (
               <a
-                href={paper.url}
+                href={safeExternalUrl(paper.url) ?? undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 font-semibold text-brand-ink underline decoration-chrome-4 underline-offset-2 hover:text-[#8A5A12]"
@@ -223,7 +224,7 @@ function ViewerError({ message, url }: { message: string; url: string }) {
         {message}
       </p>
       <a
-        href={url}
+        href={safeExternalUrl(url) ?? undefined}
         target="_blank"
         rel="noopener noreferrer"
         className="mt-3 inline-flex items-center gap-1 font-semibold text-[#8A5D00] underline decoration-[#D9B36C] underline-offset-2 hover:text-brand-ink"

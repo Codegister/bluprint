@@ -308,10 +308,12 @@ export default function Today() {
           <>
             <Button
               onClick={() => startSprint(activeLength)}
+              disabled={totalDue === 0}
+              title={totalDue === 0 ? "No cards are due today" : undefined}
               className="h-11 rounded-full px-5 text-sm font-semibold"
             >
               <Play className="size-4" aria-hidden />
-              Start today&apos;s session
+              {totalDue === 0 ? "Nothing due today" : "Start today's session"}
             </Button>
             <div
               role="group"
@@ -346,8 +348,10 @@ export default function Today() {
       >
         <p className="mt-2 text-[0.78rem] font-medium text-brand-ink/65">
           {totalDue} due · {weakSets.length} set
-          {weakSets.length === 1 ? " needs work" : "s need work"} · about{" "}
-          {Math.max(2, Math.round(activeLength / 2))} min
+          {weakSets.length === 1 ? " needs work" : "s need work"} ·{" "}
+          {totalDue === 0
+            ? "nothing due today"
+            : `about ${Math.max(1, Math.ceil(Math.min(activeLength, totalDue) / 2))} min`}
         </p>
       </PageHeader>
 

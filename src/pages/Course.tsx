@@ -5,10 +5,7 @@ import { SaveMyExamsPapers } from "@/components/study/SaveMyExamsPapers";
 import { LiteratureTextChoices } from "@/components/study/LiteratureTextChoices";
 import { TopicNotes } from "@/components/study/TopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
-import {
-  PathwaySectionsDialog,
-  type SectionOption,
-} from "@/components/study/PathwaySectionsDialog";
+import { PathwaySectionsDialog } from "@/components/study/PathwaySectionsDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,9 +23,13 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { planSummary, resolveCoursePaper } from "@/convex/lib/paperPlan";
 import { CURRENT_PATHWAY_VERSION } from "@/convex/lib/pathwayVersion";
-import { notifyError, readableError } from "@/lib/errors";
+import { notifyError } from "@/lib/errors";
 import { CourseCoveragePanel } from "@/components/study/CourseCoveragePanel";
 import { percent, plural, relativeDate } from "@/lib/format";
+import {
+  pathwaySectionOptions,
+  type SectionOption,
+} from "@/lib/pathwaySections";
 import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -37,6 +38,7 @@ import {
   ArrowRight,
   BookOpen,
   ChevronDown,
+  Layers3,
   Loader2,
   RotateCcw,
   Sparkles,
@@ -340,7 +342,7 @@ export default function Course() {
 
   const [retrying, setRetrying] = useState(false);
   const [busyTopic, setBusyTopic] = useState<string | null>(null);
-  // The topic chosen in the "how many sections" picker, with the sections a set
+  // The topic chosen in the "combine topics" picker, with the real topics a set
   // can cover from there. Null while the picker is closed.
   const [sectionTarget, setSectionTarget] = useState<{
     topicId: string;
@@ -435,23 +437,11 @@ export default function Course() {
     }
   };
 
-  /** The topics a set could cover from `topicId` onwards, in pathway order. */
-  const sectionOptionsFrom = (topicId: string): SectionOption[] => {
-    const pathway = details?.course.pathway;
-    if (!pathway) return [];
-    const outline = pathway.units.flatMap((unit) =>
-      unit.topics.map((topic) => ({
-        id: topic.id,
-        title: topic.title,
-        unit: unit.title,
-      })),
-    );
-    const startIndex = outline.findIndex((entry) => entry.id === topicId);
-    if (startIndex === -1) return [];
-    // Twelve is the most the server will combine into one set.
-    return outline.slice(startIndex, startIndex + 12);
-  };
+  /** The actual topics a set could cover from `topicId` onwards. */
+  const sectionOptionsFrom = (topicId: string): SectionOption[] =>
+    pathwaySectionOptions(details?.course.pathway?.units ?? [], topicId);
 
+  /** The normal path: one click builds the topic's own set. */
   const handleTopic = (topicId: string) => {
     if (!validId) return;
     const existing = setsByTopic.get(topicId);
@@ -459,12 +449,14 @@ export default function Course() {
       navigate(`/sets/${existing._id}`);
       return;
     }
+    void buildSet(topicId, 1);
+  };
+
+  /** The optional path: choose a run of following topics to combine. */
+  const handleCombine = (topicId: string) => {
+    if (!validId) return;
     const options = sectionOptionsFrom(topicId);
-    // Nothing to choose when this is the last topic on the pathway.
-    if (options.length <= 1) {
-      void buildSet(topicId, 1);
-      return;
-    }
+    if (options.length <= 1) return;
     setSectionTarget({ topicId, options });
   };
 
@@ -952,6 +944,7 @@ export default function Course() {
                               {unit.topics.map((topic) => {
                                 const isDone = done.has(topic.id);
                                 const set = setsByTopic.get(topic.id);
+                                const combineCount = sectionOptionsFrom(topic.id).length;
                                 return (
                                   <div
                                     key={topic.id}
@@ -1058,6 +1051,18 @@ export default function Course() {
                                         ) : null}
                                         {set ? "Open set" : "Study this topic"}
                                       </Button>
+                                      {combineCount > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCombine(topic.id)}
+                                          disabled={busyTopic !== null}
+                                          title={`Combine this topic with up to ${combineCount - 1} following topics`}
+                                          className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-2.5 text-[0.72rem] font-semibold text-brand-ink/65 transition-colors hover:bg-brand-panel hover:text-brand-ink disabled:opacity-50"
+                                        >
+                                          <Layers3 className="size-3" aria-hidden />
+                                          Combine
+                                        </button>
+                                      )}
                                       {/* Every topic has notes: published ones
                                           where the course has them, and Bluprint's
                                           own where it does not. */}

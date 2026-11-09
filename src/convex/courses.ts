@@ -8,7 +8,7 @@ import {
   query,
   type MutationCtx,
 } from "./_generated/server";
-import { BUILD_DEFAULTS } from "./lib/buildDefaults";
+import { BUILD_DEFAULTS, BUILD_MAX } from "./lib/buildDefaults";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
 import {
   canonicalSubject,
@@ -619,10 +619,10 @@ type PathwaySection = {
 };
 
 /**
- * The most sections one set can cover. Twelve keeps the source text well inside
- * what the generator (and the screen that shows it) can handle.
+ * The most topics one combined set can cover. Twelve keeps the source text
+ * inside what the generator and the set screen can handle.
  */
-const MAX_SET_SECTIONS = 12;
+const MAX_SET_TOPICS = 12;
 
 /**
  * Creates the study set for one pathway section, or for a run of them. The
@@ -649,11 +649,17 @@ export const createTopicSet = mutation({
     ) as Doc<"courses">;
     if (!course.pathway) throw new Error("This pathway is still being built.");
 
-    // Flatten the pathway into reading order so "sections" always means the
-    // next topics on the student's route, even across a unit boundary.
-    const outline: PathwaySection[] = course.pathway.units.flatMap((unit) =>
-      unit.topics.map((topic) => ({ unit, topic })),
-    );
+    // Flatten the pathway into reading order so a run always means the next
+    // topics on the student's route, even across a unit boundary. Duplicate ids
+    // are removed so the count matches the pathway the student can see.
+    const seenTopics = new Set<string>();
+    const outline: PathwaySection[] = course.pathway.units
+      .flatMap((unit) => unit.topics.map((topic) => ({ unit, topic })))
+      .filter(({ topic }) => {
+        if (seenTopics.has(topic.id)) return false;
+        seenTopics.add(topic.id);
+        return true;
+      });
     const startIndex = outline.findIndex((entry) => entry.topic.id === topicId);
     if (startIndex === -1) {
       throw new Error("That topic is not part of this pathway.");
@@ -662,7 +668,7 @@ export const createTopicSet = mutation({
     const requested = Number.isFinite(sections) ? Math.floor(sections ?? 1) : 1;
     const count = Math.min(
       Math.max(1, requested),
-      MAX_SET_SECTIONS,
+      MAX_SET_TOPICS,
       outline.length - startIndex,
     );
     const chosen = outline.slice(startIndex, startIndex + count);
@@ -700,6 +706,13 @@ export const createTopicSet = mutation({
         ? safeCourseLabel(first.title)
         : safeCourseLabel(`${first.title} + ${chosen.length - 1} more`);
 
+    // A combined set must cover every topic in it. Use the normal one-topic
+    // build size for each topic, capped at the shared account maximum, instead
+    // of spreading one topic's ten cards across a whole unit.
+    const targetCards = Math.min(BUILD_MAX, BUILD_DEFAULTS.cards * chosen.length);
+    const targetQuiz = Math.min(BUILD_MAX, BUILD_DEFAULTS.quiz * chosen.length);
+    const targetExam = Math.min(BUILD_MAX, BUILD_DEFAULTS.exam * chosen.length);
+
     const now = Date.now();
     const setId = await ctx.db.insert("studySets", {
       userId,
@@ -709,7 +722,7 @@ export const createTopicSet = mutation({
       sourceLabel:
         chosen.length === 1
           ? "Course pathway"
-          : `Course pathway · ${chosen.length} sections`,
+          : `Course pathway · ${chosen.length} topics`,
       course: safeCourseLabel(course.subject),
       examBoard: safeCourseLabel(course.examBoard),
       level: safeCourseLabel(course.level),
@@ -733,9 +746,9 @@ export const createTopicSet = mutation({
       cardCount: 0,
       quizCount: 0,
       examCount: 0,
-      targetCardCount: BUILD_DEFAULTS.cards,
-      targetQuizCount: BUILD_DEFAULTS.quiz,
-      targetExamCount: BUILD_DEFAULTS.exam,
+      targetCardCount: targetCards,
+      targetQuizCount: targetQuiz,
+      targetExamCount: targetExam,
       knownCount: 0,
       updatedAt: now,
     });

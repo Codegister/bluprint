@@ -136,6 +136,12 @@ export const deleteAccount = mutation({
       .collect();
     for (const row of builds) await ctx.db.delete(row._id);
 
+    const aiUsage = await ctx.db
+      .query("aiUsage")
+      .withIndex("by_user_at", (q) => q.eq("userId", userId))
+      .collect();
+    for (const row of aiUsage) await ctx.db.delete(row._id);
+
     const shares = await ctx.db
       .query("progressShares")
       .withIndex("by_user", (q) => q.eq("userId", userId))

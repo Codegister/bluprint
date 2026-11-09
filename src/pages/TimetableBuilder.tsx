@@ -565,6 +565,7 @@ export default function TimetableBuilder() {
                     key={course._id}
                     type="button"
                     aria-pressed={active}
+                    aria-label={`${active ? "Remove" : "Add"} ${course.subject} ${active ? "from" : "to"} the timetable`}
                     whileTap={{ scale: 0.985 }}
                     onClick={() => toggle(course._id)}
                     className={cn(

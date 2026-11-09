@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { normalisePaperSourceUrl } from "./lib/paperSource";
+import { readLimitedBody } from "./lib/readLimitedBody";
 import { requireUserId } from "./lib/requireUser";
 
 /**
@@ -31,6 +32,17 @@ export const findBySource = internalQuery({
       .first();
   },
 });
+
+export const findByStorage = internalQuery({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    return await ctx.db
+      .query("paperFiles")
+      .withIndex("by_storage", (q) => q.eq("storageId", storageId))
+      .first();
+  },
+});
+
 
 /**
  * Records a downloaded file. If another request stored the same paper while
@@ -80,6 +92,9 @@ export const cachePaper = action({
   args: { url: v.string() },
   handler: async (ctx, { url }): Promise<CachedPaper> => {
     await requireUserId(ctx);
+    if (url.length > 2_048) {
+      throw new Error("This paper link is not one Bluprint can store.");
+    }
 
     const sourceUrl = normalisePaperSourceUrl(url);
     if (!sourceUrl) {
@@ -99,22 +114,51 @@ export const cachePaper = action({
 
     let response: Response;
     try {
-      response = await fetch(sourceUrl, {
-        redirect: "follow",
-        headers: {
-          Accept: "application/pdf,*/*;q=0.8",
-          "User-Agent": "Bluprint/1.0 (past-paper cache)",
-        },
-      });
-    } catch {
+      let current = sourceUrl;
+      let redirects = 0;
+      // Follow redirects manually and validate every destination before the
+      // next request. A post-fetch check alone would already have made the
+      // request, which is enough for a blind SSRF through an open redirect.
+      while (true) {
+        response = await fetch(current, {
+          redirect: "manual",
+          headers: {
+            Accept: "application/pdf,*/*;q=0.8",
+            "User-Agent": "Bluprint/1.0 (past-paper cache)",
+          },
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (response.status < 300 || response.status >= 400) break;
+        if (redirects >= 3) {
+          throw new Error(
+            "This paper could not be downloaded from the exam board. Open the original instead.",
+          );
+        }
+        const location = response.headers.get("location");
+        if (!location) {
+          throw new Error(
+            "This paper could not be downloaded from the exam board. Open the original instead.",
+          );
+        }
+        let next: string | null = null;
+        try {
+          next = normalisePaperSourceUrl(new URL(location, current).toString());
+        } catch {
+          next = null;
+        }
+        if (!next) {
+          throw new Error("This paper link is not one Bluprint can store.");
+        }
+        current = next;
+        redirects += 1;
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("This paper")) {
+        throw error;
+      }
       throw new Error(
         "This paper could not be downloaded from the exam board. Open the original instead.",
       );
-    }
-
-    // A redirect must not turn the cache into a request for an arbitrary host.
-    if (!normalisePaperSourceUrl(response.url)) {
-      throw new Error("This paper link is not one Bluprint can store.");
     }
     if (!response.ok) {
       throw new Error(
@@ -129,8 +173,10 @@ export const cachePaper = action({
       );
     }
 
-    const buffer = await response.arrayBuffer();
-    if (buffer.byteLength > MAX_PAPER_BYTES) {
+    let buffer: ArrayBuffer;
+    try {
+      buffer = await readLimitedBody(response, MAX_PAPER_BYTES);
+    } catch {
       throw new Error(
         "This paper could not be downloaded from the exam board. Open the original instead.",
       );

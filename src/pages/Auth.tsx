@@ -116,7 +116,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       // The provider's own error can name an HTTP status or a mail endpoint.
       // The page shows a readable sentence and logs the rest.
       setError(
-        readableError(signInError, "Could not send the code. Try again."),
+        readableError(
+          signInError,
+          "We couldn't send the code. Check the address and try again in a minute. If it still doesn't arrive, use a guest session.",
+        ),
       );
       return false;
     }

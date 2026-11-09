@@ -544,7 +544,9 @@ const schema = defineSchema(
       storageId: v.id("_storage"),
       bytes: v.number(),
       fetchedAt: v.number(),
-    }).index("by_source", ["sourceUrl"]),
+    })
+      .index("by_source", ["sourceUrl"])
+      .index("by_storage", ["storageId"]),
 
     // One saved revision timetable per account. Dates are UTC calendar keys
     // (YYYY-MM-DD) so a plan renders the same day regardless of server timezone.
@@ -921,6 +923,14 @@ const schema = defineSchema(
     buildUsage: defineTable({
       userId: v.id("users"),
       /** "set", "rebuild" or "paper": the three AI build entry points. */
+      kind: v.string(),
+      at: v.number(),
+    }).index("by_user_at", ["userId", "at"]),
+
+    // Per-account usage for AI actions that do not create a build. Pruned as
+    // it is read, so one account never leaves more than a day of rows.
+    aiUsage: defineTable({
+      userId: v.id("users"),
       kind: v.string(),
       at: v.number(),
     }).index("by_user_at", ["userId", "at"]),

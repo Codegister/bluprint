@@ -20,8 +20,6 @@ import {
   BUILD_DEFAULTS,
   BUILD_MAX,
   BUILD_MIN,
-  shortfallFor,
-  shortfallSentence,
 } from "./lib/buildDefaults";
 import { materialLimits } from "./lib/buildCapacity";
 import { chatCompletionsUrl } from "./lib/gatewayConfig";
@@ -36,7 +34,6 @@ import {
   normalizeAnswer,
 } from "./lib/recall";
 import {
-  correctAnswerFor,
   isNearDuplicateStudyItem,
   prepareCards,
   prepareQuiz,
@@ -756,14 +753,6 @@ function tryParseJson<T>(raw: string): T | null {
   return null;
 }
 
-function parseModelJson<T>(raw: string): T {
-  const parsed = tryParseJson<T>(raw);
-  if (parsed === null) {
-    throw new Error("The AI returned a response we couldn't read. Please try again.");
-  }
-  return parsed;
-}
-
 /**
  * Reads `key` as a list of items, falling back to the individually recovered
  * objects when the outer JSON was cut off mid-stream. Without this, one lost
@@ -1213,8 +1202,10 @@ async function generateCards(
       .map((card) => `- ${card.front}`)
       .join("\n");
 
-    const raw = await nvidiaChat(apiKeys, {
-      model: NVIDIA_TEXT_MODEL,
+    let raw: string;
+    try {
+      raw = await nvidiaChat(apiKeys, {
+        model: NVIDIA_TEXT_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -1225,7 +1216,7 @@ async function generateCards(
               ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n`
               : `${GROUNDING_RULES}\n`) +
             `Create ${want} revision flashcards from ${syllabus ? "this scope" : "this material"}. Cover the breadth of ${syllabus ? "the topics" : "the material"}, but prioritise the niche, exam-distinguishing details a student could actually be tested on: exact figures and dates, names, formulas, precise definitions, exceptions to rules, named examples and case studies, cause-and-effect chains, and common confusions. ` +
-            "Each card must test one fact, not a list. Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific, unambiguous question. Backs must answer only that question in at most two sentences and 40 words, with the precise detail and a caveat where one exists. Never copy a sentence from the material: restate the fact as a short answer. " +
+            "Each card must test one fact, not a list. Do not write a yes/no question, and never put the answer in the question itself. Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific, unambiguous question. Backs must answer only that question in at most two sentences and 40 words, with the precise detail and a caveat where one exists. Never copy a sentence from the material: restate the fact as a short answer. " +
             "Every card also needs keyPoint: one revision-ready claim of at most 25 words, in the same order as the card, not a verbatim source sentence. " +
             `${cardSourceRule(syllabus)} ` +
             contentNotSpecRule(syllabus) +
@@ -1236,11 +1227,20 @@ async function generateCards(
             `Return JSON exactly like: {"cards":[{"front":"...","back":"...","keyPoint":"..."}]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
       ],
-      maxTokens: 7000,
-      temperature: 0.2,
-      topP: 1.0,
-      disableThinking: true,
-    });
+        maxTokens: 7000,
+        temperature: 0.2,
+        topP: 1.0,
+        disableThinking: true,
+      });
+    } catch (error) {
+      // A later batch can fail after earlier cards were already written. Keep
+      // those cards instead of throwing the whole run away.
+      if (cards.length > 0) {
+        console.error("Flashcard batch failed; keeping partial cards", error);
+        break;
+      }
+      throw error;
+    }
 
     let batch: GeneratedCard[] = [];
     try {
@@ -1328,8 +1328,10 @@ async function generateQuiz(
       .map((question) => `- ${question.question}`)
       .join("\n");
 
-    const raw = await nvidiaChat(apiKeys, {
-      model: NVIDIA_TEXT_MODEL,
+    let raw: string;
+    try {
+      raw = await nvidiaChat(apiKeys, {
+        model: NVIDIA_TEXT_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -1370,11 +1372,18 @@ async function generateQuiz(
       ],
       // A batch of eight with explanations needs far more room than the old
       // five-question call. Collection recovery handles any truncation.
-      maxTokens: 9000,
-      temperature: 0.2,
-      topP: 1.0,
-      disableThinking: true,
-    });
+        maxTokens: 9000,
+        temperature: 0.2,
+        topP: 1.0,
+        disableThinking: true,
+      });
+    } catch (error) {
+      if (questions.length > 0) {
+        console.error("Quiz batch failed; keeping partial questions", error);
+        break;
+      }
+      throw error;
+    }
 
     let batch: GeneratedQuiz[] = [];
     try {
@@ -1435,8 +1444,10 @@ async function generateExams(
       .map((exam) => `- ${exam.question}`)
       .join("\n");
 
-    const raw = await nvidiaChat(apiKeys, {
-      model: NVIDIA_TEXT_MODEL,
+    let raw: string;
+    try {
+      raw = await nvidiaChat(apiKeys, {
+        model: NVIDIA_TEXT_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -1458,11 +1469,18 @@ async function generateExams(
             `Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
       ],
-      maxTokens: 9000,
-      temperature: 0.2,
-      topP: 1.0,
-      disableThinking: true,
-    });
+        maxTokens: 9000,
+        temperature: 0.2,
+        topP: 1.0,
+        disableThinking: true,
+      });
+    } catch (error) {
+      if (exams.length > 0) {
+        console.error("Exam batch failed; keeping partial questions", error);
+        break;
+      }
+      throw error;
+    }
 
     let batch: GeneratedExam[] = [];
     try {
@@ -1821,6 +1839,11 @@ export const gradePastPaperAnswer = action({
     if (response.length < minimum) {
       throw new Error("Write a fuller answer before sending it for grading.");
     }
+    if (response.length > MAX_GRADED_ANSWER) {
+      throw new Error(
+        `Keep your answer under ${MAX_GRADED_ANSWER.toLocaleString()} characters.`,
+      );
+    }
 
     const { question } = data;
 
@@ -1840,6 +1863,8 @@ export const gradePastPaperAnswer = action({
         passes: question.markPasses ?? [question.awardedMarks, question.awardedMarks],
       };
     }
+
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "marking" });
 
     const course = await ctx.runQuery(internal.courses.getForBuild, {
       courseId: data.paper.courseId,
@@ -1942,6 +1967,8 @@ export const disputePastPaperMark = action({
     // Read once: the stored answer is what is re-marked, and the narrowing above
     // does not survive into the closure below.
     const storedAnswer = question.userAnswer;
+
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "marking" });
 
     const course = await ctx.runQuery(internal.courses.getForBuild, {
       courseId: data.paper.courseId,
@@ -2785,7 +2812,7 @@ export const rebuildCoursePathway = action({
  * messages written for students is replaced with this sentence.
  */
 const BUILD_FAILED_MESSAGE =
-  "We couldn't finish building this set. Your notes are saved — try again.";
+  "We couldn't finish building this set. Your notes are saved — try again in a minute.";
 
 /** Only a real 429 gets the rate-limit message. */
 const RATE_LIMIT_MESSAGE =
@@ -2877,15 +2904,33 @@ export const processStudySet = action({
     // A rebuild is a second, full AI run over the same notes, so it spends an
     // allowance like a new set does. The check happens before the claim, so a
     // refused rebuild leaves the set exactly as it was.
+    const buildKind = existing.status === "queued" ? ("set" as const) : ("rebuild" as const);
+    let attemptStartedAt = Date.now();
     if (existing.status !== "queued") {
       await ctx.runMutation(internal.buildUsage.consume, {
         userId,
         kind: "rebuild",
       });
+      // Take the timestamp after the row is written, so the failure refund can
+      // find the credit it is returning.
+      attemptStartedAt = Date.now();
     }
 
     const claim = await ctx.runMutation(internal.studySets.claimForProcessing, { setId });
     if (!claim.claimed || !claim.set) {
+      // Another run already owns this set. A rebuild credit was consumed just
+      // above, so hand it back rather than charging for a run that never began.
+      if (existing.status !== "queued") {
+        try {
+          await ctx.runMutation(internal.buildUsage.refund, {
+            userId,
+            kind: "rebuild",
+            before: attemptStartedAt,
+          });
+        } catch (refundError) {
+          console.error("Could not refund an unclaimed rebuild", refundError);
+        }
+      }
       return { started: false };
     }
 
@@ -3105,9 +3150,28 @@ export const processStudySet = action({
       // deployment's health sweep can alert on a repeated cause.
       console.error("Study set build failed", setId, error);
       await recordProviderIncident(ctx, "build", error);
+      // A failed run must not spend the student's allowance. Refund only the
+      // attempt that started here, so a newer build is never quietly cancelled.
+      let refunded = false;
+      try {
+        const refund = await ctx.runMutation(internal.buildUsage.refund, {
+          userId,
+          kind: buildKind,
+          before: attemptStartedAt,
+        });
+        refunded = refund.refunded;
+      } catch (refundError) {
+        console.error("Could not refund the failed set allowance", refundError);
+      }
       const message = buildFailureMessage(error);
-      await ctx.runMutation(internal.studySets.failGeneration, { setId, message });
-      throw new Error(message);
+      const finalMessage = refunded
+        ? `${message} This attempt was not counted against your build allowance.`
+        : message;
+      await ctx.runMutation(internal.studySets.failGeneration, {
+        setId,
+        message: finalMessage,
+      });
+      throw new Error(finalMessage);
     }
   },
 });
@@ -3130,8 +3194,20 @@ export const regenerateCards = action({
       userId,
       kind: "rebuild",
     });
+    const attemptStartedAt = Date.now();
     const claim = await ctx.runMutation(internal.studySets.claimForProcessing, { setId });
-    if (!claim.claimed) return { started: false };
+    if (!claim.claimed) {
+      try {
+        await ctx.runMutation(internal.buildUsage.refund, {
+          userId,
+          kind: "rebuild",
+          before: attemptStartedAt,
+        });
+      } catch (refundError) {
+        console.error("Could not refund an unclaimed card rebuild", refundError);
+      }
+      return { started: false };
+    }
 
     try {
       const apiKeys = resolveNvidiaKeys();
@@ -3209,9 +3285,26 @@ export const regenerateCards = action({
       return { started: true };
     } catch (error) {
       console.error("Card regeneration failed", setId, error);
+      let refunded = false;
+      try {
+        const refund = await ctx.runMutation(internal.buildUsage.refund, {
+          userId,
+          kind: "rebuild",
+          before: attemptStartedAt,
+        });
+        refunded = refund.refunded;
+      } catch (refundError) {
+        console.error("Could not refund the failed card rebuild", refundError);
+      }
       const message = buildFailureMessage(error);
-      await ctx.runMutation(internal.studySets.failGeneration, { setId, message });
-      throw new Error(message);
+      const finalMessage = refunded
+        ? `${message} This attempt was not counted against your build allowance.`
+        : message;
+      await ctx.runMutation(internal.studySets.failGeneration, {
+        setId,
+        message: finalMessage,
+      });
+      throw new Error(finalMessage);
     }
   },
 });
@@ -3245,6 +3338,8 @@ function examinerRules(): string {
     "2. Quote the answer in the evidence field. When a bullet is earned, copy the student's own words exactly as they appear. When it is not earned, the evidence field is the single word absent.\n" +
     "3. Never award a mark you cannot quote, and never withhold one whose words are in the answer. Before writing absent, read the whole answer again and look for the same idea in other words, a synonym, a number written as a figure or as a word, or an abbreviation the answer defines.\n" +
     "4. Never write that the answer does not mention something when it does refer to it. If the answer names the idea without the creditable detail, quote that reference and award 0 for the bullet.\n" +
+    "4a. A keyword or a named structure is not a point. If the bullet asks what something does, why something happens, or how two things are linked, the answer must state that action, cause or link. Naming capillaries does not earn a bullet about capillaries removing oxygen and maintaining a gradient; award 0 and quote the reference.\n" +
+    "4b. If the answer only restates the question or names the topic, award 0 for every bullet that depends on the missing mechanism.\n" +
     "5. A bullet that asks for more than one thing earns only the parts the answer meets, so awarded counts the marks earned out of the marks that bullet carries.\n" +
     "6. Whole marks only. A contradiction cancels a bullet even when the same point is stated correctly elsewhere.\n" +
     "7. The model answer is not a second mark scheme: judge only against the bullets. Do not reward restating the question, repetition, length, effort or confidence, and do not mark a correct answer down for being short.\n" +
@@ -4028,6 +4123,9 @@ async function markExamAnswer(
   };
 }
 
+/** A full essay fits comfortably; a script cannot make the row unbounded. */
+const MAX_GRADED_ANSWER = 12_000;
+
 /** AI-marks one written exam answer against the stored marking guide. */
 export const gradeExamAnswer = action({
   args: {
@@ -4049,6 +4147,11 @@ export const gradeExamAnswer = action({
     const response = answer.trim();
     if (response.length < 15) {
       throw new Error("Write a fuller answer before sending it for grading.");
+    }
+    if (response.length > MAX_GRADED_ANSWER) {
+      throw new Error(
+        `Keep your answer under ${MAX_GRADED_ANSWER.toLocaleString()} characters.`,
+      );
     }
 
     const data = await ctx.runQuery(internal.studySets.getExamForGrading, { examId });
@@ -4074,6 +4177,8 @@ export const gradeExamAnswer = action({
         passes: exam.markPasses ?? [exam.awardedMarks, exam.awardedMarks],
       };
     }
+
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "marking" });
 
     const apiKeys = resolveNvidiaKeys();
     let marked: MarkedAnswer;
@@ -4140,7 +4245,8 @@ export const transcribeAnswerPhoto = action({
     kind: v.optional(v.union(v.literal("answer"), v.literal("scheme"))),
   },
   handler: async (ctx, { storageId, kind }): Promise<{ text: string }> => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "vision" });
     const blob = await ctx.storage.get(storageId);
     if (!blob) throw new Error("That photo could not be read. Try uploading it again.");
     const buffer = Buffer.from(await blob.arrayBuffer());
@@ -4190,6 +4296,13 @@ export const markRealQuestion = action({
     if (response.length === 0) {
       throw new Error("Write an answer before marking it.");
     }
+    if (response.length > MAX_GRADED_ANSWER) {
+      throw new Error(
+        `Keep your answer under ${MAX_GRADED_ANSWER.toLocaleString()} characters.`,
+      );
+    }
+
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "marking" });
 
     const { row, course } = data;
     const apiKeys = resolveNvidiaKeys();
@@ -4250,53 +4363,6 @@ export const markRealQuestion = action({
 // ---------------------------------------------------------------------------
 // Flashcard recall marking
 // ---------------------------------------------------------------------------
-
-/**
- * Recall marking judges meaning, not wording. The word-overlap comparison in
- * lib/recall.ts is instant but literal: a student who says "six" for an answer
- * key of "6", or who paraphrases a definition correctly, was marked wrong, and
- * the same answer could score differently run to run. The model decides whether
- * the answer carries the same meaning; the word comparison stays as the
- * fallback for when the call cannot be made.
- */
-const RECALL_MARKER_SYSTEM_PROMPT =
-  "You mark one flashcard answer. You are strict about the fact being recalled and generous about how it is worded: a student who has remembered the answer must be credited whatever words they used. " +
-  "Answer with strict JSON only, no markdown fences, no commentary.";
-
-const RECALL_MARKER_RULES =
-  "How to mark:\n" +
-  "1. Compare the student's answer with the model answer for meaning, not for wording. Accept synonyms, paraphrases, another word order, a different grammatical person, abbreviations the material defines, and singular or plural forms.\n" +
-  "2. Numbers, units and symbols are equivalent however they are written or spoken: 6 and six, 3.5 and three point five, 1,000 and a thousand, 25% and 25 per cent. A different value (16 for 6) is incorrect.\n" +
-  "3. Accept a shorter answer that still gives the fact the question asks for, and a longer one that includes it. Extra correct detail is not a mistake.\n" +
-  "4. Ignore accents and the small spelling slips a dictation engine makes, and accept a name written with different capitalisation.\n" +
-  "5. Incorrect when the answer contradicts the model answer, gives a different fact or value, names an unrelated thing, or is only on topic and vague without actually answering. Restating the question is never an answer.\n" +
-  "6. Where the model answer makes several points and the question does not demand all of them, a correct answer needs the point the question asks for; for anything else, credit the share that is present in score.\n" +
-  "7. Never reward length, confidence or effort, and never mark down an answer for being brief.\n" +
-  "8. Write the note to the student in second person: say \"You said …\" or \"You missed …\", and name the missing idea. Never write \"the student\", \"student claims\" or \"the candidate\".\n" +
-  "9. A one-word or short-phrase answer is a fact, not a topic. If the model answer is a single term, a different word is a different fact: do not accept a related word, a word from the same topic, a different person or tense that changes meaning, or a translation of a different word. Accept only the same term or a true synonym with the same meaning in the same language.";
-
-const RECALL_MARKER_OUTPUT_SHAPE =
-  'Return JSON exactly like: {"correct":true,"score":0.9,"note":"one short sentence naming what was accepted or what was missing"}. ' +
-  "score is the share of the model answer's meaning the student produced, from 0 to 1. " +
-  "The note is at most 20 words: no praise, no encouragement, no restating the model answer.";
-
-/**
- * The model is told to write to the student, but a prompt is not a guarantee.
- * This rewrites the teacher's-note phrasing that slipped through ("student
- * claims", "the student", "the candidate") into second person without changing
- * the fact being reported.
- */
-function studentVoice(note: string): string {
-  return note
-    .replace(/\b(?:the\s+)?student\s+claims\b/gi, "You said")
-    .replace(/\b(?:the\s+)?student's\b/gi, "your")
-    .replace(/\b(?:the\s+)?candidate's\b/gi, "your")
-    .replace(/\b(?:the\s+)?student\b/gi, "you")
-    .replace(/\b(?:the\s+)?candidate\b/gi, "you")
-    .replace(/\byou's\b/gi, "your")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 /**
  * Marks one spoken or typed flashcard answer by meaning. The mark is returned to
@@ -4391,6 +4457,8 @@ export const gradeRecallAnswer = action({
 const TUTOR_SYSTEM_PROMPT =
   "You are Bluprint's AI tutor: a patient, precise subject teacher working one-to-one with a student. " +
   "Answer the request that was actually made. \"Explain X\" gets an explanation of X, \"what am I likely to lose marks on\" gets the specific things examiners deduct marks for, and \"give me an example\" gets a worked example. " +
+  "Obey an explicit instruction about length or simplicity even when it conflicts with the level picker: if the student says explain simply, keep it short, or don't give me more than I need, that instruction wins and the extra detail is left out. " +
+  "Before you state a numerical total, account for every contribution; the numbers must add up. If they do not, correct the total rather than repeating the mismatch. " +
   "Answer it directly and in prose, and never turn the request into a question back to the student. " +
   "Explain the reasoning, not only the conclusion, and use a concrete example when it helps. " +
   "The study material provided is the source: work from it, and say plainly when it does not cover something before giving the standard explanation. " +
@@ -4481,7 +4549,7 @@ type TutorContext = {
  */
 function explainLevelRules(level: string | undefined, question: string): string {
   const asksForSimple =
-    /\b(like i'?m new|new to (this|it)|in simple terms|explain (this|it) simply)\b/i.test(
+    /\b(like i'?m new|new to (this|it)|in simple terms|explain (this|it) simply|keep it simple|keep it short|don'?t give me more|no more than i need|only what i need)\b/i.test(
       question,
     );
   const chosen = asksForSimple ? "simple" : (level ?? "").trim().toLowerCase();
@@ -4492,7 +4560,9 @@ function explainLevelRules(level: string | undefined, question: string): string 
       "Open with one short, everyday analogy, then give one worked example that walks through it step by step. " +
       "Use short sentences, define every term the first time, and do not answer with a bullet list of facts. " +
       "Start with a complete sentence; never open with a word fragment, an ellipsis, or a hyphen. " +
-      "Use at most one hyphen bullet if a list is unavoidable."
+      "Use at most one hyphen bullet if a list is unavoidable. " +
+      "This is a hard limit: at most 200 words. Do not add \"Beyond your notes\", exam-technique advice, extra examples, or next-step suggestions unless the student asked for them. " +
+      "If the explanation cannot fit, cut enrichment and repetition first, never the core mechanism."
     );
   }
   if (chosen === "a-level" || chosen === "alevel" || chosen === "a level") {
@@ -5070,11 +5140,20 @@ export const transcribeDictation = action({
     format: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
 
+    if (args.format.length > 16) {
+      throw new Error("That recording format is not supported. Try dictating again.");
+    }
     const format = args.format.trim().toLowerCase();
     if (!DICTATION_FORMATS.has(format)) {
       throw new Error("That recording format is not supported. Try dictating again.");
+    }
+    // Reject an oversized base64 string before Buffer.from allocates it. The
+    // decoded-size check below still runs for malformed/compact encodings.
+    const maxBase64Chars = Math.ceil((MAX_DICTATION_BYTES * 4) / 3) + 8;
+    if (args.audio.length > maxBase64Chars) {
+      throw new Error("That recording is too long to transcribe. Keep dictation under a minute.");
     }
 
     const audio = Buffer.from(args.audio, "base64");
@@ -5085,6 +5164,7 @@ export const transcribeDictation = action({
       throw new Error("That recording is too long to transcribe. Keep dictation under a minute.");
     }
 
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "dictation" });
     const text = await transcribeDictationAudio(audio, format);
     return { text };
   },
@@ -5122,6 +5202,7 @@ export const askTutor = action({
     });
     if (!context) throw new Error("Study set not found.");
 
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
     const apiKeys = resolveNvidiaKeys();
     const messageId = await ctx.runMutation(internal.tutor.beginTutorExchange, {
       setId,
@@ -5211,6 +5292,7 @@ export const askCourseTutor = action({
     });
     if (!context) throw new Error("Course not found.");
 
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
     const apiKeys = resolveNvidiaKeys();
     const messageId = await ctx.runMutation(
       internal.tutor.beginCourseTutorExchange,
@@ -5371,6 +5453,8 @@ export const explainQuestion = action({
     if (asked.length > 600) {
       throw new Error("Keep the follow-up under 600 characters.");
     }
+
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "explain" });
 
     const apiKeys = resolveNvidiaKeys();
     const system = [

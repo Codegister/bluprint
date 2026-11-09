@@ -7,21 +7,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { SectionOption } from "@/lib/pathwaySections";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 
-/** One pathway topic that could become part of the set. */
-export type SectionOption = { id: string; title: string; unit: string };
-
 /**
- * Asks how many sections (consecutive topics of the pathway) one study set
- * should cover, starting from the topic the student tapped.
+ * Combines a run of consecutive pathway topics into one study set, starting
+ * from the topic the student tapped.
  *
- * The options are the topics that are still ahead on the pathway, so the count
- * can never promise more sections than the course has. Building a set across
- * several sections is the way to revise a whole area at once instead of one
- * topic at a time.
+ * The options are the real topics still ahead on the pathway, so a course with
+ * ten topics offers ten, never the server's twelve-topic limit. One topic is
+ * the normal set; combining is an optional way to revise a whole area at once.
  *
  * The caller gives this a `key` per topic, so choosing a different topic starts
  * the count at one again without an effect resetting it after a render.
@@ -56,19 +53,19 @@ export function PathwaySectionsDialog({
         <div className="px-6 pt-6">
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-bold text-brand-ink">
-              Build a study set
+              Combine topics
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-              Choose how many sections of the pathway this set covers. Bluprint
-              reads each one in order and builds a summary, flashcards, a quiz
-              and exam practice from them together.
+              Build one set from this topic onwards. Pick how many topics it
+              should cover; Bluprint reads them in order and builds a summary,
+              flashcards, a quiz and exam practice from them together.
             </DialogDescription>
           </DialogHeader>
         </div>
 
         <div className="px-6 pb-6">
           <p className="mt-5 text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-chrome-7">
-            Sections in this set
+            Topics in this set
           </p>
 
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -117,8 +114,8 @@ export function PathwaySectionsDialog({
 
           <p className="mt-3 text-[0.68rem] leading-relaxed text-muted-foreground">
             {chosen.length === 1
-              ? "One section makes a normal topic set."
-              : `${chosen.length} sections are combined into one set, in pathway order.`}
+              ? `One topic makes a normal set. This course has ${total} topic${total === 1 ? "" : "s"} from here.`
+              : `${chosen.length} of ${total} topics from here are combined into one set, in pathway order. A longer set builds more cards and questions so every topic is covered.`}
             {total === 1 ? " This is the last topic on the pathway." : ""}
           </p>
 
@@ -140,8 +137,8 @@ export function PathwaySectionsDialog({
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
               {chosen.length === 1
-                ? "Build 1 section"
-                : `Build ${chosen.length} sections`}
+                ? "Build 1 topic"
+                : `Build set from ${chosen.length} topics`}
             </Button>
           </DialogFooter>
         </div>

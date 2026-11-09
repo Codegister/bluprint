@@ -12,7 +12,6 @@ import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
 import { Check, Keyboard, Mic, MicOff, Sparkles, X } from "lucide-react";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 
 type Rating = 1 | 2 | 3 | 4;
 
@@ -216,7 +215,6 @@ export function FlashcardReview({
     if (!current || saving) return;
     const card = current;
     setSaving(true);
-    setSession((value) => ({ ...value, [rating]: value[rating] + 1 }));
 
     try {
       await reviewCard({
@@ -233,10 +231,16 @@ export function FlashcardReview({
           : {}),
       });
     } catch (error) {
-      notifyError(error, "Could not save that review.");
+      // A failed write must not move the student past an unreviewed card or
+      // count it in the session totals. Leave the card in place so they can
+      // retry the rating instead of silently losing the review.
+      notifyError(error, "Could not save that review. The card has not moved.");
+      return;
     } finally {
       setSaving(false);
     }
+
+    setSession((value) => ({ ...value, [rating]: value[rating] + 1 }));
 
     if (index + 1 >= queue.length) {
       setFinished(true);

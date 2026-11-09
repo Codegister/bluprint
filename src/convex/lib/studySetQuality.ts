@@ -616,6 +616,40 @@ export function repairCardAnswer(text: string, max = MAX_CARD_BACK_CHARS): strin
   return /[.!?]$/.test(clean) ? clean : `${clean}.`;
 }
 
+const TRIVIAL_ANSWER = /^(?:yes|no|true|false|none|maybe|it depends)\.?$/i;
+const YES_NO_QUESTION =
+  /^(?:is|are|was|were|do|does|did|can|could|will|would|should|has|have|had)\b/i;
+
+/**
+ * Cards that ask for no retrieval: a yes/no question, or a question that
+ * already prints its own short answer. The generator is told not to produce
+ * these, but the check runs on the saved deck as well so a prompt miss cannot
+ * lower the quality of every future review.
+ */
+export function lowValueCardReason(
+  card: Pick<CardLike, "front" | "back">,
+): string | null {
+  const front = card.front.trim();
+  const back = card.back.trim();
+  if (!front || !back) return "empty card";
+  if (TRIVIAL_ANSWER.test(back)) return "answer is yes/no";
+  if (YES_NO_QUESTION.test(front)) return "yes/no question";
+
+  const answer = normalizeAnswer(back);
+  const answerWords = answer.split(" ").filter(Boolean);
+  if (
+    answer.length > 0 &&
+    answer.length <= 40 &&
+    answerWords.length <= 3
+  ) {
+    const questionWords = new Set(normalizeAnswer(front).split(" "));
+    if (answerWords.every((word) => questionWords.has(word))) {
+      return "answer is in the question";
+    }
+  }
+  return null;
+}
+
 /** A saved card that should be repaired or regenerated. */
 export function cardNeedsRepair(
   card: Pick<CardLike, "front" | "back">,
@@ -711,7 +745,12 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
   for (const card of cards) {
     const front = card.front.replace(/\s+/g, " ").trim().slice(0, MAX_CARD_FRONT_CHARS);
     const back = repairCardAnswer(card.back, MAX_CARD_BACK_CHARS);
-    if (!front || !back || isSpecificationItem(front, back)) {
+    if (
+      !front ||
+      !back ||
+      isSpecificationItem(front, back) ||
+      lowValueCardReason({ front, back })
+    ) {
       dropped += 1;
       continue;
     }

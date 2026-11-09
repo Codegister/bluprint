@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, query } from "./_generated/server";
+import { safeExternalUrl } from "../lib/safeExternalUrl";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner } from "./lib/authorization";
 
@@ -327,18 +328,13 @@ function sanitizeTutorSources(
 ): Array<{ title: string; url: string }> {
   const out: Array<{ title: string; url: string }> = [];
   for (const source of sources) {
-    const url = source.url.trim().slice(0, 1000);
+    const url = safeExternalUrl(source.url.trim().slice(0, 1000));
     if (!url) continue;
-    try {
-      const parsed = new URL(url);
-      out.push({
-        title: normalizeTutorText(source.title, 200) || parsed.hostname,
-        url: parsed.toString(),
-      });
-    } catch {
-      // Malformed urls are not trustworthy as links. Drop them rather than
-      // storing strings that the browser might interpret as javascript: etc.
-    }
+    const parsed = new URL(url);
+    out.push({
+      title: normalizeTutorText(source.title, 200) || parsed.hostname,
+      url,
+    });
   }
   return out;
 }

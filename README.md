@@ -806,14 +806,15 @@ same rate-limit messages as the rest of the app.
 - If there is no published page for a course, the deterministic starter map keeps it
   usable, and a rebuild replaces it once the outline is published. Students are never asked
   to retry.
-- **Study this topic** asks how many sections the set should cover, then writes those
-  topics' summaries and key points into one study set and opens it. One section is a normal
-  topic set; up to twelve consecutive sections can be combined, which is how a student
-  revises a whole area without clicking through it topic by topic. The server clamps the
-  count to what is left on the pathway, and a set that already covers exactly the chosen
-  sections is reopened rather than rebuilt. The existing compile pipeline takes over, so a
-  pathway set has the same summary, cards, quiz, exam marking, scheduling, and tutor as an
-  uploaded set.
+- **Study this topic** builds its set in one click. **Combine** is the optional path for a
+  run of topics: it writes those topics' summaries and key points into one study set and
+  opens it. Up to twelve consecutive topics can be combined, which is how a student revises
+  a whole area without clicking through it topic by topic. The picker offers exactly the
+  topics left on the pathway, the server clamps the count again, and a set that already
+  covers exactly the chosen topics is reopened rather than rebuilt. A combined set uses the
+  normal per-topic build size, capped at the account maximum, so the deck still covers every
+  topic. The existing compile pipeline takes over, so a pathway set has the same summary,
+  cards, quiz, exam marking, scheduling, and tutor as an uploaded set.
 - A pathway set is built from a syllabus outline, not from teaching text. Generation is told
   to write the subject content that outline calls for — facts, examples, vocabulary, worked
   rules — and never material about the specification, assessment objectives, paper structure

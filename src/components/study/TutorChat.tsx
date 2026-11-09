@@ -10,6 +10,7 @@ import {
   saveTutorWebScope,
   tutorScopeCaption,
 } from "@/lib/tutorScope";
+import { safeExternalUrl } from "@/lib/safeExternalUrl";
 import { cn } from "@/lib/utils";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -56,7 +57,7 @@ function SourceList({ sources }: { sources: Source[] }) {
             {index + 1}
           </span>
           <a
-            href={source.url}
+            href={safeExternalUrl(source.url) ?? undefined}
             target="_blank"
             rel="noopener noreferrer"
             className="min-w-0 truncate text-chrome-6 underline decoration-chrome-4 underline-offset-2 hover:text-chrome-8"

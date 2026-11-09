@@ -19,7 +19,7 @@ import { MIN_NOTE_CHARS } from "@/convex/lib/noteLimits";
 
 /** What the app shows when it cannot name a cause a student can act on. */
 export const BUILD_FAILED_MESSAGE =
-  "We couldn't finish building this set. Your notes are saved — try again.";
+  "We couldn't finish building this set. Your notes are saved — try again in a minute.";
 
 /** The one AI failure a student can act on, so it is named rather than hidden. */
 export const RATE_LIMIT_MESSAGE =
@@ -58,6 +58,7 @@ const STUDENT_MESSAGES = [
   "Bluprint can build up to",
   "You've reached today's build limit",
   "You have reached the build limit",
+  "You have reached the AI limit",
 ];
 
 /**

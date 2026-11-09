@@ -14,9 +14,9 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
-import { buildErrorMessage, notifyError, readableError } from "@/lib/errors";
+import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
-import { percent, plural, relativeDate, sourceLabel } from "@/lib/format";
+import { percent, plural, relativeDate, sourceLabel, timeUntil } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -30,7 +30,6 @@ import {
   Pencil,
   PenLine,
   RotateCcw,
-  Sparkles,
   Timer,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -368,8 +367,8 @@ function ErrorPanel({
 
         <p className="mt-3 text-[0.78rem] text-muted-foreground">
           {failure.rateLimited
-            ? "Wait about a minute before rebuilding. Your upload is saved."
-            : "Your upload is saved, so rebuilding uses the same notes."}
+            ? "Wait about a minute before rebuilding. Your upload is saved, and any finished cards or questions are kept."
+            : "Your upload is saved. A failed run is not charged, and any cards or questions it did finish are kept."}
         </p>
       </div>
     </div>
@@ -676,6 +675,8 @@ export default function StudySet() {
   const [retrying, setRetrying] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Kept by set id, so opening another set never inherits "review ahead".
+  const [reviewAheadFor, setReviewAheadFor] = useState<string | null>(null);
   const triggered = useRef<string | null>(null);
 
   useEffect(() => {
@@ -729,6 +730,14 @@ export default function StudySet() {
 
     const set = details.set;
     const qualification = qualificationLabel(set);
+    // A frontend can reach the old backend for a few seconds during a deploy;
+    // that server has no `asOf`. Fall back to the previous all-cards view there
+    // rather than treating every card as not due and showing a false all-clear.
+    const dueCards =
+      details.asOf === undefined
+        ? details.cards
+        : details.cards.filter((card) => (card.dueAt ?? 0) <= details.asOf);
+    const reviewAhead = reviewAheadFor === set._id;
     const backTo = set.courseId ? `/courses/${set.courseId}` : "/tutor#sets";
     const backLabel = set.courseId ? "Back to course" : "Back to my sets";
     const isMode = activeSection !== "summary";
@@ -755,7 +764,7 @@ export default function StudySet() {
         ? "Start the quiz"
         : details.dueCount > 0
           ? "Review due cards"
-          : "Start studying";
+          : "Open flashcards";
 
     return (
       <>
@@ -941,13 +950,46 @@ export default function StudySet() {
           />
         ) : isMode ? (
           <div className="mt-6">
-            {activeSection === "cards" && (
-              <FlashcardReview
-                key={set._id}
-                cards={details.cards}
-                onTakeQuiz={() => navigate(`/sets/${set._id}/quiz`)}
-              />
-            )}
+            {activeSection === "cards" &&
+              (details.cards.length > 0 &&
+              dueCards.length === 0 &&
+              !reviewAhead ? (
+                <div className="gizmo-card mx-auto w-full max-w-2xl p-7 text-center sm:p-9">
+                  <Mascot size={92} float={false} className="mx-auto" />
+                  <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#0B6B45]">
+                    <CheckCircle2 className="size-3.5" aria-hidden />
+                    All caught up
+                  </p>
+                  <h2 className="mt-3 font-display text-[1.35rem] font-bold text-brand-ink">
+                    No cards are due
+                  </h2>
+                  <p className="mx-auto mt-2 max-w-md text-[0.86rem] leading-relaxed text-muted-foreground">
+                    FSRS has scheduled all {plural(details.cards.length, "card")}
+                    {details.nextDueAt
+                      ? `; the next review is ${timeUntil(details.nextDueAt)}.`
+                      : "."}
+                  </p>
+                  <p className="mx-auto mt-2 max-w-md text-[0.76rem] leading-relaxed text-muted-foreground">
+                    Reviewing ahead is extra practice. It changes the next
+                    interval, so use it when you want more work, not instead of
+                    the scheduled review.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => setReviewAheadFor(set._id)}
+                    variant="outline"
+                    className="mt-4 h-10 rounded-full border-border bg-white px-5 text-[0.82rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                  >
+                    Review all {plural(details.cards.length, "card")} anyway
+                  </Button>
+                </div>
+              ) : (
+                <FlashcardReview
+                  key={`${set._id}-${reviewAhead ? "ahead" : "due"}`}
+                  cards={reviewAhead ? details.cards : dueCards}
+                  onTakeQuiz={() => navigate(`/sets/${set._id}/quiz`)}
+                />
+              ))}
             {activeSection === "quiz" && (
               <QuizRunner
                 key={set._id}

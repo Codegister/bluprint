@@ -311,11 +311,13 @@ export default function RealPapers() {
                     {graded && (
                       <p className="text-sm font-semibold text-brand-ink">
                         {row.awardedMarks} of {markLabel(row.marks)}
+                        {row.lowConfidence ? " · provisional" : ""}
                       </p>
                     )}
                     {row.lowConfidence && (
                       <p className="rounded-xl bg-[#FFF7E6] px-3 py-1.5 text-[0.72rem] font-medium text-[#7A4B06]">
-                        Two marks disagreed — treat this as guidance.
+                        Provisional — two marking passes disagreed. Check the
+                        scheme points below before trusting this score.
                       </p>
                     )}
                   </div>
@@ -362,8 +364,13 @@ export default function RealPapers() {
                                     : "Credited from your answer."
                                   : evidence && evidence !== "absent"
                                     ? `You wrote “${evidence}”, which does not state this point.`
-                                    : "Absent"}
+                                    : "Not yet evidenced."}
                               </p>
+                              {awarded === 0 && (
+                                <p className="mt-1 text-[0.72rem] font-medium text-brand-ink/70">
+                                  To earn this mark, state: {criterion.text}
+                                </p>
+                              )}
                             </div>
                           </div>
                         );
