@@ -514,6 +514,21 @@ export default function Course() {
     setBuildSelection([topicId]);
   };
 
+  /**
+   * The next-topic "Build study set" action opens the part picker, so the
+   * student sees every part in the subject instead of only the next topic.
+   * An existing set still opens directly.
+   */
+  const handleBuildSet = (topicId: string) => {
+    if (!validId) return;
+    const existing = setsByTopic.get(topicId);
+    if (existing) {
+      navigate(`/sets/${existing._id}`);
+      return;
+    }
+    handleChooseTopics(topicId);
+  };
+
   const toggleTopic = async (topicId: string, done: boolean) => {
     if (!validId) return;
     setTickingTopic(topicId);
@@ -834,7 +849,7 @@ export default function Course() {
                   </p>
                 </div>
                 <Button
-                  onClick={() => handleTopic(nextTopic.topic.id)}
+                  onClick={() => handleBuildSet(nextTopic.topic.id)}
                   disabled={busyTopic !== null}
                   className="h-10 shrink-0 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
                 >
