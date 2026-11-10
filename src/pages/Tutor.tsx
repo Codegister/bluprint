@@ -22,6 +22,7 @@ import { readableError } from "@/lib/errors";
 import { displayName, percent } from "@/lib/format";
 import { takePendingNotes } from "@/lib/pendingNotes";
 import { subjectMeta } from "@/lib/subjects";
+import { uploadTutorImages } from "@/lib/tutorImages";
 import {
   readTutorWebScope,
   saveTutorWebScope,
@@ -29,7 +30,7 @@ import {
 } from "@/lib/tutorScope";
 import { hostOf, safeExternalUrl } from "@/lib/safeExternalUrl";
 import { cn } from "@/lib/utils";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Globe, GraduationCap, Play, Sparkles } from "lucide-react";
 
@@ -168,6 +169,7 @@ export default function TutorPage() {
 
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
+  const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
   // Same source as the embedded tutor: tiers are offered by label only, and
@@ -233,8 +235,10 @@ export default function TutorPage() {
     value: string,
     meta: { model: string; attachments: File[] },
   ) => {
-    const question = value.trim();
-    if (!question || sending) return;
+    const typed = value.trim();
+    const files = meta.attachments.slice(0, 2);
+    if ((!typed && files.length === 0) || sending) return;
+    const question = typed || "Explain what is in this image.";
     markTutorUsed();
 
     // The picker reports a level label; the server maps it to a NVIDIA model.
@@ -247,6 +251,9 @@ export default function TutorPage() {
     setPending(question);
 
     try {
+      const imageIds = files.length
+        ? await uploadTutorImages(files, () => generateUploadUrl())
+        : [];
       if (validSetId && setId) {
         await askTutor({
           setId: setId as Id<"studySets">,
@@ -254,6 +261,7 @@ export default function TutorPage() {
           useWeb,
           tier: chosenTier,
           explainLevel,
+          ...(imageIds.length > 0 ? { imageIds } : {}),
         });
       } else if (validCourseId && courseId) {
         await askCourseTutor({
@@ -263,13 +271,14 @@ export default function TutorPage() {
           useWeb,
           tier: chosenTier,
           explainLevel,
+          ...(imageIds.length > 0 ? { imageIds } : {}),
         });
       }
     } catch (sendError) {
       setError(
         readableError(sendError, "The tutor could not answer that. Please try again."),
       );
-      setDraft(question);
+      setDraft(typed);
     } finally {
       setSending(false);
       setPending(null);
@@ -765,6 +774,15 @@ export default function TutorPage() {
                   {message.role === "assistant" && !message.streaming && (
                     <div className="max-w-[86%]">
                       <SourceList sources={message.sources ?? []} />
+                      {message.builtSetId && (
+                        <Link
+                          to={`/sets/${message.builtSetId}`}
+                          className="mt-2 inline-flex items-center gap-1 rounded-full border border-brand-sky/30 bg-white px-3 py-1.5 text-[0.74rem] font-semibold text-brand-ink transition-colors hover:bg-brand-sky/10"
+                        >
+                          Open study set
+                          <ArrowRight className="size-3.5" aria-hidden />
+                        </Link>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -809,7 +827,7 @@ export default function TutorPage() {
             placeholder="Ask anything about this material…"
             className="pb-2"
             fullWidth
-            maxAttachments={1}
+            maxAttachments={2}
             models={tierLabels}
             modelDetails={modelDetails}
             onDictate={async (audio, format) =>

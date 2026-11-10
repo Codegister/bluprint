@@ -11,11 +11,13 @@ import {
   tutorScopeCaption,
 } from "@/lib/tutorScope";
 import { safeExternalUrl } from "@/lib/safeExternalUrl";
+import { uploadTutorImages } from "@/lib/tutorImages";
 import { cn } from "@/lib/utils";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { Check, Globe, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Globe, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router";
 
 const SUGGESTIONS = [
   "Explain this topic like I'm new to it",
@@ -111,6 +113,7 @@ export function TutorChat({
   const messages = scope.kind === "set" ? setMessages : courseMessages;
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
+  const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
   // The three levels are named by feel only — Fast, Balanced, Deep. The NVIDIA
@@ -176,8 +179,12 @@ export function TutorChat({
     value: string,
     meta: { model: string; attachments: File[] },
   ) => {
-    const question = value.trim();
-    if (!question || sending) return;
+    const typed = value.trim();
+    const files = meta.attachments.slice(0, 2);
+    // A photo on its own is a complete question. Give the tutor a useful
+    // default instead of refusing to send because the text box is empty.
+    if ((!typed && files.length === 0) || sending) return;
+    const question = typed || "Explain what is in this image.";
     onAsk?.();
 
     // The composer's model picker reports a tier label; an unknown one falls
@@ -189,6 +196,9 @@ export function TutorChat({
     setPending(question);
 
     try {
+      const imageIds = files.length
+        ? await uploadTutorImages(files, () => generateUploadUrl())
+        : [];
       if (scope.kind === "set") {
         await askTutor({
           setId: scope.setId,
@@ -196,6 +206,7 @@ export function TutorChat({
           useWeb,
           tier: chosenTier,
           explainLevel,
+          ...(imageIds.length > 0 ? { imageIds } : {}),
         });
       } else {
         await askCourseTutor({
@@ -205,6 +216,7 @@ export function TutorChat({
           useWeb,
           tier: chosenTier,
           explainLevel,
+          ...(imageIds.length > 0 ? { imageIds } : {}),
         });
       }
     } catch (sendError) {
@@ -212,7 +224,7 @@ export function TutorChat({
         readableError(sendError, "The tutor could not answer that. Please try again."),
       );
       // The question is already saved, so restore it for a retry.
-      setDraft(question);
+      setDraft(typed);
     } finally {
       setSending(false);
       setPending(null);
@@ -353,6 +365,15 @@ export function TutorChat({
                   {message.role === "assistant" && !message.streaming && (
                     <div className="max-w-[86%]">
                       <SourceList sources={message.sources} />
+                      {message.builtSetId && (
+                        <Link
+                          to={`/sets/${message.builtSetId}`}
+                          className="mt-2 inline-flex items-center gap-1 rounded-full border border-brand-sky/30 bg-white px-3 py-1.5 text-[0.74rem] font-semibold text-brand-ink transition-colors hover:bg-brand-sky/10"
+                        >
+                          Open study set
+                          <ArrowRight className="size-3.5" aria-hidden />
+                        </Link>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -398,7 +419,7 @@ export function TutorChat({
             }
             className="pb-2"
             fullWidth
-            maxAttachments={1}
+            maxAttachments={2}
             models={tierLabels}
             modelDetails={modelDetails}
             onDictate={async (audio, format) =>
