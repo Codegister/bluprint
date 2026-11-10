@@ -21,6 +21,16 @@ export const BUILD_DEFAULTS = {
 export const BUILD_MIN = 1;
 export const BUILD_MAX = 100;
 
+/** Keeps an explicit build request inside the range the UI promises. */
+export function clampBuildCount(
+  value: number | undefined,
+  fallback: number,
+): number {
+  const requested =
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  return Math.min(BUILD_MAX, Math.max(BUILD_MIN, Math.round(requested)));
+}
+
 /**
  * The one sentence used wherever fewer items were built than were asked for.
  * It states both numbers and the count the notes actually supported, and never

@@ -123,13 +123,13 @@ topic and subtopic in the specification reaches the map,
 then writes a summary, key points and an exam skill for each topic.
 
 Each course gets its own workspace in the course library, with topic-level progress. Open any
-topic and **Study this topic** immediately creates a normal study set from that topic's
-summary, key points, and exam skill — a summary, ten detail-heavy cards, five quiz questions,
-and three exam questions — linked back to the course. To revise a run of topics together,
-choose **Combine** next to a topic and pick how many of the following topics to include; the
-picker only offers topics that actually remain on the pathway. A combined set scales the
-build per topic. Ticking topics off tracks course progress; the next unrevised topic is
-always offered at the top of the course page.
+topic and **Study this topic** opens the build panel. Choose how many flashcards, quiz
+questions and exam-style questions to make, then Bluprint creates a normal study set from
+that topic's summary, key points, and exam skill, linked back to the course. To revise a run
+of topics together, choose **Combine** next to a topic, pick how many of the following topics
+to include, and set the totals for the combined set; the picker only offers topics that
+actually remain on the pathway. Ticking topics off tracks course progress; the next
+unrevised topic is always offered at the top of the course page.
 
 Every unit and topic has its own **remove** control. Removing something edits only the
 pathway: study sets already built from it stay in the library, and a rebuild brings the
@@ -807,15 +807,16 @@ same rate-limit messages as the rest of the app.
 - If there is no published page for a course, the deterministic starter map keeps it
   usable, and a rebuild replaces it once the outline is published. Students are never asked
   to retry.
-- **Study this topic** builds its set in one click. **Combine** is the optional path for a
-  run of topics: it writes those topics' summaries and key points into one study set and
-  opens it. Up to twelve consecutive topics can be combined, which is how a student revises
-  a whole area without clicking through it topic by topic. The picker offers exactly the
-  topics left on the pathway, the server clamps the count again, and a set that already
-  covers exactly the chosen topics is reopened rather than rebuilt. A combined set uses the
-  normal per-topic build size, capped at the account maximum, so the deck still covers every
-  topic. The existing compile pipeline takes over, so a pathway set has the same summary,
-  cards, quiz, exam marking, scheduling, and tutor as an uploaded set.
+- **Study this topic** opens a build panel with the same count controls as a pasted set;
+  **Combine** is the optional path for a run of topics. It writes those topics' summaries
+  and key points into one study set and opens it. Up to twelve consecutive topics can be
+  combined, which is how a student revises a whole area without clicking through it topic by
+  topic. The picker offers exactly the topics left on the pathway, the server clamps the
+  count again, and a set that already covers exactly the chosen topics is reopened rather
+  than rebuilt. The student chooses the total cards, quiz questions and exam questions; when
+  the dialog opens, its defaults scale with the number of topics so a combined deck still
+  covers every one. The existing compile pipeline takes over, so a pathway set has the same
+  summary, cards, quiz, exam marking, scheduling, and tutor as an uploaded set.
 - A pathway set is built from a syllabus outline, not from teaching text. Generation is told
   to write the subject content that outline calls for — facts, examples, vocabulary, worked
   rules — and never material about the specification, assessment objectives, paper structure

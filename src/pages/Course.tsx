@@ -5,7 +5,10 @@ import { SaveMyExamsPapers } from "@/components/study/SaveMyExamsPapers";
 import { LiteratureTextChoices } from "@/components/study/LiteratureTextChoices";
 import { TopicNotes } from "@/components/study/TopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
-import { PathwaySectionsDialog } from "@/components/study/PathwaySectionsDialog";
+import {
+  PathwaySectionsDialog,
+  type BuildCounts,
+} from "@/components/study/PathwaySectionsDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -419,7 +422,11 @@ export default function Course() {
     }
   };
 
-  const buildSet = async (topicId: string, sections: number) => {
+  const buildSet = async (
+    topicId: string,
+    sections: number,
+    counts: BuildCounts,
+  ) => {
     if (!validId) return;
     setBusyTopic(topicId);
     try {
@@ -427,6 +434,9 @@ export default function Course() {
         courseId: courseId as Id<"courses">,
         topicId,
         sections,
+        targetCardCount: counts.cards,
+        targetQuizCount: counts.quiz,
+        targetExamCount: counts.exam,
       });
       setSectionTarget(null);
       navigate(`/sets/${result.setId}`);
@@ -441,7 +451,7 @@ export default function Course() {
   const sectionOptionsFrom = (topicId: string): SectionOption[] =>
     pathwaySectionOptions(details?.course.pathway?.units ?? [], topicId);
 
-  /** The normal path: one click builds the topic's own set. */
+  /** Opens the build panel for the topic's own set. */
   const handleTopic = (topicId: string) => {
     if (!validId) return;
     const existing = setsByTopic.get(topicId);
@@ -449,7 +459,9 @@ export default function Course() {
       navigate(`/sets/${existing._id}`);
       return;
     }
-    void buildSet(topicId, 1);
+    const options = sectionOptionsFrom(topicId);
+    if (options.length === 0) return;
+    setSectionTarget({ topicId, options: options.slice(0, 1) });
   };
 
   /** The optional path: choose a run of following topics to combine. */
@@ -1468,9 +1480,9 @@ export default function Course() {
           }}
           options={sectionTarget?.options ?? []}
           busy={busyTopic !== null}
-          onBuild={(sections) => {
+          onBuild={(sections, counts) => {
             if (!sectionTarget) return;
-            void buildSet(sectionTarget.topicId, sections);
+            void buildSet(sectionTarget.topicId, sections, counts);
           }}
         />
 

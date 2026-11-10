@@ -10,13 +10,16 @@ import {
 } from "@/lib/examBoards";
 import {
   isSubjectOffered,
-  requiresBoardQuestion,
   subjectAvailability,
 } from "@/convex/lib/catalogue";
 import {
   literatureChoicesFor,
   type LiteratureChoiceSet,
 } from "@/convex/lib/literatureChoices";
+import {
+  courseQuestionsFor,
+  type CourseQuestion,
+} from "@/lib/courseQuestions";
 import {
   POPULAR_SUBJECTS,
   SUBJECTS,
@@ -58,11 +61,6 @@ type CourseDraft = {
   litModern?: string;
   poetryTheme?: string;
 };
-
-/** The questions asked after a subject is tapped, in order. "rs" is the
- *  Religious Studies route/religion/units step that GCSE RS asks after board
- *  and tier; "lit" is the matching set-text step for GCSE English Literature. */
-type Question = "board" | "tier" | "rs" | "lit";
 
 /**
  * Edexcel GCSE Religious Studies is two separate specifications, so the route
@@ -201,39 +199,6 @@ function defaultBoardFor(level: string): string {
 function defaultTierFor(level: string, subject: string): string | undefined {
   const { tiers } = tierChoices(level, subject);
   return tiers.includes("Higher") ? "Higher" : tiers[0];
-}
-
-/**
- * What Bluprint still needs to know about a subject.
- *
- * Only qualifications that actually have a choice are asked about: GCSE asks for
- * a board and a tier, A-Level asks for a board, IB asks for HL or SL, and KS3,
- * AP and university modules have nothing to ask; tapping one just adds it.
- *
- * Religious Studies GCSE is handled by the RS picker lower in the file, which
- * can ask for a route, a second religion and the chosen spec titles on top of
- * the generic board and tier questions above.
- */
-function questionsFor(level: string, subject: string, board?: string): Question[] {
-  const questions: Question[] = [];
-  if (requiresBoardQuestion(level)) questions.push("board");
-  const { tiers, variants } = tierChoices(level, subject);
-  if (tiers.length > 0 || variants.length > 0) questions.push("tier");
-  if (
-    level === "GCSE" &&
-    subject === "Religious Studies" &&
-    (variants.length === 0 && tiers.length > 0)
-  ) {
-    questions.push("rs");
-  }
-  if (
-    level === "GCSE" &&
-    subject === "English Literature" &&
-    literatureChoicesFor(board ?? "")
-  ) {
-    questions.push("lit");
-  }
-  return questions;
 }
 
 /**
@@ -530,11 +495,11 @@ export default function CourseSetup() {
   const activeChoices = active && level ? tierChoices(level, active) : null;
   const questions =
     active && level
-      ? questionsFor(level, active, activeDraft?.examBoard ?? board)
+      ? courseQuestionsFor(level, active, activeDraft?.examBoard ?? board)
       : [];
   const currentQuestionIndex =
     Math.min(questionIndex, Math.max(0, questions.length - 1));
-  const currentQuestion: (Question | "rs") | null =
+  const currentQuestion: CourseQuestion | null =
     questions[currentQuestionIndex] ?? null;
   // A course that was already set up reopens at the route question rather than
   // a dead card with nothing left to ask, so its answers can still be changed.
@@ -687,7 +652,7 @@ export default function CourseSetup() {
     );
     setError(null);
 
-    const needed = questionsFor(level, clean, nextBoard);
+    const needed = courseQuestionsFor(level, clean, nextBoard);
     // A new subject that can use the remembered answers is added straight away;
     // clicking an existing one still opens them so it can be changed.
     const alreadyAnswered = needed.every((question) =>

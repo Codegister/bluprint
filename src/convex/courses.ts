@@ -8,7 +8,7 @@ import {
   query,
   type MutationCtx,
 } from "./_generated/server";
-import { BUILD_DEFAULTS, BUILD_MAX } from "./lib/buildDefaults";
+import { BUILD_DEFAULTS, clampBuildCount } from "./lib/buildDefaults";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
 import {
   canonicalSubject,
@@ -634,14 +634,31 @@ const MAX_SET_TOPICS = 12;
  * topic first. It defaults to one and is clamped to what the pathway has left
  * after that topic, so asking for six near the end of a course never creates an
  * empty set.
+ *
+ * The three target counts are the totals chosen in the build dialog. They are
+ * optional so the timetable can keep opening a topic with the default size;
+ * when omitted, a combined set keeps the old per-topic default.
  */
 export const createTopicSet = mutation({
   args: {
     courseId: v.id("courses"),
     topicId: v.string(),
     sections: v.optional(v.number()),
+    targetCardCount: v.optional(v.number()),
+    targetQuizCount: v.optional(v.number()),
+    targetExamCount: v.optional(v.number()),
   },
-  handler: async (ctx, { courseId, topicId, sections }) => {
+  handler: async (
+    ctx,
+    {
+      courseId,
+      topicId,
+      sections,
+      targetCardCount,
+      targetQuizCount,
+      targetExamCount,
+    },
+  ) => {
     const userId = await requireUserId(ctx);
     const course = await requireOwner(
       await ctx.db.get(courseId),
@@ -706,12 +723,21 @@ export const createTopicSet = mutation({
         ? safeCourseLabel(first.title)
         : safeCourseLabel(`${first.title} + ${chosen.length - 1} more`);
 
-    // A combined set must cover every topic in it. Use the normal one-topic
-    // build size for each topic, capped at the shared account maximum, instead
-    // of spreading one topic's ten cards across a whole unit.
-    const targetCards = Math.min(BUILD_MAX, BUILD_DEFAULTS.cards * chosen.length);
-    const targetQuiz = Math.min(BUILD_MAX, BUILD_DEFAULTS.quiz * chosen.length);
-    const targetExam = Math.min(BUILD_MAX, BUILD_DEFAULTS.exam * chosen.length);
+    // The dialog's totals win when supplied. Otherwise a combined set uses the
+    // normal one-topic build size for each topic, capped at the shared account
+    // maximum, instead of spreading one topic's ten cards across a whole unit.
+    const targetCards = clampBuildCount(
+      targetCardCount,
+      BUILD_DEFAULTS.cards * chosen.length,
+    );
+    const targetQuiz = clampBuildCount(
+      targetQuizCount,
+      BUILD_DEFAULTS.quiz * chosen.length,
+    );
+    const targetExam = clampBuildCount(
+      targetExamCount,
+      BUILD_DEFAULTS.exam * chosen.length,
+    );
 
     const now = Date.now();
     const setId = await ctx.db.insert("studySets", {

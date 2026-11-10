@@ -313,6 +313,9 @@ export function CreateSetDialog({
           courseId: selectedCourseId as Id<"courses">,
           topicId: selectedTopic.id,
           sections: 1,
+          targetCardCount: cardCount,
+          targetQuizCount: quizCount,
+          targetExamCount: examCount,
         });
         toast.success(
           result.created
@@ -767,10 +770,8 @@ export function CreateSetDialog({
             </TabsContent>
           </Tabs>
 
-          {/* Sensible defaults build a full set; only tune them on request.
-              Course sets take their size from the pathway, so the sliders do
-              not apply there. */}
-          {mode !== "course" && (
+          {/* Every build shows the same count controls; a course set uses them
+              as the totals for the topic rather than taking a fixed size. */}
           <details className="mt-5 rounded-3xl border border-border bg-[#FCFCFD] p-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
               <span className="text-xs font-semibold text-brand-ink">
@@ -782,9 +783,11 @@ export function CreateSetDialog({
               </span>
             </summary>
             <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
-              {noteLimits
-                ? `These notes support ${noteLimits.cards} cards, ${noteLimits.quiz} quiz questions and ${noteLimits.exam} exam questions. The account maximum is ${BUILD_MAX} of each; the notes are the real ceiling.`
-                : `Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. Photos and video are assessed after reading; if they support fewer, Bluprint says so on the set page in one sentence: “Built 6 of 10. Your notes supported 6.”`}
+              {mode === "course"
+                ? "These totals apply to the set built from this topic. They are sent to the generator when you start the build."
+                : noteLimits
+                  ? `These notes support ${noteLimits.cards} cards, ${noteLimits.quiz} quiz questions and ${noteLimits.exam} exam questions. The account maximum is ${BUILD_MAX} of each; the notes are the real ceiling.`
+                  : `Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. Photos and video are assessed after reading; if they support fewer, Bluprint says so on the set page in one sentence: “Built 6 of 10. Your notes supported 6.”`}
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -842,7 +845,6 @@ export function CreateSetDialog({
               Exam-style questions are written at 5–10 marks each.
             </p>
           </details>
-          )}
 
           <AnimatePresence initial={false}>
             {error && (
@@ -891,7 +893,7 @@ export function CreateSetDialog({
           <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-relaxed text-muted-foreground">
               {mode === "course"
-                ? "Covered by your course pathway"
+                ? "Built from your course topic"
                 : mode === "photos"
                   ? "Clear, straight-on photos transcribe best"
                   : mode === "video"
