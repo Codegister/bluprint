@@ -1,4 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { deleteStudySetContent } from "./studySets";
 
@@ -13,6 +14,27 @@ export const currentUser = query({
     const userId = await getAuthUserId(ctx);
     if (userId === null) return null;
     return await ctx.db.get(userId);
+  },
+});
+
+/**
+ * Stores the name a student wants to be addressed by. It is deliberately
+ * separate from `authAccounts`: the display name is app data, not identity,
+ * and can be changed without touching the sign-in address.
+ */
+export const updateDisplayName = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("Sign in to change your name.");
+    const cleaned = name.replace(/\s+/g, " ").trim();
+    if (cleaned.length < 2) throw new Error("Use at least two characters for your name.");
+    if (cleaned.length > 40) throw new Error("Keep your name under 40 characters.");
+    if (/@|https?:\/\/|www\./i.test(cleaned)) {
+      throw new Error("Use a display name, not an email address or link.");
+    }
+    await ctx.db.patch(userId, { name: cleaned });
+    return { name: cleaned };
   },
 });
 

@@ -15,6 +15,8 @@
  * is both more stable and less lossy than scraping the rendered page.
  */
 
+import { tableRow } from "./notesFormat";
+
 const SITE = "https://www.savemyexams.com";
 const PAGE_TIMEOUT_MS = 20_000;
 /** Real course pages are under 2 MB; this is only a runaway guard. */
@@ -879,6 +881,7 @@ function collectBlocks(nodes: unknown[], out: string[]): void {
     }
 
     if (type === "table") {
+      const rows: string[][] = [];
       for (const rowRaw of children) {
         const row = asObject(rowRaw);
         if (!row) continue;
@@ -888,15 +891,24 @@ function collectBlocks(nodes: unknown[], out: string[]): void {
             return cell ? textOf(cell) : "";
           })
           .filter(Boolean);
-        if (cells.length > 0) out.push(cells.join(" · "));
+        if (cells.length >= 2) rows.push(cells);
+      }
+      // Keep one column count so the reader can draw a real table. The first
+      // row is the header; subsequent rows are body rows. Pipes, not middle
+      // dots, because "Cell membrane · Y · Y" has no visible cell boundaries.
+      if (rows.length > 0) {
+        const width = Math.max(...rows.map((row) => row.length));
+        for (const row of rows) {
+          const padded = [...row, ...Array(Math.max(0, width - row.length)).fill("")];
+          out.push(tableRow(padded));
+        }
       }
       continue;
     }
 
     if (type === "figure") {
-      const attrs = asObject(node.attrs);
-      const caption = attrs ? asString(attrs.caption) : undefined;
-      if (caption && !isImageCredit(caption)) out.push(`Figure: ${caption}`);
+      // A caption without its image is an orphan. The reader cannot show the
+      // image, so the caption is not useful notes and is deliberately dropped.
       continue;
     }
 

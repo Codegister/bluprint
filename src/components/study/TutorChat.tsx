@@ -3,6 +3,7 @@ import { SkeletonChat } from "@/components/Skeletons";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { EASE, TypingDots } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import {
@@ -13,6 +14,7 @@ import {
 import { safeExternalUrl } from "@/lib/safeExternalUrl";
 import { uploadTutorImages } from "@/lib/tutorImages";
 import { cn } from "@/lib/utils";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Globe, Sparkles } from "lucide-react";
@@ -118,7 +120,7 @@ export function TutorChat({
   const transcribe = useAction(api.ai.transcribeDictation);
   // The three levels are named by feel only — Fast, Balanced, Deep. The NVIDIA
   // model behind each label is chosen on the server, never sent here.
-  const aiStatus = useQuery(api.settings.aiStatus);
+  const { status: aiStatus, unavailable: aiUnavailable } = useAiAvailability();
   const tierLabels = aiStatus?.tutorTiers ?? ["Balanced"];
   const defaultTier = aiStatus?.defaultTutorTier ?? "Balanced";
   // Each level gets its own tagline and glyph, so the picker can say "Longest
@@ -184,6 +186,10 @@ export function TutorChat({
     // A photo on its own is a complete question. Give the tutor a useful
     // default instead of refusing to send because the text box is empty.
     if ((!typed && files.length === 0) || sending) return;
+    if (aiUnavailable) {
+      setError(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     const question = typed || "Explain what is in this image.";
     onAsk?.();
 
@@ -422,9 +428,12 @@ export function TutorChat({
             maxAttachments={2}
             models={tierLabels}
             modelDetails={modelDetails}
-            onDictate={async (audio, format) =>
-              (await transcribe({ audio, format })).text
-            }
+            onDictate={async (audio, format) => {
+              if (aiUnavailable) {
+                throw new Error(AI_NOT_CONFIGURED_MESSAGE);
+              }
+              return (await transcribe({ audio, format })).text;
+            }}
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">

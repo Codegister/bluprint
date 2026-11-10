@@ -201,7 +201,10 @@ export default function Today() {
   // The server caps the goal at what exists; the page still names both numbers
   // so "20 of 5" can never appear and the target is never unexplained.
   const dailyGoal = Math.min(study?.goal ?? 0, items.total);
-  const breakdown = `${items.cards.correct}/${items.cards.total} cards · ${items.quiz.correct}/${items.quiz.total} quiz · ${items.exam.correct}/${items.exam.total} exam`;
+  const breakdown =
+    items.total > 0
+      ? `${items.cards.correct}/${items.cards.total} cards · ${items.quiz.correct}/${items.quiz.total} quiz · ${items.exam.correct}/${items.exam.total} exam`
+      : "No saved cards or questions yet";
 
   /**
    * Choosing a length starts it: a sprint is meant to remove the decision, not
@@ -307,7 +310,7 @@ export default function Today() {
               className="h-11 rounded-full px-5 text-sm font-semibold"
             >
               <Play className="size-4" aria-hidden />
-              {totalDue === 0 ? "Nothing due today" : "Start today's session"}
+              Start today's session
             </Button>
             <div
               role="group"
@@ -340,13 +343,13 @@ export default function Today() {
           </>
         }
       >
-        <p className="mt-2 text-[0.78rem] font-medium text-brand-ink/65">
-          {totalDue} due · {weakSets.length} set
-          {weakSets.length === 1 ? " needs work" : "s need work"} ·{" "}
-          {totalDue === 0
-            ? "nothing due today"
-            : `about ${Math.max(1, Math.ceil(Math.min(activeLength, totalDue) / 2))} min`}
-        </p>
+        {/* The Due now panel below owns the empty state. Repeating it here made
+            Today say "nothing due" three times on one screen. */}
+        {totalDue > 0 && (
+          <p className="mt-2 text-[0.78rem] font-medium text-brand-ink/65">
+            {`${totalDue} due · ${weakSets.length} set${weakSets.length === 1 ? " needs" : "s need"} work · about ${Math.max(1, Math.ceil(Math.min(activeLength, totalDue) / 2))} min`}
+          </p>
+        )}
       </PageHeader>
 
       {/* One compact progress strip; the sprint picker lives in the header. */}
@@ -356,22 +359,18 @@ export default function Today() {
         {...enter(0.08)}
       >
         <div className="flex min-w-[200px] flex-1 items-center gap-2.5">
-          <p
-            title={`${items.correct} of ${items.total} items answered correctly — ${breakdown}`}
-            className="shrink-0 text-[0.76rem] font-semibold tabular-nums text-brand-ink"
-          >
-            {items.correct}/{items.total} questions
+          <p className="shrink-0 text-[0.76rem] font-semibold tabular-nums text-brand-ink">
+            {items.total > 0 ? `${items.correct}/${items.total} items correct` : "No items yet"}
           </p>
-          <Meter
-            value={progress}
-            className="h-1.5 max-w-[220px] flex-1 bg-brand-panel"
-            barClassName="bg-brand-sky"
-            label={`${items.correct} of ${items.total} items answered correctly`}
-          />
-          <p
-            title={breakdown}
-            className="text-[0.7rem] font-medium tabular-nums text-muted-foreground"
-          >
+          {items.total > 0 && (
+            <Meter
+              value={progress}
+              className="h-1.5 max-w-[220px] flex-1 bg-brand-panel"
+              barClassName="bg-brand-sky"
+              label={`${items.correct} of ${items.total} items answered correctly`}
+            />
+          )}
+          <p className="text-[0.7rem] font-medium tabular-nums text-muted-foreground">
             {breakdown}
           </p>
         </div>
@@ -463,7 +462,7 @@ export default function Today() {
             <SkeletonRows rows={3} />
           ) : dueSets.length === 0 ? (
             <p className="px-5 py-6 text-[0.85rem] text-muted-foreground">
-              Nothing is overdue. Today&apos;s goal is the only thing left.
+              No cards are due now. Scheduled reviews appear here when they are ready.
             </p>
           ) : (
             <ul>

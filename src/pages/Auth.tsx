@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
+import { safeReturnTo } from "@/lib/authRedirect";
 import { cn } from "@/lib/utils";
 
 import { motion } from "framer-motion";
@@ -35,10 +36,7 @@ interface AuthProps {
 }
 
 function resolveRedirectAfterAuth(returnTo: string | null, fallback = "/tutor") {
-  if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) {
-    return returnTo;
-  }
-  return fallback;
+  return safeReturnTo(returnTo, fallback);
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {

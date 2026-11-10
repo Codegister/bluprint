@@ -3,11 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { criteriaFor, criterionText, feedbackSummary } from "@/convex/lib/markingCriteria";
 import { referencesData } from "@/convex/lib/paperData";
 import { boardFamily, markNotation, questionTotalLine } from "@/convex/lib/paperFormat";
 import { readableError } from "@/lib/errors";
 import { markLabel, pointLabel } from "@/lib/format";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
 import { motion } from "framer-motion";
@@ -41,6 +43,7 @@ export function PastPaperPractice({
 }) {
   const gradeAnswer = useAction(api.ai.gradePastPaperAnswer);
   const disputeMark = useAction(api.ai.disputePastPaperMark);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   const family = boardFamily(examBoard);
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(questions.map((question) => [question._id, question.userAnswer ?? ""])),
@@ -94,6 +97,14 @@ export function PastPaperPractice({
    * answer and keeps the old mark as a floor, so this can only help.
    */
   const handleDispute = async (question: PaperQuestion) => {
+    if (aiUnavailable) {
+      setErrors((current) => ({
+        ...current,
+        [question._id]: AI_NOT_CONFIGURED_MESSAGE,
+      }));
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     setDisputingId(question._id);
     setErrors((current) => ({ ...current, [question._id]: "" }));
     toast.dismiss();
@@ -130,6 +141,14 @@ export function PastPaperPractice({
       return;
     }
 
+    if (aiUnavailable) {
+      setErrors((current) => ({
+        ...current,
+        [question._id]: AI_NOT_CONFIGURED_MESSAGE,
+      }));
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     setErrors((current) => ({ ...current, [question._id]: "" }));
     setGradingId(question._id);
     // A failure from an earlier answer must not sit above a fresh success.

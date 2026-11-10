@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { criteriaFor, feedbackSummary } from "@/convex/lib/markingCriteria";
 import { parseMarkScheme } from "@/convex/lib/realPaper";
 import { notifyError, readableError } from "@/lib/errors";
 import { markLabel, plural } from "@/lib/format";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { Check, Loader2, Plus, Trash2, Upload, X } from "lucide-react";
@@ -29,6 +31,7 @@ export default function RealPapers() {
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   const transcribe = useAction(api.ai.transcribeAnswerPhoto);
   const mark = useAction(api.ai.markRealQuestion);
+  const { unavailable: aiUnavailable } = useAiAvailability();
 
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -47,6 +50,10 @@ export default function RealPapers() {
   const preview = parseMarkScheme(scheme);
 
   const readPhoto = async (file: File) => {
+    if (aiUnavailable) {
+      setErrors((current) => ({ ...current, new: AI_NOT_CONFIGURED_MESSAGE }));
+      return;
+    }
     setReading(true);
     setErrors((current) => ({ ...current, new: "" }));
     try {
@@ -99,6 +106,13 @@ export default function RealPapers() {
   };
 
   const markAnswer = async (questionId: Id<"realQuestions">, value: string) => {
+    if (aiUnavailable) {
+      setErrors((current) => ({
+        ...current,
+        [questionId]: AI_NOT_CONFIGURED_MESSAGE,
+      }));
+      return;
+    }
     setGradingId(questionId);
     setErrors((current) => ({ ...current, [questionId]: "" }));
     try {

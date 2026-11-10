@@ -26,11 +26,17 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { planSummary, resolveCoursePaper } from "@/convex/lib/paperPlan";
 import { CURRENT_PATHWAY_VERSION } from "@/convex/lib/pathwayVersion";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { notifyError } from "@/lib/errors";
 import { retryTransient } from "@/lib/retry";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { CourseCoveragePanel } from "@/components/study/CourseCoveragePanel";
 import { percent, plural, relativeDate } from "@/lib/format";
-import { pathwayTopicOptions } from "@/lib/pathwaySections";
+import {
+  pathwayPartIdsForTopics,
+  pathwayPartOptions,
+  pathwayTopicOptions,
+} from "@/lib/pathwaySections";
 import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -286,6 +292,7 @@ export default function Course() {
   const repairPathways = useMutation(api.courses.repairPathways);
   const rebuild = useAction(api.ai.rebuildCoursePathway);
   const syncCognitoLinks = useAction(api.ai.syncCognitoLinks);
+  const { unavailable: aiUnavailable } = useAiAvailability();
 
   // Pathways saved before topic notes and paper splits existed are filled in
   // once, so an existing course gains them without a rebuild.
@@ -345,6 +352,8 @@ export default function Course() {
   const [busyTopic, setBusyTopic] = useState<string | null>(null);
   // The topics preselected when the build picker opens. Null while it is closed.
   const [buildSelection, setBuildSelection] = useState<string[] | null>(null);
+  // A single topic opened from inside a part keeps its own one-topic dialog.
+  const [buildSingleTopic, setBuildSingleTopic] = useState<string | null>(null);
   const [tickingTopic, setTickingTopic] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -395,6 +404,27 @@ export default function Course() {
     () => pathwayTopicOptions(details?.course.pathway?.units ?? []),
     [details],
   );
+  const partOptions = useMemo(
+    () => pathwayPartOptions(details?.course.pathway?.units ?? []),
+    [details],
+  );
+  const singleBuildTopic = buildSingleTopic
+    ? topicOptions.find((topic) => topic.id === buildSingleTopic)
+    : undefined;
+  const buildDialogOptions = singleBuildTopic
+    ? [
+        {
+          id: singleBuildTopic.id,
+          title: singleBuildTopic.title,
+          number: 1,
+          topicIds: [singleBuildTopic.id],
+          topicCount: 1,
+        },
+      ]
+    : partOptions;
+  const buildDialogSelection = singleBuildTopic
+    ? [singleBuildTopic.id]
+    : pathwayPartIdsForTopics(partOptions, buildSelection ?? []);
 
   // The notes tab opens on the topic being worked through, so the screen shows
   // notes straight away instead of a list waiting to be tapped.
@@ -424,6 +454,27 @@ export default function Course() {
   const buildSet = async (topicIds: string[], counts: BuildCounts) => {
     const firstTopicId = topicIds[0];
     if (!validId || !firstTopicId) return;
+
+    // Reopening a set that already covers this selection needs no model call.
+    // Check that first, so the AI guard cannot block saved work.
+    const selected = new Set(topicIds);
+    const existing = details?.sets.find((set) => {
+      const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
+      return (
+        covered.length === topicIds.length &&
+        covered.every((topicId) => selected.has(topicId))
+      );
+    });
+    if (existing) {
+      setBuildSelection(null);
+      navigate(`/sets/${existing._id}`);
+      return;
+    }
+    if (aiUnavailable) {
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
+
     setBusyTopic(firstTopicId);
     try {
       const result = await createTopicSet({
@@ -452,12 +503,14 @@ export default function Course() {
       return;
     }
     if (!topicOptions.some((option) => option.id === topicId)) return;
+    setBuildSingleTopic(topicId);
     setBuildSelection([topicId]);
   };
 
-  /** Opens the same picker without changing an existing single-topic set. */
+  /** Opens the part picker without changing an existing single-topic set. */
   const handleChooseTopics = (topicId: string) => {
     if (!validId) return;
+    setBuildSingleTopic(null);
     setBuildSelection([topicId]);
   };
 
@@ -746,16 +799,19 @@ export default function Course() {
                   </p>
                 </div>
                 <span className="rounded-full bg-[#EAFBF0] px-3 py-1.5 text-[0.72rem] font-semibold text-[#0B6B45]">
-                  {details.topicCount} topic{details.topicCount === 1 ? "" : "s"} ·{" "}
-                  {pathway.units.length} unit{pathway.units.length === 1 ? "" : "s"}
+                  {partOptions.length} part{partOptions.length === 1 ? "" : "s"} ·{" "}
+                  {details.topicCount} topic{details.topicCount === 1 ? "" : "s"}
                 </span>
               </div>
               <p className="mt-4 max-w-3xl text-[0.88rem] leading-relaxed text-brand-ink/75">
                 {pathway.overview}
               </p>
               <p className="mt-3 text-[0.72rem] leading-relaxed text-muted-foreground">
-                AI-built from the published specification. Always check your exam
-                board's current specification before relying on a topic list.
+                {pathway.source === "specification"
+                  ? "Mapped directly from the board's published specification. Every reference above is the board's own."
+                  : pathway.source === "savemyexams"
+                    ? "This pathway follows Save My Exams' published revision notes. It is a notes-based route through the course, not the board's specification document."
+                    : "Built from the published course outline. Always check your exam board's current specification before relying on a topic list."}
               </p>
                 </motion.section>
 
@@ -806,18 +862,19 @@ export default function Course() {
                     not teach. The rest of the pathway stays as it is.
                   </p>
                 </div>
-                {topicOptions.length > 1 && (
+                {partOptions.length > 1 && (
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() =>
-                      setBuildSelection(topicOptions.map((option) => option.id))
-                    }
+                    onClick={() => {
+                      setBuildSingleTopic(null);
+                      setBuildSelection(topicOptions.map((option) => option.id));
+                    }}
                     disabled={busyTopic !== null}
                     className="h-9 rounded-full border-border bg-white px-4 text-[0.78rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                   >
                     <Layers3 className="size-3.5" aria-hidden />
-                    Build from topics
+                    Build from parts
                   </Button>
                 )}
               </div>
@@ -1066,16 +1123,16 @@ export default function Course() {
                                         ) : null}
                                         {set ? "Open set" : "Study this topic"}
                                       </Button>
-                                      {topicOptions.length > 1 && (
+                                      {partOptions.length > 1 && (
                                         <button
                                           type="button"
                                           onClick={() => handleChooseTopics(topic.id)}
                                           disabled={busyTopic !== null}
-                                          title="Choose any topics for one set"
+                                          title="Choose parts for one set"
                                           className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-2.5 text-[0.72rem] font-semibold text-brand-ink/65 transition-colors hover:bg-brand-panel hover:text-brand-ink disabled:opacity-50"
                                         >
                                           <Layers3 className="size-3" aria-hidden />
-                                          Choose topics
+                                          Choose parts
                                         </button>
                                       )}
                                       {/* Every topic has notes: published ones
@@ -1475,15 +1532,19 @@ export default function Course() {
         )}
 
         <PathwaySectionsDialog
-          // Keyed per opening so the checklist starts from the chosen topics.
-          key={buildSelection?.join("|") ?? "closed"}
+          // Keyed per opening so the checklist starts from the chosen parts.
+          key={buildSingleTopic ?? buildSelection?.join("|") ?? "closed"}
           open={buildSelection !== null}
           onOpenChange={(open) => {
-            if (!open) setBuildSelection(null);
+            if (!open) {
+              setBuildSelection(null);
+              setBuildSingleTopic(null);
+            }
           }}
-          options={topicOptions}
-          initialSelectedIds={buildSelection ?? []}
+          options={buildDialogOptions}
+          initialSelectedIds={buildDialogSelection}
           busy={busyTopic !== null}
+          noun={singleBuildTopic ? "topic" : "part"}
           onBuild={(topicIds, counts) => void buildSet(topicIds, counts)}
         />
 

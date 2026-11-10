@@ -16,6 +16,7 @@
 
 import { toast } from "sonner";
 import { MIN_NOTE_CHARS } from "@/convex/lib/noteLimits";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 
 /** What the app shows when it cannot name a cause a student can act on. */
 export const BUILD_FAILED_MESSAGE =
@@ -27,12 +28,22 @@ export const RATE_LIMIT_MESSAGE =
 
 /** Sentences the app writes for students, shown as they are. */
 const STUDENT_MESSAGES = [
+  AI_NOT_CONFIGURED_MESSAGE,
   "Bluprint couldn't find enough readable text",
   "The AI did not return any usable material",
   "Bluprint's AI is having trouble right now",
   "The tutor is having trouble right now",
   "The AI is rate-limited right now",
   "The AI is rate-limiting Bluprint right now",
+  "The AI was rate-limited",
+  // Stage-aware build failures. These are written on the server for students;
+  // without them the one message that names the failed stage was replaced by
+  // the generic "could not be restarted" sentence before it reached the page.
+  "The summary stage did not finish",
+  "The flashcard stage did not finish",
+  "The quiz stage did not finish",
+  "The exam-question stage did not finish",
+  "The saving stage did not finish",
   "Dictation is not working right now",
   "We couldn't finish building this set",
   "We couldn't finish this paper",
@@ -133,9 +144,11 @@ export function buildErrorMessage(raw?: string | null): {
   rateLimited: boolean;
 } {
   const value = (raw ?? "").trim();
+  // Only the legacy exact sentence or raw provider text is replaced by the
+  // rate-limit copy. A stage-aware message may mention rate limiting and still
+  // names the stage and the work that survived, so it must pass through.
   const rateLimited =
-    /rate.?limit|too many requests|\b429\b/i.test(value) ||
-    value === RATE_LIMIT_MESSAGE;
+    value === RATE_LIMIT_MESSAGE || /too many requests|\b429\b/i.test(value);
   if (rateLimited) return { message: RATE_LIMIT_MESSAGE, rateLimited: true };
 
   const safe = readableError(new Error(value), BUILD_FAILED_MESSAGE);

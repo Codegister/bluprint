@@ -14,8 +14,10 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { retryTransient } from "@/lib/retry";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, plural, relativeDate, sourceLabel, timeUntil } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -327,7 +329,41 @@ function BuildingPanel({
               </Button>
             </div>
           )}
+
+          {/* A run that was interrupted after saving a stage still has work the
+              student can open, even before the stale timeout offers a retry. */}
+          <FinishedSections set={set} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** The sections a stopped build already saved, linked so they can be opened. */
+function FinishedSections({ set }: { set: Doc<"studySets"> }) {
+  if (set.cardCount + set.quizCount + set.examCount === 0) return null;
+  return (
+    <div className="mt-4 rounded-2xl border border-border bg-brand-panel/50 p-4">
+      <p className="text-[0.8rem] font-semibold text-brand-ink">Open what finished</p>
+      <p className="mt-0.5 text-[0.76rem] text-muted-foreground">
+        These sections are saved and work now; only the failed stage is missing.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {set.cardCount > 0 && (
+          <Link to={`/sets/${set._id}/cards`} className="rounded-full bg-white px-3 py-1.5 text-[0.76rem] font-semibold text-brand-ink ring-1 ring-border hover:bg-brand-panel">
+            {plural(set.cardCount, "flashcard")}
+          </Link>
+        )}
+        {set.quizCount > 0 && (
+          <Link to={`/sets/${set._id}/quiz`} className="rounded-full bg-white px-3 py-1.5 text-[0.76rem] font-semibold text-brand-ink ring-1 ring-border hover:bg-brand-panel">
+            {plural(set.quizCount, "quiz question")}
+          </Link>
+        )}
+        {set.examCount > 0 && (
+          <Link to={`/sets/${set._id}/exam`} className="rounded-full bg-white px-3 py-1.5 text-[0.76rem] font-semibold text-brand-ink ring-1 ring-border hover:bg-brand-panel">
+            {plural(set.examCount, "exam question")}
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -369,10 +405,11 @@ function ErrorPanel({
           Rebuild set
         </Button>
 
+        <FinishedSections set={set} />
+
         <p className="mt-3 text-[0.78rem] text-muted-foreground">
-          {failure.rateLimited
-            ? "Wait about a minute before rebuilding. Your upload is saved, and any finished cards or questions are kept."
-            : "Your upload is saved. A failed run is not charged, and any cards or questions it did finish are kept."}
+          Your upload is saved. A failed run is not charged, and any cards or
+          questions it did finish are kept. You can rebuild now.
         </p>
       </div>
     </div>
@@ -663,6 +700,7 @@ export default function StudySet() {
   );
   const processSet = useAction(api.ai.processStudySet);
   const regenerateSetCards = useAction(api.ai.regenerateCards);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   // Older links used `?tab=exam`; keep them working while every new link points
   // at the mode's own screen.
   const [searchParams] = useSearchParams();
@@ -698,6 +736,10 @@ export default function StudySet() {
 
   const retry = async () => {
     if (!details) return;
+    if (aiUnavailable) {
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     setRetrying(true);
     try {
       await retryTransient(() => processSet({ setId: details.set._id }), {
@@ -718,6 +760,10 @@ export default function StudySet() {
 
   const regenerateCards = async () => {
     if (!details || regenerating) return;
+    if (aiUnavailable) {
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     const approved = window.confirm(
       "Regenerate this set's cards? Cards are rebuilt from the notes, and review history for them is reset. The quiz is re-checked against the new deck.",
     );
@@ -751,6 +797,15 @@ export default function StudySet() {
     const backTo = set.courseId ? `/courses/${set.courseId}` : "/tutor#sets";
     const backLabel = set.courseId ? "Back to course" : "Back to my sets";
     const isMode = activeSection !== "summary";
+    // A failed build may still have written a complete section. That section is
+    // real work, so it stays reachable instead of being hidden behind the error
+    // card. Only the stage that failed is unavailable.
+    const completedSection =
+      isMode &&
+      ((activeSection === "cards" && set.cardCount > 0) ||
+        (activeSection === "quiz" && set.quizCount > 0) ||
+        (activeSection === "exam" && set.examCount > 0));
+    const showSection = completedSection && set.status !== "queued";
     // The one sentence for a build that came in under the request, in the same
     // words the generator wrote it with.
     const shortfall = set.generationNote
@@ -917,7 +972,7 @@ export default function StudySet() {
           </div>
         )}
 
-        {set.status === "ready" && (
+        {(set.status === "ready" || showSection) && (
           <nav
             aria-label="Set sections"
             className="no-scrollbar mt-3 flex gap-1 overflow-x-auto"
@@ -952,9 +1007,9 @@ export default function StudySet() {
           </nav>
         )}
 
-        {set.status === "error" ? (
+        {set.status === "error" && !showSection ? (
           <ErrorPanel set={set} onRetry={retry} retrying={retrying} />
-        ) : set.status !== "ready" ? (
+        ) : set.status !== "ready" && !showSection ? (
           <BuildingPanel
             set={set}
             stale={details.processingStale}

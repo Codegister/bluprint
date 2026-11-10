@@ -22,10 +22,11 @@ separately and gets their own tutor home containing only their courses and study
 - **Convex Auth (email one-time code)** — separate accounts without password management
 - **NVIDIA API** — study-set and past-paper generation, vision, marking, and tutoring,
   through the OpenAI-compatible endpoint at `integrate.api.nvidia.com`
-- **Published specification outlines (scraped)** — the official topic outline for each
-  course. The pathway builder follows the published qualification → subject → exam board →
-  tier route, so the map matches the board's own specification headings exactly. No AI is
-  used for the pathway.
+- **Published specification outlines, plus a checked AQA GCSE Biology map** — the official
+  topic outline for each course. The pathway builder follows the published qualification →
+  subject → exam board → tier route. AQA GCSE Biology (8461) is mapped directly to AQA's own
+  4.x references, including active transport and the required practicals. No AI is used for
+  any pathway.
 - **Bun** — package manager and scripts
 
 There is no separate server to deploy. Convex hosts the backend, file storage, and AI
@@ -123,14 +124,15 @@ topic and subtopic in the specification reaches the map,
 then writes a summary, key points and an exam skill for each topic.
 
 Each course gets its own workspace in the course library, with topic-level progress. Open any
-topic and **Study this topic** opens the build panel, or use **Choose topics** next to a topic
-or **Build from topics** above the pathway to pick several. The picker lists every remaining
-topic by its course number and name, and lets you tick any number of whole topics, including
-selecting all of them for a whole-subject set. It never expands the choices into unit or
-subtopic groups. Choose how many flashcards, quiz questions and exam-style questions to
-make, then Bluprint creates one normal study set from those topics' summaries, key points
-and exam skill, linked back to the course. Ticking topics off tracks course progress; the
-next unrevised topic is always offered at the top of the course page.
+topic and **Study this topic** opens its one-topic build panel, or use **Choose parts** next to
+a topic or **Build from parts** above the pathway to pick several. The picker lists the
+pathway's parts by their course numbers and names, shows how many topics each part contains,
+and lets you tick any number of whole parts, including all of them for a whole-subject set.
+It never flattens the parts into individual topics. Choose how many flashcards, quiz questions
+and exam-style questions to make, then Bluprint creates one normal study set from the selected
+parts' topics, summaries, key points and exam skill, linked back to the course. Ticking topics
+off tracks course progress; the next unrevised topic is always offered at the top of the
+course page.
 
 Every unit and topic has its own **remove** control. Removing something edits only the
 pathway: study sets already built from it stay in the library, and a rebuild brings the
@@ -197,8 +199,9 @@ earned. Four practice papers per course is the cap; remove one to build another.
    when the microphone cannot start. A **Self-mark** switch skips the comparison for
    when speaking is not possible. The quiz mixes multiple choice, cloze (fill the gap)
    and short typed answers, all marked on key words with explanations, the same number
-   and accent folding included. Exam questions are marked against the guide with
-   feedback and a model answer.
+   and accent folding included. Written answers are marked out of the marks available:
+   each credited point is named and quoted, each missing point is named, a misconception is
+   corrected rather than credited, and a model answer is shown.
 4. **Tag the exam context afterwards** — a set opens with its settings button, where it can
    be renamed and tagged with a course, an exam board (AQA, Pearson Edexcel, OCR, WJEC /
    Eduqas, Cambridge International, IB, SQA, College Board AP), and a level (GCSE, A-Level,
@@ -365,12 +368,14 @@ Sets built from a course topic link back to that course.
 
 ## Assumptions
 
-- **Course pathways are scraped from the published specification, not written by a model.**
-  The builder reads the page for the exact qualification, subject, board and tier —
-  including the specification page when the notes page is not server-rendered. If there is
-  no published page for a course, Bluprint stores a small starter map instead of inventing topics. Always check
-  the official specification; the course page says this too. Topic study sets are generated
-  lazily (one tap per topic), which keeps a nine-course setup affordable on free tiers.
+- **Course pathways come from a published outline, not a model.** AQA GCSE Biology uses a
+  checked map of the board's own specification, with AQA's 4.x numbering, active transport
+  and the required practicals. Other courses are scraped from the published notes or
+  specification page for the exact qualification, subject, board and tier; the course page
+  labels a notes-based pathway as notes-based rather than as the specification. If there is
+  no published page for a course, Bluprint stores a small starter map instead of inventing
+  topics. Always check the official specification. Topic study sets are generated lazily
+  (one tap per topic), which keeps a nine-course setup affordable on free tiers.
 - **The course picker is a curated catalogue plus custom entry.** It covers common GCSE,
   A-Level, IB, AP, and undergraduate subjects. Anything missing can be typed in. Every
   GCSE subject offers Higher tier and Foundation tier, defaulting to Higher because that is
@@ -422,16 +427,18 @@ Sets built from a course topic link back to that course.
 - **Tutor history is saved in the database**, one thread per set, per course, and per unit.
   There is no clear-thread button yet; deleting a set or course deletes its conversations.
 - **Requested counts are capped by the material.** The sliders allow 1–100, but before
-  generating Bluprint estimates a sane ceiling from the notes' word count — roughly one
-  card per 12 words, one quiz question per 30, and one exam question per 90. The request is
+  generating Bluprint estimates a ceiling from the notes' words and distinct statements —
+  roughly one card per 6 words or two per statement, one quiz question per 8 words or one
+  per statement, and one exam question per 15 words or one per statement. The request is
   kept on the set, so the page can say "asked for 100, built 34" and explain that the
-  material set the limit. This is deliberately conservative for exam questions, which need
-  much more substance than a flashcard.
+  material set the limit. Exam questions still need more substance than a flashcard.
 - **A single failed generation stage does not lose the set.** Bad JSON is repaired first
   (unescaped LaTeX backslashes and literal newlines, the usual cause of Physics sets
-  failing), a malformed batch is retried, and if one section still cannot be produced the
-  others are saved and the set page names the missing section with a rebuild prompt. Only a
-  run where nothing at all came back is reported as a failure.
+  failing), a malformed batch is retried, and each finished stage is saved as it completes.
+  If one section still cannot be produced, the others stay open, the set page names the
+  stage that failed in plain words, links every completed section, and offers an immediate
+  rebuild with no cooldown. A failed run is refunded; only a run where nothing at all came
+  back is reported as a failure.
 
 ## Run it
 
@@ -812,23 +819,27 @@ same rate-limit messages as the rest of the app.
 - The pathway is a direct mapping of those headings: summaries, key points and exam skills
   are assembled from the scraped subtopics. Nothing is invented, so the map covers the
   entire published specification and no unit needs a model call.
+- AQA GCSE Biology (8461) does not use a notes-site index at all. Its pathway is a checked
+  specification map in AQA's own 4.x numbering, with active transport and the required
+  practicals, and no "Exam Skills" part. The course page states which source a pathway
+  used; every other pathway is labelled notes-based when it follows Save My Exams pages.
 - If there is no published page for a course, the deterministic starter map keeps it
   usable, and a rebuild replaces it once the outline is published. Students are never asked
   to retry.
-- **Study this topic** opens a build panel with the same count controls as a pasted set;
-  **Choose topics** opens the multi-select picker from that topic, and **Build from topics**
-  above the pathway opens it with the whole course selected. The picker is a flat list of
-  every topic on the pathway, numbered in course order, with no unit or subtopic nesting.
-  Ticking several topics writes their summaries and key points into one study set and opens
-  it; selecting every topic is how a student revises the whole subject without building a
-  set topic by topic. The server keeps the selected topics in pathway order, reopens a set
-  that already covers exactly that selection, and checks the combined brief against the note
-  limit before spending an allowance. The twelve-topic cap remains only for legacy
-  start-topic callers that ask for a run. The student chooses the total cards, quiz questions
-  and exam questions; when the dialog opens, its defaults scale with the number of selected
-  topics so a whole-subject deck still covers every one. The existing compile pipeline takes
-  over, so a pathway set has the same summary, cards, quiz, exam marking, scheduling, and
-  tutor as an uploaded set.
+- **Study this topic** opens a one-topic build panel with the same count controls as a
+  pasted set; **Choose parts** opens the multi-select picker from that topic's part, and
+  **Build from parts** above the pathway opens it with the whole course selected. The picker
+  lists the pathway's specification parts, each with the number of topics it contains, so a
+  course with 15 parts offers 15 choices rather than flattening them into 33 topics. Selecting
+  a part includes every topic in it; selecting every part is how a student revises the whole
+  subject without building a set part by part. The server keeps the selected topics in pathway
+  order, reopens a set that already covers exactly that selection, and checks the combined
+  brief against the note limit before spending an allowance. The twelve-topic cap remains only
+  for legacy start-topic callers that ask for a run. The student chooses the total cards, quiz
+  questions and exam questions; when the dialog opens, its defaults scale with the number of
+  selected topics so a whole-subject deck still covers every one. The existing compile
+  pipeline takes over, so a pathway set has the same summary, cards, quiz, exam marking,
+  scheduling, and tutor as an uploaded set.
 - A pathway set is built from a syllabus outline, not from teaching text. Generation is told
   to write the subject content that outline calls for — facts, examples, vocabulary, worked
   rules — and never material about the specification, assessment objectives, paper structure
@@ -842,6 +853,30 @@ same rate-limit messages as the rest of the app.
   survive.
 - Marking topics complete is manual. A topic's linked study set, card counts, and course
   scores are derived from the set, not duplicated.
+
+### Owner decision: Save My Exams licensing
+
+Bluprint reads published Save My Exams note pages for courses that are not covered by the
+checked AQA GCSE Biology specification map. Whether that reading is licensed is unresolved.
+This is a decision for the service owner; the code does not change or remove that source in
+this audit, and no licence claim is made on the course page.
+
+## Route metadata, names and empty states
+
+- **Every route has its own title and description.** The title is derived from the route,
+  never from a set title, course name, email address or share token. Private, personal and
+  tokenised routes carry `noindex, nofollow` and no canonical link.
+- **A display name is optional.** A student can set one from the account menu; until then
+  the greeting is neutral ("Welcome") and the fallback form of address is "there". No
+  invented first name is used.
+- **Setup progress counts usable content.** The "build a study set" step is complete only
+  when a set has cards, quiz questions or exam questions. An interrupted build does not earn
+  the step.
+- **Today states its status once.** The empty state lives in the Due now panel; the header
+  no longer repeats it. Every counter names what it counts (cards, quiz, exam, items).
+- **Topic notes keep their structure.** List items retain a separator, table rows are
+  stored with cell boundaries and rendered as a table, and a figure caption whose image is
+  not shown is dropped instead of dangling.
 
 ## How a revision timetable is built
 

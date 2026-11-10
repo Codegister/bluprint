@@ -46,7 +46,8 @@ export function displayName(
 ): string {
   if (name?.trim()) return name.trim();
   if (email?.trim()) return email.split("@")[0];
-  return "friend";
+  // A guest has not told us a name. No invented first name, no "friend".
+  return "there";
 }
 
 export function percent(part: number, total: number): number {

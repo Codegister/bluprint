@@ -26,6 +26,7 @@ import {
 import { materialLimits } from "@/convex/lib/buildCapacity";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { notifyError, readableError } from "@/lib/errors";
 import {
   EXAM_BOARDS,
@@ -35,6 +36,7 @@ import {
   validLevelsForBoard,
 } from "@/lib/examBoards";
 import { requiresBoardQuestion } from "@/convex/lib/catalogue";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -63,6 +65,7 @@ export function SetSettingsDialog({
   const saveExamDate = useMutation(api.studySets.setExamDate);
   const removeSet = useMutation(api.studySets.remove);
   const processSet = useAction(api.ai.processStudySet);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   const navigate = useNavigate();
 
   const [title, setTitle] = useState(set.title);
@@ -139,6 +142,10 @@ export function SetSettingsDialog({
   const save = async (rebuild: boolean) => {
     if (title.trim().length < 2) {
       setError("Give the set a name first.");
+      return;
+    }
+    if (rebuild && aiUnavailable) {
+      setError(AI_NOT_CONFIGURED_MESSAGE);
       return;
     }
     setSaving(rebuild ? "rebuild" : "save");

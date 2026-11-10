@@ -17,6 +17,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { DeckGlyph } from "@/components/Mascot";
 import { EASE, Meter, TypingDots, enter } from "@/components/motion/Motion";
 import { useAuth } from "@/hooks/use-auth";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { readableError } from "@/lib/errors";
 import { displayName, percent } from "@/lib/format";
 import { takePendingNotes } from "@/lib/pendingNotes";
@@ -28,6 +29,7 @@ import {
   tutorScopeCaption,
 } from "@/lib/tutorScope";
 import { hostOf, safeExternalUrl } from "@/lib/safeExternalUrl";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -173,7 +175,7 @@ export default function TutorPage() {
   const transcribe = useAction(api.ai.transcribeDictation);
   // Same source as the embedded tutor: tiers are offered by label only, and
   // the NVIDIA model behind each label stays on the server.
-  const aiStatus = useQuery(api.settings.aiStatus);
+  const { status: aiStatus, unavailable: aiUnavailable } = useAiAvailability();
   const tierLabels = aiStatus?.tutorTiers ?? ["Balanced"];
   const defaultTier = aiStatus?.defaultTutorTier ?? "Balanced";
   // The picker shows a tagline and a distinct icon per tier; both come from the
@@ -239,10 +241,8 @@ export default function TutorPage() {
     if ((!typed && files.length === 0) || sending) return;
     // Only an explicit "not configured" answer stops the request. An undefined
     // status is still loading, so it must never create a false negative.
-    if (aiStatus?.configured === false) {
-      setError(
-        "The tutor isn't connected in this workspace yet. Saved material still works, but new questions can't be answered.",
-      );
+    if (aiUnavailable) {
+      setError(AI_NOT_CONFIGURED_MESSAGE);
       return;
     }
     const question = typed || "Explain what is in this image.";
@@ -320,6 +320,10 @@ export default function TutorPage() {
       (course) => course.status === "ready",
     );
     const readySets = (mySets ?? []).filter((set) => set.status === "ready");
+    // The tutor reads the notes saved with a set, so a set whose build failed or
+    // is still running is still readable. Excluding it made Home claim the tutor
+    // had nothing to read while an interrupted build's notes were on the server.
+    const librarySets = (mySets ?? []).filter((set) => set.status !== "queued");
     const recentSets = [...readySets].sort(
       (a, b) =>
         (b.lastStudiedAt ?? b.updatedAt) - (a.lastStudiedAt ?? a.updatedAt),
@@ -334,7 +338,7 @@ export default function TutorPage() {
     })();
 
     const scopeOptions = [
-      ...recentSets.slice(0, 8).map((set) => ({
+      ...librarySets.slice(0, 8).map((set) => ({
         value: `set:${set._id}`,
         label: `Set · ${set.title}`,
       })),
@@ -351,9 +355,11 @@ export default function TutorPage() {
       (sum, set) => sum + (set.dueCount ?? 0),
       0,
     );
-    const firstName = displayName(user?.name, user?.email)
-      .split(" ")[0]
-      .split("@")[0];
+    const firstName = user?.name?.trim()
+      ? user.name.trim().split(" ")[0]
+      : user?.email
+        ? user.email.split("@")[0]
+        : "";
     const primarySet = continueSets[0];
     const primaryHref = totalDue > 0 ? "/today" : primarySet ? `/sets/${primarySet._id}` : null;
     const primaryLabel =
@@ -370,7 +376,7 @@ export default function TutorPage() {
           : null;
     const tutorSet =
       scopeKind === "set"
-        ? recentSets.find((set) => set._id === scopeValue)
+        ? librarySets.find((set) => set._id === scopeValue)
         : undefined;
     const tutorCourse =
       scopeKind === "course"
@@ -399,7 +405,7 @@ export default function TutorPage() {
         <div className="mx-auto w-full max-w-4xl">
           <PageHeader
             eyebrow="Home"
-            title={`Hi, ${firstName}`}
+            title={firstName ? `Hi, ${firstName}` : "Welcome"}
             description={
               <>
                 {totalDue > 0
@@ -844,9 +850,12 @@ export default function TutorPage() {
             maxAttachments={2}
             models={tierLabels}
             modelDetails={modelDetails}
-            onDictate={async (audio, format) =>
-              (await transcribe({ audio, format })).text
-            }
+            onDictate={async (audio, format) => {
+              if (aiUnavailable) {
+                throw new Error(AI_NOT_CONFIGURED_MESSAGE);
+              }
+              return (await transcribe({ audio, format })).text;
+            }}
           />
 
           <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">

@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { readableError } from "@/lib/errors";
 import { markLabel, plural } from "@/lib/format";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { ArrowRight, Clock, Loader2, Timer, TriangleAlert } from "lucide-react";
@@ -38,6 +40,7 @@ export default function Mock() {
   const startMock = useMutation(api.mocks.start);
   const finishMock = useMutation(api.mocks.finish);
   const gradeAnswer = useAction(api.ai.gradeExamAnswer);
+  const { unavailable: aiUnavailable } = useAiAvailability();
 
   const [attemptId, setAttemptId] = useState<Id<"mockAttempts"> | null>(null);
   const [starting, setStarting] = useState(false);
@@ -87,6 +90,10 @@ export default function Mock() {
 
   const begin = async () => {
     if (!valid) return;
+    if (aiUnavailable) {
+      setError(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     setStarting(true);
     setError(null);
     try {

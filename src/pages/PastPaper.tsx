@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { planSummary, resolveCoursePaper } from "@/convex/lib/paperPlan";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { qualificationLabel } from "@/lib/examBoards";
 import { printWithClass } from "@/lib/print";
 import { markLabel, plural } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import { Loader2, Printer } from "lucide-react";
@@ -99,6 +101,7 @@ export default function PastPaper() {
     validId ? { paperId: paperId as Id<"pastPapers"> } : "skip",
   );
   const rebuild = useMutation(api.pastPapers.rebuild);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   const [retrying, setRetrying] = useState(false);
 
   // A build can outlive the copy on the page, so the page keeps its own clock
@@ -126,6 +129,10 @@ export default function PastPaper() {
 
   const handleRetry = async () => {
     if (!validId) return;
+    if (aiUnavailable) {
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     setRetrying(true);
     try {
       await rebuild({ paperId: paperId as Id<"pastPapers"> });

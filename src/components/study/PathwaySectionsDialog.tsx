@@ -12,7 +12,8 @@ import {
   BUILD_MAX,
   BUILD_MIN,
 } from "@/convex/lib/buildDefaults";
-import type { SectionOption } from "@/lib/pathwaySections";
+import type { PathwayPartOption } from "@/lib/pathwaySections";
+import { plural } from "@/lib/format";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { TopicPicker } from "@/components/study/TopicPicker";
@@ -33,10 +34,10 @@ function defaultsFor(topicCount: number): BuildCounts {
 }
 
 /**
- * Builds a study set from any whole topics on the pathway. The student sees the
- * full topic list with its course-wide numbers, selects as many as they need,
- * and chooses the number of flashcards, quiz questions and exam-style questions
- * before the build starts.
+ * Builds a study set from whole pathway parts, or from one topic when opened
+ * from inside an expanded part. A part includes every topic it contains, so the
+ * number of choices here matches the number of parts on the pathway instead of
+ * flattening those parts into their individual topics.
  *
  * The caller gives this a `key` per opening, so the initial selection starts
  * cleanly without an effect resetting it after a render.
@@ -48,35 +49,56 @@ export function PathwaySectionsDialog({
   initialSelectedIds,
   busy,
   onBuild,
+  noun = "part",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  options: SectionOption[];
+  options: PathwayPartOption[];
   initialSelectedIds: readonly string[];
   busy: boolean;
   onBuild: (topicIds: string[], counts: BuildCounts) => void;
+  /** "topic" is used for the single-topic build opened from a part. */
+  noun?: "part" | "topic";
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>(() => {
     const available = new Set(options.map((option) => option.id));
     const chosen = initialSelectedIds.filter((id) => available.has(id));
-    return chosen.length > 0 ? chosen : options.slice(0, 1).map((option) => option.id);
+    return chosen.length > 0
+      ? chosen
+      : options.slice(0, 1).map((option) => option.id);
   });
-  const initialCounts = defaultsFor(selectedIds.length);
+  const initialCounts = defaultsFor(
+    options
+      .filter((option) => selectedIds.includes(option.id))
+      .reduce((sum, option) => sum + option.topicCount, 0),
+  );
   const [cards, setCards] = useState<number>(initialCounts.cards);
   const [quiz, setQuiz] = useState<number>(initialCounts.quiz);
   const [exam, setExam] = useState<number>(initialCounts.exam);
   // Until the student edits a count, changing the selection keeps the default
-  // per-topic coverage instead of leaving a ten-topic set at 10 cards.
+  // per-topic coverage instead of leaving a longer set at one topic's totals.
   const [countsTouched, setCountsTouched] = useState(false);
 
   const selected = options.filter((option) => selectedIds.includes(option.id));
   const selectedCount = selected.length;
-  const oneTopic = options.length === 1;
+  const selectedTopicCount = selected.reduce(
+    (sum, option) => sum + option.topicCount,
+    0,
+  );
+  const totalTopicCount = options.reduce(
+    (sum, option) => sum + option.topicCount,
+    0,
+  );
+  const oneChoice = options.length === 1;
+  const choicePlural = noun === "part" ? "parts" : "topics";
 
-  const chooseTopics = (topicIds: string[]) => {
-    setSelectedIds(topicIds);
+  const chooseOptions = (optionIds: string[]) => {
+    setSelectedIds(optionIds);
     if (countsTouched) return;
-    const next = defaultsFor(topicIds.length);
+    const topicCount = options
+      .filter((option) => optionIds.includes(option.id))
+      .reduce((sum, option) => sum + option.topicCount, 0);
+    const next = defaultsFor(topicCount);
     setCards(next.cards);
     setQuiz(next.quiz);
     setExam(next.exam);
@@ -95,38 +117,47 @@ export function PathwaySectionsDialog({
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-bold text-brand-ink">
               {selectedCount > 1
-                ? `Build a set from ${selectedCount} topics`
+                ? `Build a set from ${selectedCount} ${choicePlural}`
                 : "Build a study set"}
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-              Choose any whole topics below. Bluprint builds one set from only
-              the topics you tick, in pathway order; it does not expand them into
-              subtopics.
+              {noun === "part"
+                ? "Choose any whole parts below. Bluprint builds one set from every topic in the parts you tick, in pathway order."
+                : "Build one set from this topic. Choose how much Bluprint should make, then it writes the summary, flashcards, quiz and exam practice."}
             </DialogDescription>
           </DialogHeader>
         </div>
 
         <div className="px-6 pb-6">
           <p className="mt-5 text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-chrome-7">
-            {oneTopic ? "Topic in this set" : "Choose topics"}
+            {oneChoice
+              ? noun === "part"
+                ? "Part in this set"
+                : "Topic in this set"
+              : `Choose ${choicePlural}`}
           </p>
 
           <div className="mt-2">
             <TopicPicker
               options={options}
               selectedIds={selectedIds}
-              onChange={chooseTopics}
+              onChange={chooseOptions}
               disabled={busy}
+              noun={noun}
             />
           </div>
 
           <p className="mt-3 text-[0.68rem] leading-relaxed text-muted-foreground">
             {selectedCount === 0
-              ? "Choose at least one topic to build a set."
-              : selectedCount === 1
+              ? `Choose at least one ${noun} to build a set.`
+              : noun === "topic"
                 ? "One topic makes a normal set."
-                : `${selectedCount} whole topics are combined into one set, in pathway order.`}
-            {selectedCount > 0 && ` This course has ${options.length} topic${options.length === 1 ? "" : "s"}.`}
+                : selectedCount === 1
+                  ? `This part includes ${plural(selectedTopicCount, "topic")}.`
+                  : `${selectedCount} parts include ${plural(selectedTopicCount, "topic")} in one set, in pathway order.`}
+            {noun === "part" && selectedCount > 0
+              ? ` This course has ${options.length} part${options.length === 1 ? "" : "s"}, covering ${plural(totalTopicCount, "topic")}.`
+              : ""}
           </p>
 
           <div className="mt-5 rounded-2xl border border-border bg-[#FCFCFD] p-4">
@@ -134,7 +165,7 @@ export function PathwaySectionsDialog({
               How much should Bluprint build?
             </p>
             <p className="mt-1 text-[0.68rem] leading-relaxed text-muted-foreground">
-              {selectedCount <= 1
+              {selectedTopicCount <= 1
                 ? "These are the totals for this set."
                 : "These are totals for the whole selected set. A longer set is generated in batches and takes more time."}
             </p>
@@ -202,16 +233,21 @@ export function PathwaySectionsDialog({
             </Button>
             <Button
               type="button"
-              onClick={() => onBuild(selected.map((option) => option.id), { cards, quiz, exam })}
+              onClick={() =>
+                onBuild(
+                  selected.flatMap((option) => option.topicIds),
+                  { cards, quiz, exam },
+                )
+              }
               disabled={busy || selectedCount === 0}
               className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E]"
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
               {selectedCount === 0
-                ? "Choose topics"
+                ? `Choose ${choicePlural}`
                 : selectedCount === 1
                   ? "Build study set"
-                  : `Build set from ${selectedCount} topics`}
+                  : `Build set from ${selectedCount} ${choicePlural}`}
             </Button>
           </DialogFooter>
         </div>

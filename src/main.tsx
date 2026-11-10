@@ -5,6 +5,7 @@ import { EASE } from "@/components/motion/Motion";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/use-auth";
 import { installResizeObserverGuard } from "@/lib/resizeGuard";
+import { applyPageMeta } from "@/lib/pageMeta";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
@@ -145,9 +146,6 @@ class RootErrorBoundary extends React.Component<
 // frontend release cannot get ahead of the backend fix.
 const CONVEX_URL = "https://harmless-dog-538.convex.cloud";
 
-// One canonical origin, even if an old host is still serving a copy. The
-// static tag in index.html carries the same value.
-const CANONICAL_URL = "https://codegister.github.io/bluprint/";
 const convex = new ConvexReactClient(CONVEX_URL);
 
 // GitHub Pages serves a project site from /<repo>/, so the router must treat
@@ -193,45 +191,12 @@ function RouteSyncer() {
     );
   }, [location.pathname]);
 
-  // The app is one HTML file served for every route, so indexing rules are
-  // applied per navigation. Sign-in and shared-progress links are private or
-  // tokenised; the landing page is the only canonical destination.
+  // The app is one HTML file served for every route, so the title,
+  // description and indexing rules are applied per navigation. Private and
+  // tokenised screens are noindex; metadata never includes a set title, a
+  // course name, an email address or a share token.
   useEffect(() => {
-    const path = location.pathname;
-    const privateScreen = path === "/auth" || path.startsWith("/share/");
-
-    let robots = document.head.querySelector<HTMLMetaElement>(
-      'meta[name="robots"]',
-    );
-    if (privateScreen) {
-      if (!robots) {
-        robots = document.createElement("meta");
-        robots.name = "robots";
-        document.head.appendChild(robots);
-      }
-      robots.content = "noindex, nofollow";
-    } else if (robots) {
-      robots.remove();
-    }
-
-    let canonical = document.head.querySelector<HTMLLinkElement>(
-      'link[rel="canonical"]',
-    );
-    if (privateScreen) {
-      // A tokenised share page or the sign-in screen must not compete with
-      // the landing page in search results at all.
-      if (canonical) canonical.remove();
-    } else {
-      // Every public app route points at the one canonical landing page, so
-      // /tutor, /privacy and the rest cannot be indexed as separate copies of
-      // the app shell. The static tag in index.html is the first-paint value.
-      if (!canonical) {
-        canonical = document.createElement("link");
-        canonical.rel = "canonical";
-        document.head.appendChild(canonical);
-      }
-      canonical.href = CANONICAL_URL;
-    }
+    applyPageMeta(location.pathname);
   }, [location.pathname]);
 
   useEffect(() => {

@@ -27,6 +27,11 @@ import {
   type TutorBuildPlan,
 } from "./lib/tutorAgent";
 import { materialLimits } from "./lib/buildCapacity";
+import { toCardArgs } from "./lib/cardArgs";
+import { toExamArgs } from "./lib/examArgs";
+import { buildFailureCopy, partialStageNote, type BuildStage } from "./lib/buildFailure";
+import { buildAqaBiologyPathway } from "./lib/specPathways";
+import { tutorMarkingRules } from "./lib/tutorMarking";
 import { chatCompletionsUrl } from "./lib/gatewayConfig";
 import { alignDataReference, dropUnusedData } from "./lib/paperData";
 import { criteriaToGuide } from "./lib/realPaper";
@@ -434,6 +439,8 @@ async function nvidiaChat(
     retries?: number;
     /** Pathway builds can produce a large JSON document, so they need longer. */
     timeoutMs?: number;
+    /** The pipeline's wall-clock limit; one call must not outlive it. */
+    deadline?: number;
   },
 ): Promise<string> {
   const retries = options.retries ?? 2;
@@ -459,6 +466,14 @@ async function nvidiaChat(
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const apiKey = nextApiKey(apiKeys);
     const model = models[Math.min(modelIndex, models.length - 1)]!;
+    // A Convex action is killed at its own limit, which would leave the set
+    // stuck in "processing" with no message. Stop the request first so the
+    // stage fails in the catch block, keeps earlier stages, and reports itself.
+    const configuredTimeout = options.timeoutMs ?? 120_000;
+    const remaining = options.deadline === undefined
+      ? configuredTimeout
+      : options.deadline - Date.now();
+    const requestTimeout = Math.max(5_000, Math.min(configuredTimeout, remaining));
     let response: Response;
     try {
       response = await fetch(gatewayChatUrl(), {
@@ -481,7 +496,7 @@ async function nvidiaChat(
             ? { chat_template_kwargs: { enable_thinking: false } }
             : {}),
         }),
-        signal: AbortSignal.timeout(options.timeoutMs ?? 120_000),
+        signal: AbortSignal.timeout(requestTimeout),
       });
     } catch (error) {
       // Never include the request object: it contains the Authorization header.
@@ -1232,6 +1247,7 @@ async function generateCards(
             `Return JSON exactly like: {"cards":[{"front":"...","back":"...","keyPoint":"..."}]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
       ],
+        deadline,
         maxTokens: 7000,
         temperature: 0.2,
         topP: 1.0,
@@ -1377,6 +1393,7 @@ async function generateQuiz(
       ],
       // A batch of eight with explanations needs far more room than the old
       // five-question call. Collection recovery handles any truncation.
+        deadline,
         maxTokens: 9000,
         temperature: 0.2,
         topP: 1.0,
@@ -1474,6 +1491,7 @@ async function generateExams(
             `Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
       ],
+        deadline,
         maxTokens: 9000,
         temperature: 0.2,
         topP: 1.0,
@@ -2270,7 +2288,7 @@ type CoursePathway = {
   examFormat: string;
   units: PathwayUnit[];
   /** Where the saved unit/topic shape was read from. */
-  source?: "savemyexams" | "cognito" | "bluprint" | "rs";
+  source?: "savemyexams" | "cognito" | "bluprint" | "rs" | "specification";
   /** The notes page this map was read from. */
   sourceUrl?: string;
   /** The qualification's papers, when the specification publishes a split. */
@@ -2695,6 +2713,19 @@ async function generateCoursePathway(
     };
   }
 
+  // AQA GCSE Biology is mapped to the board's own specification, not to a
+  // notes-site index. This keeps AQA numbering, includes active transport, and
+  // stops a notes-site "Exam Skills" page becoming part 8 of 8.
+  const aqaBiology = buildAqaBiologyPathway(course);
+  if (aqaBiology) {
+    return {
+      ...aqaBiology,
+      source: "specification",
+      cognitoSyncedAt: Date.now(),
+      version: CURRENT_PATHWAY_VERSION,
+    };
+  }
+
   let pathway: CoursePathway | null = null;
   try {
     pathway = await scrapeSaveMyExamsPathway(course);
@@ -3052,12 +3083,18 @@ async function setStillExists(
  * failure just means that stage produced nothing, so the rest of the set is
  * still built — a failed quiz must not cost the student their flashcards.
  */
-async function stage<T>(run: () => Promise<T>, empty: T): Promise<T> {
+type StageOutcome<T> = { value: T; failure: unknown | null };
+
+async function stage<T>(
+  run: () => Promise<T>,
+  empty: T,
+): Promise<StageOutcome<T>> {
   try {
-    return await run();
+    return { value: await run(), failure: null };
   } catch (error) {
     if (error instanceof BuildCancelled) throw error;
-    return empty;
+    console.error("Study set stage failed", error);
+    return { value: empty, failure: error };
   }
 }
 
@@ -3130,6 +3167,15 @@ async function processStudySetForUser(
       }
       return { started: false };
     }
+
+    // These live outside the try block because the catch needs them: the stage
+    // is recorded as it starts, and the counts say what survived for the message.
+    const savedCounts = {
+      cards: existing.cardCount,
+      quiz: existing.quizCount,
+      exams: existing.examCount,
+    };
+    let currentStage: BuildStage = "summary";
 
     try {
       const apiKeys = resolveNvidiaKeys();
@@ -3212,9 +3258,55 @@ async function processStudySetForUser(
         progress: "Writing your summary…",
         percent: 14,
       });
-      const generatedSummary = await summariseNotes(apiKeys, notes, context, syllabus).catch(
-        () => null,
+      // Keep every completed stage. A fresh build can safely store a partial
+      // set: if a later stage fails, the student can still open what finished.
+      // A rebuild leaves the previous set untouched until all new stages are in.
+      const canKeepPartial =
+        existing.cardCount === 0 && existing.quizCount === 0 && existing.examCount === 0;
+      const stageFailures: Array<{ stage: BuildStage; error: unknown }> = [];
+
+      const savePartial = async (
+        nextSummary: Summary,
+        nextCards: GeneratedCard[],
+        nextQuiz: GeneratedQuiz[],
+        nextExams: GeneratedExam[],
+      ) => {
+        if (!canKeepPartial) return;
+        const saved = await ctx.runMutation(internal.studySets.completeGeneration, {
+          setId,
+          summary: nextSummary,
+          cards: toCardArgs(nextCards),
+          quiz: nextQuiz,
+          exams: toExamArgs(nextExams),
+          title: nextSummary.title,
+          requested: {
+            cards: requestedCards,
+            quiz: requestedQuiz,
+            exams: requestedExam,
+          },
+          final: false,
+        });
+        // The mutation filters, grounds and deduplicates before storing, so the
+        // failure message must use its counts, not the generated lengths.
+        if (saved.stored) {
+          savedCounts.cards = saved.counts.cards;
+          savedCounts.quiz = saved.counts.quiz;
+          savedCounts.exams = saved.counts.exams;
+        }
+      };
+
+      const summaryStage = await stage(
+        () => summariseNotes(apiKeys, notes, context, syllabus),
+        null,
       );
+      const generatedSummary = summaryStage.value;
+      if (summaryStage.failure) {
+        stageFailures.push({ stage: "summary", error: summaryStage.failure });
+      }
+      const summary = generatedSummary ?? summaryFromNotes(notes, existing.course);
+      if (generatedSummary) {
+        await savePartial(summary, [], [], []);
+      }
 
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
@@ -3229,11 +3321,18 @@ async function processStudySetForUser(
           percent: 24 + (done / Math.max(1, target)) * 32,
         });
       };
-      const cards = await stage(
+      currentStage = "cards";
+      const cardStage = await stage(
         () =>
           generateCards(apiKeys, notes, targetCards, deadline, reportCards, syllabus),
         [],
       );
+      const cards = cardStage.value;
+      if (cardStage.failure) {
+        stageFailures.push({ stage: "cards", error: cardStage.failure });
+      } else if (cards.length > 0) {
+        await savePartial(summary, cards, [], []);
+      }
 
       // A deleted set stops the run at the stage boundary, so the quiz and
       // exam calls are never made and no orphaned rows are written.
@@ -3251,7 +3350,8 @@ async function processStudySetForUser(
           percent: 58 + (done / Math.max(1, target)) * 20,
         });
       };
-      const quiz = await stage(
+      currentStage = "quiz";
+      const quizStage = await stage(
         () =>
           generateQuiz(
             apiKeys,
@@ -3264,6 +3364,12 @@ async function processStudySetForUser(
           ),
         [],
       );
+      const quiz = quizStage.value;
+      if (quizStage.failure) {
+        stageFailures.push({ stage: "quiz", error: quizStage.failure });
+      } else if (quiz.length > 0) {
+        await savePartial(summary, cards, quiz, []);
+      }
 
       if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
       await ctx.runMutation(internal.studySets.setProgress, {
@@ -3279,7 +3385,8 @@ async function processStudySetForUser(
           percent: 80 + (done / Math.max(1, target)) * 14,
         });
       };
-      const exams = await stage(
+      currentStage = "exam";
+      const examStage = await stage(
         () =>
           generateExams(
             apiKeys,
@@ -3292,6 +3399,10 @@ async function processStudySetForUser(
           ),
         [],
       );
+      const exams = examStage.value;
+      if (examStage.failure) {
+        stageFailures.push({ stage: "exam", error: examStage.failure });
+      }
 
       // Last chance to stop before writing rows: a set deleted while the exam
       // questions were being written must not leave cards or questions behind.
@@ -3299,15 +3410,19 @@ async function processStudySetForUser(
 
       // A failed stage should not lose the rest of the set. Only a run where
       // nothing at all came back is a real failure, and it gets a clear message.
-      const summary = generatedSummary ?? summaryFromNotes(notes, existing.course);
       if (
         !generatedSummary &&
         cards.length === 0 &&
         quiz.length === 0 &&
         exams.length === 0
       ) {
+        const first = stageFailures[0];
         throw new Error(
-          "The AI did not return any usable material for this set. Your notes are saved; rebuild in a moment.",
+          buildFailureCopy(
+            first?.stage ?? "summary",
+            savedCounts,
+            isRateLimit(first?.error),
+          ),
         );
       }
 
@@ -3316,12 +3431,13 @@ async function processStudySetForUser(
         progress: "Saving your set…",
         percent: 97,
       });
+      currentStage = "save";
       await ctx.runMutation(internal.studySets.completeGeneration, {
         setId,
         summary,
-        cards,
+        cards: toCardArgs(cards),
         quiz,
-        exams,
+        exams: toExamArgs(exams),
         // A short topic name replaces a name derived from the first line of the
         // upload. A name the student typed is never overwritten.
         title: summary.title,
@@ -3333,6 +3449,9 @@ async function processStudySetForUser(
           quiz: requestedQuiz,
           exams: requestedExam,
         },
+        ...(stageFailures.length > 0
+          ? { failureNote: partialStageNote(stageFailures[0]!.stage) }
+          : {}),
       });
       return { started: true };
     } catch (error) {
@@ -3360,7 +3479,11 @@ async function processStudySetForUser(
       } catch (refundError) {
         console.error("Could not refund the failed set allowance", refundError);
       }
-      const message = buildFailureMessage(error);
+      const message = buildFailureCopy(
+        currentStage,
+        savedCounts,
+        isRateLimit(error),
+      );
       const finalMessage = refunded
         ? `${message} This attempt was not counted against your build allowance.`
         : message;
@@ -3452,7 +3575,7 @@ export const regenerateCards = action({
       await ctx.runMutation(internal.studySets.completeGeneration, {
         setId,
         summary,
-        cards,
+        cards: toCardArgs(cards),
         quiz: content.quiz.map((question) => ({
           question: question.question,
           options: question.options,
@@ -4792,6 +4915,7 @@ function tutorPrompt(
   const system = [
     TUTOR_SYSTEM_PROMPT,
     TUTOR_THREAD_RULES,
+    tutorMarkingRules(),
     "Begin every reply with a complete sentence. Never start with a partial word, a hyphen, or a continuation of the study material.",
     materialBlock(context.material),
     `<material_title>${context.title}</material_title>`,

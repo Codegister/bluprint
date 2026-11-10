@@ -1,5 +1,3 @@
-import "@vly-ai/integrations";
-
 /**
  * Preview runtime, loaded as a real module from index.html.
  *
@@ -11,8 +9,11 @@ import "@vly-ai/integrations";
  *   No matching HTML proxy module found from index.html?html-proxy&index=1.js
  *
  * Keeping the runtime in a source file removes every HTML proxy module from
- * the page while preserving the screenshot listener and error reporting.
+ * the page. Error reporting stays enabled everywhere; the screenshot bridge
+ * is preview-only.
  */
+import { isPreviewHostname } from "@/lib/previewHost";
+
 type PreviewError = {
   message: string;
   stack?: string;
@@ -56,3 +57,11 @@ window.addEventListener("unhandledrejection", (event) => {
     stack: reason?.stack,
   });
 });
+
+if (isPreviewHostname(window.location.hostname)) {
+  // The integration loads html2canvas-pro from jsDelivr. Production uses a
+  // `script-src 'self'` policy and does not need the preview screenshot bridge.
+  void import("@vly-ai/integrations").catch((error) => {
+    console.warn("[preview] Integrations runtime unavailable", error);
+  });
+}

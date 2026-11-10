@@ -223,6 +223,9 @@ const schema = defineSchema(
               v.literal("cognito"),
               v.literal("bluprint"),
               v.literal("rs"),
+              // The board's own specification, used where Bluprint has a
+              // complete checked map (currently AQA GCSE Biology).
+              v.literal("specification"),
             ),
           ),
           // The published notes page the pathway was read from.

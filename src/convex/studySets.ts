@@ -19,7 +19,7 @@ import {
   BUILD_MAX,
   BUILD_MIN,
 } from "./lib/buildDefaults";
-import { shortTitle } from "./lib/titles";
+import { cleanTopicTitle, shortTitle } from "./lib/titles";
 import { matchSpecPoint } from "./lib/specMapping";
 import { requireUserId } from "./lib/requireUser";
 import {
@@ -1398,8 +1398,16 @@ export const completeGeneration = internalMutation({
       quiz: v.number(),
       exams: v.number(),
     }),
+    // A partial save keeps the rows and counts but leaves the set building.
+    // The final call is the only one that marks it ready.
+    final: v.optional(v.boolean()),
+    // A section that failed while the rest finished, shown beside the set.
+    failureNote: v.optional(v.string()),
   },
-  handler: async (ctx, { setId, summary, cards, quiz, exams, title, requested }) => {
+  handler: async (
+    ctx,
+    { setId, summary, cards, quiz, exams, title, requested, final, failureNote },
+  ) => {
     const set = await ctx.db.get(setId);
     // Deleted mid-build: stop quietly rather than writing into a missing set.
     if (!set) return { stored: false };
@@ -1580,7 +1588,10 @@ export const completeGeneration = internalMutation({
       quizCount: preparedQuiz.items.length,
       examCount: storedExams.length,
       knownCount: 0,
-      generationNote: generationNote || undefined,
+      generationNote:
+        final === false
+          ? undefined
+          : [generationNote, failureNote].filter(Boolean).join(" ") || undefined,
       coverageNote: syllabusOutline
         ? undefined
         : [
@@ -1597,13 +1608,27 @@ export const completeGeneration = internalMutation({
             .join(" ") || undefined,
       lastQuizScore: undefined,
       lastQuizTotal: undefined,
-      status: "ready",
-      progress: undefined,
-      errorMessage: undefined,
-      processingStartedAt: undefined,
+      ...(final === false
+        ? {}
+        : {
+            status: "ready" as const,
+            progress: undefined,
+            errorMessage: undefined,
+            processingStartedAt: undefined,
+          }),
       updatedAt: now,
     });
-    return { stored: true };
+    // The action's failure message uses these, not the generated lengths: a
+    // card or question dropped by the filters above must not be promised to the
+    // student as saved.
+    return {
+      stored: true,
+      counts: {
+        cards: contentCards.length,
+        quiz: preparedQuiz.items.length,
+        exams: storedExams.length,
+      },
+    };
   },
 });
 
@@ -1683,7 +1708,15 @@ export const failGeneration = internalMutation({
   handler: async (ctx, { setId, message }) => {
     const set = await ctx.db.get(setId);
     if (!set) return { written: false };
+    // A run that fails before the summary named itself leaves the creation
+    // placeholder. Name the set from its own notes so the library does not fill
+    // with identical "Study set" rows.
+    const fallbackTitle =
+      set.title === "Study set" ? cleanTopicTitle("", set.notes) : "";
     await ctx.db.patch(setId, {
+      ...(fallbackTitle && fallbackTitle !== "Study topic"
+        ? { title: fallbackTitle, titleSource: "auto" as const }
+        : {}),
       status: "error",
       errorMessage: message.slice(0, 600),
       progress: undefined,

@@ -8,7 +8,9 @@ import {
 } from "@/components/ui/dialog";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { readableError } from "@/lib/errors";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
 import { motion } from "framer-motion";
@@ -52,6 +54,7 @@ export function ExplainDialog({
   label?: string;
 }) {
   const explain = useAction(api.ai.explainQuestion);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
@@ -68,6 +71,10 @@ export function ExplainDialog({
   const ask = async (prompt: string, prior: Turn[]) => {
     const text = prompt.trim();
     if (!text || pending) return;
+    if (aiUnavailable) {
+      setError(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     const id = requestId.current + 1;
     requestId.current = id;
 

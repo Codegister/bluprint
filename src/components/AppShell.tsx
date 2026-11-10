@@ -21,11 +21,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { AccountExportButton } from "@/components/study/ShareAndExport";
 import { useAuth } from "@/hooks/use-auth";
 import { notifyError } from "@/lib/errors";
 import { displayName, initialFor } from "@/lib/format";
+import { guestKeepWorkHref } from "@/lib/authRedirect";
 import { subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -158,6 +160,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [confirmingGuestSignOut, setConfirmingGuestSignOut] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [nameOpen, setNameOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState(user?.name ?? "");
+  const [savingName, setSavingName] = useState(false);
+  const updateDisplayName = useMutation(api.users.updateDisplayName);
 
   const decks = useMemo(
     () =>
@@ -310,6 +316,16 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <p className="truncate text-[0.85rem] font-semibold text-brand-ink">
               {displayName(user?.name, user?.email)}
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setNameDraft(user?.name ?? "");
+                setNameOpen(true);
+              }}
+              className="text-[0.68rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+            >
+              {user?.name ? "Edit name" : "Set a name"}
+            </button>
             <p className="truncate text-[0.72rem] text-muted-foreground">
               {user?.email ?? "Guest"}
             </p>
@@ -380,6 +396,55 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={nameOpen} onOpenChange={setNameOpen}>
+        <AlertDialogContent className="rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">What should we call you?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              This is only shown inside your workspace. It is not your email
+              address and does not change how you sign in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (savingName) return;
+              setSavingName(true);
+              void updateDisplayName({ name: nameDraft })
+                .then(() => {
+                  toast.success("Name saved.");
+                  setNameOpen(false);
+                })
+                .catch((error) => notifyError(error, "Could not save that name."))
+                .finally(() => setSavingName(false));
+            }}
+          >
+            <label htmlFor="display-name" className="text-[0.8rem] font-semibold text-brand-ink">
+              Display name
+            </label>
+            <Input
+              id="display-name"
+              value={nameDraft}
+              onChange={(event) => setNameDraft(event.target.value)}
+              maxLength={40}
+              autoComplete="nickname"
+              className="mt-2 h-11 rounded-2xl"
+              placeholder="e.g. Sam"
+            />
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+              <button
+                type="submit"
+                disabled={savingName}
+                className="inline-flex h-10 items-center justify-center rounded-full bg-brand-sky px-4 text-[0.82rem] font-semibold text-white disabled:opacity-60"
+              >
+                {savingName ? "Saving…" : "Save name"}
+              </button>
+            </AlertDialogFooter>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent className="rounded-3xl">
           <AlertDialogHeader>
@@ -433,7 +498,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 /** A standing reminder for guests once they have work worth losing. */
 function GuestNotice() {
   const { user } = useAuth();
+  const { pathname } = useLocation();
   if (!user?.isAnonymous) return null;
+  const keepHref = guestKeepWorkHref(pathname);
 
   // The warning sits at the point of creation, before the first deck exists,
   // so nobody builds work under the impression it is already safe.
@@ -442,7 +509,7 @@ function GuestNotice() {
       <span className="font-semibold">Guest workspace</span>
       <span className="text-[#7A5200]/80">Saved in this browser only.</span>
       <Link
-        to="/auth?link=1&returnTo=%2Fsets"
+        to={keepHref}
         className="ml-auto font-semibold underline decoration-[#7A5200]/40 underline-offset-2 hover:text-brand-ink"
       >
         Keep my work

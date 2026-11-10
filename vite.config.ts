@@ -57,8 +57,16 @@ function securityMeta(): Plugin {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [vlyPlugin(), react(), tailwindcss(), securityMeta()],
+export default defineConfig(({ command }) => ({
+  plugins: [
+    // The plugin injects Vly's preview runtime, which loads a screenshot
+    // library from jsDelivr. Production does not use that bridge and its CSP
+    // only allows scripts from this origin, so it is development-only.
+    ...(command === "serve" ? [vlyPlugin()] : []),
+    react(),
+    tailwindcss(),
+    securityMeta(),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -152,4 +160,4 @@ export default defineConfig({
     // after the managed dev server restarts.
     hmr: false,
   },
-});
+}));

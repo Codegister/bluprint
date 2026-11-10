@@ -4,6 +4,7 @@ import { EASE } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
+import { groupNotesBlocks } from "@/convex/lib/notesFormat";
 import { useAction, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import { BookOpen, RotateCcw } from "lucide-react";
@@ -136,14 +137,65 @@ export function TopicNotes({
                 {section.heading}
               </h4>
               <div className="mt-1 space-y-1.5">
-                {section.blocks.map((line, lineIndex) => (
-                  <p
-                    key={`${line.slice(0, 24)}-${lineIndex}`}
-                    className="text-[0.8rem] leading-relaxed text-brand-ink/75"
-                  >
-                    {line}
-                  </p>
-                ))}
+                {groupNotesBlocks(section.blocks).map((block, blockIndex) => {
+                  if (block.kind === "table") {
+                    return (
+                      <div
+                        key={`table-${blockIndex}`}
+                        className="my-2 overflow-x-auto rounded-xl border border-border"
+                      >
+                        <table className="w-full border-collapse text-left text-[0.76rem]">
+                          <thead className="bg-brand-panel/60 text-brand-ink">
+                            <tr>
+                              {block.header.map((cell, cellIndex) => (
+                                <th
+                                  key={`${cell}-${cellIndex}`}
+                                  scope="col"
+                                  className="border-b border-border px-2.5 py-1.5 font-semibold"
+                                >
+                                  {cell || " "}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {block.rows.map((row, rowIndex) => (
+                              <tr key={`row-${rowIndex}`} className="border-b border-border/60 last:border-b-0">
+                                {row.map((cell, cellIndex) => (
+                                  <td
+                                    key={`${cell}-${cellIndex}`}
+                                    className="px-2.5 py-1.5 text-brand-ink/75"
+                                  >
+                                    {cell || "—"}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  }
+                  if (block.kind === "bullet") {
+                    return (
+                      <p
+                        key={`bullet-${blockIndex}`}
+                        className="flex items-start gap-2 text-[0.8rem] leading-relaxed text-brand-ink/75"
+                      >
+                        <span aria-hidden className="mt-1.5 size-1 shrink-0 rounded-full bg-brand-sky" />
+                        <span>{block.text}</span>
+                      </p>
+                    );
+                  }
+                  return (
+                    <p
+                      key={`line-${blockIndex}`}
+                      className="text-[0.8rem] leading-relaxed text-brand-ink/75"
+                    >
+                      {block.text}
+                    </p>
+                  );
+                })}
               </div>
             </div>
           ))}

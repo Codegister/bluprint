@@ -1,10 +1,18 @@
-import type { SectionOption } from "@/lib/pathwaySections";
 import { cn } from "@/lib/utils";
 
+type PickerOption = {
+  id: string;
+  title: string;
+  number: number;
+  /** Present when the option is a pathway part rather than a single topic. */
+  topicCount?: number;
+};
+
 /**
- * A flat checklist of whole pathway topics. Unit names and subtopics are
- * deliberately not shown: the student is choosing the topics a set covers, and
- * each one is included in full. Numbers are the course-wide topic numbers.
+ * A flat checklist of whole pathway choices. A part includes every topic it
+ * contains; a single topic is used when building from one topic on the pathway.
+ * Subtopics are deliberately not shown: the student is choosing the scope of a
+ * set, and each choice is included in full.
  */
 export function TopicPicker({
   options,
@@ -12,23 +20,31 @@ export function TopicPicker({
   onChange,
   disabled = false,
   className,
+  noun = "topic",
 }: {
-  options: SectionOption[];
+  options: PickerOption[];
   selectedIds: readonly string[];
-  onChange: (topicIds: string[]) => void;
+  onChange: (optionIds: string[]) => void;
   disabled?: boolean;
   className?: string;
+  noun?: "part" | "topic";
 }) {
   const chosen = new Set(selectedIds);
-  const selectedCount = options.filter((option) => chosen.has(option.id)).length;
+  const selectedCount = options.filter((option) =>
+    chosen.has(option.id),
+  ).length;
   const allSelected = options.length > 0 && selectedCount === options.length;
 
-  const toggle = (topicId: string) => {
+  const toggle = (optionId: string) => {
     const next = new Set(chosen);
-    if (next.has(topicId)) next.delete(topicId);
-    else next.add(topicId);
+    if (next.has(optionId)) next.delete(optionId);
+    else next.add(optionId);
     // Always hand back pathway order, no matter which box was clicked.
-    onChange(options.filter((option) => next.has(option.id)).map((option) => option.id));
+    onChange(
+      options
+        .filter((option) => next.has(option.id))
+        .map((option) => option.id),
+    );
   };
 
   return (
@@ -38,7 +54,7 @@ export function TopicPicker({
           className="text-[0.7rem] font-medium text-muted-foreground"
           aria-live="polite"
         >
-          {selectedCount} of {options.length} topic
+          {selectedCount} of {options.length} {noun}
           {options.length === 1 ? "" : "s"} selected
         </p>
         {options.length > 1 && (
@@ -68,7 +84,9 @@ export function TopicPicker({
       </div>
 
       <ul
-        aria-label="Topics in this set"
+        aria-label={
+          noun === "part" ? "Parts in this set" : "Topics in this set"
+        }
         className="mt-2 max-h-72 overflow-y-auto rounded-2xl border border-border bg-[#FCFCFD] p-1.5"
       >
         {options.map((option) => {
@@ -99,13 +117,21 @@ export function TopicPicker({
                 >
                   {option.number}
                 </span>
-                <span
-                  className={cn(
-                    "min-w-0 text-[0.82rem] font-medium leading-snug",
-                    isSelected ? "text-brand-ink" : "text-brand-ink/75",
+                <span className="min-w-0">
+                  <span
+                    className={cn(
+                      "block text-[0.82rem] font-medium leading-snug",
+                      isSelected ? "text-brand-ink" : "text-brand-ink/75",
+                    )}
+                  >
+                    {option.title}
+                  </span>
+                  {noun === "part" && option.topicCount !== undefined && (
+                    <span className="mt-0.5 block text-[0.7rem] leading-snug text-muted-foreground">
+                      {option.topicCount} topic
+                      {option.topicCount === 1 ? "" : "s"}
+                    </span>
                   )}
-                >
-                  {option.title}
                 </span>
               </label>
             </li>

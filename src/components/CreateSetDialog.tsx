@@ -12,6 +12,7 @@ import { TopicPicker } from "@/components/study/TopicPicker";
 import { EASE, EASE_EXIT } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { createSetFailureMessage, notifyError } from "@/lib/errors";
 import { plural } from "@/lib/format";
 import {
@@ -30,7 +31,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { shortTitle, titleFromSource } from "@/convex/lib/titles";
 import { compressImage, extractVideoFrames } from "@/lib/media";
-import { pathwayTopicOptions } from "@/lib/pathwaySections";
+import { pathwayPartOptions } from "@/lib/pathwaySections";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -80,7 +82,7 @@ export function CreateSetDialog({
   initialText?: string;
 }) {
   const navigate = useNavigate();
-  const ai = useQuery(api.settings.aiStatus);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   const createSet = useMutation(api.studySets.create);
   const usage = useQuery(api.buildUsage.status);
@@ -118,9 +120,9 @@ export function CreateSetDialog({
   const maxExam = noteLimits?.exam ?? BUILD_MAX;
   const [error, setError] = useState<string | null>(null);
   const [courseId, setCourseId] = useState("");
-  // Null means "show the suggested topic"; an empty array means the student
+  // Null means "show the suggested part"; an empty array means the student
   // deliberately cleared every box.
-  const [selectedTopicIds, setSelectedTopicIds] = useState<string[] | null>(null);
+  const [selectedPartIds, setSelectedPartIds] = useState<string[] | null>(null);
   const previewsRef = useRef<string[]>([]);
   const openedRef = useRef(false);
 
@@ -133,25 +135,32 @@ export function CreateSetDialog({
     selectedCourseId ? { courseId: selectedCourseId as Id<"courses"> } : "skip",
   );
   const units = courseDetails?.course.pathway?.units ?? [];
-  const topics = pathwayTopicOptions(units);
+  const parts = pathwayPartOptions(units);
   const completedTopics = new Set(courseDetails?.course.completedTopics ?? []);
-  // Default to the next unfinished topic, so the common case is one click.
-  const suggestedTopic =
-    topics.find((topic) => !completedTopics.has(topic.id)) ?? topics[0];
-  const selectedTopics =
-    selectedTopicIds === null
-      ? suggestedTopic
-        ? [suggestedTopic]
+  // Default to the next unfinished part, so the common case is one click.
+  const suggestedPart =
+    parts.find((part) =>
+      part.topicIds.some((topicId) => !completedTopics.has(topicId)),
+    ) ?? parts[0];
+  const selectedParts =
+    selectedPartIds === null
+      ? suggestedPart
+        ? [suggestedPart]
         : []
-      : topics.filter((topic) => selectedTopicIds.includes(topic.id));
+      : parts.filter((part) => selectedPartIds.includes(part.id));
+  const selectedTopicIds = selectedParts.flatMap((part) => part.topicIds);
+  const selectedTopicCount = selectedTopicIds.length;
   const courseReady =
-    selectedCourseId !== "" && selectedTopics.length > 0 && !isLoading;
+    selectedCourseId !== "" && selectedTopicCount > 0 && !isLoading;
 
-  const chooseCourseTopics = (topicIds: string[]) => {
-    setSelectedTopicIds(topicIds);
+  const chooseCourseParts = (partIds: string[]) => {
+    setSelectedPartIds(partIds);
     setError(null);
     if (countsTouched) return;
-    const scale = Math.max(1, topicIds.length);
+    const topicCount = parts
+      .filter((part) => partIds.includes(part.id))
+      .reduce((sum, part) => sum + part.topicCount, 0);
+    const scale = Math.max(1, topicCount);
     setCardCount(Math.min(BUILD_MAX, BUILD_DEFAULTS.cards * scale));
     setQuizCount(Math.min(BUILD_MAX, BUILD_DEFAULTS.quiz * scale));
     setExamCount(Math.min(BUILD_MAX, BUILD_DEFAULTS.exam * scale));
@@ -220,7 +229,7 @@ export function CreateSetDialog({
     setStep("");
     setError(null);
     setCourseId("");
-    setSelectedTopicIds(null);
+    setSelectedPartIds(null);
   };
 
   const handleClose = (next: boolean) => {
@@ -287,25 +296,17 @@ export function CreateSetDialog({
   const handleSubmit = async () => {
     setError(null);
 
-    if (mode === "course" && (selectedCourseId === "" || selectedTopics.length === 0)) {
+    if (mode === "course" && (selectedCourseId === "" || selectedTopicCount === 0)) {
       setError(
         readyCourses.length === 0
-          ? "Set up a course first, then build a set from its topics."
-          : "Choose a course and at least one topic to build from.",
+          ? "Set up a course first, then build a set from its parts."
+          : "Choose a course and at least one part to build from.",
       );
       return;
     }
 
-    if (ai?.configured === false) {
-      setError(
-        "AI building isn't set up for this workspace yet. Ask the owner to connect the AI service, then try again — your notes can still be saved.",
-      );
-      return;
-    }
-    if (ai === undefined) {
-      setError(
-        "Still checking the AI connection — nothing was uploaded. Press Retry in a moment.",
-      );
+    if (aiUnavailable) {
+      setError(AI_NOT_CONFIGURED_MESSAGE);
       return;
     }
     if (mode === "photos" && images.length === 0) {
@@ -329,12 +330,12 @@ export function CreateSetDialog({
 
     setIsLoading(true);
 
-    if (mode === "course" && selectedTopics.length > 0) {
+    if (mode === "course" && selectedTopicCount > 0) {
       try {
         const result = await createTopicSet({
           courseId: selectedCourseId as Id<"courses">,
-          topicId: selectedTopics[0]!.id,
-          topicIds: selectedTopics.map((topic) => topic.id),
+          topicId: selectedTopicIds[0]!,
+          topicIds: selectedTopicIds,
           targetCardCount: cardCount,
           targetQuizCount: quizCount,
           targetExamCount: examCount,
@@ -342,7 +343,7 @@ export function CreateSetDialog({
         toast.success(
           result.created
             ? "Set created from your course. Bluprint is compiling it now."
-            : "Opening the set you already have for that topic.",
+            : "Opening the set you already have for that selection.",
         );
         reset();
         onOpenChange(false);
@@ -350,7 +351,7 @@ export function CreateSetDialog({
       } catch (submitError) {
         const message = notifyError(
           submitError,
-          "Could not build a set from that topic. Try again.",
+          "Could not build a set from that part. Try again.",
         );
         setError(message);
       } finally {
@@ -488,7 +489,7 @@ export function CreateSetDialog({
             </div>
           )}
 
-          {ai?.configured === false && (
+          {aiUnavailable && (
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
@@ -496,8 +497,7 @@ export function CreateSetDialog({
               className="mb-4 rounded-2xl bg-[#FFF6E5] px-3.5 py-3"
             >
               <p className="text-xs leading-relaxed text-[#8A5D00]">
-                AI building isn't set up for this workspace yet. Ask the owner to connect the AI service.
-                owner to add it before compiling a set.
+                {AI_NOT_CONFIGURED_MESSAGE}
               </p>
             </motion.div>
           )}
@@ -614,7 +614,7 @@ export function CreateSetDialog({
                       value={selectedCourseId}
                       onChange={(event) => {
                         setCourseId(event.target.value);
-                        setSelectedTopicIds(null);
+                        setSelectedPartIds(null);
                         setCountsTouched(false);
                         setCardCount(BUILD_DEFAULTS.cards);
                         setQuizCount(BUILD_DEFAULTS.quiz);
@@ -634,27 +634,27 @@ export function CreateSetDialog({
 
                   <div className="mt-3">
                     <span className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-chrome-7">
-                      Topics
+                      Parts
                     </span>
-                    {topics.length === 0 ? (
+                    {parts.length === 0 ? (
                       <p className="mt-2 rounded-2xl border border-dashed border-border px-3 py-5 text-center text-xs font-medium text-muted-foreground">
                         {courseDetails === undefined
-                          ? "Loading topics…"
-                          : "No topics mapped yet"}
+                          ? "Loading parts…"
+                          : "No parts mapped yet"}
                       </p>
                     ) : (
                       <TopicPicker
                         className="mt-1"
-                        options={topics}
-                        selectedIds={selectedTopics.map((topic) => topic.id)}
-                        onChange={chooseCourseTopics}
+                        options={parts}
+                        selectedIds={selectedParts.map((part) => part.id)}
+                        onChange={chooseCourseParts}
                         disabled={isLoading}
+                        noun="part"
                       />
                     )}
                     <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                      Choose whole topics; each is included in full, with no
-                      subtopics. Select every topic to revise the whole subject in
-                      one set.
+                      Choose whole parts; each includes every topic in that part.
+                      Select every part to revise the whole subject in one set.
                     </p>
                   </div>
                 </>
@@ -795,7 +795,7 @@ export function CreateSetDialog({
             </summary>
             <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
               {mode === "course"
-                ? `These totals apply to the set built from ${selectedTopics.length === 1 ? "this topic" : "these topics"}. They are sent to the generator when you start the build.`
+                ? `These totals apply to the set built from ${selectedParts.length === 1 ? "this part" : "these parts"} (${selectedTopicCount} topic${selectedTopicCount === 1 ? "" : "s"}). They are sent to the generator when you start the build.`
                 : noteLimits
                   ? `These notes support ${noteLimits.cards} cards, ${noteLimits.quiz} quiz questions and ${noteLimits.exam} exam questions. The account maximum is ${BUILD_MAX} of each; the notes are the real ceiling.`
                   : `Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. Photos and video are assessed after reading; if they support fewer, Bluprint says so on the set page in one sentence: “Built 6 of 10. Your notes supported 6.”`}
@@ -907,7 +907,7 @@ export function CreateSetDialog({
           <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-relaxed text-muted-foreground">
               {mode === "course"
-                ? "Built from your course topics"
+                ? "Built from your course parts"
                 : mode === "photos"
                   ? "Clear, straight-on photos transcribe best"
                   : mode === "video"

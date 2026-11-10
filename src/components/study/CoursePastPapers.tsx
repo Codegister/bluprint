@@ -13,8 +13,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { markLabel, plural } from "@/lib/format";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -53,6 +55,7 @@ export function CoursePastPapers({
   const createPaper = useMutation(api.pastPapers.create);
   const removePaper = useMutation(api.pastPapers.remove);
   const rebuildPaper = useMutation(api.pastPapers.rebuild);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   // Which paper of the qualification the next practice paper covers. No choice
   // means every topic is examinable, which is how a single-paper course works.
   const [chosenPaper, setChosenPaper] = useState<string | undefined>(
@@ -75,6 +78,10 @@ export function CoursePastPapers({
   );
 
   const handleBuild = async () => {
+    if (aiUnavailable) {
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     setBuilding(true);
     try {
       const result = await createPaper({
@@ -97,6 +104,10 @@ export function CoursePastPapers({
   };
 
   const handleRebuild = async (paperId: Id<"pastPapers">) => {
+    if (aiUnavailable) {
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
+      return;
+    }
     setRebuildingId(paperId);
     try {
       await rebuildPaper({ paperId });

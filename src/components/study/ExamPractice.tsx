@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import {
   criteriaFor,
   criterionText,
@@ -11,6 +12,7 @@ import {
 } from "@/convex/lib/markingCriteria";
 import { readableError } from "@/lib/errors";
 import { markLabel, pointLabel } from "@/lib/format";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
@@ -30,6 +32,7 @@ export function ExamPractice({
   const gradeAnswer = useAction(api.ai.gradeExamAnswer);
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   const transcribe = useAction(api.ai.transcribeAnswerPhoto);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   const [readingPhotoId, setReadingPhotoId] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(exams.map((exam) => [exam._id, exam.userAnswer ?? ""])),
@@ -58,6 +61,13 @@ export function ExamPractice({
    * actually asks for, so the answer should not have to be retyped.
    */
   const handlePhoto = async (exam: Doc<"examQuestions">, file: File) => {
+    if (aiUnavailable) {
+      setErrors((current) => ({
+        ...current,
+        [exam._id]: AI_NOT_CONFIGURED_MESSAGE,
+      }));
+      return;
+    }
     setReadingPhotoId(exam._id);
     setErrors((current) => ({ ...current, [exam._id]: "" }));
     try {
@@ -95,6 +105,13 @@ export function ExamPractice({
       return;
     }
 
+    if (aiUnavailable) {
+      setErrors((current) => ({
+        ...current,
+        [exam._id]: AI_NOT_CONFIGURED_MESSAGE,
+      }));
+      return;
+    }
     setErrors((current) => ({ ...current, [exam._id]: "" }));
     setGradingId(exam._id);
     // A previous failure's toast must not outlive the failure.

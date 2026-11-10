@@ -15,8 +15,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
+import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { readableError } from "@/lib/errors";
 import { retryTransient } from "@/lib/retry";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import { daysUntilInput } from "@/lib/format";
 import {
   addDaysKey,
@@ -519,6 +521,8 @@ export default function Timetable() {
       ? selected
       : defaultDate;
   const view = useQuery(api.timetable.getDayView, { date: activeDate });
+  const mySets = useQuery(api.studySets.listMine);
+  const { unavailable: aiUnavailable } = useAiAvailability();
 
   const ensureDay = useMutation(api.timetable.ensureDay);
   const openTopic = useMutation(api.courses.createTopicSet);
@@ -701,6 +705,21 @@ export default function Timetable() {
           ? `/papers/${session.paperId}`
           : `/courses/${session.courseId}/papers`,
       );
+      return;
+    }
+    // Open a set the student already has without touching AI. Only a topic
+    // that has never been built needs the model.
+    const saved = (mySets ?? []).find((set) =>
+      (set.topicIds ?? (set.topicId ? [set.topicId] : [])).includes(
+        session.topicId,
+      ),
+    );
+    if (saved) {
+      navigate(`/sets/${saved._id}`);
+      return;
+    }
+    if (aiUnavailable) {
+      toast.error(AI_NOT_CONFIGURED_MESSAGE);
       return;
     }
     setBusySession(session.id);

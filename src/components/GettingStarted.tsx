@@ -86,7 +86,9 @@ export function GettingStarted({
     {
       title: "Build a study set",
       body: "Use a course topic, or add photos and notes; Bluprint writes the cards.",
-      done: sets.length > 0,
+      // An interrupted build created a set but no usable cards. Setup is only
+      // complete once the build produced something the student can study.
+      done: sets.some((set) => set.cardCount > 0 || set.quizCount > 0 || set.examCount > 0),
       // The page's primary "Add material" button already does this. Keeping a
       // second build link in the strip would split the screen's one action.
       action: null,

@@ -515,7 +515,9 @@ describe("Save My Exams note pages", () => {
     );
     expect(sections?.[0]?.blocks).toContain("• a cell membrane");
     expect(sections?.[0]?.blocks).toContain("• cytoplasm");
-    expect(sections?.[0]?.blocks).toContain(
+    // A caption with no image is an orphan: the reader cannot show the image,
+    // so the caption is not kept as if it were a note.
+    expect(sections?.flatMap((section) => section.blocks).join(" ")).not.toContain(
       "Figure: All cells have a number of features in common with each other",
     );
     expect(sections?.flatMap((section) => section.blocks)).not.toContain(

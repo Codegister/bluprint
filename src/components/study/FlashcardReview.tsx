@@ -3,6 +3,7 @@ import { EASE, SPRING } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
+import { useAiAvailability } from "@/lib/useAiAvailability";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { gradeRecall, normalizeAnswer } from "@/convex/lib/recall";
 import { useDictation } from "@/hooks/use-dictation";
@@ -81,6 +82,7 @@ export function FlashcardReview({
 }) {
   const reviewCard = useMutation(api.studySets.reviewCard);
   const checkByMeaning = useAction(api.ai.gradeRecallAnswer);
+  const { unavailable: aiUnavailable } = useAiAvailability();
   const [index, setIndex] = useState(0);
   const [typed, setTyped] = useState("");
   const [showInput, setShowInput] = useState(false);
@@ -179,6 +181,19 @@ export function FlashcardReview({
         note: "Matches the model answer.",
         coveredUnits: local.coveredUnits ?? card.recallUnits ?? [],
         missedUnits: [],
+      });
+      return;
+    }
+
+    // The local key-point check is a complete fallback, so a workspace with no
+    // AI should use it immediately instead of waiting for a failed request.
+    if (aiUnavailable) {
+      setGrade({
+        correct: local.correct,
+        score: local.score,
+        note: "Checked on key points — AI checking isn't connected in this workspace.",
+        coveredUnits: local.coveredUnits ?? [],
+        missedUnits: local.missedUnits ?? [],
       });
       return;
     }
