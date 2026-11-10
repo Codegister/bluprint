@@ -21,6 +21,11 @@ import {
   BUILD_MAX,
   BUILD_MIN,
 } from "./lib/buildDefaults";
+import {
+  isTutorBuildRequest,
+  planTutorBuild,
+  type TutorBuildPlan,
+} from "./lib/tutorAgent";
 import { materialLimits } from "./lib/buildCapacity";
 import { chatCompletionsUrl } from "./lib/gatewayConfig";
 import { alignDataReference, dropUnusedData } from "./lib/paperData";
@@ -2072,6 +2077,176 @@ async function readSourceImages(
   return sections.join("\n\n---\n\n");
 }
 
+/** A tutor turn carries at most two images; the composer offers the same cap. */
+const MAX_TUTOR_IMAGES = 2;
+
+/**
+ * Reads images attached to a tutor question.
+ *
+ * This is deliberately not the notes OCR path: a student may attach a diagram,
+ * a timetable, a marked answer or a photo of a question. The vision model is
+ * asked to describe the whole image for another tutor that cannot see it,
+ * preserving labels, table cells and relationships as well as the words.
+ */
+async function readTutorImages(
+  ctx: ActionCtx,
+  apiKeys: string[],
+  imageIds: Id<"_storage">[],
+): Promise<string> {
+  const sections: string[] = [];
+  for (const imageId of imageIds.slice(0, MAX_TUTOR_IMAGES)) {
+    const blob = await ctx.storage.get(imageId);
+    if (!blob || blob.size > 8 * 1024 * 1024) continue;
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    const mime = blob.type?.startsWith("image/") ? blob.type : "image/jpeg";
+    const text = await transcribeImages(
+      apiKeys,
+      [{ dataUrl: `data:${mime};base64,${buffer.toString("base64")}` }],
+      "The student attached this image to a tutor question. Read it for another tutor who cannot see it. " +
+        "Transcribe every legible word, label, formula, table cell and number in reading order. " +
+        "Describe any diagram, graph, table or handwritten working and the relationship it shows. " +
+        "If it is an exam question, quote it exactly. If it contains marked work, say what is marked right or wrong. " +
+        "Do not answer the question, teach the topic or invent anything. Use [unclear] for text you cannot read.",
+    );
+    if (text.trim()) {
+      sections.push(
+        `<attached_image number="${sections.length + 1}">\n${text.trim().slice(0, 4000)}\n</attached_image>`,
+      );
+    }
+  }
+  return sections.join("\n\n").slice(0, 8000);
+}
+
+/**
+ * What an agent build already did before the tutor starts writing. The note is
+ * quoted into the system prompt so the answer cannot ask permission for a build
+ * that has already happened, or claim a set is ready when it is still queued.
+ */
+type TutorBuildAction = {
+  note: string;
+  builtSetId?: Id<"studySets">;
+};
+
+function safeTutorBuildError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/build limit/i.test(message)) {
+    return "You have reached your build limit. Nothing was built, so no tokens were spent.";
+  }
+  if (/too large for one set/i.test(message)) {
+    return "That topic selection is too large for one set. Choose fewer topics.";
+  }
+  if (/verify your email/i.test(message)) {
+    return "Please verify your email before building a set.";
+  }
+  if (/sign in/i.test(message)) {
+    return "Please sign in again, then ask the tutor to build it.";
+  }
+  if (/choose at least one/i.test(message)) {
+    return "Choose at least one topic for the set.";
+  }
+  if (/no longer part of this pathway/i.test(message)) {
+    return "Some of those topics are no longer in the pathway.";
+  }
+  return "I couldn't start that build. Nothing was charged.";
+}
+
+/**
+ * Runs the build side of the tutor agent before the answer is generated.
+ *
+ * The planner is deterministic and reads only the user's own courses. The
+ * mutation repeats every ownership, verification and allowance check, so this
+ * function cannot widen what a student is allowed to build. A build failure is
+ * turned into a note for the tutor rather than an exception, so the student
+ * still gets an answer explaining what happened.
+ */
+async function runTutorBuild(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+  question: string,
+  options: { currentCourseId?: Id<"courses">; unitTitle?: string },
+): Promise<TutorBuildAction | null> {
+  // Avoid a database read on every ordinary tutor question.
+  if (!isTutorBuildRequest(question)) return null;
+  const courses = await ctx.runQuery(internal.tutor.getTutorBuildCourses, { userId });
+  const decision = planTutorBuild(question, courses, options);
+  if (decision.status === "not-a-build") return null;
+
+  if (decision.status === "needs-course") {
+    return {
+      note:
+        "The student asked you to build material, but no course matched the request. " +
+        "Do not claim anything was built. Ask them which course or subject to use. " +
+        (decision.subjects.length > 0
+          ? `Their ready courses are: ${decision.subjects.join(", ")}.`
+          : "They do not have a ready course yet."),
+    };
+  }
+
+  if (decision.status === "needs-topic") {
+    return {
+      note:
+        `The student asked you to build material for ${decision.subject}, but did not name one topic unambiguously. ` +
+        "Do not claim anything was built and do not ask for a topic number unless it helps. " +
+        "Ask which topic they want, and mention that they can say the topic number or title.",
+    };
+  }
+
+  const plan: TutorBuildPlan = decision;
+
+  let result: { setId: Id<"studySets">; created: boolean; sections: number };
+  try {
+    result = await ctx.runMutation(internal.courses.createTopicSetForTutor, {
+      userId,
+      courseId: plan.courseId as Id<"courses">,
+      topicId: plan.firstTopicId,
+      topicIds: plan.topicIds,
+      targetCardCount: plan.counts.cards,
+      targetQuizCount: plan.counts.quiz,
+      targetExamCount: plan.counts.exam,
+    });
+  } catch (error) {
+    console.error("Tutor build could not start", error);
+    return {
+      note:
+        `The student asked you to build ${plan.subject}: ${plan.label}, but the build did not start. ` +
+        `The reason is: ${safeTutorBuildError(error)} ` +
+        "Do not claim anything was built. Tell them what happened and what to do next.",
+    };
+  }
+
+  let started = false;
+  if (result.created) {
+    try {
+      // Start the long generation now. Waiting for the student to open the set
+      // would make "build me a quiz" only a link, not an action.
+      await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
+        setId: result.setId,
+        userId,
+      });
+      started = true;
+    } catch (error) {
+      // The set is already committed. Keep its link in the answer so the
+      // student can open it, which starts a queued build from the set page.
+      console.error("Tutor build was created but could not be scheduled", error);
+    }
+  }
+
+  return {
+    builtSetId: result.setId,
+    note: result.created
+      ? started
+        ? `A study set has already been created and its background build has started for ${plan.subject}: ${plan.label}. ` +
+          "In your first sentence, say you have built it and started it. Do not ask for confirmation. " +
+          "Say it is building now, not ready, and do not claim the cards or questions are finished. " +
+          "Then answer any remaining part of their request with a short explanation or one practice question."
+        : `A study set has been created for ${plan.subject}: ${plan.label}, but its background build could not be queued. ` +
+          "Tell them the set is saved and they can open it to start the build. Do not claim it is already building."
+      : `A study set covering ${plan.subject}: ${plan.label} already exists. ` +
+        "In your first sentence, tell them it is already in their library. Do not claim a new build was started. " +
+        "Then answer any remaining part of their request.",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Course pathways (scraped from Cognito)
 // ---------------------------------------------------------------------------
@@ -2895,7 +3070,29 @@ export const processStudySet = action({
   args: { setId: v.id("studySets") },
   handler: async (ctx, { setId }) => {
     const userId = await requireUserId(ctx);
+    return await processStudySetForUser(ctx, setId, userId);
+  },
+});
 
+/**
+ * Starts a build from the tutor after that action has authenticated the user.
+ *
+ * The public build action cannot be scheduled: a scheduled function has no
+ * browser session, so it would fail its auth check. This internal entry point
+ * carries the already-verified user id instead. It is not public and can only
+ * be invoked by another Convex function.
+ */
+export const processStudySetScheduled = internalAction({
+  args: { setId: v.id("studySets"), userId: v.id("users") },
+  handler: async (ctx, { setId, userId }) =>
+    await processStudySetForUser(ctx, setId, userId),
+});
+
+async function processStudySetForUser(
+  ctx: ActionCtx,
+  setId: Id<"studySets">,
+  userId: Id<"users">,
+) {
     const existing = await ctx.runQuery(internal.studySets.getForProcessing, { setId });
     if (!existing || existing.userId !== userId) {
       throw new Error("Study set not found.");
@@ -3173,8 +3370,7 @@ export const processStudySet = action({
       });
       throw new Error(finalMessage);
     }
-  },
-});
+}
 
 /**
  * Rebuilds only a set's cards. Used for a set whose stored answers are long
@@ -4586,6 +4782,7 @@ function tutorPrompt(
   question: string,
   web: WebResult[] = [],
   webState: TutorWebState = web.length > 0 ? "sources" : "off",
+  agentNote?: string,
 ): ChatMessage[] {
   const qualification = qualificationText(context);
 
@@ -4608,6 +4805,7 @@ function tutorPrompt(
     explainLevelRules(context.explainLevel, question),
     webRules(webState),
     web.length > 0 ? webResultsBlock(web) : "",
+    agentNote ? `<agent_action>${agentNote}</agent_action>` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -4917,11 +5115,12 @@ async function streamTutorAnswer(
   useWeb: boolean,
   tier: TutorTier,
   onSnapshot: Snapshot,
+  agentNote?: string,
 ): Promise<StreamResult> {
   if (!useWeb) {
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, [], "off"),
+      tutorPrompt(context, question, [], "off", agentNote),
       tier,
       onSnapshot,
     );
@@ -4933,7 +5132,7 @@ async function streamTutorAnswer(
   if (results.length > 0) {
     const grounded = await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, results, "sources"),
+      tutorPrompt(context, question, results, "sources", agentNote),
       tier,
       onSnapshot,
     );
@@ -4942,7 +5141,7 @@ async function streamTutorAnswer(
 
   try {
     return await streamWebAnswer(
-      tutorPrompt(context, question, [], "browsing"),
+      tutorPrompt(context, question, [], "browsing", agentNote),
       tier,
       onSnapshot,
     );
@@ -4952,7 +5151,7 @@ async function streamTutorAnswer(
     // found nothing outside it.
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, [], "empty"),
+      tutorPrompt(context, question, [], "empty", agentNote),
       tier,
       onSnapshot,
     );
@@ -5187,11 +5386,13 @@ export const askTutor = action({
     tier: v.optional(v.string()),
     // Simple, GCSE or A-Level. It changes register, not the model.
     explainLevel: v.optional(v.string()),
+    // Images uploaded straight to Convex storage by the composer.
+    imageIds: v.optional(v.array(v.id("_storage"))),
   },
   handler: async (
     ctx,
-    { setId, question, useWeb, tier, explainLevel },
-  ): Promise<{ reply: string }> => {
+    { setId, question, useWeb, tier, explainLevel, imageIds },
+  ): Promise<{ reply: string; builtSetId?: Id<"studySets"> }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
     const chosenTier = readTutorTier(tier);
@@ -5204,6 +5405,26 @@ export const askTutor = action({
 
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
     const apiKeys = resolveNvidiaKeys();
+
+    // The main tutor models are text models. Read the image once with the
+    // vision model, then give the tutor a faithful description beside the
+    // student's words. This keeps one model contract and means the image can
+    // contain a diagram, not just handwriting OCR.
+    const attachmentIds = (imageIds ?? []).slice(0, MAX_TUTOR_IMAGES);
+    let imageContext = "";
+    if (attachmentIds.length > 0) {
+      await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "vision" });
+      imageContext = await readTutorImages(ctx, apiKeys, attachmentIds);
+      if (!imageContext) {
+        throw new Error(
+          "That image could not be read. Try a JPG or PNG under 10MB, then send it again.",
+        );
+      }
+    }
+    const modelQuestion = imageContext
+      ? `${text}\n\n<attached_image_context>\n${imageContext}\n</attached_image_context>`
+      : text;
+
     const messageId = await ctx.runMutation(internal.tutor.beginTutorExchange, {
       setId,
       userId,
@@ -5211,6 +5432,12 @@ export const askTutor = action({
     });
 
     try {
+      // Act before answering. A build request creates a real set and starts its
+      // background generation; the answer then tells the student what happened.
+      const build = await runTutorBuild(ctx, userId, text, {
+        currentCourseId: context.set.courseId,
+      });
+
       const tutorContext: TutorContext = {
         title: context.set.title,
         material: context.set.notes,
@@ -5223,7 +5450,7 @@ export const askTutor = action({
       const result = await streamTutorAnswer(
         apiKeys,
         tutorContext,
-        text,
+        modelQuestion,
         // Off unless the browser explicitly asks for it.
         useWeb === true,
         chosenTier,
@@ -5234,16 +5461,22 @@ export const askTutor = action({
             ...(sources.length > 0 ? { sources } : {}),
           });
         },
+        build?.note,
       );
 
-      // One last write carries the final text and every page that was cited.
+      // One last write carries the final text, every page cited and the set the
+      // tutor built, so the link survives a reload.
       await ctx.runMutation(internal.tutor.appendTutorAnswer, {
         messageId,
         content: result.text,
         ...(result.sources.length > 0 ? { sources: result.sources } : {}),
+        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
       });
       await ctx.runMutation(internal.tutor.finishTutorExchange, { messageId });
-      return { reply: result.text };
+      return {
+        reply: result.text,
+        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
+      };
     } catch (error) {
       await ctx.runMutation(internal.tutor.discardTutorAnswer, { messageId });
       await recordProviderIncident(ctx, "tutor", error);
@@ -5276,11 +5509,13 @@ export const askCourseTutor = action({
     // Same level labels as `askTutor`; the model mapping is shared.
     tier: v.optional(v.string()),
     explainLevel: v.optional(v.string()),
+    // Images uploaded straight to Convex storage by the composer.
+    imageIds: v.optional(v.array(v.id("_storage"))),
   },
   handler: async (
     ctx,
-    { courseId, unitTitle, question, useWeb, tier, explainLevel },
-  ): Promise<{ reply: string }> => {
+    { courseId, unitTitle, question, useWeb, tier, explainLevel, imageIds },
+  ): Promise<{ reply: string; builtSetId?: Id<"studySets"> }> => {
     const userId = await requireUserId(ctx);
     const text = readQuestion(question);
     const chosenTier = readTutorTier(tier);
@@ -5294,16 +5529,36 @@ export const askCourseTutor = action({
 
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
     const apiKeys = resolveNvidiaKeys();
+
+    const attachmentIds = (imageIds ?? []).slice(0, MAX_TUTOR_IMAGES);
+    let imageContext = "";
+    if (attachmentIds.length > 0) {
+      await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "vision" });
+      imageContext = await readTutorImages(ctx, apiKeys, attachmentIds);
+      if (!imageContext) {
+        throw new Error(
+          "That image could not be read. Try a JPG or PNG under 10MB, then send it again.",
+        );
+      }
+    }
+    const modelQuestion = imageContext
+      ? `${text}\n\n<attached_image_context>\n${imageContext}\n</attached_image_context>`
+      : text;
+
     const messageId = await ctx.runMutation(
       internal.tutor.beginCourseTutorExchange,
       { courseId, userId, unitTitle, question: text },
     );
 
     try {
+      const build = await runTutorBuild(ctx, userId, text, {
+        currentCourseId: courseId,
+        unitTitle,
+      });
       const result = await streamTutorAnswer(
         apiKeys,
         { ...context, explainLevel },
-        text,
+        modelQuestion,
         // Off unless the browser explicitly asks for it.
         useWeb === true,
         chosenTier,
@@ -5314,17 +5569,22 @@ export const askCourseTutor = action({
             ...(sources.length > 0 ? { sources } : {}),
           });
         },
+        build?.note,
       );
 
       await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
         messageId,
         content: result.text,
         ...(result.sources.length > 0 ? { sources: result.sources } : {}),
+        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
       });
       await ctx.runMutation(internal.tutor.finishCourseTutorExchange, {
         messageId,
       });
-      return { reply: result.text };
+      return {
+        reply: result.text,
+        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
+      };
     } catch (error) {
       await ctx.runMutation(internal.tutor.discardCourseTutorAnswer, { messageId });
       await recordProviderIncident(ctx, "tutor", error);

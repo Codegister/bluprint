@@ -9,6 +9,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { BUILD_DEFAULTS, clampBuildCount } from "./lib/buildDefaults";
+import { withinNoteLimit } from "./lib/noteLimits";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
 import {
   canonicalSubject,
@@ -619,47 +620,89 @@ type PathwaySection = {
 };
 
 /**
- * The most topics one combined set can cover. Twelve keeps the source text
- * inside what the generator and the set screen can handle.
+ * A legacy start-topic run can still cover at most twelve topics. A
+ * multi-select build names its own topics, so its size is the selection itself;
+ * the brief is checked against the note limit before any allowance is spent.
  */
 const MAX_SET_TOPICS = 12;
 
 /**
- * Creates the study set for one pathway section, or for a run of them. The
- * pathway already contains a summary, key points and exam skill, so those
- * become the source material for the normal summary/flashcards/quiz/exam
- * pipeline.
+ * Creates the study set for one pathway section, a run of them, or an explicit
+ * selection of whole topics. The pathway already contains a summary, key points
+ * and exam skill, so those become the source material for the normal
+ * summary/flashcards/quiz/exam pipeline.
  *
- * `sections` is how many sections the set should cover, counting the chosen
- * topic first. It defaults to one and is clamped to what the pathway has left
- * after that topic, so asking for six near the end of a course never creates an
- * empty set.
+ * `topicIds` is the multi-select list from the course picker. It is ordered by
+ * the pathway, never by click order, so the set always follows the course. When
+ * it is omitted, `sections` keeps the old start-topic run behaviour: it counts
+ * from the chosen topic and is clamped to what remains on the pathway.
  *
  * The three target counts are the totals chosen in the build dialog. They are
  * optional so the timetable can keep opening a topic with the default size;
  * when omitted, a combined set keeps the old per-topic default.
  */
+type CreateTopicSetArgs = {
+  courseId: Id<"courses">;
+  topicId: string;
+  topicIds?: string[];
+  sections?: number;
+  targetCardCount?: number;
+  targetQuizCount?: number;
+  targetExamCount?: number;
+};
+
 export const createTopicSet = mutation({
   args: {
     courseId: v.id("courses"),
     topicId: v.string(),
+    topicIds: v.optional(v.array(v.string())),
     sections: v.optional(v.number()),
     targetCardCount: v.optional(v.number()),
     targetQuizCount: v.optional(v.number()),
     targetExamCount: v.optional(v.number()),
   },
-  handler: async (
-    ctx,
-    {
-      courseId,
-      topicId,
-      sections,
-      targetCardCount,
-      targetQuizCount,
-      targetExamCount,
-    },
-  ) => {
+  handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    return await createTopicSetForUser(ctx, userId, args);
+  },
+});
+
+/**
+ * The tutor's build path.
+ *
+ * It carries the caller's already-verified user id instead of reading auth from
+ * the mutation context, because it is invoked by the tutor action after that
+ * action has authenticated the student. The same helper performs the owner
+ * check, verified-account gate and build-allowance spend as the public path.
+ */
+export const createTopicSetForTutor = internalMutation({
+  args: {
+    userId: v.id("users"),
+    courseId: v.id("courses"),
+    topicId: v.string(),
+    topicIds: v.optional(v.array(v.string())),
+    sections: v.optional(v.number()),
+    targetCardCount: v.optional(v.number()),
+    targetQuizCount: v.optional(v.number()),
+    targetExamCount: v.optional(v.number()),
+  },
+  handler: async (ctx, { userId, ...args }) =>
+    await createTopicSetForUser(ctx, userId, args),
+});
+
+async function createTopicSetForUser(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  {
+    courseId,
+    topicId,
+    topicIds: requestedTopicIds,
+    sections,
+    targetCardCount,
+    targetQuizCount,
+    targetExamCount,
+  }: CreateTopicSetArgs,
+) {
     const course = await requireOwner(
       await ctx.db.get(courseId),
       userId,
@@ -677,18 +720,32 @@ export const createTopicSet = mutation({
         seenTopics.add(topic.id);
         return true;
       });
-    const startIndex = outline.findIndex((entry) => entry.topic.id === topicId);
-    if (startIndex === -1) {
-      throw new Error("That topic is not part of this pathway.");
-    }
+    let chosen: PathwaySection[];
+    if (requestedTopicIds !== undefined) {
+      const uniqueIds = [...new Set(requestedTopicIds)];
+      if (uniqueIds.length === 0) {
+        throw new Error("Choose at least one topic for this set.");
+      }
+      const byId = new Map(outline.map((entry) => [entry.topic.id, entry]));
+      if (uniqueIds.some((id) => !byId.has(id))) {
+        throw new Error("Some of those topics are no longer part of this pathway.");
+      }
+      const selected = new Set(uniqueIds);
+      chosen = outline.filter((entry) => selected.has(entry.topic.id));
+    } else {
+      const startIndex = outline.findIndex((entry) => entry.topic.id === topicId);
+      if (startIndex === -1) {
+        throw new Error("That topic is not part of this pathway.");
+      }
 
-    const requested = Number.isFinite(sections) ? Math.floor(sections ?? 1) : 1;
-    const count = Math.min(
-      Math.max(1, requested),
-      MAX_SET_TOPICS,
-      outline.length - startIndex,
-    );
-    const chosen = outline.slice(startIndex, startIndex + count);
+      const requested = Number.isFinite(sections) ? Math.floor(sections ?? 1) : 1;
+      const count = Math.min(
+        Math.max(1, requested),
+        MAX_SET_TOPICS,
+        outline.length - startIndex,
+      );
+      chosen = outline.slice(startIndex, startIndex + count);
+    }
 
     // Reuse an existing set that covers exactly these sections, so repeated
     // taps never create duplicate decks. Sets built before sections existed
@@ -697,16 +754,28 @@ export const createTopicSet = mutation({
       .query("studySets")
       .withIndex("by_course", (q) => q.eq("courseId", courseId))
       .collect();
-    const wanted = chosen.map((entry) => entry.topic.id).join("|");
+    const chosenIds = chosen.map((entry) => entry.topic.id);
+    const wanted = chosenIds.join("|");
     const match = existing.find((set) => {
       if (set.userId !== userId) return false;
       const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
       if (covered.join("|") === wanted) return true;
       // A caller that did not ask for a length (the timetable opening a session)
       // just wants the set for this topic, whichever build produced it.
-      return sections === undefined && covered.includes(topicId);
+      return (
+        requestedTopicIds === undefined &&
+        sections === undefined &&
+        covered.includes(topicId)
+      );
     });
     if (match) return { setId: match._id, created: false, sections: chosen.length };
+
+    const notes = buildTopicNotes(course, chosen);
+    if (!withinNoteLimit(notes)) {
+      throw new Error(
+        "That selection is too large for one set. Choose fewer topics and try again.",
+      );
+    }
 
     // A set built from a course topic is a full AI build, so it spends the same
     // allowance as pasting notes. Without this, the course path was an
@@ -714,7 +783,6 @@ export const createTopicSet = mutation({
     await requireVerifiedUser(ctx, userId);
     await consumeBuildAllowance(ctx, userId, "set");
 
-    const notes = buildTopicNotes(course, chosen);
     const first = chosen[0]!.topic;
     // One section keeps the topic's own name; a longer set is named after the
     // first section so the library row still says what it covers.
@@ -753,8 +821,8 @@ export const createTopicSet = mutation({
       examBoard: safeCourseLabel(course.examBoard),
       level: safeCourseLabel(course.level),
       courseId,
-      topicId,
-      topicIds: chosen.map((entry) => entry.topic.id),
+      topicId: first.id,
+      topicIds: chosenIds,
       // The specification statements this set is built from, kept with the set
       // so cards and questions can be tagged to them and coverage reported
       // later, even if the pathway is rebuilt.
@@ -781,8 +849,7 @@ export const createTopicSet = mutation({
 
     await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
     return { setId, created: true, sections: chosen.length };
-  },
-});
+}
 
 /**
  * Builds the brief for a pathway set from the stored pathway: what the set must

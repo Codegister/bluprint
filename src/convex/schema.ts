@@ -899,6 +899,8 @@ const schema = defineSchema(
       sources: v.optional(
         v.array(v.object({ title: v.string(), url: v.string() })),
       ),
+      // A set the tutor built while answering, linked from the reply.
+      builtSetId: v.optional(v.id("studySets")),
     }).index("by_set", ["setId"]),
 
     // Tutor conversation pointed at a whole course, or at one unit of it. The
@@ -915,6 +917,8 @@ const schema = defineSchema(
       sources: v.optional(
         v.array(v.object({ title: v.string(), url: v.string() })),
       ),
+      // A set the tutor built while answering, linked from the reply.
+      builtSetId: v.optional(v.id("studySets")),
     }).index("by_course", ["courseId"]),
 
     // One row per AI build a person starts, so the rate limit is enforced from

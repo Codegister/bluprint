@@ -91,6 +91,7 @@ export const listMessages = query({
       createdAt: row.createdAt,
       streaming: row.streaming ?? false,
       sources: row.sources ?? [],
+      builtSetId: row.builtSetId,
     }));
   },
 });
@@ -109,6 +110,7 @@ export const getTutorContext = internalQuery({
       course?: string | null;
       examBoard?: string | null;
       level?: string | null;
+      courseId?: Id<"courses">;
     };
     if (!set) return null;
 
@@ -125,6 +127,7 @@ export const getTutorContext = internalQuery({
         course: set.course ?? undefined,
         examBoard: set.examBoard ?? undefined,
         level: set.level ?? undefined,
+        courseId: set.courseId,
       },
       messages: inConversationOrder(rows.filter((row) => !row.streaming))
         .slice(-HISTORY_LIMIT)
@@ -166,6 +169,7 @@ export const listCourseMessages = query({
         createdAt: row.createdAt,
         streaming: row.streaming ?? false,
         sources: row.sources ?? [],
+        builtSetId: row.builtSetId,
       }),
     );
   },
@@ -258,6 +262,38 @@ export const getCourseTutorContext = internalQuery({
 /* -------------------------------------------------------------------------- */
 
 /**
+ * The user's ready courses, reduced to ids, subject labels and topic titles.
+ * The tutor build planner needs every course to honour a subject named in the
+ * message ("build me a Spanish quiz"), but never needs notes or key points.
+ */
+export const getTutorBuildCourses = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+      .collect();
+
+    return courses
+      .filter((course) => course.status === "ready" && course.pathway)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .map((course) => ({
+        id: course._id as string,
+        subject: course.subject,
+        level: course.level,
+        examBoard: course.examBoard,
+        units: (course.pathway?.units ?? []).map((unit) => ({
+          title: unit.title,
+          topics: unit.topics.map((topic) => ({
+            id: topic.id,
+            title: topic.title,
+          })),
+        })),
+      }));
+  },
+});
+
+/**
  * A reply is written as it arrives: the question and an empty assistant row are
  * saved first, the action appends tokens to that row, and the row is marked
  * complete at the end. If the action dies, the next question deletes the
@@ -312,13 +348,15 @@ export const appendTutorAnswer = internalMutation({
     messageId: v.id("tutorMessages"),
     content: v.string(),
     sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
+    builtSetId: v.optional(v.id("studySets")),
   },
-  handler: async (ctx, { messageId, content, sources }) => {
+  handler: async (ctx, { messageId, content, sources, builtSetId }) => {
     const row = await ctx.db.get(messageId);
     if (!row) return;
     await ctx.db.patch(messageId, {
       content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
+      ...(builtSetId === undefined ? {} : { builtSetId }),
     });
   },
 });
@@ -410,13 +448,15 @@ export const appendCourseTutorAnswer = internalMutation({
     messageId: v.id("courseTutorMessages"),
     content: v.string(),
     sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
+    builtSetId: v.optional(v.id("studySets")),
   },
-  handler: async (ctx, { messageId, content, sources }) => {
+  handler: async (ctx, { messageId, content, sources, builtSetId }) => {
     const row = await ctx.db.get(messageId);
     if (!row) return;
     await ctx.db.patch(messageId, {
       content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
+      ...(builtSetId === undefined ? {} : { builtSetId }),
     });
   },
 });
