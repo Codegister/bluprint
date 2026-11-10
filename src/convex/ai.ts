@@ -1302,9 +1302,9 @@ async function generateCards(
         // A progress write must never lose generated cards.
       }
     }
-    // A model that ignores the "do not repeat" instruction would otherwise
-    // loop until the attempt cap with no new cards.
-    if (added === 0) break;
+    // A batch can be entirely rejected by grounding or the quality filters.
+    // Try the next bounded attempt instead of ending the stage short.
+    if (added === 0) continue;
   }
 
   if (cards.length === 0) {
@@ -1428,7 +1428,7 @@ async function generateQuiz(
         // Cosmetic only.
       }
     }
-    if (added === 0) break;
+    if (added === 0) continue;
   }
 
   if (questions.length === 0) {
@@ -1546,7 +1546,7 @@ async function generateExams(
         // Cosmetic only.
       }
     }
-    if (added === 0) break;
+    if (added === 0) continue;
   }
 
   if (exams.length === 0) {
