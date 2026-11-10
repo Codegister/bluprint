@@ -15,6 +15,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
+import { retryTransient } from "@/lib/retry";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, plural, relativeDate, sourceLabel, timeUntil } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -59,7 +60,10 @@ function SetTitle({ setId, title }: { setId: Id<"studySets">; title: string }) {
     }
     setSaving(true);
     try {
-      await updateDetails({ setId, title: next });
+      await retryTransient(() => updateDetails({ setId, title: next }), {
+        attempts: 2,
+        delayMs: 400,
+      });
     } catch (error) {
       setValue(title);
       notifyError(error, "Could not rename that set.");
@@ -684,7 +688,10 @@ export default function StudySet() {
     const id = details.set._id;
     if (triggered.current === id) return;
     triggered.current = id;
-    processSet({ setId: id }).catch((error) => {
+    retryTransient(() => processSet({ setId: id }), {
+      attempts: 2,
+      delayMs: 900,
+    }).catch((error) => {
       notifyError(error, "The build stopped. Open the set to retry.");
     });
   }, [details, processSet]);
@@ -693,7 +700,10 @@ export default function StudySet() {
     if (!details) return;
     setRetrying(true);
     try {
-      await processSet({ setId: details.set._id });
+      await retryTransient(() => processSet({ setId: details.set._id }), {
+        attempts: 2,
+        delayMs: 900,
+      });
     } catch (error) {
       notifyError(error, "The build could not be restarted.");
     } finally {
@@ -861,7 +871,10 @@ export default function StudySet() {
           )}
         </nav>
 
-        <div className="chrome-plate mt-2 min-w-0 rounded-[1.6rem] px-4 py-4">
+        <div
+          className="chrome-plate relative z-20 mt-2 min-w-0 rounded-[1.6rem] px-4 py-4"
+          style={{ overflow: "visible" }}
+        >
           {isMode && (
             <p className="text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-chrome-7">
               {SECTION_LABEL[activeSection]}

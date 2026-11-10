@@ -13,9 +13,9 @@ import {
   BUILD_MIN,
 } from "@/convex/lib/buildDefaults";
 import type { SectionOption } from "@/lib/pathwaySections";
-import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
+import { TopicPicker } from "@/components/study/TopicPicker";
 
 export type BuildCounts = {
   cards: number;
@@ -23,48 +23,63 @@ export type BuildCounts = {
   exam: number;
 };
 
+function defaultsFor(topicCount: number): BuildCounts {
+  const scale = Math.max(1, topicCount);
+  return {
+    cards: Math.min(BUILD_MAX, BUILD_DEFAULTS.cards * scale),
+    quiz: Math.min(BUILD_MAX, BUILD_DEFAULTS.quiz * scale),
+    exam: Math.min(BUILD_MAX, BUILD_DEFAULTS.exam * scale),
+  };
+}
+
 /**
- * Builds a study set from one topic, or from a run of following pathway
- * topics. The student chooses both the scope and the number of flashcards,
- * quiz questions and exam-style questions before the build starts.
+ * Builds a study set from any whole topics on the pathway. The student sees the
+ * full topic list with its course-wide numbers, selects as many as they need,
+ * and chooses the number of flashcards, quiz questions and exam-style questions
+ * before the build starts.
  *
- * The options are the real topics still ahead on the pathway, so a course with
- * ten topics offers ten, never the server's twelve-topic limit.
- *
- * The caller gives this a `key` per topic, so choosing a different topic starts
- * the count at one again without an effect resetting it after a render.
+ * The caller gives this a `key` per opening, so the initial selection starts
+ * cleanly without an effect resetting it after a render.
  */
 export function PathwaySectionsDialog({
   open,
   onOpenChange,
   options,
+  initialSelectedIds,
   busy,
   onBuild,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   options: SectionOption[];
+  initialSelectedIds: readonly string[];
   busy: boolean;
-  onBuild: (sections: number, counts: BuildCounts) => void;
+  onBuild: (topicIds: string[], counts: BuildCounts) => void;
 }) {
-  const [count, setCount] = useState(1);
-  const [cards, setCards] = useState<number>(BUILD_DEFAULTS.cards);
-  const [quiz, setQuiz] = useState<number>(BUILD_DEFAULTS.quiz);
-  const [exam, setExam] = useState<number>(BUILD_DEFAULTS.exam);
-  // Until the student edits a count, changing the number of topics keeps the
-  // default per-topic coverage instead of leaving a ten-topic set at 10 cards.
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    const available = new Set(options.map((option) => option.id));
+    const chosen = initialSelectedIds.filter((id) => available.has(id));
+    return chosen.length > 0 ? chosen : options.slice(0, 1).map((option) => option.id);
+  });
+  const initialCounts = defaultsFor(selectedIds.length);
+  const [cards, setCards] = useState<number>(initialCounts.cards);
+  const [quiz, setQuiz] = useState<number>(initialCounts.quiz);
+  const [exam, setExam] = useState<number>(initialCounts.exam);
+  // Until the student edits a count, changing the selection keeps the default
+  // per-topic coverage instead of leaving a ten-topic set at 10 cards.
   const [countsTouched, setCountsTouched] = useState(false);
 
-  const total = options.length;
-  const chosen = options.slice(0, Math.min(count, total));
-  const oneTopic = total === 1;
+  const selected = options.filter((option) => selectedIds.includes(option.id));
+  const selectedCount = selected.length;
+  const oneTopic = options.length === 1;
 
-  const chooseTopicCount = (value: number) => {
-    setCount(value);
+  const chooseTopics = (topicIds: string[]) => {
+    setSelectedIds(topicIds);
     if (countsTouched) return;
-    setCards(Math.min(BUILD_MAX, BUILD_DEFAULTS.cards * value));
-    setQuiz(Math.min(BUILD_MAX, BUILD_DEFAULTS.quiz * value));
-    setExam(Math.min(BUILD_MAX, BUILD_DEFAULTS.exam * value));
+    const next = defaultsFor(topicIds.length);
+    setCards(next.cards);
+    setQuiz(next.quiz);
+    setExam(next.exam);
   };
 
   return (
@@ -75,76 +90,43 @@ export function PathwaySectionsDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto rounded-[1.75rem] border-border bg-white p-0 shadow-none sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] gap-0 overflow-y-auto rounded-[1.75rem] border-border bg-white p-0 shadow-none sm:max-w-xl">
         <div className="px-6 pt-6">
           <DialogHeader>
             <DialogTitle className="font-display text-xl font-bold text-brand-ink">
-              {oneTopic ? "Build a study set" : "Combine topics"}
+              {selectedCount > 1
+                ? `Build a set from ${selectedCount} topics`
+                : "Build a study set"}
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-              {oneTopic
-                ? "Build one set from this topic. Choose how much Bluprint should make, then it writes the summary, flashcards, quiz and exam practice."
-                : "Build one set from this topic onwards. Choose how many topics it should cover and how much Bluprint should make from them together."}
+              Choose any whole topics below. Bluprint builds one set from only
+              the topics you tick, in pathway order; it does not expand them into
+              subtopics.
             </DialogDescription>
           </DialogHeader>
         </div>
 
         <div className="px-6 pb-6">
           <p className="mt-5 text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-chrome-7">
-            {oneTopic ? "Topic in this set" : "Topics in this set"}
+            {oneTopic ? "Topic in this set" : "Choose topics"}
           </p>
 
-          {total > 1 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {Array.from({ length: total }, (_, index) => index + 1).map((value) => {
-                const selected = value === Math.min(count, total);
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={selected}
-                    disabled={busy}
-                    onClick={() => chooseTopicCount(value)}
-                    className={cn(
-                      "grid size-9 place-items-center rounded-full border text-sm font-semibold tabular-nums transition-colors",
-                      selected
-                        ? "border-[#191B27] bg-[#191B27] text-white"
-                        : "border-border bg-white text-brand-ink/70 hover:bg-brand-panel",
-                    )}
-                  >
-                    {value}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <ul className="mt-4 space-y-1.5">
-            {chosen.map((option, index) => (
-              <li
-                key={option.id}
-                className="flex items-start gap-2.5 rounded-2xl bg-[#FCFCFD] px-3 py-2.5"
-              >
-                <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-brand-panel text-[0.66rem] font-semibold tabular-nums text-chrome-7">
-                  {index + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[0.82rem] font-semibold leading-snug text-brand-ink">
-                    {option.title}
-                  </span>
-                  <span className="block text-[0.7rem] leading-snug text-muted-foreground">
-                    {option.unit}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-2">
+            <TopicPicker
+              options={options}
+              selectedIds={selectedIds}
+              onChange={chooseTopics}
+              disabled={busy}
+            />
+          </div>
 
           <p className="mt-3 text-[0.68rem] leading-relaxed text-muted-foreground">
-            {chosen.length === 1
-              ? `One topic makes a normal set. This course has ${total} topic${total === 1 ? "" : "s"} from here.`
-              : `${chosen.length} of ${total} topics from here are combined into one set, in pathway order.`}
-            {total === 1 ? " This is the last topic on the pathway." : ""}
+            {selectedCount === 0
+              ? "Choose at least one topic to build a set."
+              : selectedCount === 1
+                ? "One topic makes a normal set."
+                : `${selectedCount} whole topics are combined into one set, in pathway order.`}
+            {selectedCount > 0 && ` This course has ${options.length} topic${options.length === 1 ? "" : "s"}.`}
           </p>
 
           <div className="mt-5 rounded-2xl border border-border bg-[#FCFCFD] p-4">
@@ -152,9 +134,9 @@ export function PathwaySectionsDialog({
               How much should Bluprint build?
             </p>
             <p className="mt-1 text-[0.68rem] leading-relaxed text-muted-foreground">
-              {oneTopic
+              {selectedCount <= 1
                 ? "These are the totals for this set."
-                : "These are totals for the whole combined set. A longer set is generated in batches and takes more time."}
+                : "These are totals for the whole selected set. A longer set is generated in batches and takes more time."}
             </p>
 
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -220,14 +202,16 @@ export function PathwaySectionsDialog({
             </Button>
             <Button
               type="button"
-              onClick={() => onBuild(chosen.length, { cards, quiz, exam })}
-              disabled={busy || chosen.length === 0}
+              onClick={() => onBuild(selected.map((option) => option.id), { cards, quiz, exam })}
+              disabled={busy || selectedCount === 0}
               className="h-11 rounded-full bg-[#191B27] px-5 text-sm font-semibold text-white hover:bg-[#2A2D3E]"
             >
               {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-              {chosen.length === 1
-                ? "Build study set"
-                : `Build set from ${chosen.length} topics`}
+              {selectedCount === 0
+                ? "Choose topics"
+                : selectedCount === 1
+                  ? "Build study set"
+                  : `Build set from ${selectedCount} topics`}
             </Button>
           </DialogFooter>
         </div>

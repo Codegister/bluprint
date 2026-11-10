@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import { readableError } from "@/lib/errors";
+import { retryTransient } from "@/lib/retry";
 import { daysUntilInput } from "@/lib/format";
 import {
   addDaysKey,
@@ -39,6 +40,7 @@ import {
   ChevronRight,
   Clock3,
   Loader2,
+  Play,
   Plus,
   Sparkles,
   Utensils,
@@ -294,10 +296,15 @@ function SessionRow({
             size="sm"
             variant="outline"
             onClick={onOpen}
+            disabled={busy}
             className="h-7 rounded-full border-border bg-white px-2.5 text-[0.68rem] font-semibold shadow-none"
           >
+            {busy ? (
+              <Loader2 className="size-3 animate-spin" aria-hidden />
+            ) : (
+              <ChevronRight className="size-3" />
+            )}
             {session.kind === "paper" ? "Sit paper" : "Open set"}
-            <ChevronRight className="size-3" />
           </Button>
           <span
             className={cn(
@@ -534,7 +541,10 @@ export default function Timetable() {
     const key = `${view.plan._id}:${activeDate}`;
     if (autoTried.current.has(key)) return;
     autoTried.current.add(key);
-    ensureDay({ date: activeDate })
+    retryTransient(() => ensureDay({ date: activeDate }), {
+      attempts: 2,
+      delayMs: 700,
+    })
       .then((result) => {
         if (!result.generated) {
           setDayError(reasonCopy(result.reason));
@@ -612,14 +622,18 @@ export default function Timetable() {
     setSavingBlocks(true);
     setDayError(null);
     try {
-      await setBlockedPeriods({
-        date: activeDate,
-        periods: next.map((period) => ({
-          startMinutes: period.startMinutes,
-          endMinutes: period.endMinutes,
-          ...(period.label ? { label: period.label } : {}),
-        })),
-      });
+      await retryTransient(
+        () =>
+          setBlockedPeriods({
+            date: activeDate,
+            periods: next.map((period) => ({
+              startMinutes: period.startMinutes,
+              endMinutes: period.endMinutes,
+              ...(period.label ? { label: period.label } : {}),
+            })),
+          }),
+        { attempts: 2, delayMs: 500 },
+      );
       toast.success("Day replanned around that time.");
     } finally {
       setSavingBlocks(false);
@@ -629,22 +643,26 @@ export default function Timetable() {
   const removeBlock = async (period: Blocked) => {
     setSavingBlocks(true);
     try {
-      await setBlockedPeriods({
-        date: activeDate,
-        periods: blockedByTime
-          .filter(
-            (entry) =>
-              !(
-                entry.startMinutes === period.startMinutes &&
-                entry.endMinutes === period.endMinutes
-              ),
-          )
-          .map((entry) => ({
-            startMinutes: entry.startMinutes,
-            endMinutes: entry.endMinutes,
-            ...(entry.label ? { label: entry.label } : {}),
-          })),
-      });
+      await retryTransient(
+        () =>
+          setBlockedPeriods({
+            date: activeDate,
+            periods: blockedByTime
+              .filter(
+                (entry) =>
+                  !(
+                    entry.startMinutes === period.startMinutes &&
+                    entry.endMinutes === period.endMinutes
+                  ),
+              )
+              .map((entry) => ({
+                startMinutes: entry.startMinutes,
+                endMinutes: entry.endMinutes,
+                ...(entry.label ? { label: entry.label } : {}),
+              })),
+          }),
+        { attempts: 2, delayMs: 500 },
+      );
       toast.success("Blocked time removed.");
     } catch (error) {
       toast.error(
@@ -658,11 +676,15 @@ export default function Timetable() {
   const toggleSession = async (session: DaySession) => {
     setBusySession(session.id);
     try {
-      await setSessionDone({
-        date: activeDate,
-        sessionId: session.id,
-        done: !session.done,
-      });
+      await retryTransient(
+        () =>
+          setSessionDone({
+            date: activeDate,
+            sessionId: session.id,
+            done: !session.done,
+          }),
+        { attempts: 2, delayMs: 500 },
+      );
     } catch (error) {
       toast.error(
         readableError(error, "Could not update that session. Try again."),
@@ -681,6 +703,7 @@ export default function Timetable() {
       );
       return;
     }
+    setBusySession(session.id);
     try {
       const result = await openTopic({
         courseId: session.courseId,
@@ -691,6 +714,8 @@ export default function Timetable() {
       toast.error(
         readableError(error, "Could not open that revision topic."),
       );
+    } finally {
+      setBusySession(null);
     }
   };
 
@@ -750,6 +775,8 @@ export default function Timetable() {
   const daysLeft = daysUntilInput(view.plan.examDate);
   const isPast = activeDate < today;
   const canGenerate = !isPast && !view.reason && !view.day && !dayError;
+  const nextSession =
+    daySessions.find((session) => !session.done) ?? daySessions[0];
   const nextRevision = strip.find(
     (date) =>
       date > activeDate && isRevisionDate(date, view.plan.daysPerWeek),
@@ -775,16 +802,32 @@ export default function Timetable() {
           </>
         }
         actions={
-          <Button
-            asChild
-            variant="outline"
-            className="h-10 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-          >
-            <Link to="/timetable/new">
-              <CalendarPlus className="size-3.5" />
-              Rebuild plan
-            </Link>
-          </Button>
+          nextSession ? (
+            <Button
+              type="button"
+              onClick={() => void handleOpen(nextSession)}
+              disabled={busySession !== null}
+              className="h-10 rounded-full px-4 text-[0.8rem] font-semibold"
+            >
+              {busySession === nextSession.id ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Play className="size-3.5" aria-hidden />
+              )}
+              {nextSession.kind === "paper" ? "Start paper" : "Start session"}
+            </Button>
+          ) : (
+            <Button
+              asChild
+              variant="outline"
+              className="h-10 rounded-full border-border bg-white px-4 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+            >
+              <Link to="/timetable/new">
+                <CalendarPlus className="size-3.5" />
+                Rebuild plan
+              </Link>
+            </Button>
+          )
         }
       />
 

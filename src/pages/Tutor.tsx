@@ -1,7 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { CreateSetDialog } from "@/components/CreateSetDialog";
 import { GettingStarted, markTutorUsed } from "@/components/GettingStarted";
-import { NextStep } from "@/components/NextStep";
 import { PageHeader } from "@/components/PageHeader";
 import {
   SkeletonChat,
@@ -238,6 +237,14 @@ export default function TutorPage() {
     const typed = value.trim();
     const files = meta.attachments.slice(0, 2);
     if ((!typed && files.length === 0) || sending) return;
+    // Only an explicit "not configured" answer stops the request. An undefined
+    // status is still loading, so it must never create a false negative.
+    if (aiStatus?.configured === false) {
+      setError(
+        "The tutor isn't connected in this workspace yet. Saved material still works, but new questions can't be answered.",
+      );
+      return;
+    }
     const question = typed || "Explain what is in this image.";
     markTutorUsed();
 
@@ -347,6 +354,10 @@ export default function TutorPage() {
     const firstName = displayName(user?.name, user?.email)
       .split(" ")[0]
       .split("@")[0];
+    const primarySet = continueSets[0];
+    const primaryHref = totalDue > 0 ? "/today" : primarySet ? `/sets/${primarySet._id}` : null;
+    const primaryLabel =
+      totalDue > 0 ? "Start today's session" : primarySet ? "Continue studying" : null;
 
     // The scope chip stores "set:<id>" or "course:<id>"; the chat needs the
     // typed scope object, and the header needs the label and qualification.
@@ -399,14 +410,32 @@ export default function TutorPage() {
               </>
             }
             actions={
-              <Button
-                type="button"
-                onClick={() => setNewSetOpen(true)}
-                className="h-11 shrink-0 rounded-full px-5 text-sm font-semibold"
-              >
-                Add material
-                <ArrowRight className="size-4" aria-hidden />
-              </Button>
+              <>
+                {primaryHref && primaryLabel && (
+                  <Button
+                    asChild
+                    className="h-11 shrink-0 rounded-full px-5 text-sm font-semibold"
+                  >
+                    <Link to={primaryHref}>
+                      <Play className="size-4" aria-hidden />
+                      {primaryLabel}
+                      <ArrowRight className="size-4" aria-hidden />
+                    </Link>
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant={primaryHref ? "outline" : "default"}
+                  onClick={() => setNewSetOpen(true)}
+                  className={cn(
+                    "h-11 shrink-0 rounded-full px-5 text-sm font-semibold",
+                    primaryHref && "border-border bg-card text-brand-ink shadow-none hover:bg-brand-panel",
+                  )}
+                >
+                  Add material
+                  <ArrowRight className="size-4" aria-hidden />
+                </Button>
+              </>
             }
           />
 
@@ -418,10 +447,7 @@ export default function TutorPage() {
             </p>
           )}
 
-          <GettingStarted
-            onAddMaterial={() => setNewSetOpen(true)}
-            onExploreTutor={focusTutor}
-          />
+          <GettingStarted onExploreTutor={focusTutor} />
 
           {/* The tutor is the page's main tool: the full chat with model tiers,
               the picker, dictation and streaming answers, not a link elsewhere. */}
@@ -468,9 +494,15 @@ export default function TutorPage() {
                       its own. An empty state explains; it does not repeat. */}
                   <p className="mt-1 text-[0.85rem] leading-relaxed text-muted-foreground">
                     Use <span className="font-semibold text-brand-ink">Add material</span>{" "}
-                    to paste or upload a page of notes, or pick your subjects in{" "}
-                    Courses below. The tutor then explains, quizzes and marks
-                    answers from your own material.
+                    to paste or upload a page of notes, or{" "}
+                    <Link
+                      to="/courses/new"
+                      className="font-semibold text-brand-ink underline decoration-border underline-offset-2 hover:decoration-brand-ink"
+                    >
+                      set up your subjects
+                    </Link>
+                    . The tutor then explains, quizzes and marks answers from your
+                    own material.
                   </p>
                 </div>
               </div>
@@ -529,9 +561,10 @@ export default function TutorPage() {
             </section>
           )}
 
-          <SetLibrary onCreate={() => setNewSetOpen(true)} />
+          <SetLibrary onCreate={() => setNewSetOpen(true)} hideWhenEmpty />
 
-          {/* Courses stay reachable without competing with the sets list. */}
+          {/* Courses only take up space once there is one to show. */}
+          {readyCourses.length > 0 && (
           <section className="mt-7" aria-labelledby="home-courses-heading">
             <div className="flex flex-wrap items-center gap-3">
               <h2
@@ -546,19 +579,11 @@ export default function TutorPage() {
                 to="/courses"
                 className="text-[0.76rem] font-semibold text-brand-ink/70 underline-offset-2 hover:text-brand-ink hover:underline"
               >
-                {readyCourses.length > 0 ? "Manage courses" : "Add a course"}
+                Manage courses
               </Link>
             </div>
 
-            {readyCourses.length === 0 ? (
-              <p className="mt-2 text-[0.82rem] leading-relaxed text-muted-foreground">
-                Choose your subjects to get a topic-by-topic pathway and ask the
-                tutor about the whole specification. Use{" "}
-                <span className="font-semibold text-brand-ink">Add a course</span>{" "}
-                above to start.
-              </p>
-            ) : (
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {readyCourses.slice(0, 4).map((course) => {
                   const done = percent(
                     course.completedCount,
@@ -601,19 +626,8 @@ export default function TutorPage() {
                   );
                 })}
               </div>
-            )}
           </section>
-
-          <NextStep
-            to="/today"
-            title="Start today's session"
-            hint={
-              totalDue > 0
-                ? `${totalDue} card${totalDue === 1 ? "" : "s"} are ready for review`
-                : "One short session keeps the plan moving"
-            }
-            className="mb-1 mt-7"
-          />
+          )}
         </div>
 
         <CreateSetDialog

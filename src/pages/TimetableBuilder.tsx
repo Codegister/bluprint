@@ -431,9 +431,9 @@ export default function TimetableBuilder() {
 
       <PageHeader
         className="mt-4"
-        eyebrow="Step 4 · Timetable"
-        title="Build a plan you can actually follow"
-        description="Three short steps. Choose your subjects, the time you have on school days and days off, then your first exam date. Bluprint spreads that time across the day with breaks and space for meals, and every session links to its study set."
+        eyebrow="Timetable setup"
+        title="Build your revision plan"
+        description="Choose your subjects, the time you have on school days and days off, then your first exam date. Every session links to its study set."
       />
 
       {/* A quiet stepper: one accent marks where you are, mint marks what is

@@ -1,9 +1,8 @@
-import { Meter, enter } from "@/components/motion/Motion";
+import { enter } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
-import { cn } from "@/lib/utils";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { Check } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -34,18 +33,15 @@ export function markTutorUsed() {
 }
 
 /**
- * The first-run guide.
+ * The first-run guide, reduced to the one thing to do next.
  *
- * It names the four moves that make Bluprint work — courses, material, the
- * tutor, a timetable — in the order they build on each other, and it marks them
- * off as they are done. It disappears once all four are complete, so it never
- * becomes another panel to dismiss.
+ * A four-column checklist said the same thing four times and pushed the actual
+ * work below the fold. This strip keeps the progress and the next action, then
+ * gets out of the way.
  */
 export function GettingStarted({
-  onAddMaterial,
   onExploreTutor,
 }: {
-  onAddMaterial: () => void;
   onExploreTutor: () => void;
 }) {
   const courses = useQuery(api.courses.listMine);
@@ -54,7 +50,6 @@ export function GettingStarted({
   const [tutorUsed, setTutorUsed] = useState(() => readFlag(TUTOR_KEY));
   const [dismissed, setDismissed] = useState(() => readFlag(DISMISS_KEY));
 
-  // Ticking the tutor step live, so asking a question here visibly completes it.
   useEffect(() => {
     const onUsed = () => setTutorUsed(true);
     window.addEventListener(TUTOR_EVENT, onUsed);
@@ -70,40 +65,35 @@ export function GettingStarted({
     {
       title: "Set up your courses",
       body: "Pick your subjects so every topic has a pathway.",
-      tone: "border-brand-violet/30 bg-brand-violet/15 text-brand-violet",
       done: courses.length > 0,
-      action: courses.length > 0 ? (
-        <Link to="/courses" className="font-semibold text-brand-ink underline-offset-2 hover:underline">
-          Open
-        </Link>
-      ) : (
-        <Link to="/courses/new" className="font-semibold text-brand-ink underline-offset-2 hover:underline">
-          Choose courses
-        </Link>
-      ),
+      action:
+        courses.length > 0 ? (
+          <Link
+            to="/courses"
+            className="font-semibold text-brand-ink underline-offset-2 hover:underline"
+          >
+            Open
+          </Link>
+        ) : (
+          <Link
+            to="/courses/new"
+            className="font-semibold text-brand-ink underline-offset-2 hover:underline"
+          >
+            Choose courses
+          </Link>
+        ),
     },
     {
       title: "Build a study set",
       body: "Use a course topic, or add photos and notes; Bluprint writes the cards.",
-      tone: "border-brand-sky/30 bg-brand-sky/15 text-brand-sky",
       done: sets.length > 0,
-      action: (
-        <button
-          type="button"
-          onClick={onAddMaterial}
-          className="font-semibold text-brand-ink underline-offset-2 hover:underline"
-        >
-          Build set
-        </button>
-      ),
+      // The page's primary "Add material" button already does this. Keeping a
+      // second build link in the strip would split the screen's one action.
+      action: null,
     },
     {
       title: "Explore the tutor",
       body: "Ask about a course, a set or a card you keep missing.",
-      tone: "border-brand-mint/30 bg-brand-mint/15 text-brand-mint",
-      // A stored tutor flag can survive from an earlier browser session. It
-      // only counts once the student has material for the tutor to use, so a
-      // brand-new guest never opens the guide at "1 of 4 done".
       done: tutorUsed && (courses.length > 0 || sets.length > 0),
       action: (
         <button
@@ -118,7 +108,6 @@ export function GettingStarted({
     {
       title: "Plan your week",
       body: "Turn your topics into a timetable that ends at your exam.",
-      tone: "border-brand-peach/30 bg-brand-peach/15 text-brand-peach",
       done: plan !== null,
       action: (
         <Link
@@ -133,92 +122,63 @@ export function GettingStarted({
 
   const done = steps.filter((step) => step.done).length;
   if (done === steps.length) return null;
-  // The first unfinished step is the one to do now, and looking like it.
-  const nextIndex = steps.findIndex((step) => !step.done);
+  const next = steps.find((step) => !step.done);
+  if (!next) return null;
 
   return (
     <motion.section
       aria-labelledby="getting-started-heading"
-      className="mt-4 rounded-[1.6rem] border border-border bg-card p-4 sm:p-5"
+      className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-border bg-card px-3.5 py-2.5"
       {...enter(0.08, 10)}
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="mono-label text-chrome-7">Getting started</p>
-          <h2
-            id="getting-started-heading"
-            className="mt-1 font-display text-[1.1rem] font-bold text-brand-ink"
-          >
-            Four steps to a working study loop
-          </h2>
-        </div>
-        <span className="rounded-full bg-brand-panel px-2.5 py-1 text-[0.7rem] font-semibold tabular-nums text-brand-ink/70">
-          {done} of {steps.length} done
+      <div className="flex items-center gap-2">
+        <p className="mono-label text-chrome-7">Setup</p>
+        <span
+          className="text-[0.72rem] font-semibold tabular-nums text-muted-foreground"
+          title={`${done} of ${steps.length} steps done`}
+        >
+          {done}/{steps.length}
+        </span>
+        <span className="flex gap-1" aria-hidden>
+          {steps.map((step) => (
+            <span
+              key={step.title}
+              className={
+                step.done
+                  ? "size-1.5 rounded-full bg-brand-mint"
+                  : "size-1.5 rounded-full bg-border"
+              }
+            />
+          ))}
         </span>
       </div>
 
-      <Meter
-        value={(done / steps.length) * 100}
-        className="mt-3 h-1.5 max-w-[240px] bg-brand-panel"
-        barClassName="bg-brand-sky"
-        label="Getting started progress"
-      />
+      <div className="min-w-0 flex-1">
+        <h2
+          id="getting-started-heading"
+          className="text-[0.84rem] font-semibold leading-snug text-brand-ink"
+        >
+          Next: {next.title}
+        </h2>
+        <p className="hidden truncate text-[0.72rem] leading-relaxed text-muted-foreground sm:block">
+          {next.body}
+        </p>
+      </div>
 
-      <ol className="mt-3 grid gap-1.5 sm:grid-cols-2">
-        {steps.map((step, index) => (
-          <li
-            key={step.title}
-            aria-current={index === nextIndex ? "step" : undefined}
-            className={cn(
-              "flex items-start gap-2.5 rounded-2xl px-2 py-2 transition-colors hover:bg-brand-panel/60",
-              index === nextIndex && "bg-brand-panel/70 ring-1 ring-border",
-            )}
-          >
-            <span
-              className={cn(
-                "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border",
-                step.tone,
-              )}
-              aria-hidden
-            >
-              {step.done ? (
-                <Check className="size-3" />
-              ) : (
-                <span className="text-[0.6rem] font-bold tabular-nums">
-                  {index + 1}
-                </span>
-              )}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p
-                className={
-                  step.done
-                    ? "text-[0.84rem] font-semibold text-brand-ink/65 line-through"
-                    : "text-[0.84rem] font-semibold text-brand-ink"
-                }
-              >
-                {step.title}
-              </p>
-              <p className="mt-0.5 text-[0.74rem] leading-relaxed text-muted-foreground">
-                {step.body}
-              </p>
-            </div>
-            <span className="shrink-0 self-center text-[0.76rem]">
-              {step.action}
-            </span>
-          </li>
-        ))}
-      </ol>
-
+      {next.action && (
+        <span className="shrink-0 text-[0.76rem]">{next.action}</span>
+      )}
       <button
         type="button"
         onClick={() => {
           writeFlag(DISMISS_KEY);
           setDismissed(true);
         }}
-        className="mt-2 text-[0.72rem] font-medium text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+        aria-label="Hide setup guide"
+        title="Hide setup guide"
+        className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-brand-panel hover:text-brand-ink"
       >
-        Hide this guide
+        <X className="size-3.5" aria-hidden />
       </button>
     </motion.section>
   );

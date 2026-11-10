@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
-import { EASE, EASE_EXIT, SPRING, enter } from "@/components/motion/Motion";
+import { PageHeader } from "@/components/PageHeader";
+import { EASE, SPRING, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
@@ -822,105 +823,19 @@ export default function CourseSetup() {
         All courses
       </Link>
 
-      <div className="chrome-plate mt-3 flex flex-wrap items-end justify-between gap-x-6 gap-y-2 rounded-[1.6rem] px-5 py-5">
-        <div>
-          <motion.h1
-            className="chrome-title font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] sm:text-[2rem]"
-            {...enter(0.04)}
-          >
-            Your courses
-          </motion.h1>
-        </div>
-        <p className="max-w-md text-[0.82rem] leading-relaxed text-muted-foreground">
-          Pick what you study. Bluprint maps each course from its published
-          specification, then builds revision material for every topic. Religious
-          Studies is split into Edexcel Religious Studies A and B, with the
-          religions and units you study. English Literature asks for your
-          Shakespeare play, novel, modern text and poetry cluster.
-        </p>
-      </div>
-
-      {/* The two wizard steps cross-fade, so choosing a qualification feels
-          like turning a page rather than the content swapping instantly. */}
-      <AnimatePresence mode="wait" initial={false}>
-      {!level ? (
-        <motion.section
-          key="qualification"
-          initial={{ opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{
-            opacity: 0,
-            x: -16,
-            transition: { duration: 0.26, ease: EASE_EXIT },
-          }}
-          transition={{ duration: 0.3, ease: EASE }}
-          className="mt-6 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-7"
-        >
-          <p className="text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-chrome-6">
-            Step 1 of 2
-          </p>
-          <motion.h2
-            className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink"
-            {...enter(0.04)}
-          >
-            Which qualification are you studying?
-          </motion.h2>
-          <p className="mt-1 max-w-xl text-[0.86rem] leading-relaxed text-muted-foreground">
-            This decides the exam boards and tiers Bluprint offers for every
-            subject, so choose it before picking courses.
-          </p>
-
-          <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {STUDY_LEVELS.map((option, index) => (
-              <motion.button
-                key={option}
-                type="button"
-                onClick={() => chooseQualification(option)}
-                {...enter(0.08 + index * 0.05, 12)}
-                whileHover={{ y: -2, transition: SPRING }}
-                whileTap={{ scale: 0.99, transition: SPRING }}
-                className="group flex items-center justify-between gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-chrome-6/60 hover:bg-brand-panel"
-              >
-                <span>
-                  <span className="block text-[0.94rem] font-semibold text-brand-ink">
-                    {option}
-                  </span>
-                  <span className="mt-0.5 block text-[0.72rem] text-muted-foreground">
-                    {levelHints[option]}
-                  </span>
-                </span>
-                <ChevronRight
-                  className="size-4 text-brand-ink/30 transition-colors group-hover:text-chrome-7"
-                  aria-hidden
-                />
-              </motion.button>
-            ))}
-          </div>
-
-          {selectedCount > 0 && (
-            <p className="mt-4 text-[0.74rem] text-muted-foreground">
-              You already have {selectedCount} course
-              {selectedCount === 1 ? "" : "s"} picked. Choosing a qualification
-              resets their board and tier to that qualification's defaults.
-            </p>
-          )}
-        </motion.section>
-      ) : (
-        <motion.div
-          key="subjects"
-          initial={{ opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{
-            opacity: 0,
-            x: -16,
-            transition: { duration: 0.26, ease: EASE_EXIT },
-          }}
-          transition={{ duration: 0.3, ease: EASE }}
-        >
-          <p className="mt-5 text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-chrome-6">
-            Step 2 of 2
-          </p>
-          <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+      <PageHeader
+        className="mt-3"
+        eyebrow={level ? "Step 2 of 2" : "Step 1 of 2"}
+        title={
+          level ? "Add your courses" : "Which qualification are you studying?"
+        }
+        description={
+          level
+            ? "Pick what you study. Bluprint maps each published specification into a revision pathway."
+            : "Choose one. It sets the exam boards and tiers available for every subject."
+        }
+        actions={
+          level ? (
             <button
               type="button"
               onClick={changeQualification}
@@ -931,7 +846,58 @@ export default function CourseSetup() {
                 Change
               </span>
             </button>
+          ) : undefined
+        }
+      >
+        {!level && (
+          <>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {STUDY_LEVELS.map((option, index) => (
+                <motion.button
+                  key={option}
+                  type="button"
+                  onClick={() => chooseQualification(option)}
+                  {...enter(0.08 + index * 0.05, 12)}
+                  whileHover={{ y: -2, transition: SPRING }}
+                  whileTap={{ scale: 0.99, transition: SPRING }}
+                  className="group flex items-center justify-between gap-2 rounded-2xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-chrome-6/60 hover:bg-brand-panel"
+                >
+                  <span>
+                    <span className="block text-[0.94rem] font-semibold text-brand-ink">
+                      {option}
+                    </span>
+                    <span className="mt-0.5 block text-[0.72rem] text-muted-foreground">
+                      {levelHints[option]}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="size-4 text-brand-ink/30 transition-colors group-hover:text-chrome-7"
+                    aria-hidden
+                  />
+                </motion.button>
+              ))}
+            </div>
+            {selectedCount > 0 && (
+              <p className="mt-4 text-[0.74rem] text-muted-foreground">
+                You already have {selectedCount} course
+                {selectedCount === 1 ? "" : "s"} picked. Choosing a qualification
+                resets their board and tier to that qualification's defaults.
+              </p>
+            )}
+          </>
+        )}
+      </PageHeader>
 
+      {/* The subject list fades in after the qualification is chosen. */}
+      <AnimatePresence mode="wait" initial={false}>
+      {level && (
+        <motion.div
+          key="subjects"
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3, ease: EASE }}
+        >
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className={cn("relative sm:ml-auto sm:w-64", asking && "hidden")}>
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"

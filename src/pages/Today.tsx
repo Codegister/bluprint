@@ -14,7 +14,6 @@ import {
   ArrowRight,
   Camera,
   Flame,
-  GraduationCap,
   Layers3,
   Play,
   RotateCcw,
@@ -65,41 +64,36 @@ function FirstRunOptions() {
         title={hasCourses ? "No study sets yet" : "Nothing to revise yet"}
         description={description}
         actions={
-          <>
-            <Button
-              asChild
-              className="h-11 rounded-full px-5 text-sm font-semibold"
-            >
-              {/* With courses mapped the dialog opens on its Course tab, so
-                  this is the one-tap route into a first set. */}
-              <Link to="/tutor?new=1">
-                {readyCourses.length > 0 ? (
-                  <Layers3 className="size-4" aria-hidden />
-                ) : (
-                  <Camera className="size-4" aria-hidden />
-                )}
-                {readyCourses.length > 0 ? "Build a study set" : "Add your notes"}
-                <ArrowRight className="size-4" aria-hidden />
-              </Link>
-            </Button>
-            {/* Wait for the course list before naming this action: showing
-                "Choose courses first" to a student who already has courses is
-                the bug this replaced. */}
-            {courses !== undefined && (
-              <Button
-                asChild
-                variant="outline"
-                className="h-11 rounded-full px-5 text-sm font-semibold shadow-none"
-              >
-                <Link to={secondaryAction.to}>
-                  <GraduationCap className="size-4" aria-hidden />
-                  {secondaryAction.label}
-                </Link>
-              </Button>
-            )}
-          </>
+          <Button
+            asChild
+            className="h-11 rounded-full px-5 text-sm font-semibold"
+          >
+            {/* With courses mapped the dialog opens on its Course tab, so
+                this is the one-tap route into a first set. */}
+            <Link to="/tutor?new=1">
+              {readyCourses.length > 0 ? (
+                <Layers3 className="size-4" aria-hidden />
+              ) : (
+                <Camera className="size-4" aria-hidden />
+              )}
+              {readyCourses.length > 0 ? "Build a study set" : "Add your notes"}
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </Button>
         }
-      />
+      >
+        {courses !== undefined && (
+          <p className="mt-2 text-[0.78rem] text-muted-foreground">
+            {hasCourses ? "Or open your mapped courses." : "Prefer to start from a course?"}{" "}
+            <Link
+              to={secondaryAction.to}
+              className="font-semibold text-brand-ink underline-offset-2 hover:underline"
+            >
+              {secondaryAction.label}
+            </Link>
+          </p>
+        )}
+      </PageHeader>
 
       <motion.section
         className="mt-4 rounded-[1.6rem] border border-border bg-card px-5 py-4"

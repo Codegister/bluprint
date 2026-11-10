@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   MAX_COMBINED_TOPICS,
   pathwaySectionOptions,
+  pathwayTopicOptions,
 } from "../src/lib/pathwaySections";
 
 const CHEMISTRY = [
@@ -61,5 +62,34 @@ describe("course topic picker", () => {
 
   test("an unknown topic produces no options", () => {
     expect(pathwaySectionOptions(CHEMISTRY, "missing")).toEqual([]);
+  });
+
+  test("the whole-course list keeps every topic and numbers it across units", () => {
+    const units = [
+      {
+        title: "First unit",
+        topics: [
+          { id: "first", title: "Cell structure" },
+          { id: "second", title: "Cell division" },
+        ],
+      },
+      {
+        title: "Second unit",
+        topics: [{ id: "third", title: "Transport in cells" }],
+      },
+    ];
+
+    expect(
+      pathwayTopicOptions(units).map(({ number, title }) => ({ number, title })),
+    ).toEqual([
+      { number: 1, title: "Cell structure" },
+      { number: 2, title: "Cell division" },
+      { number: 3, title: "Transport in cells" },
+    ]);
+  });
+
+  test("whole-course topics keep their course number when a run starts later", () => {
+    const options = pathwaySectionOptions(CHEMISTRY, "chem-8");
+    expect(options.map((option) => option.number)).toEqual([8, 9, 10]);
   });
 });

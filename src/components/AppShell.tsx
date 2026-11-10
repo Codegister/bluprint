@@ -438,18 +438,15 @@ function GuestNotice() {
   // The warning sits at the point of creation, before the first deck exists,
   // so nobody builds work under the impression it is already safe.
   return (
-    <div className="mb-4 rounded-2xl border border-[#E8D3A3] bg-[#FFF8E8] px-4 py-3 text-[0.8rem] leading-relaxed text-[#7A5200]">
-      <span className="font-semibold">Guest workspace.</span> Guest sets live
-      only in this browser and are removed when you sign out or clear site data.
-      Guest builds are limited; add an email to keep your work and raise the
-      limit.{" "}
+    <div className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-[#E8D3A3] bg-[#FFF8E8] px-3 py-2 text-[0.76rem] leading-relaxed text-[#7A5200]">
+      <span className="font-semibold">Guest workspace</span>
+      <span className="text-[#7A5200]/80">Saved in this browser only.</span>
       <Link
         to="/auth?link=1&returnTo=%2Fsets"
-        className="font-semibold underline decoration-[#7A5200]/40 underline-offset-2 hover:text-brand-ink"
+        className="ml-auto font-semibold underline decoration-[#7A5200]/40 underline-offset-2 hover:text-brand-ink"
       >
-        Add an email to keep my work
+        Keep my work
       </Link>
-      . You can also export any set, including its quiz and review history.
     </div>
   );
 }

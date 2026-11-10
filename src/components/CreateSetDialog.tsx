@@ -8,10 +8,11 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { TopicPicker } from "@/components/study/TopicPicker";
 import { EASE, EASE_EXIT } from "@/components/motion/Motion";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { createSetFailureMessage, notifyError, readableError } from "@/lib/errors";
+import { createSetFailureMessage, notifyError } from "@/lib/errors";
 import { plural } from "@/lib/format";
 import {
   MAX_NOTE_CHARS,
@@ -29,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { shortTitle, titleFromSource } from "@/convex/lib/titles";
 import { compressImage, extractVideoFrames } from "@/lib/media";
+import { pathwayTopicOptions } from "@/lib/pathwaySections";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -99,6 +101,9 @@ export function CreateSetDialog({
   const [cardCount, setCardCount] = useState<number>(BUILD_DEFAULTS.cards);
   const [quizCount, setQuizCount] = useState<number>(BUILD_DEFAULTS.quiz);
   const [examCount, setExamCount] = useState<number>(BUILD_DEFAULTS.exam);
+  // Until a slider is moved, adding topics keeps the normal per-topic build
+  // size, so a whole-subject set is not stuck at one topic's ten cards.
+  const [countsTouched, setCountsTouched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState("");
   // Limits shown before anything is uploaded. For pasted notes the sliders use
@@ -113,7 +118,9 @@ export function CreateSetDialog({
   const maxExam = noteLimits?.exam ?? BUILD_MAX;
   const [error, setError] = useState<string | null>(null);
   const [courseId, setCourseId] = useState("");
-  const [topicId, setTopicId] = useState("");
+  // Null means "show the suggested topic"; an empty array means the student
+  // deliberately cleared every box.
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[] | null>(null);
   const previewsRef = useRef<string[]>([]);
   const openedRef = useRef(false);
 
@@ -126,17 +133,29 @@ export function CreateSetDialog({
     selectedCourseId ? { courseId: selectedCourseId as Id<"courses"> } : "skip",
   );
   const units = courseDetails?.course.pathway?.units ?? [];
-  const topics = units.flatMap((unit) =>
-    unit.topics.map((topic) => ({ ...topic, unit: unit.title })),
-  );
+  const topics = pathwayTopicOptions(units);
   const completedTopics = new Set(courseDetails?.course.completedTopics ?? []);
   // Default to the next unfinished topic, so the common case is one click.
   const suggestedTopic =
     topics.find((topic) => !completedTopics.has(topic.id)) ?? topics[0];
-  const selectedTopic =
-    topics.find((topic) => topic.id === topicId) ?? suggestedTopic;
+  const selectedTopics =
+    selectedTopicIds === null
+      ? suggestedTopic
+        ? [suggestedTopic]
+        : []
+      : topics.filter((topic) => selectedTopicIds.includes(topic.id));
   const courseReady =
-    selectedCourseId !== "" && selectedTopic !== undefined && !isLoading;
+    selectedCourseId !== "" && selectedTopics.length > 0 && !isLoading;
+
+  const chooseCourseTopics = (topicIds: string[]) => {
+    setSelectedTopicIds(topicIds);
+    setError(null);
+    if (countsTouched) return;
+    const scale = Math.max(1, topicIds.length);
+    setCardCount(Math.min(BUILD_MAX, BUILD_DEFAULTS.cards * scale));
+    setQuizCount(Math.min(BUILD_MAX, BUILD_DEFAULTS.quiz * scale));
+    setExamCount(Math.min(BUILD_MAX, BUILD_DEFAULTS.exam * scale));
+  };
 
   useEffect(() => {
     return () => {
@@ -196,11 +215,12 @@ export function CreateSetDialog({
     setCardCount(BUILD_DEFAULTS.cards);
     setQuizCount(BUILD_DEFAULTS.quiz);
     setExamCount(BUILD_DEFAULTS.exam);
+    setCountsTouched(false);
     setMode("photos");
     setStep("");
     setError(null);
     setCourseId("");
-    setTopicId("");
+    setSelectedTopicIds(null);
   };
 
   const handleClose = (next: boolean) => {
@@ -267,11 +287,11 @@ export function CreateSetDialog({
   const handleSubmit = async () => {
     setError(null);
 
-    if (mode === "course" && (selectedCourseId === "" || !selectedTopic)) {
+    if (mode === "course" && (selectedCourseId === "" || selectedTopics.length === 0)) {
       setError(
         readyCourses.length === 0
-          ? "Set up a course first, then build a set from one of its topics."
-          : "Choose a course and a topic to build from.",
+          ? "Set up a course first, then build a set from its topics."
+          : "Choose a course and at least one topic to build from.",
       );
       return;
     }
@@ -283,7 +303,9 @@ export function CreateSetDialog({
       return;
     }
     if (ai === undefined) {
-      setError("Checking AI status…");
+      setError(
+        "Still checking the AI connection — nothing was uploaded. Press Retry in a moment.",
+      );
       return;
     }
     if (mode === "photos" && images.length === 0) {
@@ -307,12 +329,12 @@ export function CreateSetDialog({
 
     setIsLoading(true);
 
-    if (mode === "course" && selectedTopic) {
+    if (mode === "course" && selectedTopics.length > 0) {
       try {
         const result = await createTopicSet({
           courseId: selectedCourseId as Id<"courses">,
-          topicId: selectedTopic.id,
-          sections: 1,
+          topicId: selectedTopics[0]!.id,
+          topicIds: selectedTopics.map((topic) => topic.id),
           targetCardCount: cardCount,
           targetQuizCount: quizCount,
           targetExamCount: examCount,
@@ -331,7 +353,6 @@ export function CreateSetDialog({
           "Could not build a set from that topic. Try again.",
         );
         setError(message);
-        toast.error(message);
       } finally {
         setIsLoading(false);
       }
@@ -593,7 +614,11 @@ export function CreateSetDialog({
                       value={selectedCourseId}
                       onChange={(event) => {
                         setCourseId(event.target.value);
-                        setTopicId("");
+                        setSelectedTopicIds(null);
+                        setCountsTouched(false);
+                        setCardCount(BUILD_DEFAULTS.cards);
+                        setQuizCount(BUILD_DEFAULTS.quiz);
+                        setExamCount(BUILD_DEFAULTS.exam);
                         setError(null);
                       }}
                       disabled={isLoading}
@@ -607,45 +632,31 @@ export function CreateSetDialog({
                     </select>
                   </label>
 
-                  <label className="mt-3 block">
+                  <div className="mt-3">
                     <span className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-chrome-7">
-                      Topic
+                      Topics
                     </span>
-                    <select
-                      value={selectedTopic?.id ?? ""}
-                      onChange={(event) => {
-                        setTopicId(event.target.value);
-                        setError(null);
-                      }}
-                      disabled={isLoading || topics.length === 0}
-                      className="mt-1 h-10 w-full rounded-xl border border-border bg-card px-3 text-sm font-medium text-brand-ink outline-none focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/15 disabled:opacity-60"
-                    >
-                      {topics.length === 0 ? (
-                        <option value="">
-                          {courseDetails === undefined
-                            ? "Loading topics…"
-                            : "No topics mapped yet"}
-                        </option>
-                      ) : (
-                        units.map((unit) => (
-                          <optgroup key={unit.title} label={unit.title}>
-                            {unit.topics.map((topic) => (
-                              <option key={topic.id} value={topic.id}>
-                                {topic.title}
-                                {completedTopics.has(topic.id) ? " (done)" : ""}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))
-                      )}
-                    </select>
-                  </label>
-
-                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                    Bluprint writes the set from this topic's place in the
-                    specification. Need a longer set? Build across several topics
-                    from the course page.
-                  </p>
+                    {topics.length === 0 ? (
+                      <p className="mt-2 rounded-2xl border border-dashed border-border px-3 py-5 text-center text-xs font-medium text-muted-foreground">
+                        {courseDetails === undefined
+                          ? "Loading topics…"
+                          : "No topics mapped yet"}
+                      </p>
+                    ) : (
+                      <TopicPicker
+                        className="mt-1"
+                        options={topics}
+                        selectedIds={selectedTopics.map((topic) => topic.id)}
+                        onChange={chooseCourseTopics}
+                        disabled={isLoading}
+                      />
+                    )}
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                      Choose whole topics; each is included in full, with no
+                      subtopics. Select every topic to revise the whole subject in
+                      one set.
+                    </p>
+                  </div>
                 </>
               )}
             </TabsContent>
@@ -784,7 +795,7 @@ export function CreateSetDialog({
             </summary>
             <p className="mt-2 text-[0.7rem] leading-relaxed text-muted-foreground">
               {mode === "course"
-                ? "These totals apply to the set built from this topic. They are sent to the generator when you start the build."
+                ? `These totals apply to the set built from ${selectedTopics.length === 1 ? "this topic" : "these topics"}. They are sent to the generator when you start the build.`
                 : noteLimits
                   ? `These notes support ${noteLimits.cards} cards, ${noteLimits.quiz} quiz questions and ${noteLimits.exam} exam questions. The account maximum is ${BUILD_MAX} of each; the notes are the real ceiling.`
                   : `Choose anything from ${BUILD_MIN} to ${BUILD_MAX} of each. Photos and video are assessed after reading; if they support fewer, Bluprint says so on the set page in one sentence: “Built 6 of 10. Your notes supported 6.”`}
@@ -828,7 +839,10 @@ export function CreateSetDialog({
                     step={1}
                     value={control.value}
                     disabled={isLoading}
-                    onChange={(event) => control.onChange(Number(event.target.value))}
+                    onChange={(event) => {
+                      setCountsTouched(true);
+                      control.onChange(Number(event.target.value));
+                    }}
                     aria-label={control.aria}
                     className="mt-2 w-full cursor-pointer accent-chrome-6"
                   />
@@ -893,7 +907,7 @@ export function CreateSetDialog({
           <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-relaxed text-muted-foreground">
               {mode === "course"
-                ? "Built from your course topic"
+                ? "Built from your course topics"
                 : mode === "photos"
                   ? "Clear, straight-on photos transcribe best"
                   : mode === "video"

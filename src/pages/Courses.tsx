@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/convex/_generated/api";
 import { CURRENT_PATHWAY_VERSION } from "@/convex/lib/pathwayVersion";
 import { percent } from "@/lib/format";
+import { retryTransient } from "@/lib/retry";
 import { courseSubtitle, subjectMeta } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
@@ -118,7 +119,10 @@ export default function Courses() {
     }
     if (recoveryRequested.current) return;
     recoveryRequested.current = true;
-    void recoverCourses().catch(() => {
+    void retryTransient(() => recoverCourses(), {
+      attempts: 2,
+      delayMs: 900,
+    }).catch(() => {
       recoveryRequested.current = false;
     });
   }, [courseRows, recoverCourses]);

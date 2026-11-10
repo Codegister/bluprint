@@ -123,13 +123,14 @@ topic and subtopic in the specification reaches the map,
 then writes a summary, key points and an exam skill for each topic.
 
 Each course gets its own workspace in the course library, with topic-level progress. Open any
-topic and **Study this topic** opens the build panel. Choose how many flashcards, quiz
-questions and exam-style questions to make, then Bluprint creates a normal study set from
-that topic's summary, key points, and exam skill, linked back to the course. To revise a run
-of topics together, choose **Combine** next to a topic, pick how many of the following topics
-to include, and set the totals for the combined set; the picker only offers topics that
-actually remain on the pathway. Ticking topics off tracks course progress; the next
-unrevised topic is always offered at the top of the course page.
+topic and **Study this topic** opens the build panel, or use **Choose topics** next to a topic
+or **Build from topics** above the pathway to pick several. The picker lists every remaining
+topic by its course number and name, and lets you tick any number of whole topics, including
+selecting all of them for a whole-subject set. It never expands the choices into unit or
+subtopic groups. Choose how many flashcards, quiz questions and exam-style questions to
+make, then Bluprint creates one normal study set from those topics' summaries, key points
+and exam skill, linked back to the course. Ticking topics off tracks course progress; the
+next unrevised topic is always offered at the top of the course page.
 
 Every unit and topic has its own **remove** control. Removing something edits only the
 pathway: study sets already built from it stay in the library, and a rebuild brings the
@@ -248,7 +249,13 @@ earned. Four practice papers per course is the cap; remove one to build another.
     question. With web on, it can check exam-board pages and other sites, and the pages it
     used are listed under the answer and saved with the thread. With web off it answers from
     your material alone. Suggested first questions get you started; exam practice is one
-    question at a time.
+    question at a time. You can attach up to two photos or diagrams; a vision model reads
+    the whole image (text, labels, tables and diagrams) before the tutor answers, so a photo
+    of a question or a marked answer works as a question in its own right.
+    The tutor can also **act**. Ask “build me a Spanish quiz on topic 1” and it finds that
+    course and topic, creates the study set, starts the background build and links the set
+    in its reply. It uses the same verified-account and build-allowance checks as the
+    course page, and a subject named in the message takes priority over the open course.
     The **level picker** under the prompt chooses how much work the tutor does: **Fast**
     (a quick, short answer), **Balanced** (the default everyday answer) and **Deep** (the
     longest answer budget and a worked explanation, for a full derivation or a marked essay
@@ -408,9 +415,10 @@ Sets built from a course topic link back to that course.
   papers someone actually sits.
 - **The tutor has three scopes.** A study set reads that set's notes (up to 12,000
   characters); a course reads the whole scraped pathway; a unit reads only that unit's
-  topics. Each scope keeps the last ten saved turns, has no web access, and is not a
-  general-purpose chatbot. That keeps answers aligned with your material and keeps token
-  cost predictable.
+  topics. Each scope keeps the last ten saved turns, can use web search when switched on,
+  accepts up to two temporary image attachments, and can start a course-topic set on
+  request. It is not a general-purpose chatbot: answers stay aligned with your material,
+  and a build still spends the same allowance as one started from the course page.
 - **Tutor history is saved in the database**, one thread per set, per course, and per unit.
   There is no clear-thread button yet; deleting a set or course deletes its conversations.
 - **Requested counts are capped by the material.** The sliders allow 1–100, but before
@@ -808,15 +816,19 @@ same rate-limit messages as the rest of the app.
   usable, and a rebuild replaces it once the outline is published. Students are never asked
   to retry.
 - **Study this topic** opens a build panel with the same count controls as a pasted set;
-  **Combine** is the optional path for a run of topics. It writes those topics' summaries
-  and key points into one study set and opens it. Up to twelve consecutive topics can be
-  combined, which is how a student revises a whole area without clicking through it topic by
-  topic. The picker offers exactly the topics left on the pathway, the server clamps the
-  count again, and a set that already covers exactly the chosen topics is reopened rather
-  than rebuilt. The student chooses the total cards, quiz questions and exam questions; when
-  the dialog opens, its defaults scale with the number of topics so a combined deck still
-  covers every one. The existing compile pipeline takes over, so a pathway set has the same
-  summary, cards, quiz, exam marking, scheduling, and tutor as an uploaded set.
+  **Choose topics** opens the multi-select picker from that topic, and **Build from topics**
+  above the pathway opens it with the whole course selected. The picker is a flat list of
+  every topic on the pathway, numbered in course order, with no unit or subtopic nesting.
+  Ticking several topics writes their summaries and key points into one study set and opens
+  it; selecting every topic is how a student revises the whole subject without building a
+  set topic by topic. The server keeps the selected topics in pathway order, reopens a set
+  that already covers exactly that selection, and checks the combined brief against the note
+  limit before spending an allowance. The twelve-topic cap remains only for legacy
+  start-topic callers that ask for a run. The student chooses the total cards, quiz questions
+  and exam questions; when the dialog opens, its defaults scale with the number of selected
+  topics so a whole-subject deck still covers every one. The existing compile pipeline takes
+  over, so a pathway set has the same summary, cards, quiz, exam marking, scheduling, and
+  tutor as an uploaded set.
 - A pathway set is built from a syllabus outline, not from teaching text. Generation is told
   to write the subject content that outline calls for — facts, examples, vocabulary, worked
   rules — and never material about the specification, assessment objectives, paper structure

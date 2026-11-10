@@ -27,12 +27,10 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { planSummary, resolveCoursePaper } from "@/convex/lib/paperPlan";
 import { CURRENT_PATHWAY_VERSION } from "@/convex/lib/pathwayVersion";
 import { notifyError } from "@/lib/errors";
+import { retryTransient } from "@/lib/retry";
 import { CourseCoveragePanel } from "@/components/study/CourseCoveragePanel";
 import { percent, plural, relativeDate } from "@/lib/format";
-import {
-  pathwaySectionOptions,
-  type SectionOption,
-} from "@/lib/pathwaySections";
+import { pathwayTopicOptions } from "@/lib/pathwaySections";
 import { courseSubtitle } from "@/lib/subjects";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -345,12 +343,8 @@ export default function Course() {
 
   const [retrying, setRetrying] = useState(false);
   const [busyTopic, setBusyTopic] = useState<string | null>(null);
-  // The topic chosen in the "combine topics" picker, with the real topics a set
-  // can cover from there. Null while the picker is closed.
-  const [sectionTarget, setSectionTarget] = useState<{
-    topicId: string;
-    options: SectionOption[];
-  } | null>(null);
+  // The topics preselected when the build picker opens. Null while it is closed.
+  const [buildSelection, setBuildSelection] = useState<string[] | null>(null);
   const [tickingTopic, setTickingTopic] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -397,6 +391,11 @@ export default function Course() {
     return null;
   }, [details]);
 
+  const topicOptions = useMemo(
+    () => pathwayTopicOptions(details?.course.pathway?.units ?? []),
+    [details],
+  );
+
   // The notes tab opens on the topic being worked through, so the screen shows
   // notes straight away instead of a list waiting to be tapped.
   const notesOpened = useRef(false);
@@ -422,34 +421,27 @@ export default function Course() {
     }
   };
 
-  const buildSet = async (
-    topicId: string,
-    sections: number,
-    counts: BuildCounts,
-  ) => {
-    if (!validId) return;
-    setBusyTopic(topicId);
+  const buildSet = async (topicIds: string[], counts: BuildCounts) => {
+    const firstTopicId = topicIds[0];
+    if (!validId || !firstTopicId) return;
+    setBusyTopic(firstTopicId);
     try {
       const result = await createTopicSet({
         courseId: courseId as Id<"courses">,
-        topicId,
-        sections,
+        topicId: firstTopicId,
+        topicIds,
         targetCardCount: counts.cards,
         targetQuizCount: counts.quiz,
         targetExamCount: counts.exam,
       });
-      setSectionTarget(null);
+      setBuildSelection(null);
       navigate(`/sets/${result.setId}`);
     } catch (error) {
-      notifyError(error, "Could not build material for that topic.");
+      notifyError(error, "Could not build material for those topics.");
     } finally {
       setBusyTopic(null);
     }
   };
-
-  /** The actual topics a set could cover from `topicId` onwards. */
-  const sectionOptionsFrom = (topicId: string): SectionOption[] =>
-    pathwaySectionOptions(details?.course.pathway?.units ?? [], topicId);
 
   /** Opens the build panel for the topic's own set. */
   const handleTopic = (topicId: string) => {
@@ -459,28 +451,29 @@ export default function Course() {
       navigate(`/sets/${existing._id}`);
       return;
     }
-    const options = sectionOptionsFrom(topicId);
-    if (options.length === 0) return;
-    setSectionTarget({ topicId, options: options.slice(0, 1) });
+    if (!topicOptions.some((option) => option.id === topicId)) return;
+    setBuildSelection([topicId]);
   };
 
-  /** The optional path: choose a run of following topics to combine. */
-  const handleCombine = (topicId: string) => {
+  /** Opens the same picker without changing an existing single-topic set. */
+  const handleChooseTopics = (topicId: string) => {
     if (!validId) return;
-    const options = sectionOptionsFrom(topicId);
-    if (options.length <= 1) return;
-    setSectionTarget({ topicId, options });
+    setBuildSelection([topicId]);
   };
 
   const toggleTopic = async (topicId: string, done: boolean) => {
     if (!validId) return;
     setTickingTopic(topicId);
     try {
-      await setTopicDone({
-        courseId: courseId as Id<"courses">,
-        topicId,
-        done,
-      });
+      await retryTransient(
+        () =>
+          setTopicDone({
+            courseId: courseId as Id<"courses">,
+            topicId,
+            done,
+          }),
+        { attempts: 2, delayMs: 500 },
+      );
     } catch (error) {
       notifyError(error, "Could not update that topic.");
     } finally {
@@ -551,7 +544,10 @@ export default function Course() {
 
     return (
       <>
-        <div className="chrome-plate relative z-20 flex flex-wrap items-center gap-3 overflow-visible rounded-[1.6rem] px-4 py-4">
+        <div
+          className="chrome-plate relative z-20 flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4"
+          style={{ overflow: "visible" }}
+        >
           <Link
             to="/courses"
             className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
@@ -591,41 +587,6 @@ export default function Course() {
                 </Button>
               )}
 
-            {/* Rebuilding and removing are course-level actions, so they stay
-                visible instead of hiding behind a menu. */}
-            {currentSection === "pathway" && course.status === "ready" && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handleRetry()}
-                disabled={retrying}
-                aria-label="Rebuild pathway"
-                className="h-9 rounded-full border-border bg-card px-3 text-[0.8rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
-              >
-                <RotateCcw
-                  className={cn("size-3.5", retrying && "animate-spin")}
-                  aria-hidden
-                />
-                <span className="hidden sm:inline">
-                  {retrying ? "Rebuilding…" : "Rebuild pathway"}
-                </span>
-              </Button>
-            )}
-            {currentSection === "pathway" && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setConfirmingDelete(true)}
-                disabled={deleting}
-                aria-label="Remove course"
-                className="h-9 rounded-full border-destructive/30 bg-card px-3 text-[0.8rem] font-semibold text-destructive shadow-none hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="size-3.5" aria-hidden />
-                <span className="hidden sm:inline">Remove course</span>
-              </Button>
-            )}
-
-            {/* Everything else needs a home, but the tutor is the only one. */}
             {pathway && (
               <details className="relative">
                 <summary
@@ -645,6 +606,35 @@ export default function Course() {
                     className="block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel"
                   >
                     Ask the tutor
+                  </button>
+                  <button
+                    type="button"
+                    disabled={retrying}
+                    onClick={(event) => {
+                      const menu = event.currentTarget.closest("details");
+                      if (menu instanceof HTMLDetailsElement) menu.open = false;
+                      void handleRetry();
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel disabled:opacity-40"
+                  >
+                    <RotateCcw
+                      className={cn("size-3.5", retrying && "animate-spin")}
+                      aria-hidden
+                    />
+                    {retrying ? "Rebuilding…" : "Rebuild pathway"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={(event) => {
+                      const menu = event.currentTarget.closest("details");
+                      if (menu instanceof HTMLDetailsElement) menu.open = false;
+                      setConfirmingDelete(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-destructive hover:bg-destructive/10 disabled:opacity-40"
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                    Remove course
                   </button>
                 </div>
               </details>
@@ -816,6 +806,20 @@ export default function Course() {
                     not teach. The rest of the pathway stays as it is.
                   </p>
                 </div>
+                {topicOptions.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setBuildSelection(topicOptions.map((option) => option.id))
+                    }
+                    disabled={busyTopic !== null}
+                    className="h-9 rounded-full border-border bg-white px-4 text-[0.78rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                  >
+                    <Layers3 className="size-3.5" aria-hidden />
+                    Build from topics
+                  </Button>
+                )}
               </div>
 
               {pathway.units.length === 0 ? (
@@ -956,7 +960,6 @@ export default function Course() {
                               {unit.topics.map((topic) => {
                                 const isDone = done.has(topic.id);
                                 const set = setsByTopic.get(topic.id);
-                                const combineCount = sectionOptionsFrom(topic.id).length;
                                 return (
                                   <div
                                     key={topic.id}
@@ -1063,16 +1066,16 @@ export default function Course() {
                                         ) : null}
                                         {set ? "Open set" : "Study this topic"}
                                       </Button>
-                                      {combineCount > 1 && (
+                                      {topicOptions.length > 1 && (
                                         <button
                                           type="button"
-                                          onClick={() => handleCombine(topic.id)}
+                                          onClick={() => handleChooseTopics(topic.id)}
                                           disabled={busyTopic !== null}
-                                          title={`Combine this topic with up to ${combineCount - 1} following topics`}
+                                          title="Choose any topics for one set"
                                           className="inline-flex h-8 items-center gap-1 rounded-full border border-border bg-white px-2.5 text-[0.72rem] font-semibold text-brand-ink/65 transition-colors hover:bg-brand-panel hover:text-brand-ink disabled:opacity-50"
                                         >
                                           <Layers3 className="size-3" aria-hidden />
-                                          Combine
+                                          Choose topics
                                         </button>
                                       )}
                                       {/* Every topic has notes: published ones
@@ -1472,18 +1475,16 @@ export default function Course() {
         )}
 
         <PathwaySectionsDialog
-          // Keyed per topic so a new topic starts the section count at one.
-          key={sectionTarget?.topicId ?? "closed"}
-          open={sectionTarget !== null}
+          // Keyed per opening so the checklist starts from the chosen topics.
+          key={buildSelection?.join("|") ?? "closed"}
+          open={buildSelection !== null}
           onOpenChange={(open) => {
-            if (!open) setSectionTarget(null);
+            if (!open) setBuildSelection(null);
           }}
-          options={sectionTarget?.options ?? []}
+          options={topicOptions}
+          initialSelectedIds={buildSelection ?? []}
           busy={busyTopic !== null}
-          onBuild={(sections, counts) => {
-            if (!sectionTarget) return;
-            void buildSet(sectionTarget.topicId, sections, counts);
-          }}
+          onBuild={(topicIds, counts) => void buildSet(topicIds, counts)}
         />
 
         <AlertDialog

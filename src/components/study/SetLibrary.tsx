@@ -126,7 +126,14 @@ function SetRow({ set }: { set: SetSummary }) {
  * a question and opens the material it is about. Rows open the set itself; the
  * set's own "Ask the tutor" button starts a scoped conversation.
  */
-export function SetLibrary({ onCreate }: { onCreate: () => void }) {
+export function SetLibrary({
+  onCreate,
+  hideWhenEmpty = false,
+}: {
+  onCreate: () => void;
+  /** On Home the empty state would repeat the page's primary action. */
+  hideWhenEmpty?: boolean;
+}) {
   const sets = useQuery(api.studySets.listMine);
   const [search, setSearch] = useState("");
 
@@ -139,6 +146,8 @@ export function SetLibrary({ onCreate }: { onCreate: () => void }) {
       ),
     );
   }, [sets, search]);
+
+  if (hideWhenEmpty && sets?.length === 0) return null;
 
   return (
     <section
