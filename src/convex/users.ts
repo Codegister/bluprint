@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { deleteStudySetContent } from "./studySets";
+import { forgetStudySetReuse } from "./lib/studySetReuse";
 
 /**
  * Get the current signed in user. Returns null if the user is not signed in.
@@ -81,6 +82,7 @@ export const deleteAccount = mutation({
         .collect();
       for (const row of tutorRows) await ctx.db.delete(row._id);
       for (const imageId of set.sourceImageIds) await deleteImage(imageId);
+      await forgetStudySetReuse(ctx, set._id);
       await ctx.db.delete(set._id);
     }
 

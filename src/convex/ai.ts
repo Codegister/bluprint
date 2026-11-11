@@ -2305,7 +2305,12 @@ async function runTutorBuild(
 
   const plan: TutorBuildPlan = decision;
 
-  let result: { setId: Id<"studySets">; created: boolean; sections: number };
+  let result: {
+    setId: Id<"studySets">;
+    created: boolean;
+    sections: number;
+    cached: boolean;
+  };
   try {
     result = await ctx.runMutation(internal.courses.createTopicSetForTutor, {
       userId,
@@ -2327,7 +2332,7 @@ async function runTutorBuild(
   }
 
   let started = false;
-  if (result.created) {
+  if (result.created && !result.cached) {
     try {
       // Start the long generation now. Waiting for the student to open the set
       // would make "build me a quiz" only a link, not an action.
@@ -2345,17 +2350,21 @@ async function runTutorBuild(
 
   return {
     builtSetId: result.setId,
-    note: result.created
-      ? started
-        ? `A study set has already been created and its background build has started for ${plan.subject}: ${plan.label}. ` +
-          "In your first sentence, say you have built it and started it. Do not ask for confirmation. " +
-          "Say it is building now, not ready, and do not claim the cards or questions are finished. " +
-          "Then answer any remaining part of their request with a short explanation or one practice question."
-        : `A study set has been created for ${plan.subject}: ${plan.label}, but its background build could not be queued. ` +
-          "Tell them the set is saved and they can open it to start the build. Do not claim it is already building."
-      : `A study set covering ${plan.subject}: ${plan.label} already exists. ` +
-        "In your first sentence, tell them it is already in their library. Do not claim a new build was started. " +
-        "Then answer any remaining part of their request.",
+    note: result.cached
+      ? `A study set for ${plan.subject}: ${plan.label} has been created and is ready to study now. ` +
+        "It reused a finished build, so no generation is running. In your first sentence, say it is ready, not building. " +
+        "Do not ask for confirmation or claim anything is still generating. Then answer any remaining part of their request."
+      : result.created
+        ? started
+          ? `A study set has already been created and its background build has started for ${plan.subject}: ${plan.label}. ` +
+            "In your first sentence, say you have built it and started it. Do not ask for confirmation. " +
+            "Say it is building now, not ready, and do not claim the cards or questions are finished. " +
+            "Then answer any remaining part of their request with a short explanation or one practice question."
+          : `A study set has been created for ${plan.subject}: ${plan.label}, but its background build could not be queued. ` +
+            "Tell them the set is saved and they can open it to start the build. Do not claim it is already building."
+        : `A study set covering ${plan.subject}: ${plan.label} already exists. ` +
+          "In your first sentence, tell them it is already in their library. Do not claim a new build was started. " +
+          "Then answer any remaining part of their request.",
   };
 }
 

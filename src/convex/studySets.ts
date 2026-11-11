@@ -52,6 +52,10 @@ import {
 import { shortfallFor, shortfallSentence } from "./lib/buildDefaults";
 import { cleanGeneratedText } from "./lib/register";
 import { isSyllabusOutline } from "./lib/syllabusOutline";
+import {
+  forgetStudySetReuse,
+  rememberStudySetForReuse,
+} from "./lib/studySetReuse";
 
 const sourceType = v.union(
   v.literal("text"),
@@ -961,6 +965,7 @@ export const remove = mutation({
     for (const imageId of set.sourceImageIds) {
       await ctx.storage.delete(imageId);
     }
+    await forgetStudySetReuse(ctx, setId);
     await ctx.db.delete(setId);
   },
 });
@@ -1682,6 +1687,17 @@ export const completeGeneration = internalMutation({
           }),
       updatedAt: now,
     });
+    // A finished course-topic set can seed another student's private copy.
+    // Caching is best-effort: a cache problem must not undo a set that is
+    // already saved and ready.
+    if (final !== false) {
+      try {
+        await rememberStudySetForReuse(ctx, setId);
+      } catch (error) {
+        console.error("Could not cache this study set for reuse", setId, error);
+      }
+    }
+
     // The action's failure message uses these, not the generated lengths: a
     // card or question dropped by the filters above must not be promised to the
     // student as saved.

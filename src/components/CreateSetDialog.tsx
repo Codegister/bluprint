@@ -341,9 +341,11 @@ export function CreateSetDialog({
           targetExamCount: examCount,
         });
         toast.success(
-          result.created
-            ? "Set created from your course. Bluprint is compiling it now."
-            : "Opening the set you already have for that selection.",
+          result.cached
+            ? "Reused a finished build for that selection. Your copy is ready."
+            : result.created
+              ? "Set created from your course. Bluprint is compiling it now."
+              : "Opening the set you already have for that selection.",
         );
         reset();
         onOpenChange(false);

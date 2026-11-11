@@ -20,6 +20,7 @@ import {
 } from "./lib/catalogue";
 import { literatureChoicesFor } from "./lib/literatureChoices";
 import { consumeBuildAllowance } from "./buildUsage";
+import { copyCachedStudySet, studySetReuseKey } from "./lib/studySetReuse";
 import { requireUserId } from "./lib/requireUser";
 import { SYLLABUS_SCOPE_HEADER } from "./lib/syllabusOutline";
 import { requireOwner, requireVerifiedUser } from "./lib/authorization";
@@ -768,7 +769,14 @@ async function createTopicSetForUser(
         covered.includes(topicId)
       );
     });
-    if (match) return { setId: match._id, created: false, sections: chosen.length };
+    if (match) {
+      return {
+        setId: match._id,
+        created: false,
+        sections: chosen.length,
+        cached: false,
+      };
+    }
 
     const notes = buildTopicNotes(course, chosen);
     if (!withinNoteLimit(notes)) {
@@ -776,12 +784,6 @@ async function createTopicSetForUser(
         "That selection is too large for one set. Choose fewer topics and try again.",
       );
     }
-
-    // A set built from a course topic is a full AI build, so it spends the same
-    // allowance as pasting notes. Without this, the course path was an
-    // unlimited way to start builds while the paste dialog was rate-limited.
-    await requireVerifiedUser(ctx, userId);
-    await consumeBuildAllowance(ctx, userId, "set");
 
     const first = chosen[0]!.topic;
     // One section keeps the topic's own name; a longer set is named after the
@@ -807,33 +809,84 @@ async function createTopicSetForUser(
       BUILD_DEFAULTS.exam * chosen.length,
     );
 
+    const courseLabel = safeCourseLabel(course.subject);
+    const boardLabel = safeCourseLabel(course.examBoard);
+    const levelLabel = safeCourseLabel(course.level);
+    const sourceLabel =
+      chosen.length === 1
+        ? "Course pathway"
+        : `Course pathway · ${chosen.length} topics`;
+    // The specification statements this set is built from, kept with the set
+    // so cards and questions can be tagged to them and coverage reported
+    // later, even if the pathway is rebuilt.
+    const specPoints = chosen
+      .flatMap(({ topic }) =>
+        topic.keyPoints.map((text, index) => ({
+          id: `${topic.id}:${index}`,
+          text: `${topic.specReference ? `${topic.specReference} ` : ""}${text}`,
+        })),
+      )
+      .slice(0, 60);
+    const cacheKey = studySetReuseKey({
+      notes,
+      course: courseLabel,
+      examBoard: boardLabel,
+      level: levelLabel,
+      topicIds: chosenIds,
+      specPoints,
+      targetCardCount: targetCards,
+      targetQuizCount: targetQuiz,
+      targetExamCount: targetExam,
+    });
+
+    // A set built from a course topic is a full build, so it spends the same
+    // allowance as pasting notes even when the content comes from the cache.
+    // Without this, the course path was an unlimited way to start builds while
+    // the paste dialog was rate-limited.
+    await requireVerifiedUser(ctx, userId);
+    await consumeBuildAllowance(ctx, userId, "set");
+
     const now = Date.now();
+    const reusedSetId = await copyCachedStudySet(ctx, {
+      cacheKey,
+      userId,
+      courseId,
+      title: title || "Revision topic",
+      notes,
+      sourceLabel,
+      course: courseLabel,
+      examBoard: boardLabel,
+      level: levelLabel,
+      topicId: first.id,
+      topicIds: chosenIds,
+      specPoints,
+      targetCardCount: targetCards,
+      targetQuizCount: targetQuiz,
+      targetExamCount: targetExam,
+    });
+    if (reusedSetId) {
+      await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
+      return {
+        setId: reusedSetId,
+        created: true,
+        sections: chosen.length,
+        cached: true,
+      };
+    }
+
     const setId = await ctx.db.insert("studySets", {
       userId,
       title: title || "Revision topic",
       notes,
       sourceType: "text",
-      sourceLabel:
-        chosen.length === 1
-          ? "Course pathway"
-          : `Course pathway · ${chosen.length} topics`,
-      course: safeCourseLabel(course.subject),
-      examBoard: safeCourseLabel(course.examBoard),
-      level: safeCourseLabel(course.level),
+      sourceLabel,
+      course: courseLabel,
+      examBoard: boardLabel,
+      level: levelLabel,
       courseId,
       topicId: first.id,
       topicIds: chosenIds,
-      // The specification statements this set is built from, kept with the set
-      // so cards and questions can be tagged to them and coverage reported
-      // later, even if the pathway is rebuilt.
-      specPoints: chosen
-        .flatMap(({ topic }) =>
-          topic.keyPoints.map((text, index) => ({
-            id: `${topic.id}:${index}`,
-            text: `${topic.specReference ? `${topic.specReference} ` : ""}${text}`,
-          })),
-        )
-        .slice(0, 60),
+      specPoints,
       sourceImageIds: [],
       status: "queued",
       progress: "Queued",
@@ -848,7 +901,7 @@ async function createTopicSetForUser(
     });
 
     await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
-    return { setId, created: true, sections: chosen.length };
+    return { setId, created: true, sections: chosen.length, cached: false };
 }
 
 /**

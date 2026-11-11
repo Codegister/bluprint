@@ -168,6 +168,21 @@ const schema = defineSchema(
       .index("by_user_updated", ["userId", "updatedAt"])
       .index("by_course", ["courseId", "updatedAt"]),
 
+    // A finished course-topic set that can seed another student's private copy.
+    // Only sets built from a pathway brief are eligible: uploaded notes, photos
+    // and video frames never enter this table. Cache keys cover the exact brief,
+    // topic selection and requested lengths, and copied sets reset all personal
+    // review, quiz and exam state.
+    studySetCache: defineTable({
+      cacheKey: v.string(),
+      sourceSetId: v.id("studySets"),
+      createdAt: v.number(),
+      lastUsedAt: v.number(),
+      uses: v.number(),
+    })
+      .index("by_key", ["cacheKey"])
+      .index("by_source", ["sourceSetId"]),
+
     // A course pathway is the second way into Bluprint: instead of uploading
     // notes, a student picks their qualification and the published course
     // structure is mapped as units and topics. Topics are ordered, tagged with
