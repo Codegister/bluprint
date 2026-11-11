@@ -157,6 +157,9 @@ const schema = defineSchema(
       knownCount: v.number(),
       updatedAt: v.number(),
       processingStartedAt: v.optional(v.number()),
+      // Set while a reused cached set is being reviewed in the background, so
+      // duplicate scheduler entries cannot append the same review twice.
+      reuseReviewStartedAt: v.optional(v.number()),
       lastStudiedAt: v.optional(v.number()),
       lastQuizScore: v.optional(v.number()),
       lastQuizTotal: v.optional(v.number()),

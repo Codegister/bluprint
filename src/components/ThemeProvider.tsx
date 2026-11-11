@@ -50,10 +50,6 @@ function applyTheme(theme: Theme) {
   const root = document.documentElement;
   root.classList.toggle("dark", theme === "dark");
   root.style.colorScheme = theme;
-  // The browser's own chrome (address bar on a phone) should match the sheet.
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute("content", theme === "dark" ? "#0b1016" : "#eef2f6");
 }
 
 type ThemeContextValue = {

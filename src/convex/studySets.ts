@@ -1399,6 +1399,199 @@ export const claimContinuation = internalMutation({
 });
 
 /**
+ * Claims one background review of a reused set. A duplicate scheduler entry
+ * cannot append the same review twice; after a crash the next reuse creates a
+ * fresh copy and can review that instead.
+ */
+export const claimReuseReview = internalMutation({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const set = await ctx.db.get(setId);
+    if (
+      !set ||
+      set.status !== "ready" ||
+      set.sourceType !== "text" ||
+      set.courseId === undefined
+    ) {
+      return { claimed: false as const };
+    }
+    const now = Date.now();
+    if (
+      set.reuseReviewStartedAt !== undefined &&
+      now - set.reuseReviewStartedAt < 10 * 60 * 1000
+    ) {
+      return { claimed: false as const };
+    }
+    await ctx.db.patch(setId, { reuseReviewStartedAt: now });
+    return { claimed: true as const };
+  },
+});
+
+/**
+ * Appends the additions produced by an AI review. Existing cards, quiz rows and
+ * exam rows are left untouched, so a student who has already reviewed a card or
+ * marked an answer keeps that progress while the set grows around it.
+ */
+export const appendReviewedContent = internalMutation({
+  args: {
+    setId: v.id("studySets"),
+    userId: v.id("users"),
+    cards: v.array(cardInput),
+    quiz: v.array(quizInput),
+    exams: v.array(examInput),
+  },
+  handler: async (ctx, { setId, userId, cards, quiz, exams }) => {
+    const set = await ctx.db.get(setId);
+    if (
+      !set ||
+      set.userId !== userId ||
+      set.status !== "ready" ||
+      set.sourceType !== "text" ||
+      set.courseId === undefined
+    ) {
+      return { appended: false, cards: 0, quiz: 0, exams: 0 };
+    }
+
+    const cardsToAdd = cards.slice(
+      0,
+      Math.max(0, BUILD_MAX - set.cardCount),
+    );
+    const quizToAdd = quiz.slice(
+      0,
+      Math.max(0, BUILD_MAX - set.quizCount),
+    );
+    const examsToAdd = exams.slice(
+      0,
+      Math.max(0, BUILD_MAX - set.examCount),
+    );
+    if (
+      cardsToAdd.length === 0 &&
+      quizToAdd.length === 0 &&
+      examsToAdd.length === 0
+    ) {
+      return { appended: false, cards: 0, quiz: 0, exams: 0 };
+    }
+
+    const now = Date.now();
+    const specPoints = set.specPoints ?? [];
+    const tag = (text: string): string | undefined =>
+      specPoints.length > 0
+        ? (matchSpecPoint(text, specPoints).id ?? undefined)
+        : undefined;
+
+    for (const [index, card] of cardsToAdd.entries()) {
+      await ctx.db.insert("flashcards", {
+        setId,
+        userId,
+        front: card.front,
+        back: card.back,
+        order: set.cardCount + index,
+        ...(card.beyondNotes !== undefined
+          ? { beyondNotes: card.beyondNotes }
+          : {}),
+        specRef: tag(`${card.front} ${card.back}`),
+        recallThreshold: 0.75,
+        recallUnits: deriveRecallUnits(card.back),
+        status: "new",
+        reviewCount: 0,
+        dueAt: now,
+        intervalDays: 0,
+        fsrsState: "new",
+        lapses: 0,
+        reps: 0,
+      });
+    }
+
+    for (const [index, question] of quizToAdd.entries()) {
+      await ctx.db.insert("quizQuestions", {
+        setId,
+        userId,
+        question: question.question,
+        options: question.options,
+        correctIndex: question.correctIndex,
+        explanation: question.explanation,
+        type: question.type,
+        answer: question.answer,
+        acceptedAnswers: question.acceptedAnswers,
+        beyondNotes: question.beyondNotes,
+        specRef: tag(
+          `${question.question} ${question.answer ?? ""} ${question.explanation}`,
+        ),
+        order: set.quizCount + index,
+        missCount: 0,
+        correctCount: 0,
+      });
+    }
+
+    for (const [index, question] of examsToAdd.entries()) {
+      await ctx.db.insert("examQuestions", {
+        setId,
+        userId,
+        question: question.question,
+        marks: question.marks,
+        modelAnswer: question.modelAnswer,
+        markingGuide: question.markingGuide,
+        beyondNotes: question.beyondNotes,
+        specRef: tag(`${question.question} ${question.modelAnswer}`),
+        criteria: question.criteria
+          ? alignCriteria(question.criteria)
+          : alignCriteria(toCriteria(question.markingGuide)),
+        order: set.examCount + index,
+      });
+    }
+
+    // Keep the summary's key points in step with the larger deck.
+    const allCards = await ctx.db
+      .query("flashcards")
+      .withIndex("by_set", (q) => q.eq("setId", setId))
+      .collect();
+    const keyPoints = keyPointsForCards(allCards);
+    const links =
+      specPoints.length > 0
+        ? linkKeyPointsToSpecs(keyPoints, specPoints)
+        : null;
+    const summary = set.summary;
+
+    await ctx.db.patch(setId, {
+      cardCount: set.cardCount + cardsToAdd.length,
+      quizCount: set.quizCount + quizToAdd.length,
+      examCount: set.examCount + examsToAdd.length,
+      ...(summary
+        ? {
+            summary: links
+              ? {
+                  ...summary,
+                  keyPoints:
+                    links.links.length > 0
+                      ? links.links.map((link) => link.text)
+                      : keyPoints,
+                  keyPointSpecs: links.links,
+                }
+              : { ...summary, keyPoints },
+          }
+        : {}),
+      updatedAt: now,
+    });
+
+    // The grown copy becomes the source for the next student, so improvements
+    // compound instead of being thrown away after one use. A cache problem must
+    // not roll back the review the student can already see.
+    try {
+      await rememberStudySetForReuse(ctx, setId);
+    } catch (error) {
+      console.error("Could not cache the reviewed study set", setId, error);
+    }
+
+    return {
+      appended: true,
+      cards: cardsToAdd.length,
+      quiz: quizToAdd.length,
+      exams: examsToAdd.length,
+    };
+  },
+});
+
+/**
  * Progress writes are no-ops once a set has been deleted mid-build.
  *
  * Deleting a set while it was still generating used to surface Convex's own

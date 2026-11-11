@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Counter, Meter, enter, reveal } from "@/components/motion/Motion";
+import { Counter, Meter, enter } from "@/components/motion/Motion";
 
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
@@ -61,14 +61,7 @@ import { toast } from "sonner";
  * gradient and each unit keeps one shade down the path; the variables flip
  * with the dark theme automatically.
  */
-const PATH_COLORS = [
-  { hex: "var(--chrome-8)", soft: "var(--chrome-2)", ring: "var(--chrome-4)" },
-  { hex: "var(--chrome-7)", soft: "var(--chrome-3)", ring: "var(--chrome-4)" },
-  { hex: "var(--chrome-8)", soft: "var(--chrome-2)", ring: "var(--chrome-5)" },
-  { hex: "var(--chrome-7)", soft: "var(--chrome-3)", ring: "var(--chrome-4)" },
-  { hex: "var(--chrome-8)", soft: "var(--chrome-2)", ring: "var(--chrome-5)" },
-  { hex: "var(--chrome-7)", soft: "var(--chrome-3)", ring: "var(--chrome-5)" },
-];
+
 
 /**
  * Five destinations: the pathway, the specification behind it, the detailed
@@ -95,57 +88,21 @@ const COURSE_SECTIONS: Array<{ value: CourseSection; label: string }> = [
 const SECTION_LINK_CLASS =
   "inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[0.8rem] font-semibold transition-colors";
 
-/** Octagon, so each node reads as a cut gem rather than a plain circle. */
-const NODE_SHAPE =
-  "polygon(30% 3%, 70% 3%, 97% 30%, 97% 70%, 70% 97%, 30% 97%, 3% 70%, 3% 30%)";
 
 function PathNode({
   percent,
-  color,
   index,
   total,
 }: {
   percent: number;
-  color: (typeof PATH_COLORS)[number];
   index: number;
   total: number;
 }) {
   return (
-    <span className="relative z-10 grid size-[74px] shrink-0 place-items-center sm:size-[86px]">
-      {/* Faint geometric echo under the node, like a stamped path marker. */}
-      <span
-        aria-hidden
-        className="absolute -bottom-1.5 left-1/2 h-4 w-16 -translate-x-1/2 opacity-60 blur-[2px]"
-        style={{ backgroundColor: color.soft }}
-      />
-      <span
-        aria-hidden
-        className="absolute inset-0 shadow-[0_10px_24px_-18px_rgba(22,24,31,0.6)]"
-        style={{
-          clipPath: NODE_SHAPE,
-          background: `conic-gradient(${color.hex} ${percent}%, #E8E9EF 0)`,
-        }}
-      />
-      <span
-        aria-hidden
-        className="absolute inset-[6px]"
-        style={{ clipPath: NODE_SHAPE, backgroundColor: color.soft }}
-      />
-      <span
-        aria-hidden
-        className="absolute inset-[10px] bg-white"
-        style={{ clipPath: NODE_SHAPE }}
-      />
-      <span className="relative text-center leading-none">
-        <span
-          className="block font-display text-[0.95rem] font-extrabold"
-          style={{ color: color.hex }}
-        >
-          {percent}%
-        </span>
-        <span className="mt-1 block text-[0.5rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Part {index + 1}/{total}
-        </span>
+    <span className="path-stamp relative z-10">
+      <span className="path-stamp-value">{percent}%</span>
+      <span className="path-stamp-label">
+        Part {index + 1}/{total}
       </span>
     </span>
   );
@@ -613,7 +570,7 @@ export default function Course() {
     return (
       <>
         <div
-          className="chrome-plate relative z-20 flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4"
+          className="course-cover chrome-plate relative z-20 flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4"
           style={{ overflow: "visible" }}
         >
           <Link
@@ -718,7 +675,7 @@ export default function Course() {
           <>
             {currentSection === "pathway" && (
             <motion.section
-              className="mt-6 grid overflow-hidden rounded-3xl border border-border bg-white sm:grid-cols-3"
+              className="course-facts mt-6 grid overflow-hidden rounded-3xl border border-border bg-white sm:grid-cols-3"
               {...enter(0.14, 12)}
             >
               <div className="px-5 py-4">
@@ -772,7 +729,7 @@ export default function Course() {
 
             <nav
               aria-label="Course sections"
-              className="mt-5 flex flex-wrap gap-1.5"
+              className="course-tabs mt-5 flex flex-wrap gap-1.5"
             >
               {COURSE_SECTIONS.map((item) => {
                 const active = currentSection === item.value;
@@ -800,10 +757,7 @@ export default function Course() {
             </nav>
 
             {currentSection === "pathway" && (<>
-                <motion.section
-                  className="mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
-                  {...reveal()}
-                >
+                <section className="course-assessment mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="font-display text-[1.1rem] font-bold text-brand-ink">
@@ -826,9 +780,8 @@ export default function Course() {
                   ? "Mapped directly from the board's published specification. Every reference above is the board's own."
                   : pathway.source === "savemyexams"
                     ? "This pathway follows Save My Exams' published revision notes. It is a notes-based route through the course, not the board's specification document."
-                    : "Built from the published course outline. Always check your exam board's current specification before relying on a topic list."}
-              </p>
-                </motion.section>
+                    : "Built from the published course outline. Always check your exam board's current specification before relying on a topic list."}                </p>
+                </section>
 
                 <LiteratureTextChoices
                   key={`${course.litShakespeare ?? ""}|${course.litNovel ?? ""}|${course.litModern ?? ""}|${course.poetryTheme ?? ""}`}
@@ -836,7 +789,7 @@ export default function Course() {
                 />
 
                 {nextTopic && (
-              <section className="mt-4 flex flex-col gap-4 rounded-[2rem] border border-border bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <section className="course-next mt-4 flex flex-col gap-4 rounded-[2rem] border border-border bg-white p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                 <div className="min-w-0">
                   <p className="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-chrome-7">
                     Next up · {nextTopic.unit.title}
@@ -865,7 +818,7 @@ export default function Course() {
 
             {/* The pathway is tall enough to exceed a phone screen, so it
                 animates on mount instead of waiting to be "in view". */}
-            <motion.section className="mt-6" {...enter(0.05, 10)}>
+            <motion.section className="course-pathway mt-6" {...enter(0.05, 10)}>
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
@@ -925,9 +878,12 @@ export default function Course() {
                       done.has(topic.id),
                     ).length;
                     const unitPercent = percent(completedInUnit, unit.topics.length);
-                    const baseColor =
-                      PATH_COLORS[unitIndex % PATH_COLORS.length] ?? PATH_COLORS[0]!;
-                    const color = unitPercent === 100 ? PATH_COLORS[0]! : baseColor;
+                    // One accent down the whole pathway. The old per-unit hues
+                    // made the path look like a legend instead of a route.
+                    const color = {
+                      hex: "var(--olive-deep)",
+                      soft: "var(--accent-wash)",
+                    };
                     const expanded =
                       openUnit === null
                         ? unitIndex === (nextTopic?.unitIndex ?? 0)
@@ -941,15 +897,11 @@ export default function Course() {
                         <div className="flex items-start gap-3 sm:gap-4">
                           <PathNode
                             percent={unitPercent}
-                            color={color}
                             index={unitIndex}
                             total={pathway.units.length}
                           />
 
-                          <div
-                            className="min-w-0 flex-1 rounded-3xl border bg-white p-3.5 shadow-[0_16px_34px_-30px_rgba(22,24,31,0.55)] sm:p-4"
-                            style={{ borderColor: "var(--chrome-line)" }}
-                          >
+                          <div className="course-unit min-w-0 flex-1 p-3.5 sm:p-4">
                             <div className="flex items-start gap-2">
                               <button
                                 type="button"
@@ -1029,7 +981,7 @@ export default function Course() {
 
                         {expanded && (
                           <div className="mt-2 pl-[86px] sm:pl-[102px]">
-                            <div className="rise-stagger overflow-hidden rounded-2xl border border-border bg-white">
+                            <div className="course-topics rise-stagger overflow-hidden rounded-2xl border border-border bg-white">
                               {unit.topics.map((topic) => {
                                 const isDone = done.has(topic.id);
                                 const set = setsByTopic.get(topic.id);
@@ -1633,5 +1585,9 @@ export default function Course() {
     );
   })();
 
-  return <AppShell>{body}</AppShell>;
+  return (
+    <AppShell>
+      <div className="course-screen">{body}</div>
+    </AppShell>
+  );
 }

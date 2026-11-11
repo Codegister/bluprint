@@ -59,6 +59,7 @@ function FirstRunOptions() {
 
   return (
     <AppShell>
+      <div className="today-screen">
       <PageHeader
         eyebrow="Today"
         title={hasCourses ? "No study sets yet" : "Nothing to revise yet"}
@@ -96,11 +97,11 @@ function FirstRunOptions() {
       </PageHeader>
 
       <motion.section
-        className="mt-4 rounded-[1.6rem] border border-border bg-card px-5 py-4"
+        className="today-how mt-4 rounded-[1.6rem] border border-border bg-card px-5 py-4"
         {...enter(0.1)}
       >
         <p className="mono-label text-chrome-7">How a session works</p>
-        <ol className="mt-3 grid gap-3 sm:grid-cols-3">
+        <ol className="today-steps mt-3 grid gap-3 sm:grid-cols-3">
           {[
             {
               step: "1",
@@ -121,7 +122,7 @@ function FirstRunOptions() {
               tone: "border-brand-mint/30 bg-brand-mint/15 text-brand-mint",
             },
           ].map((item) => (
-            <li key={item.step} className="flex gap-3">
+            <li key={item.step} className="today-step flex gap-3">
               <span
                 className={cn(
                   "grid size-7 shrink-0 place-items-center rounded-full border text-[0.72rem] font-bold",
@@ -142,6 +143,7 @@ function FirstRunOptions() {
           ))}
         </ol>
       </motion.section>
+      </div>
     </AppShell>
   );
 }
@@ -268,6 +270,7 @@ export default function Today() {
   if (sets === undefined || study === undefined) {
     return (
       <AppShell>
+        <div className="today-screen">
         <PageHeader
           eyebrow="Today"
           title="Today"
@@ -279,6 +282,7 @@ export default function Today() {
         <section className="mt-6">
           <SkeletonRows rows={3} withAvatar />
         </section>
+        </div>
       </AppShell>
     );
   }
@@ -291,6 +295,7 @@ export default function Today() {
 
   return (
     <AppShell>
+      <div className="today-screen">
       <PageHeader
         eyebrow="Today"
         title={
@@ -354,7 +359,7 @@ export default function Today() {
 
       {/* One compact progress strip; the sprint picker lives in the header. */}
       <motion.section
-        className="gizmo-card mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3"
+        className="today-progress gizmo-card mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3"
         aria-label="Today's progress"
         {...enter(0.08)}
       >
@@ -389,7 +394,7 @@ export default function Today() {
 
       {/* Sprint session */}
       {sprintLength && (
-        <section className="mt-6 scroll-mt-24" ref={sprintRef}>
+        <section className="today-sprint mt-6 scroll-mt-24" ref={sprintRef}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-[1.15rem] font-bold text-brand-ink">
               {sprintLength}-card sprint
@@ -448,8 +453,8 @@ export default function Today() {
       )}
 
       {/* Due queue + weak spots */}
-      <section className="mt-6 grid gap-3 lg:grid-cols-2">
-        <div className="gizmo-card overflow-hidden">
+      <section className="today-queues mt-6 grid gap-3 lg:grid-cols-2">
+        <div className="today-queue today-due gizmo-card overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-3.5">
             <h2 className="font-display text-[1rem] font-bold text-brand-ink">
               Due now
@@ -489,7 +494,7 @@ export default function Today() {
           )}
         </div>
 
-        <div className="gizmo-card overflow-hidden">
+        <div className="today-queue today-weak gizmo-card overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-3.5">
             <h2 className="font-display text-[1rem] font-bold text-brand-ink">
               Weak spots
@@ -530,7 +535,7 @@ export default function Today() {
 
       {/* Calibration: what you think you know against what the quiz says. */}
       {calibration?.sentence && (
-        <section className="mt-6 rounded-[1.6rem] border border-border bg-card p-5">
+        <section className="today-calibration mt-6 rounded-[1.6rem] border border-border bg-card p-5">
           <p className="mono-label text-chrome-7">Calibration</p>
           <p className="mt-1 text-[0.9rem] font-semibold leading-relaxed text-brand-ink">
             {calibration.sentence}
@@ -542,7 +547,7 @@ export default function Today() {
         </section>
       )}
 
-      <section className="mt-6 grid gap-3 lg:grid-cols-2">
+      <section className="today-data mt-6 grid gap-3 lg:grid-cols-2">
         <ShareProgressButton />
         <div className="rounded-2xl border border-border bg-card p-4">
           <p className="text-[0.84rem] font-semibold text-brand-ink">Your data</p>
@@ -561,6 +566,7 @@ export default function Today() {
         title="See what's planned next"
         hint="Your week, day by day, all the way to the exam"
       />
+      </div>
     </AppShell>
   );
 }

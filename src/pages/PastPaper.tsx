@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { SkeletonPastPaperPage } from "@/components/Skeletons";
-import { enter, reveal } from "@/components/motion/Motion";
+import { enter } from "@/components/motion/Motion";
 import { PastPaperPractice } from "@/components/study/PastPaperPractice";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -176,7 +176,7 @@ export default function PastPaper() {
 
     return (
       <>
-        <div className="chrome-plate flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4">
+        <div className="past-paper-cover chrome-plate flex flex-wrap items-center gap-3 rounded-[1.6rem] px-4 py-4">
           <Link
             to={course ? `/courses/${course._id}/papers` : "/tutor"}
             className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
@@ -215,10 +215,7 @@ export default function PastPaper() {
           )}
         </div>
 
-        <motion.section
-          className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-[#FFFBF2] px-4 py-3 text-[0.78rem] text-muted-foreground"
-          {...reveal(0.14, 10)}
-        >
+        <section className="past-paper-facts mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-border bg-[#FFFBF2] px-4 py-3 text-[0.78rem] text-muted-foreground">
           <span>
             <span className="font-semibold text-brand-ink">
               {paper.questionCount}
@@ -250,7 +247,7 @@ export default function PastPaper() {
               </span>
             </>
           )}
-        </motion.section>
+        </section>
 
         {outdated && (
           <section className="mt-4 rounded-[2rem] border border-border bg-[#FFFBF2] p-5 sm:p-6">
@@ -371,5 +368,9 @@ export default function PastPaper() {
     );
   })();
 
-  return <AppShell>{body}</AppShell>;
+  return (
+    <AppShell>
+      <div className="past-paper-screen">{body}</div>
+    </AppShell>
+  );
 }

@@ -489,10 +489,18 @@ export default function TutorPage() {
                 }
               />
             ) : (
-              <div className="gizmo-card flex flex-col items-center gap-3 px-5 py-8 text-center">
-                <Mascot size={64} float={false} />
-                <div className="max-w-sm">
-                  <p className="font-display text-[1.05rem] font-bold text-brand-ink">
+              <div className="tutor-empty">
+                <div className="tutor-empty-visual" aria-hidden>
+                  <span className="tutor-empty-sheet tutor-empty-sheet-back" />
+                  <span className="tutor-empty-sheet tutor-empty-sheet-front">
+                    <b />
+                    <i />
+                    <i />
+                    <em />
+                  </span>
+                </div>
+                <div className="tutor-empty-copy">
+                  <p className="tutor-empty-title">
                     The tutor needs something to read
                   </p>
                   {/* No button here: "Add material" is the page's one primary

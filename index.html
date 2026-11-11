@@ -6,20 +6,20 @@
   <link rel="icon" type="image/svg+xml" href="/logo.svg" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#eef2f6" />
-  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#0c0708" />
+  <meta name="color-scheme" content="dark light" />
   <meta
     name="description"
-    content="Bluprint turns your notes into summaries, flashcards, quizzes and AI-marked exam questions."
+    content="Turn your notes into flashcards, quiz questions and an exam answer marked against the scheme."
   />
   <!-- One canonical origin. Update this if the site moves host. -->
   <link rel="canonical" href="https://codegister.github.io/bluprint/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Bluprint" />
-  <meta property="og:title" content="Bluprint: notes in, revision out" />
+  <meta property="og:title" content="Bluprint: your notes come back marked" />
   <meta
     property="og:description"
-    content="Turn your notes into summaries, flashcards, quizzes and AI-marked exam questions."
+    content="Turn your notes into flashcards, quiz questions and an exam answer marked against the scheme."
   />
   <meta property="og:url" content="https://codegister.github.io/bluprint/" />
   <meta property="og:image" content="https://codegister.github.io/bluprint/logo.svg" />
@@ -28,18 +28,18 @@
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:image" content="https://codegister.github.io/bluprint/logo.svg" />
   <meta name="twitter:image:alt" content="Bluprint" />
-  <meta name="twitter:title" content="Bluprint: notes in, revision out" />
+  <meta name="twitter:title" content="Bluprint: your notes come back marked" />
   <meta
     name="twitter:description"
-    content="Turn your notes into summaries, flashcards, quizzes and AI-marked exam questions."
+    content="Turn your notes into flashcards, quiz questions and an exam answer marked against the scheme."
   />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
-  <title>Bluprint: notes in, revision out</title>
+  <title>Bluprint: your notes come back marked</title>
   <script src="%BASE_URL%theme-init.js"></script>
   <script type="module" src="/src/vly-runtime.ts"></script>
 </head>
@@ -61,40 +61,32 @@
           align-items: center;
           justify-content: center;
           gap: 16px;
-          background: #eef2f6;
-          font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-          color: #111;
-        }
-        html.dark .boot-loader {
-          background: #101216;
-          color: #f5f7fa;
+          background: #0c0708;
+          font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+          color: #f6f1e8;
         }
         .boot-loader__mark {
-          font-size: 1.35rem;
-          font-weight: 700;
-          letter-spacing: -0.02em;
+          font-family: "Fraunces", Georgia, serif;
+          font-size: 28.125px;
+          font-weight: 500;
+          letter-spacing: -0.04em;
         }
         .boot-loader__bar {
           width: 168px;
-          height: 4px;
-          border-radius: 999px;
+          height: 2px;
           overflow: hidden;
-          background: rgba(17, 17, 17, 0.1);
-        }
-        html.dark .boot-loader__bar {
-          background: rgba(245, 247, 250, 0.16);
+          background: #2b2320;
         }
         .boot-loader__bar span {
           display: block;
           width: 40%;
           height: 100%;
-          border-radius: 999px;
-          background: #7dd3fc;
+          background: #9eb07a;
           animation: boot-slide 1.15s ease-in-out infinite;
         }
         .boot-loader__text {
-          font-size: 0.8rem;
-          opacity: 0.6;
+          color: #b8afa5;
+          font-size: 18px;
         }
         @keyframes boot-slide {
           0% {
@@ -113,7 +105,7 @@
       </style>
       <p class="boot-loader__mark">Bluprint</p>
       <div class="boot-loader__bar"><span></span></div>
-      <p class="boot-loader__text">Loading your study space…</p>
+      <p class="boot-loader__text">Opening your study space…</p>
     </div>
   </div>
   <script type="module" src="/src/main.tsx"></script>

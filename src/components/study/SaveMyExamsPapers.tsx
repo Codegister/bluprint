@@ -1,4 +1,4 @@
-import { EASE, reveal } from "@/components/motion/Motion";
+import { EASE } from "@/components/motion/Motion";
 import {
   PaperViewerDialog,
   type ViewedPaper,
@@ -55,10 +55,7 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
   const years = [...new Set(papers.map((paper) => paper.year))];
 
   return (
-    <motion.section
-      className="mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6"
-      {...reveal()}
-    >
+    <section className="savemyexams-papers mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
@@ -217,6 +214,6 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
         paper={viewing}
         onClose={() => setViewing(null)}
       />
-    </motion.section>
+    </section>
   );
 }

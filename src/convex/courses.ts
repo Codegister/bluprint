@@ -866,6 +866,17 @@ async function createTopicSetForUser(
     });
     if (reusedSetId) {
       await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
+      // The student gets the saved copy immediately; the review runs in the
+      // background and appends new material without touching their progress.
+      try {
+        await ctx.scheduler.runAfter(0, internal.ai.reviewReusedStudySet, {
+          setId: reusedSetId,
+          userId,
+        });
+      } catch (reviewError) {
+        // A failed scheduler write must not throw away a ready copy.
+        console.error("Could not queue a review for the reused set", reviewError);
+      }
       return {
         setId: reusedSetId,
         created: true,

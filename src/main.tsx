@@ -1,7 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
-import { EASE } from "@/components/motion/Motion";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/use-auth";
 import { installResizeObserverGuard } from "@/lib/resizeGuard";
@@ -9,7 +8,7 @@ import { applyPageMeta } from "@/lib/pageMeta";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
-import { MotionConfig, motion } from "framer-motion";
+import { MotionConfig } from "framer-motion";
 import React, {
   StrictMode,
   useEffect,
@@ -26,6 +25,10 @@ import {
   useLocation,
 } from "react-router";
 import "./index.css";
+import "./redesign.css";
+import "./stage.css";
+import "./stage-study.css";
+import "./stage-pages.css";
 
 // Installed before React mounts so every observer in the app (including the
 // ones created by framer-motion and Radix) is covered. See lib/resizeGuard.ts.
@@ -214,29 +217,11 @@ function RouteSyncer() {
 }
 
 /**
- * Soft fade between screens. Opacity only, deliberately: transforming the
- * route wrapper would give the fixed sidebar a new containing block and make
- * it drift. The keyed child restarts the fade on each new path.
+ * Screen changes are immediate. Motion belongs to the work itself, not to
+ * navigation, so this is a stable wrapper rather than a fade.
  */
 function RouteFade({ children }: { children: React.ReactNode }) {
-  const { pathname } = useLocation();
-  // The timetable builder is one screen whose four steps live in the URL.
-  // Keying on the full path used to remount it on every step, discarding the
-  // subjects chosen so far; those steps keep the same key (and no fade).
-  const screenKey = pathname.startsWith("/timetable/new")
-    ? "/timetable/new"
-    : pathname;
-  return (
-    <motion.div
-      key={screenKey}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.32, ease: EASE }}
-      className="min-h-screen"
-    >
-      {children}
-    </motion.div>
-  );
+  return <div className="min-h-screen">{children}</div>;
 }
 
 createRoot(document.getElementById("root")!).render(

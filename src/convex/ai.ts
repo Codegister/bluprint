@@ -1298,6 +1298,7 @@ async function generateCards(
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
   syllabus = false,
+  reviewCards = "",
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
   const seen = new Set<string>();
@@ -1337,6 +1338,9 @@ async function generateCards(
             " " +
             (previous
               ? `These flashcards already exist; write different, non-overlapping ones. A reworded card is still a repeat:\n${previous}\n`
+              : "") +
+            (reviewCards
+              ? `<existing_flashcards>\n${reviewCards}\n</existing_flashcards>\nThis is an AI review of an existing deck. Do not repeat these cards. Add only new, high-value cards that improve coverage and close gaps. Return only the new cards.\n`
               : "") +
             `Return JSON exactly like: {"cards":[{"front":"...","back":"...","keyPoint":"..."}]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
@@ -1417,6 +1421,7 @@ async function generateQuiz(
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
   syllabus = false,
+  reviewQuiz = "",
 ): Promise<GeneratedQuiz[]> {
   let questions: GeneratedQuiz[] = [];
   const seen = new Set<string>();
@@ -1478,6 +1483,9 @@ async function generateQuiz(
             "For typed questions list every wording that should be marked correct in acceptedAnswers, including abbreviations and common synonyms. " +
             (previous
               ? `Do not repeat these existing questions. A reworded question with the same answer is still a repeat:\n${previous}\n`
+              : "") +
+            (reviewQuiz
+              ? `<existing_quiz>\n${reviewQuiz}\n</existing_quiz>\nThis is an AI review of an existing quiz. Do not repeat these questions. Add only new questions that improve coverage and do not test a fact already covered above.\n`
               : "") +
             'Return JSON exactly like: {"questions":[' +
             '{"question":"...","type":"mcq","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."},' +
@@ -1541,6 +1549,7 @@ async function generateExams(
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
   syllabus = false,
+  reviewExams = "",
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText(context);
   const exams: GeneratedExam[] = [];
@@ -1581,6 +1590,9 @@ async function generateExams(
             "Include a full-mark model answer that hits each bullet. " +
             (previous
               ? `Do not repeat these existing questions:\n${previous}\n`
+              : "") +
+            (reviewExams
+              ? `<existing_exam_questions>\n${reviewExams}\n</existing_exam_questions>\nThis is an AI review of an existing exam section. Do not repeat these questions. Add only new questions that improve coverage.\n`
               : "") +
             `Return JSON exactly like: {"questions":[{"question":"...","marks":6,"modelAnswer":"...","markingGuide":["1 mark: ..."]}]}${syllabus ? "" : BEYOND_NOTES_FIELD}`,
         },
@@ -3490,6 +3502,291 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
     return { continued: false, failed: true };
   }
 }
+
+const REUSE_REVIEW_CARDS = 3;
+const REUSE_REVIEW_QUIZ = 2;
+const REUSE_REVIEW_EXAMS = 1;
+const REUSE_REVIEW_MAX_DIGEST = 14_000;
+
+function reuseCardDigest(rows: Array<Doc<"flashcards">>): string {
+  return rows
+    .map((card) => `Q: ${card.front}\nA: ${card.back}`)
+    .join("\n\n")
+    .slice(0, REUSE_REVIEW_MAX_DIGEST);
+}
+
+function reuseQuizDigest(rows: Array<Doc<"quizQuestions">>): string {
+  return rows
+    .map((question) => {
+      const answer =
+        question.answer ?? question.options[question.correctIndex] ?? "";
+      return `Q: ${question.question}\nA: ${answer}`;
+    })
+    .join("\n\n")
+    .slice(0, REUSE_REVIEW_MAX_DIGEST);
+}
+
+function reuseExamDigest(rows: Array<Doc<"examQuestions">>): string {
+  return rows
+    .map((question) => `${question.question} (${question.marks} marks)`)
+    .join("\n")
+    .slice(0, REUSE_REVIEW_MAX_DIGEST);
+}
+
+function generatedQuizAnswer(question: GeneratedQuiz): string {
+  return question.answer ?? question.options[question.correctIndex] ?? "";
+}
+
+function uniqueReviewedCards(
+  generated: GeneratedCard[],
+  existing: Array<Doc<"flashcards">>,
+): GeneratedCard[] {
+  const accepted: GeneratedCard[] = [];
+  for (const card of generated) {
+    const candidate = { prompt: card.front, answer: card.back };
+    if (
+      existing.some((row) =>
+        isNearDuplicateStudyItem(
+          { prompt: row.front, answer: row.back },
+          candidate,
+        ),
+      ) ||
+      accepted.some((row) =>
+        isNearDuplicateStudyItem(
+          { prompt: row.front, answer: row.back },
+          candidate,
+        ),
+      )
+    ) {
+      continue;
+    }
+    accepted.push(card);
+  }
+  return accepted;
+}
+
+function uniqueReviewedQuiz(
+  generated: GeneratedQuiz[],
+  existing: Array<Doc<"quizQuestions">>,
+): GeneratedQuiz[] {
+  const accepted: GeneratedQuiz[] = [];
+  for (const question of generated) {
+    const candidate = {
+      prompt: question.question,
+      answer: generatedQuizAnswer(question),
+    };
+    if (
+      existing.some((row) =>
+        isNearDuplicateStudyItem(
+          {
+            prompt: row.question,
+            answer: row.answer ?? row.options[row.correctIndex] ?? "",
+          },
+          candidate,
+        ),
+      ) ||
+      accepted.some((row) =>
+        isNearDuplicateStudyItem(
+          {
+            prompt: row.question,
+            answer: generatedQuizAnswer(row),
+          },
+          candidate,
+        ),
+      )
+    ) {
+      continue;
+    }
+    accepted.push(question);
+  }
+  return accepted;
+}
+
+function uniqueReviewedExams(
+  generated: GeneratedExam[],
+  existing: Array<Doc<"examQuestions">>,
+): GeneratedExam[] {
+  const accepted: GeneratedExam[] = [];
+  for (const question of generated) {
+    const candidate = { prompt: question.question, answer: question.modelAnswer };
+    if (
+      existing.some((row) =>
+        isNearDuplicateStudyItem(
+          { prompt: row.question, answer: row.modelAnswer },
+          candidate,
+        ),
+      ) ||
+      accepted.some((row) =>
+        isNearDuplicateStudyItem(
+          { prompt: row.question, answer: row.modelAnswer },
+          candidate,
+        ),
+      )
+    ) {
+      continue;
+    }
+    accepted.push(question);
+  }
+  return accepted;
+}
+
+/**
+ * Reviews a reused cached set and appends a few new items. It never replaces
+ * existing rows, so the student's review history, quiz answers and marked exams
+ * stay intact. If this action is interrupted the copy still works; the next
+ * reuse starts a fresh review.
+ */
+export const reviewReusedStudySet = internalAction({
+  args: { setId: v.id("studySets"), userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const snapshot = await ctx.runQuery(
+      internal.studySets.getBuildSnapshot,
+      { setId: args.setId },
+    );
+    if (
+      !snapshot ||
+      snapshot.set.userId !== args.userId ||
+      snapshot.set.status !== "ready" ||
+      snapshot.set.sourceType !== "text" ||
+      snapshot.set.courseId === undefined
+    ) {
+      return { reviewed: false };
+    }
+
+    const set = snapshot.set;
+    const availableCards = Math.min(
+      REUSE_REVIEW_CARDS,
+      Math.max(0, BUILD_MAX - set.cardCount),
+    );
+    const availableQuiz = Math.min(
+      REUSE_REVIEW_QUIZ,
+      Math.max(0, BUILD_MAX - set.quizCount),
+    );
+    const availableExams = Math.min(
+      REUSE_REVIEW_EXAMS,
+      Math.max(0, BUILD_MAX - set.examCount),
+    );
+    if (availableCards + availableQuiz + availableExams === 0) {
+      return { reviewed: false };
+    }
+
+    const claim = await ctx.runMutation(
+      internal.studySets.claimReuseReview,
+      { setId: args.setId },
+    );
+    if (!claim.claimed) return { reviewed: false };
+
+    const plan = planForSet(set);
+    const deadline = Date.now() + 4 * 60 * 1000;
+    let newCards: GeneratedCard[] = [];
+    let newQuiz: GeneratedQuiz[] = [];
+    let newExams: GeneratedExam[] = [];
+
+    try {
+      const apiKeys = resolveNvidiaKeys();
+
+      if (availableCards > 0) {
+        try {
+          const generated = await generateCards(
+            apiKeys,
+            plan.notes,
+            availableCards,
+            deadline,
+            undefined,
+            plan.syllabus,
+            reuseCardDigest(snapshot.cards),
+          );
+          newCards = uniqueReviewedCards(generated, snapshot.cards).slice(
+            0,
+            availableCards,
+          );
+        } catch (error) {
+          console.error("Reuse review could not add flashcards", args.setId, error);
+        }
+      }
+
+      if (availableQuiz > 0) {
+        try {
+          const cards = [
+            ...cardsForGeneration(snapshot.cards),
+            ...newCards,
+          ];
+          const generated = await generateQuiz(
+            apiKeys,
+            plan.notes,
+            cards,
+            availableQuiz,
+            deadline,
+            undefined,
+            plan.syllabus,
+            reuseQuizDigest(snapshot.quiz),
+          );
+          newQuiz = uniqueReviewedQuiz(generated, snapshot.quiz).slice(
+            0,
+            availableQuiz,
+          );
+        } catch (error) {
+          console.error("Reuse review could not add quiz questions", args.setId, error);
+        }
+      }
+
+      if (availableExams > 0) {
+        try {
+          const generated = await generateExams(
+            apiKeys,
+            plan.notes,
+            plan.context,
+            availableExams,
+            deadline,
+            undefined,
+            plan.syllabus,
+            reuseExamDigest(snapshot.exams),
+          );
+          newExams = uniqueReviewedExams(generated, snapshot.exams).slice(
+            0,
+            availableExams,
+          );
+        } catch (error) {
+          console.error("Reuse review could not add exam questions", args.setId, error);
+        }
+      }
+
+      if (newCards.length + newQuiz.length + newExams.length === 0) {
+        return { reviewed: false };
+      }
+
+      await ctx.runMutation(internal.studySets.appendReviewedContent, {
+        setId: args.setId,
+        userId: args.userId,
+        cards: toCardArgs(newCards),
+        quiz: newQuiz.map((question) => ({
+          question: question.question,
+          options: question.options,
+          correctIndex: question.correctIndex,
+          explanation: question.explanation,
+          ...(question.type !== undefined ? { type: question.type } : {}),
+          ...(question.answer !== undefined ? { answer: question.answer } : {}),
+          ...(question.acceptedAnswers !== undefined
+            ? { acceptedAnswers: question.acceptedAnswers }
+            : {}),
+          ...(question.beyondNotes !== undefined
+            ? { beyondNotes: question.beyondNotes }
+            : {}),
+        })),
+        exams: toExamArgs(newExams),
+      });
+      return {
+        reviewed: true,
+        cards: newCards.length,
+        quiz: newQuiz.length,
+        exams: newExams.length,
+      };
+    } catch (error) {
+      console.error("Reuse review failed", args.setId, error);
+      return { reviewed: false };
+    }
+  },
+});
 
 async function processStudySetForUser(
   ctx: ActionCtx,

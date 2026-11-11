@@ -7,13 +7,13 @@ export type PageMeta = {
 
 const SITE = "Bluprint";
 const DESCRIPTION =
-  "Turn your notes into a summary, flashcards, a quiz and exam practice marked against the mark scheme.";
+  "Turn your notes into flashcards, quiz questions and an exam answer marked against the scheme.";
 
 const PUBLIC: Record<string, PageMeta> = {
   "/": {
-    title: "Bluprint: notes in, revision out",
+    title: "Bluprint: your notes come back marked",
     description:
-      "Turn your notes into a summary, flashcards, a quiz and AI-marked exam questions.",
+      "Turn your notes into flashcards, quiz questions and an exam answer marked against the scheme.",
     noindex: false,
   },
   "/privacy": {

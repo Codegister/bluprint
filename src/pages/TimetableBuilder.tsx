@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { SkeletonBuilderPage } from "@/components/Skeletons";
-import { EASE, enter, reveal } from "@/components/motion/Motion";
+import { EASE, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
@@ -415,13 +415,16 @@ export default function TimetableBuilder() {
   if (courses === undefined) {
     return (
       <AppShell>
-        <SkeletonBuilderPage />
+        <div className="timetable-setup-screen">
+          <SkeletonBuilderPage />
+        </div>
       </AppShell>
     );
   }
 
   return (
     <AppShell>
+      <div className="timetable-setup-screen">
       <Link
         to="/timetable"
         className="text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
@@ -430,7 +433,7 @@ export default function TimetableBuilder() {
       </Link>
 
       <PageHeader
-        className="mt-4"
+        className="mt-4 timetable-setup-cover"
         eyebrow="Timetable setup"
         title="Build your revision plan"
         description="Choose your subjects, the time you have on school days and days off, then your first exam date. Every session links to its study set."
@@ -504,7 +507,6 @@ export default function TimetableBuilder() {
       {ready.length === 0 ? (
         <motion.section
           className="mt-6 rounded-[2rem] border border-dashed border-border bg-white p-6 sm:p-8"
-          {...reveal(0.12)}
         >
           <h2 className="font-display text-[1.15rem] font-bold text-brand-ink">
             No ready course pathways yet
@@ -1059,6 +1061,7 @@ export default function TimetableBuilder() {
           </div>
         </motion.div>
       )}
+      </div>
     </AppShell>
   );
 }

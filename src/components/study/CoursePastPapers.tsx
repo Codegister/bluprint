@@ -1,4 +1,4 @@
-import { EASE, Meter, reveal } from "@/components/motion/Motion";
+import { EASE, Meter } from "@/components/motion/Motion";
 import { SkeletonRows } from "@/components/Skeletons";
 import {
   AlertDialog,
@@ -134,10 +134,7 @@ export function CoursePastPapers({
   };
 
   return (
-    <motion.section
-      className="mt-4 rounded-[2rem] border border-border bg-white p-5 sm:p-6"
-      {...reveal()}
-    >
+    <section className="course-past-papers mt-4 rounded-[2rem] border border-border bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-[#8A5A12]">
@@ -388,6 +385,6 @@ export function CoursePastPapers({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.section>
+    </section>
   );
 }

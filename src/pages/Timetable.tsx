@@ -2,7 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { NextStep } from "@/components/NextStep";
 import { PageHeader } from "@/components/PageHeader";
 import { SkeletonTimetablePage } from "@/components/Skeletons";
-import { EASE, Meter, reveal } from "@/components/motion/Motion";
+import { EASE, Meter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -156,7 +156,7 @@ function DayChip({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: EASE, delay: index * 0.03 }}
       className={cn(
-        "group flex min-w-[86px] flex-1 flex-col items-start gap-1 rounded-2xl border px-3 py-2.5 text-left transition-colors",
+        "timetable-day group flex min-w-[86px] flex-1 flex-col items-start gap-1 rounded-2xl border px-3 py-2.5 text-left transition-colors",
         selected
           ? "border-brand-sky bg-brand-sky text-brand-cream"
           : "border-border bg-white text-brand-ink hover:border-brand-sky/30 hover:bg-brand-sky/10",
@@ -222,7 +222,7 @@ function SessionRow({
   return (
     <div
       className={cn(
-        "group relative flex gap-3 rounded-2xl border bg-white px-3 py-3 transition-colors sm:gap-4 sm:px-4",
+        "timetable-session group relative flex gap-3 rounded-2xl border bg-white px-3 py-3 transition-colors sm:gap-4 sm:px-4",
         done
           ? "border-border/70 bg-[#FAFAF7]"
           : "border-border hover:border-[#CFC7E8]",
@@ -328,7 +328,7 @@ function SessionRow({
  */
 function MealRow({ meal }: { meal: Meal }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-dashed border-[#EBD6AB] bg-[#FFFBF2] px-3 py-2 sm:gap-4 sm:px-4">
+    <div className="timetable-meal flex items-center gap-3 rounded-2xl border border-dashed border-[#EBD6AB] bg-[#FFFBF2] px-3 py-2 sm:gap-4 sm:px-4">
       <span className="w-[62px] shrink-0 text-[0.66rem] font-semibold tabular-nums leading-relaxed text-muted-foreground">
         <span className="block text-brand-ink/70">
           {formatTime24(meal.startMinutes)}
@@ -351,7 +351,7 @@ function MealRow({ meal }: { meal: Meal }) {
 /** Blocked-out time, shown inline with the day's work. */
 function BlockedRow({ period }: { period: Blocked }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-dashed border-border bg-[#F7F5EF] px-3 py-2.5">
+    <div className="timetable-blocked flex items-center gap-3 rounded-2xl border border-dashed border-border bg-[#F7F5EF] px-3 py-2.5">
       <span className="w-[62px] shrink-0 text-[0.66rem] font-semibold tabular-nums leading-relaxed text-muted-foreground">
         <span className="block text-brand-ink/70">
           {formatTime24(period.startMinutes)}
@@ -741,7 +741,9 @@ export default function Timetable() {
   if (plan === undefined || view === undefined) {
     return (
       <AppShell>
-        <SkeletonTimetablePage />
+        <div className="timetable-screen">
+          <SkeletonTimetablePage />
+        </div>
       </AppShell>
     );
   }
@@ -749,6 +751,7 @@ export default function Timetable() {
   if (plan === null || view === null) {
     return (
       <AppShell>
+        <div className="timetable-screen">
         <PageHeader
           eyebrow="Step 4 · Timetable"
           title="Your revision timetable"
@@ -764,8 +767,7 @@ export default function Timetable() {
         />
 
         <motion.section
-          className="mt-4 rounded-[1.6rem] border border-dashed border-border bg-card px-5 py-5"
-          {...reveal(0.14)}
+          className="timetable-empty mt-4 rounded-[1.6rem] border border-dashed border-border bg-card px-5 py-5"
         >
           <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
             No timetable yet
@@ -786,6 +788,7 @@ export default function Timetable() {
             if you have not already.
           </p>
         </motion.section>
+        </div>
       </AppShell>
     );
   }
@@ -809,6 +812,7 @@ export default function Timetable() {
 
   return (
     <AppShell>
+      <div className="timetable-screen">
       <PageHeader
         eyebrow={dayLabel}
         title={isToday ? "Today's revision" : formatLongDate(activeDate)}
@@ -853,8 +857,7 @@ export default function Timetable() {
       {/* One day at a time. The strip only chooses which day to generate and
           show; the week grid is gone. */}
       <motion.div
-        className="mt-5 flex gap-2 overflow-x-auto pb-1 no-scrollbar"
-        {...reveal(0.1)}
+        className="timetable-days mt-5 flex gap-2 overflow-x-auto pb-1 no-scrollbar"
       >
         {strip.map((date, index) => (
           <DayChip
@@ -876,8 +879,7 @@ export default function Timetable() {
 
       {view.missed > 0 && (
         <motion.div
-          className="mt-4 flex flex-col gap-1 rounded-2xl border border-[#F0DCB8] bg-[#FFF9EC] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-          {...reveal(0.12)}
+          className="timetable-missed mt-4 flex flex-col gap-1 rounded-2xl border border-[#F0DCB8] bg-[#FFF9EC] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
         >
           <p className="flex items-start gap-2 text-[0.8rem] leading-relaxed text-[#7A5410]">
             <Sparkles className="mt-0.5 size-3.5 shrink-0" />
@@ -893,15 +895,14 @@ export default function Timetable() {
       )}
 
       {dayError && (
-        <p className="mt-4 rounded-2xl bg-[#FFEEF0] px-4 py-3 text-[0.8rem] leading-relaxed text-[#B23A55]">
+        <p className="timetable-error mt-4 rounded-2xl bg-[#FFEEF0] px-4 py-3 text-[0.8rem] leading-relaxed text-[#B23A55]">
           {dayError}
         </p>
       )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="timetable-layout mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <motion.section
-          className="overflow-hidden rounded-[1.7rem] border border-border bg-white"
-          {...reveal(0.14)}
+          className="timetable-day-panel overflow-hidden rounded-[1.7rem] border border-border bg-white"
         >
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-[#FCFCFA] px-4 py-3 sm:px-5">
             <div>
@@ -997,7 +998,6 @@ export default function Timetable() {
                   item.kind === "session" ? (
                     <motion.div
                       key={item.session.id}
-                      {...reveal(0.02 + index * 0.02, 10)}
                     >
                       <SessionRow
                         session={item.session}
@@ -1014,14 +1014,12 @@ export default function Timetable() {
                   ) : item.kind === "meal" ? (
                     <motion.div
                       key={`meal-${item.meal.label}`}
-                      {...reveal(0.02 + index * 0.02, 10)}
                     >
                       <MealRow meal={item.meal} />
                     </motion.div>
                   ) : (
                     <motion.div
                       key={`blocked-${item.period.startMinutes}-${item.period.endMinutes}`}
-                      {...reveal(0.02 + index * 0.02, 10)}
                     >
                       <BlockedRow period={item.period} />
                     </motion.div>
@@ -1044,10 +1042,9 @@ export default function Timetable() {
           </div>
         </motion.section>
 
-        <div className="space-y-4">
+        <div className="timetable-side space-y-4">
           <motion.section
             className="rounded-[1.7rem] border border-border bg-white p-4"
-            {...reveal(0.18)}
           >
             <div className="flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 font-display text-[0.98rem] font-bold text-brand-ink">
@@ -1109,7 +1106,6 @@ export default function Timetable() {
 
           <motion.section
             className="rounded-[1.7rem] border border-border bg-[#FCFAF4] p-4"
-            {...reveal(0.22)}
           >
             <h2 className="flex items-center gap-2 font-display text-[0.98rem] font-bold text-brand-ink">
               <Clock3 className="size-3.5 text-brand-sky" />
@@ -1169,7 +1165,6 @@ export default function Timetable() {
 
           <motion.section
             className="rounded-[1.7rem] border border-dashed border-border bg-white p-4"
-            {...reveal(0.26)}
           >
             <h2 className="font-display text-[0.92rem] font-bold text-brand-ink">
               How the day works
@@ -1199,6 +1194,7 @@ export default function Timetable() {
         title="Start today's session"
         hint="Your plan's next step, in one short card sprint"
       />
+      </div>
     </AppShell>
   );
 }

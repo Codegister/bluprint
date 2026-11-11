@@ -273,6 +273,60 @@ describe("study set reuse", () => {
     expect(tables.studySets).toHaveLength(1);
   });
 
+  test("keeps a reviewed set reusable after its counts grow past the target", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    const cardTemplate = tables.flashcards[0]!;
+    for (let index = 2; index < 13; index += 1) {
+      tables.flashcards.push({
+        ...cardTemplate,
+        _id: `card:${index + 1}`,
+        order: index,
+        front: `Extra card ${index + 1}?`,
+        back: `Extra answer ${index + 1}.`,
+      });
+    }
+    const quizTemplate = tables.quizQuestions[0]!;
+    for (let index = 1; index < 7; index += 1) {
+      tables.quizQuestions.push({
+        ...quizTemplate,
+        _id: `quiz:${index + 1}`,
+        order: index,
+        question: `Extra quiz ${index + 1}?`,
+      });
+    }
+    const examTemplate = tables.examQuestions[0]!;
+    for (let index = 1; index < 4; index += 1) {
+      tables.examQuestions.push({
+        ...examTemplate,
+        _id: `exam:${index + 1}`,
+        order: index,
+        question: `Extra exam ${index + 1}?`,
+      });
+    }
+    source.cardCount = 13;
+    source.quizCount = 7;
+    source.examCount = 4;
+    const key = studySetReuseKeyForSet(source as any);
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: key,
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+    const { ctx } = fakeContext(tables);
+
+    const setId = await copyCachedStudySet(ctx, cacheArgs(key));
+
+    expect(setId).not.toBeNull();
+    const copy = tables.studySets.find((row) => row._id === setId)!;
+    expect(copy.cardCount).toBe(13);
+    expect(copy.quizCount).toBe(7);
+    expect(copy.examCount).toBe(4);
+  });
+
   test("remembers only completed course sets, never uploads", async () => {
     const tables = rowsForSource("set:source");
     const { ctx } = fakeContext(tables);

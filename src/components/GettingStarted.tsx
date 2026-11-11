@@ -130,26 +130,22 @@ export function GettingStarted({
   return (
     <motion.section
       aria-labelledby="getting-started-heading"
-      className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-border bg-card px-3.5 py-2.5"
+      className="setup-strip"
       {...enter(0.08, 10)}
     >
       <div className="flex items-center gap-2">
-        <p className="mono-label text-chrome-7">Setup</p>
+        <p className="mono-label setup-label">Setup</p>
         <span
-          className="text-[0.72rem] font-semibold tabular-nums text-muted-foreground"
+          className="setup-count"
           title={`${done} of ${steps.length} steps done`}
         >
           {done}/{steps.length}
         </span>
-        <span className="flex gap-1" aria-hidden>
+        <span className="setup-dots" aria-hidden>
           {steps.map((step) => (
             <span
               key={step.title}
-              className={
-                step.done
-                  ? "size-1.5 rounded-full bg-brand-mint"
-                  : "size-1.5 rounded-full bg-border"
-              }
+              className={step.done ? "setup-dot is-done" : "setup-dot"}
             />
           ))}
         </span>
@@ -158,13 +154,11 @@ export function GettingStarted({
       <div className="min-w-0 flex-1">
         <h2
           id="getting-started-heading"
-          className="text-[0.84rem] font-semibold leading-snug text-brand-ink"
+          className="setup-next"
         >
           Next: {next.title}
         </h2>
-        <p className="hidden truncate text-[0.72rem] leading-relaxed text-muted-foreground sm:block">
-          {next.body}
-        </p>
+        <p className="setup-body">{next.body}</p>
       </div>
 
       {next.action && (
@@ -178,7 +172,7 @@ export function GettingStarted({
         }}
         aria-label="Hide setup guide"
         title="Hide setup guide"
-        className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-brand-panel hover:text-brand-ink"
+        className="setup-dismiss"
       >
         <X className="size-3.5" aria-hidden />
       </button>

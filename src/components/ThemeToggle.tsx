@@ -28,15 +28,15 @@ export function ThemeToggle({
         aria-label={`Switch to ${next} mode`}
         title={`Switch to ${next} mode`}
         className={cn(
-          "group flex w-full items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[0.9rem] font-medium text-brand-ink transition-colors hover:bg-brand-panel",
+          "theme-toggle theme-toggle-labeled group flex w-full items-center gap-2.5 rounded-[0.7rem] px-2.5 py-2 text-left text-[0.9rem] font-medium text-brand-ink transition-colors hover:bg-brand-panel",
           className,
         )}
       >
         <span className="grid size-7 shrink-0 place-items-center rounded-[0.6rem] bg-brand-panel text-brand-ink ring-1 ring-border/70 transition-colors group-hover:bg-card">
           {dark ? (
-            <Moon className="size-[15px] text-brand-violet" aria-hidden />
+            <Moon className="size-[15px]" aria-hidden />
           ) : (
-            <Sun className="size-[15px] text-brand-peach" aria-hidden />
+            <Sun className="size-[15px]" aria-hidden />
           )}
         </span>
         {dark ? "Dark mode" : "Light mode"}
@@ -54,15 +54,15 @@ export function ThemeToggle({
       aria-label={`Switch to ${next} mode`}
       title={`Switch to ${next} mode`}
       className={cn(
-        "grid size-9 place-items-center rounded-full border border-border bg-card text-brand-ink transition-colors hover:bg-brand-panel",
+        "theme-toggle grid size-9 place-items-center rounded-[0.7rem] border border-border bg-card text-brand-ink transition-colors hover:bg-brand-panel",
         className,
       )}
     >
       {/* Icon-only buttons show the mode a click will switch to. */}
       {dark ? (
-        <Sun className="size-[17px] text-brand-peach" aria-hidden />
+        <Sun className="size-[17px]" aria-hidden />
       ) : (
-        <Moon className="size-[17px] text-brand-violet" aria-hidden />
+        <Moon className="size-[17px]" aria-hidden />
       )}
     </button>
   );

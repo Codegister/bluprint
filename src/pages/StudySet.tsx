@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { Brand } from "@/components/Brand";
 import { Mascot } from "@/components/Mascot";
 import { NextStep } from "@/components/NextStep";
 import { SkeletonStudySetPage } from "@/components/Skeletons";
@@ -15,12 +16,14 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
 import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
+import { guestKeepWorkHref } from "@/lib/authRedirect";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
 import { retryTransient } from "@/lib/retry";
 import { useAiAvailability } from "@/lib/useAiAvailability";
 import { qualificationLabel } from "@/lib/examBoards";
 import { percent, plural, relativeDate, sourceLabel, timeUntil } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
@@ -90,14 +93,14 @@ function SetTitle({ setId, title }: { setId: Id<"studySets">; title: string }) {
             setEditing(false);
           }
         }}
-        className="w-full rounded-xl border border-chrome-5 bg-white px-2 py-1 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink outline-none focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/20 sm:text-[2rem]"
+        className="set-title-input w-full rounded-xl border border-chrome-5 bg-white px-2 py-1 font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink outline-none focus-visible:border-chrome-6 focus-visible:ring-2 focus-visible:ring-chrome-6/20 sm:text-[2rem]"
       />
     );
   }
 
   return (
     <motion.h1
-      className="min-w-0"
+      className="set-title min-w-0"
       {...enter(0.04)}
     >
       <button
@@ -106,7 +109,7 @@ function SetTitle({ setId, title }: { setId: Id<"studySets">; title: string }) {
         title="Rename this set"
         className="group flex max-w-full items-center gap-2 text-left"
       >
-        <span className="truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink transition-colors group-hover:text-chrome-7 sm:text-[2rem]">
+        <span className="set-title-text truncate font-display text-[1.6rem] font-bold leading-tight tracking-[-0.03em] text-brand-ink transition-colors group-hover:text-chrome-7 sm:text-[2rem]">
           {title}
         </span>
         <Pencil
@@ -619,7 +622,6 @@ function StudyActions({
       count: set.cardCount,
       note: `${mastery}% known · spaced review`,
       icon: Layers3,
-      tint: "bg-brand-sky/15 text-brand-sky",
     },
     {
       value: "quiz",
@@ -633,7 +635,6 @@ function StudyActions({
           ? `${quizAnswered}/${quizTotal} answered`
           : "Mixed format, with explanations",
       icon: CheckCircle2,
-      tint: "bg-[#E6F7EF] text-[#0B6B45]",
     },
     {
       value: "exam",
@@ -642,48 +643,39 @@ function StudyActions({
       count: set.examCount,
       note: "Written answers, marked with feedback",
       icon: PenLine,
-      tint: "bg-[#FFF1DE] text-[#8A5410]",
     },
   ] as const;
 
+  const ordered = [...items].sort(
+    (a, b) =>
+      Number(b.value === recommended) - Number(a.value === recommended),
+  );
+
   return (
-    <section className="grid gap-2.5 sm:grid-cols-3">
-      {items.map((item) => {
+    <section className="set-actions" aria-label="Study modes">
+      {ordered.map((item) => {
         const isRecommended = item.value === recommended;
         return (
-        <Link
-          key={item.label}
-          to={item.to}
-          className={cn(
-            "group flex items-center gap-3 rounded-2xl border bg-white p-4 transition-colors hover:border-brand-sky/40 hover:bg-brand-sky/5",
-            isRecommended
-              ? "border-brand-sky/40 ring-1 ring-brand-sky/20"
-              : "border-border",
-          )}
-        >
-          <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${item.tint}`}>
-            <item.icon className="size-[18px]" aria-hidden />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex flex-wrap items-baseline gap-1.5">
-              <span className="font-display text-[0.95rem] font-bold text-brand-ink">
-                {item.label}
-              </span>
-              <span className="text-[0.72rem] font-semibold tabular-nums text-muted-foreground">
-                {item.count}
-              </span>
-              {isRecommended && (
-                <span className="rounded-full bg-brand-sky px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-[0.06em] text-brand-cream">
-                  Start here
-                </span>
-              )}
+          <Link
+            key={item.label}
+            to={item.to}
+            className={cn("set-action", isRecommended && "is-recommended")}
+          >
+            <span className="set-action-icon">
+              <item.icon className="size-[18px]" aria-hidden />
             </span>
-            <span className="mt-0.5 block truncate text-[0.72rem] text-muted-foreground">
-              {item.note}
+            <span className="min-w-0 flex-1">
+              <span className="set-action-title-row">
+                <span className="set-action-title">{item.label}</span>
+                <span className="set-action-count">{item.count}</span>
+                {isRecommended && (
+                  <span className="set-action-badge">Start here</span>
+                )}
+              </span>
+              <span className="set-action-note">{item.note}</span>
             </span>
-          </span>
-          <ArrowRight className="size-4 shrink-0 text-brand-sky transition-transform group-hover:translate-x-0.5" />
-        </Link>
+            <ArrowRight className="set-action-arrow size-4" aria-hidden />
+          </Link>
         );
       })}
     </section>
@@ -691,6 +683,7 @@ function StudyActions({
 }
 
 export default function StudySet() {
+  const { user } = useAuth();
   const { setId, section } = useParams<{ setId: string; section?: string }>();
   const navigate = useNavigate();
   const validId = Boolean(setId && /^[a-z0-9]{20,40}$/i.test(setId));
@@ -833,124 +826,109 @@ export default function StudySet() {
 
     return (
       <>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to={isMode ? `/sets/${set._id}` : backTo}
-            className="inline-flex items-center gap-1.5 text-[0.8rem] font-semibold text-muted-foreground hover:text-brand-ink"
-          >
-            <ArrowLeft className="size-3.5" aria-hidden />
-            {isMode ? "Back to set" : backLabel}
-          </Link>
-          <div className="ml-auto flex items-center gap-2">
-            {!isMode && set.status === "ready" && (
-              <Button
-                asChild
-                className="hidden h-9 shrink-0 rounded-full px-4 text-[0.8rem] font-semibold sm:inline-flex"
-              >
-                <Link to={`/sets/${set._id}/${recommendedSection}`}>
-                  {details.dueCount > 0 && (
-                    <span className="rounded-full bg-white/15 px-1.5 text-[0.7rem] tabular-nums">
-                      {details.dueCount}
-                    </span>
-                  )}
-                  {recommendedLabel}
-                  <ArrowRight className="size-3.5" aria-hidden />
-                </Link>
-              </Button>
-            )}
-            {/* Low-frequency actions live together instead of competing with
-                the study button. A plain details element keeps it dependency-free. */}
-            <details className="relative">
-              <summary
-                aria-label="More set actions"
-                className="grid size-9 cursor-pointer list-none place-items-center rounded-full border border-border bg-card text-[1rem] font-bold text-brand-ink/70 transition-colors hover:bg-brand-panel hover:text-brand-ink [&::-webkit-details-marker]:hidden"
-              >
-                ⋯
-              </summary>
-              <div className="absolute right-0 z-20 mt-1 w-44 rounded-xl border border-border bg-card p-1 shadow-lg">
-                {[
-                  { label: "Ask the tutor", onClick: openTutor },
-                  { label: "Edit set", onClick: () => setSettingsOpen(true) },
-                  ...(set.status === "ready"
-                    ? [
-                        {
-                          label: regenerating ? "Regenerating cards…" : "Regenerate cards",
-                          onClick: () => void regenerateCards(),
-                        },
-                      ]
-                    : []),
-                ].map((action) => (
-                  <button
-                    key={action.label}
-                    type="button"
-                    onClick={(event) => {
-                      const menu = event.currentTarget.closest("details");
-                      if (menu instanceof HTMLDetailsElement) menu.open = false;
-                      action.onClick();
-                    }}
-                    className="block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel"
-                  >
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            </details>
-          </div>
-        </div>
-
-        <nav
-          aria-label="Breadcrumb"
-          className="mb-2 flex flex-wrap items-center gap-1.5 text-[0.74rem] font-medium text-muted-foreground"
-        >
-          <Link to="/tutor#sets" className="hover:text-brand-ink hover:underline">
-            Sets
-          </Link>
-          <span aria-hidden>/</span>
-          {isMode ? (
-            <>
+        <div className="set-stage">
+          <div className="set-stage-bar">
+            <Brand to="/tutor" />
+            <div className="set-stage-links">
               <Link
-                to={`/sets/${set._id}`}
-                className="max-w-[16rem] truncate hover:text-brand-ink hover:underline"
+                to={isMode ? `/sets/${set._id}` : backTo}
+                className="set-back"
               >
-                {set.title}
+                <ArrowLeft className="size-3.5" aria-hidden />
+                {isMode ? "Back to set" : backLabel}
               </Link>
-              <span aria-hidden>/</span>
-              <span aria-current="page" className="font-semibold text-brand-ink">
-                {SECTION_LABEL[activeSection]}
-              </span>
-            </>
-          ) : (
-            <span aria-current="page" className="max-w-[16rem] truncate">
-              {set.title}
-            </span>
-          )}
-        </nav>
+              <details className="set-menu">
+                <summary aria-label="More set actions" className="set-menu-trigger">
+                  ⋯
+                </summary>
+                <div className="set-menu-panel">
+                  {[
+                    { label: "Ask the tutor", onClick: openTutor },
+                    { label: "Edit set", onClick: () => setSettingsOpen(true) },
+                    ...(set.status === "ready"
+                      ? [
+                          {
+                            label: regenerating
+                              ? "Regenerating cards…"
+                              : "Regenerate cards",
+                            onClick: () => void regenerateCards(),
+                          },
+                        ]
+                      : []),
+                  ].map((action) => (
+                    <button
+                      key={action.label}
+                      type="button"
+                      onClick={(event) => {
+                        const menu = event.currentTarget.closest("details");
+                        if (menu instanceof HTMLDetailsElement) menu.open = false;
+                        action.onClick();
+                      }}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              </details>
+            </div>
+          </div>
 
-        <div
-          className="chrome-plate relative z-20 mt-2 min-w-0 rounded-[1.6rem] px-4 py-4"
-          style={{ overflow: "visible" }}
-        >
-          {isMode && (
-            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-chrome-7">
-              {SECTION_LABEL[activeSection]}
-            </p>
-          )}
-          <SetTitle setId={set._id} title={set.title} />
-          <motion.p
-            className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] text-muted-foreground"
-            {...enter(0.1)}
-          >
-            <span>{set.sourceLabel || sourceLabel(set.sourceType)}</span>
-            {qualification && (
-              <>
-                <span className="text-brand-ink/20">•</span>
-                <span>{qualification}</span>
-              </>
+          <div className="set-cover">
+            <div className="set-cover-copy">
+              <p className="set-eyebrow">
+                {isMode ? SECTION_LABEL[activeSection] : "Study set"}
+              </p>
+              <SetTitle setId={set._id} title={set.title} />
+              <p className="set-meta">
+                <span>{set.sourceLabel || sourceLabel(set.sourceType)}</span>
+                {qualification && <span>{qualification}</span>}
+                <span>Updated {relativeDate(set.updatedAt)}</span>
+              </p>
+              {user?.isAnonymous && (
+                <p className="set-guest">
+                  Guest workspace · saved in this browser ·{" "}
+                  <Link to={guestKeepWorkHref(`/sets/${set._id}`)}>
+                    Keep my work
+                  </Link>
+                </p>
+              )}
+            </div>
+            {!isMode && set.status === "ready" && (
+              <Link
+                to={`/sets/${set._id}/${recommendedSection}`}
+                className="stage-button set-start"
+              >
+                {details.dueCount > 0 && (
+                  <span className="set-start-count">{details.dueCount}</span>
+                )}
+                {recommendedLabel}
+                <ArrowRight className="size-3.5" aria-hidden />
+              </Link>
             )}
-            <span className="text-brand-ink/20">•</span>
-            <span>Updated {relativeDate(set.updatedAt)}</span>
-          </motion.p>
+          </div>
+
+          <dl className="set-facts" aria-label="Set progress">
+            {[
+              { label: "Exam ready", value: `${details.readiness.score}%` },
+              { label: "Cards due", value: String(details.dueCount) },
+              { label: "Quiz", value: `${details.quizAnswered}/${details.quizTotal}` },
+              {
+                label: "Exam date",
+                value: details.pace
+                  ? `${details.pace.daysLeft} day${details.pace.daysLeft === 1 ? "" : "s"}`
+                  : "Not set",
+              },
+            ].map((fact) => (
+              <div key={fact.label}>
+                <dt>{fact.label}</dt>
+                <dd>{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
+
+        <div className="set-desk">
+          <div className="set-desk-inner">
 
         {set.status === "ready" && details.cardRepairNeeded && (
           <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-[#F3E2C8] bg-[#FFF7E8] px-4 py-3 text-[0.8rem] leading-relaxed text-[#8A5D00] sm:flex-row sm:items-center sm:justify-between">
@@ -975,7 +953,7 @@ export default function StudySet() {
         {(set.status === "ready" || showSection) && (
           <nav
             aria-label="Set sections"
-            className="no-scrollbar mt-3 flex gap-1 overflow-x-auto"
+            className="set-tabs no-scrollbar"
           >
             {(
               [
@@ -994,11 +972,7 @@ export default function StudySet() {
                   key={value}
                   to={value === "summary" ? `/sets/${set._id}` : `/sets/${set._id}/${value}`}
                   aria-current={active ? "page" : undefined}
-                  className={
-                    active
-                      ? "shrink-0 rounded-full bg-brand-sky px-3 py-1.5 text-[0.78rem] font-semibold text-brand-cream"
-                      : "shrink-0 rounded-full px-3 py-1.5 text-[0.78rem] font-semibold text-brand-ink/60 transition-colors hover:bg-brand-sky/10 hover:text-brand-ink"
-                  }
+                  className={cn("set-tab", active && "is-active")}
                 >
                   {label}
                 </Link>
@@ -1017,7 +991,7 @@ export default function StudySet() {
             retrying={retrying}
           />
         ) : isMode ? (
-          <div className="mt-6">
+          <div className="set-mode">
             {activeSection === "cards" &&
               (details.cards.length > 0 &&
               dueCards.length === 0 &&
@@ -1081,50 +1055,16 @@ export default function StudySet() {
           </div>
         ) : (
           <>
-            <motion.dl
-              className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4"
-              {...enter(0.12)}
-            >
-              {[
-                {
-                  label: "Exam ready",
-                  value: `${details.readiness.score}%`,
-                  tone: "border-l-brand-mint text-brand-mint",
-                },
-                {
-                  label: "Cards due",
-                  value: String(details.dueCount),
-                  tone: "border-l-brand-peach text-brand-peach",
-                },
-                {
-                  label: "Quiz answered",
-                  value: `${details.quizAnswered}/${details.quizTotal}`,
-                  tone: "border-l-brand-sky text-brand-sky",
-                },
-                {
-                  label: "Exam date",
-                  value: details.pace
-                    ? `${details.pace.daysLeft} day${details.pace.daysLeft === 1 ? "" : "s"}`
-                    : "Not set",
-                  tone: "border-l-brand-violet text-brand-violet",
-                },
-              ].map((stat) => (
-                <div
-                  key={stat.label}
-                  className={cn(
-                    "rounded-2xl border border-l-2 border-border bg-card px-3.5 py-2.5",
-                    stat.tone,
-                  )}
-                >
-                  <dt className="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    {stat.label}
-                  </dt>
-                  <dd className="mt-0.5 font-display text-[1.15rem] font-bold tabular-nums">
-                    {stat.value}
-                  </dd>
-                </div>
-              ))}
-            </motion.dl>            {/* One compact build summary. The denominators are what was actually
+            <div className="set-overview-intro">
+              <p className="set-kicker">Study modes</p>
+              <h2 className="set-section-title">Open the part you need.</h2>
+              <p className="set-lede">
+                One set holds the summary, the cards and the questions. Start with
+                the recommended mode, then close the gaps it finds.
+              </p>
+            </div>
+
+            {/* One compact build summary. The denominators are what was actually
                 built, not what was asked for: a bar that can never fill is worse
                 than no bar. The shortfall sentence below explains any gap. */}
             {(() => {
@@ -1155,9 +1095,9 @@ export default function StudySet() {
                 },
               ];
               return (
-                <div className="mt-3">
+                <div className="set-build">
                   <div
-                    className="flex flex-wrap items-center gap-2"
+                    className="set-build-chips"
                     aria-label="What this set was built with"
                   >
                     {rows.map((row) => (
@@ -1187,14 +1127,14 @@ export default function StudySet() {
             })()} 
 
             {/* One line that defines the percentage, right under the number. */}
-            <p className="mt-2 text-[0.72rem] leading-relaxed text-muted-foreground">
+            <p className="set-note">
               Exam ready % is the share of this set you can currently recall and
               answer correctly. It counts cards that are settled and not due,
               quiz questions you have answered right, and written answers you
               have had marked.
             </p>
 
-            <div className="mt-5">
+            <div className="set-actions-wrap">
               <StudyActions
                 setId={set._id}
                 set={set}
@@ -1206,16 +1146,17 @@ export default function StudySet() {
 
             {/* A phone-sized session CTA that stays in reach while the overview
                 scrolls. The header button is hidden below sm for the same reason. */}
-            <div className="sticky bottom-3 z-20 mt-4 sm:hidden">
-              <Button asChild className="h-12 w-full rounded-full text-[0.9rem] font-semibold shadow-lg">
-                <Link to={`/sets/${set._id}/${recommendedSection}`}>
-                  {recommendedLabel}
-                  <ArrowRight className="size-4" aria-hidden />
-                </Link>
-              </Button>
+            <div className="set-sticky-start">
+              <Link
+                to={`/sets/${set._id}/${recommendedSection}`}
+                className="stage-button"
+              >
+                {recommendedLabel}
+                <ArrowRight className="size-4" aria-hidden />
+              </Link>
             </div>
 
-            <div className="mt-6">
+            <div className="set-overview">
               <OverviewView
                 setId={set._id}
                 set={set}
@@ -1226,11 +1167,11 @@ export default function StudySet() {
             {/* Specification coverage, export and the timed mock: the three
                 things a student needs when the set is done, not while building
                 it. Each is one expansion away. */}
-            <div className="mt-4 space-y-3">
+            <div className="set-tools">
               <SetExportButtons setId={set._id} />
               <Link
                 to={`/sets/${set._id}/mock`}
-                className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-card p-4 text-[0.86rem] font-semibold text-brand-ink hover:bg-brand-panel"
+                className="set-tool"
               >
                 <span className="flex items-center gap-2">
                   <Timer className="size-4 text-chrome-7" aria-hidden />
@@ -1244,8 +1185,8 @@ export default function StudySet() {
 
             {/* Pacing detail is useful, but it should not sit between the
                 student and the set. It is one expansion away. */}
-            <details className="mt-6 rounded-2xl border border-border bg-card p-4">
-              <summary className="cursor-pointer text-[0.86rem] font-semibold text-brand-ink">
+            <details className="set-readiness">
+              <summary>
                 How readiness and exam pace work
               </summary>
               <div className="mt-3">
@@ -1277,9 +1218,15 @@ export default function StudySet() {
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
         />
+          </div>
+        </div>
       </>
     );
   })();
 
-  return <AppShell>{body}</AppShell>;
+  return (
+    <AppShell focus>
+      <div className="set-screen">{body}</div>
+    </AppShell>
+  );
 }

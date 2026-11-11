@@ -29,11 +29,11 @@ function CourseRow({ course }: { course: CourseSummary }) {
   return (
     <Link
       to={`/courses/${course._id}`}
-      className="group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel sm:grid-cols-[minmax(0,1fr)_170px_16px] sm:items-center sm:px-5"
+      className="course-row group grid grid-cols-1 gap-3 border-b border-border/70 px-4 py-4 transition-colors last:border-b-0 hover:bg-brand-panel sm:grid-cols-[minmax(0,1fr)_170px_16px] sm:items-center sm:px-5"
     >
       <div className="flex min-w-0 items-center gap-3">
         <span
-          className={cn("grid size-11 shrink-0 place-items-center rounded-2xl", meta.tint)}
+          className={cn("course-row-icon grid size-11 shrink-0 place-items-center rounded-2xl", meta.tint)}
           style={{ color: meta.color }}
         >
           <Icon className="size-5" />
@@ -131,7 +131,9 @@ export default function Courses() {
 
   return (
     <AppShell>
+      <div className="courses-screen">
       <PageHeader
+        className="course-library-cover"
         eyebrow="Step 1 · Your subjects"
         title="Courses"
         description="Each course turns your specification into topics you can revise, ask about and practise."
@@ -149,7 +151,7 @@ export default function Courses() {
       />
 
       <section className="mt-5">
-        <div className="overflow-hidden rounded-3xl border border-border bg-card">
+        <div className="course-list overflow-hidden rounded-3xl border border-border bg-card">
           {courseRows === undefined ? (
             <div role="status" aria-busy="true" aria-live="polite">
               <span className="sr-only">Loading your courses</span>
@@ -214,6 +216,7 @@ export default function Courses() {
           hint="Photos or pasted notes become cards, a summary and a quiz"
         />
       )}
+      </div>
     </AppShell>
   );
 }

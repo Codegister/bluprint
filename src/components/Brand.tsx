@@ -2,9 +2,9 @@ import { cn } from "@/lib/utils";
 import { Link } from "react-router";
 
 /**
- * Bluprint wordmark. The mark is a sticker tile with an ink page-and-spark
- * glyph and the wordmark is heavy and tight. It is written "Bluprint" here
- * exactly as it is written in prose everywhere else: one spelling, one brand.
+ * The Bluprint mark: two offset note cards, one filled with the highlighter
+ * colour, and three ruled lines. It reads at a glance as “notes, stacked” and
+ * does not depend on a mascot or a gradient.
  */
 export function Brand({
   className,
@@ -22,27 +22,33 @@ export function Brand({
       to={to}
       aria-label="Bluprint home"
       onClick={onNavigate}
-      className={cn("group inline-flex items-center gap-2.5", className)}
+      className={cn("brand group inline-flex items-center gap-2.5", className)}
     >
-      <span className="grid size-9 place-items-center rounded-[0.7rem] border border-brand-ink/70 bg-gizmo-lime text-brand-ink shadow-[0_2px_0_rgba(28,26,20,0.22)] transition-transform duration-300 ease-out group-hover:-rotate-6 group-hover:scale-105">
-        <svg
-          viewBox="0 0 24 24"
-          className="size-[18px]"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path d="M6.5 4.5h6.2a3.8 3.8 0 0 1 0 7.6H6.5V4.5Z" fill="currentColor" />
+      <span className="brand-mark" aria-hidden>
+        <svg viewBox="0 0 30 30" className="size-full" fill="none">
           <path
-            d="M6.5 12.1h7a3.9 3.9 0 1 1 0 7.9h-7v-7.9Z"
-            fill="currentColor"
-            opacity="0.55"
+            d="M6 7.5h12.5a2 2 0 0 1 2 2v15H8a2 2 0 0 1-2-2v-15Z"
+            fill="var(--card)"
+            stroke="currentColor"
+            strokeWidth="1.3"
           />
-          <circle cx="18.5" cy="5.5" r="1.9" fill="currentColor" />
+          <path
+            d="M10 4.5h12.5a2 2 0 0 1 2 2v15H12a2 2 0 0 1-2-2v-15Z"
+            fill="var(--highlighter)"
+            stroke="currentColor"
+            strokeWidth="1.3"
+          />
+          <path
+            d="M13 9.5h7.5M13 13h5.5M13 16.5h6.5"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+          />
         </svg>
       </span>
       {!markOnly && (
-        <span className="font-display text-[1.5rem] font-extrabold leading-none tracking-[-0.045em] text-brand-ink">
-          Bluprint
+        <span className="brand-word">
+          Bluprint<span className="brand-period">.</span>
         </span>
       )}
     </Link>

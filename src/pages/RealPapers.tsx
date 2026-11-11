@@ -129,8 +129,11 @@ export default function RealPapers() {
 
   return (
     <AppShell>
+      <div className="papers-screen">
       <div className="mx-auto w-full max-w-4xl px-4 pb-16 sm:px-6">
         <PageHeader
+          className="papers-cover"
+          eyebrow="Papers"
           title="Real question bank"
           description="Paste one question and the board's own mark scheme. For a full paper, open your course's Past papers tab. Bluprint marks your answer point by point."
           actions={
@@ -412,6 +415,7 @@ export default function RealPapers() {
             })
           )}
         </div>
+      </div>
       </div>
     </AppShell>
   );

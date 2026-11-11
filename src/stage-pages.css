@@ -1,0 +1,1318 @@
+/* ---------------------------------------------------------------------------
+   Stage 3: Today, Timetable and Auth
+
+   The queue and the planner open with a stage cover and put the day's work on
+   the desk. Auth is the one split surface: the invitation stays on the stage
+   and the form is the first sheet of paper.
+   ------------------------------------------------------------------------- */
+
+/* The shared cover for the signed-in queue and planner. */
+.today-screen .page-masthead,
+.timetable-screen .page-masthead,
+.timetable-setup-screen .page-masthead {
+  align-items: flex-end;
+  gap: 28px;
+  margin: 0 !important;
+  padding: 24px !important;
+  border: 1px solid var(--stage-line) !important;
+  border-radius: 2px !important;
+  background: var(--stage) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--stage-ink) !important;
+}
+
+.today-screen .page-masthead::before,
+.today-screen .page-masthead::after,
+.timetable-screen .page-masthead::before,
+.timetable-screen .page-masthead::after,
+.timetable-setup-screen .page-masthead::before,
+.timetable-setup-screen .page-masthead::after {
+  display: none !important;
+}
+
+.today-screen .page-title,
+.timetable-screen .page-title,
+.timetable-setup-screen .page-title {
+  max-width: 20ch;
+  color: var(--stage-ink) !important;
+  font-family: var(--font-editorial) !important;
+  font-size: 35.156px !important;
+  font-weight: 600 !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.today-screen .page-description,
+.timetable-screen .page-description,
+.timetable-setup-screen .page-description {
+  max-width: 58ch;
+  margin-top: 8px;
+  color: var(--stage-muted) !important;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.today-screen .page-kicker,
+.timetable-screen .page-kicker,
+.timetable-setup-screen .page-kicker {
+  color: var(--olive) !important;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.today-screen .page-kicker-dot,
+.timetable-screen .page-kicker-dot,
+.timetable-setup-screen .page-kicker-dot {
+  background: currentColor !important;
+}
+
+.today-screen .page-masthead p,
+.timetable-screen .page-masthead p,
+.timetable-setup-screen .page-masthead p {
+  color: var(--stage-muted) !important;
+}
+
+.today-screen .page-masthead p a,
+.timetable-screen .page-masthead p a,
+.timetable-setup-screen .page-masthead p a {
+  color: var(--olive) !important;
+}
+
+.today-screen .page-masthead a:not(.page-kicker),
+.timetable-screen .page-masthead a:not(.page-kicker) {
+  text-underline-offset: 0.18em;
+}
+
+/* One rectangular olive action on the cover. */
+.today-screen .page-actions > :is(a, button),
+.timetable-screen .page-actions > :is(a, button) {
+  min-height: 44px;
+  border: 0 !important;
+  border-radius: 2px !important;
+  background: var(--olive) !important;
+  color: var(--olive-ink) !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+}
+
+.today-screen .page-actions > :is(a, button):hover,
+.timetable-screen .page-actions > :is(a, button):hover {
+  background: color-mix(in srgb, var(--olive) 84%, var(--stage-ink)) !important;
+}
+
+/* Today's length picker belongs to the cover, not the desk. */
+.today-screen .page-actions > [role="group"] {
+  min-height: 44px;
+  border: 1px solid var(--stage-line) !important;
+  border-radius: 2px !important;
+  background: var(--stage-raised) !important;
+  padding: 3px !important;
+}
+
+.today-screen .page-actions > [role="group"] button {
+  min-width: 32px !important;
+  height: 34px !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  color: var(--stage-muted) !important;
+  font-size: 12px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-screen .page-actions > [role="group"] button[aria-pressed="true"] {
+  background: var(--olive) !important;
+  color: var(--olive-ink) !important;
+}
+
+.today-screen .page-actions > [role="group"] button:hover {
+  background: var(--stage-line) !important;
+  color: var(--stage-ink) !important;
+}
+
+.today-screen .page-actions > [role="group"] button[aria-pressed="true"]:hover {
+  background: var(--olive) !important;
+  color: var(--olive-ink) !important;
+}
+
+.today-screen .page-actions > [role="group"] span {
+  color: var(--stage-muted) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Today
+   ------------------------------------------------------------------------- */
+
+.today-screen {
+  color: var(--desk-ink);
+}
+
+/* The progress strip is the cover's facts row. */
+.today-progress {
+  margin-top: 0 !important;
+  border: 1px solid var(--stage-line) !important;
+  border-top: 0 !important;
+  border-radius: 0 0 2px 2px !important;
+  background: var(--stage-raised) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--stage-ink) !important;
+  padding: 14px 20px !important;
+}
+
+.today-progress p,
+.today-progress .text-muted-foreground {
+  color: var(--stage-muted) !important;
+}
+
+.today-progress .text-brand-ink,
+.today-progress .text-brand-ink\/75 {
+  color: var(--stage-ink) !important;
+}
+
+.today-progress svg {
+  color: var(--olive) !important;
+}
+
+.today-progress [class*="bg-brand-panel"] {
+  background: var(--stage-line) !important;
+}
+
+.today-progress [class*="bg-brand-sky"] {
+  background: var(--olive) !important;
+}
+
+/* First run: the pipeline is a numbered ledger, not three cards. */
+.today-how {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  box-shadow: none !important;
+  padding: 20px !important;
+}
+
+.today-how > .mono-label {
+  color: var(--olive-deep) !important;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.today-steps {
+  display: block !important;
+  margin-top: 10px !important;
+}
+
+.today-step {
+  display: grid !important;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  border-bottom: 1px solid var(--desk-line);
+  padding: 14px 0;
+}
+
+.today-step:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.today-step > span {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--olive-deep) !important;
+  border-radius: 2px !important;
+  background: var(--accent-wash) !important;
+  color: var(--olive-deep) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.today-step p:first-child {
+  color: var(--desk-ink);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.today-step p:last-child {
+  color: var(--desk-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Two queues sit beside each other on a wide desk, but they are lists, not
+   matching cards. */
+.today-queues {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) !important;
+  gap: 32px !important;
+  margin-top: 28px !important;
+}
+
+.today-queue {
+  overflow: visible !important;
+  border: 0 !important;
+  border-top: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.today-queue > div:first-child {
+  border-bottom-color: var(--desk-line) !important;
+  padding: 12px 0 !important;
+}
+
+.today-queue h2 {
+  color: var(--desk-ink) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.today-queue > div:first-child > span {
+  color: var(--desk-muted) !important;
+  font-size: 12px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-queue ul {
+  border: 0 !important;
+}
+
+.today-queue li a {
+  border-color: var(--desk-line) !important;
+  padding: 12px 0 !important;
+  background: transparent !important;
+}
+
+.today-queue li a:hover {
+  background: var(--accent-wash) !important;
+}
+
+.today-queue li a > span:not(:last-child) {
+  color: var(--desk-ink) !important;
+  font-size: 15px !important;
+}
+
+.today-queue li a > span:last-child {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 2px !important;
+  background: var(--accent-wash) !important;
+  color: var(--olive-deep) !important;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-queue svg,
+.today-queue .text-\[\#8f1d26\] {
+  color: var(--olive-deep) !important;
+}
+
+.today-queue p {
+  color: var(--desk-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.6;
+}
+
+/* The sprint itself. */
+.today-sprint h2 {
+  color: var(--desk-ink);
+  font-family: var(--font-sans) !important;
+  font-size: 22.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.015em;
+}
+
+.today-sprint .gizmo-card {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  box-shadow: none !important;
+}
+
+.today-sprint .gizmo-card p:first-child {
+  color: var(--desk-ink);
+  font-size: 18px;
+}
+
+.today-sprint .gizmo-card p:last-child {
+  color: var(--desk-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.today-sprint button {
+  border-radius: 6px !important;
+}
+
+/* Calibration and data are editorial rows, not another card grid. */
+.today-calibration {
+  margin-top: 30px !important;
+  border: 0 !important;
+  border-top: 1px solid var(--desk-line) !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 18px 0 !important;
+}
+
+.today-calibration .mono-label {
+  color: var(--olive-deep) !important;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.today-calibration p:nth-of-type(2) {
+  color: var(--desk-ink);
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.today-calibration p:last-child {
+  color: var(--desk-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.today-data {
+  display: block !important;
+  margin-top: 26px !important;
+}
+
+.today-data > * {
+  display: block;
+  width: 100%;
+  border: 0 !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 14px 0 !important;
+}
+
+.today-data > *:last-child {
+  border-bottom: 0 !important;
+}
+
+.today-data p:first-child {
+  color: var(--desk-ink);
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.today-data p {
+  color: var(--desk-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.today-data button {
+  border-radius: 6px !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Timetable
+   ------------------------------------------------------------------------- */
+
+.timetable-screen {
+  color: var(--desk-ink);
+}
+
+.timetable-screen .page-masthead .page-title {
+  max-width: 24ch;
+}
+
+/* The day strip is a narrow, horizontal stage ledger. */
+.timetable-days {
+  margin-top: 0 !important;
+  border: 1px solid var(--stage-line) !important;
+  border-top: 0 !important;
+  border-radius: 0 0 2px 2px !important;
+  background: var(--stage-raised) !important;
+  padding: 10px !important;
+  scrollbar-width: thin;
+}
+
+.timetable-day {
+  min-width: 84px !important;
+  flex: 1 0 84px !important;
+  border: 1px solid var(--stage-line) !important;
+  border-radius: 2px !important;
+  background: var(--stage) !important;
+  color: var(--stage-ink) !important;
+  padding: 8px 10px !important;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.timetable-day:hover {
+  border-color: var(--olive) !important;
+  background: var(--stage-raised) !important;
+}
+
+.timetable-day[aria-pressed="true"] {
+  border-color: var(--olive) !important;
+  background: var(--olive) !important;
+  color: var(--olive-ink) !important;
+}
+
+.timetable-day span {
+  color: var(--stage-muted) !important;
+}
+
+.timetable-day[aria-pressed="true"] span {
+  color: color-mix(in srgb, var(--olive-ink) 76%, transparent) !important;
+}
+
+.timetable-day .font-display {
+  color: var(--stage-ink) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.timetable-day[aria-pressed="true"] .font-display {
+  color: var(--olive-ink) !important;
+}
+
+.timetable-missed {
+  border: 1px solid var(--olive-deep) !important;
+  border-radius: 6px !important;
+  background: var(--accent-wash) !important;
+  color: var(--olive-deep) !important;
+}
+
+.timetable-missed p,
+.timetable-missed .text-\[\#7A5410\] {
+  color: var(--olive-deep) !important;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.timetable-missed svg {
+  color: var(--olive-deep) !important;
+}
+
+.timetable-error {
+  border: 1px solid color-mix(in srgb, var(--coral) 45%, var(--desk-line)) !important;
+  border-radius: 6px !important;
+  background: #fff4f1 !important;
+  color: var(--coral) !important;
+  font-size: 14px;
+}
+
+.timetable-layout {
+  margin-top: 20px !important;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr) !important;
+  gap: 20px !important;
+  align-items: start;
+}
+
+.timetable-day-panel {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  box-shadow: none !important;
+}
+
+.timetable-day-panel > div:first-child {
+  border-bottom: 1px solid var(--desk-line) !important;
+  background: var(--desk) !important;
+  padding: 12px 16px !important;
+}
+
+.timetable-day-panel > div:first-child p:first-child {
+  color: var(--desk-muted) !important;
+  font-size: 10px !important;
+  letter-spacing: 0.12em;
+}
+
+.timetable-day-panel > div:first-child p.font-display {
+  color: var(--desk-ink) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.timetable-day-panel .rounded-2xl {
+  border-radius: 6px !important;
+}
+
+.timetable-day-panel [class*="bg-brand-panel"] {
+  background: var(--desk-line) !important;
+}
+
+.timetable-day-panel [class*="bg-chrome-6"] {
+  background: var(--olive-deep) !important;
+}
+
+.timetable-day-panel > div:nth-child(2) {
+  padding: 8px 16px 14px !important;
+}
+
+.timetable-day-panel > div:last-child {
+  border-top: 1px solid var(--desk-line) !important;
+  background: var(--desk) !important;
+  padding: 10px 16px !important;
+}
+
+.timetable-day-panel .space-y-2 > * + * {
+  margin-top: 0 !important;
+}
+
+.timetable-day-panel .space-y-2 > div:last-child .timetable-session {
+  border-bottom: 0 !important;
+}
+
+/* Sessions, meals and blocked time are one continuous day ledger. */
+.timetable-session {
+  border: 0 !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 14px 0 14px 10px !important;
+}
+
+.timetable-session:last-child {
+  border-bottom: 0 !important;
+}
+
+.timetable-session:hover {
+  background: var(--accent-wash) !important;
+}
+
+.timetable-session > span[aria-hidden] {
+  top: 10px !important;
+  bottom: 10px !important;
+  background: var(--olive-deep) !important;
+  opacity: 0.5 !important;
+}
+
+.timetable-session > div:first-of-type {
+  width: 56px !important;
+  color: var(--desk-muted) !important;
+  font-size: 11px !important;
+}
+
+.timetable-session > div:first-of-type p:first-child {
+  color: var(--desk-ink) !important;
+}
+
+.timetable-session p.text-\[0\.88rem\] {
+  color: var(--desk-ink) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.timetable-session p.text-\[0\.7rem\] {
+  color: var(--desk-muted) !important;
+  font-size: 13px !important;
+}
+
+.timetable-session button {
+  border-radius: 6px !important;
+}
+
+.timetable-session button[aria-pressed="true"] {
+  border-color: var(--olive-deep) !important;
+  background: var(--accent-wash) !important;
+  color: var(--olive-deep) !important;
+}
+
+.timetable-session span[class*="uppercase"] {
+  border-radius: 2px !important;
+  background: var(--accent-wash) !important;
+  color: var(--olive-deep) !important;
+}
+
+.timetable-session .text-\[\#0B6B45\] {
+  color: var(--olive-deep) !important;
+}
+
+.timetable-meal,
+.timetable-blocked {
+  border: 0 !important;
+  border-bottom: 1px dashed var(--desk-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 10px 0 10px 10px !important;
+}
+
+.timetable-meal > span:first-child,
+.timetable-blocked > span:first-child {
+  width: 56px !important;
+  color: var(--desk-muted) !important;
+  font-size: 11px !important;
+}
+
+.timetable-meal > span:first-child span:first-child,
+.timetable-blocked > span:first-child span:first-child {
+  color: var(--desk-ink) !important;
+}
+
+.timetable-meal svg,
+.timetable-blocked svg {
+  color: var(--olive-deep) !important;
+}
+
+.timetable-meal span,
+.timetable-blocked span {
+  color: var(--desk-muted);
+}
+
+.timetable-meal .text-brand-ink\/70,
+.timetable-blocked .text-brand-ink\/70 {
+  color: var(--desk-ink) !important;
+  font-size: 14px;
+}
+
+.timetable-side {
+  min-width: 0;
+}
+
+.timetable-side > section {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  padding: 16px !important;
+}
+
+.timetable-side > section h2 {
+  color: var(--desk-ink) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+.timetable-side > section h2 svg {
+  color: var(--olive-deep) !important;
+}
+
+.timetable-side > section p,
+.timetable-side > section dt {
+  color: var(--desk-muted) !important;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.timetable-side > section dd {
+  color: var(--desk-ink) !important;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.timetable-side > section dl {
+  font-size: 13px;
+}
+
+.timetable-side > section .rounded-xl {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk) !important;
+}
+
+.timetable-side > section button {
+  border-radius: 6px !important;
+}
+
+.timetable-side > section .size-2 {
+  background: var(--olive) !important;
+}
+
+.timetable-side > section .text-brand-sky,
+.timetable-side > section .text-brand-peach {
+  color: var(--olive-deep) !important;
+}
+
+.timetable-empty {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  box-shadow: none !important;
+  padding: 20px !important;
+}
+
+.timetable-empty h2 {
+  color: var(--desk-ink);
+  font-family: var(--font-sans) !important;
+  font-size: 22.5px !important;
+  font-weight: 600 !important;
+}
+
+.timetable-empty p {
+  color: var(--desk-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Buttons live on the desk at this point. */
+.timetable-screen button,
+.timetable-screen a[class*="rounded-full"] {
+  border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   Timetable setup
+   ------------------------------------------------------------------------- */
+
+.timetable-setup-screen {
+  color: var(--desk-ink);
+}
+
+.timetable-setup-screen > a:first-child {
+  display: inline-flex;
+  margin-bottom: 4px;
+  color: var(--desk-muted) !important;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.timetable-setup-screen > a:first-child:hover {
+  color: var(--desk-ink) !important;
+  text-decoration: underline;
+}
+
+.timetable-setup-screen .page-title {
+  max-width: 20ch;
+}
+
+.timetable-setup-screen nav ol {
+  border-bottom: 1px solid var(--desk-line);
+  padding-bottom: 0;
+}
+
+.timetable-setup-screen nav li button {
+  min-height: 46px;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 4px !important;
+}
+
+.timetable-setup-screen nav li button[aria-current="step"] {
+  border-bottom-color: var(--olive-deep) !important;
+}
+
+.timetable-setup-screen nav li button > span:first-child {
+  border-radius: 2px !important;
+  background: var(--accent-wash) !important;
+  color: var(--olive-deep) !important;
+}
+
+.timetable-setup-screen nav li button[aria-current="step"] > span:first-child {
+  background: var(--olive) !important;
+  color: var(--olive-ink) !important;
+}
+
+.timetable-setup-screen nav li button > span:last-child {
+  color: var(--desk-muted) !important;
+  font-size: 13px !important;
+}
+
+.timetable-setup-screen nav li button[aria-current="step"] > span:last-child {
+  color: var(--desk-ink) !important;
+}
+
+.timetable-setup-screen nav [aria-hidden] {
+  background: var(--olive) !important;
+}
+
+.timetable-setup-screen section {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  box-shadow: none !important;
+}
+
+.timetable-setup-screen section h2 {
+  color: var(--desk-ink) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 22.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.015em;
+}
+
+.timetable-setup-screen section p {
+  color: var(--desk-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.timetable-setup-screen .rise-stagger {
+  animation: none !important;
+}
+
+.timetable-setup-screen .rise-stagger.grid {
+  grid-template-columns: 1fr !important;
+}
+
+.timetable-setup-screen .rise-stagger.grid > button,
+.timetable-setup-screen .rise-stagger.grid > div {
+  border: 0 !important;
+  border-bottom: 1px solid var(--desk-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 12px 0 !important;
+}
+
+.timetable-setup-screen .rise-stagger.grid > button[aria-pressed="true"] {
+  border-bottom-color: var(--olive-deep) !important;
+  background: var(--accent-wash) !important;
+}
+
+.timetable-setup-screen .rise-stagger.grid > button .size-2\.5 {
+  background: var(--olive-deep) !important;
+}
+
+.timetable-setup-screen .rise-stagger.grid > button span {
+  color: var(--desk-muted);
+}
+
+.timetable-setup-screen .rise-stagger.grid > button > span:nth-child(2) > span:first-child {
+  color: var(--desk-ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.timetable-setup-screen .chrome-bar {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  background-image: none !important;
+  box-shadow: 0 18px 38px -32px rgba(23, 18, 16, 0.55) !important;
+}
+
+.timetable-setup-screen .chrome-bar p {
+  color: var(--desk-muted);
+}
+
+.timetable-setup-screen .chrome-bar button {
+  border-radius: 6px !important;
+}
+
+.timetable-setup-screen .chrome-bar button:not(:first-child),
+.timetable-setup-screen .chrome-bar button:last-child,
+.timetable-setup-screen section > button {
+  background: var(--olive) !important;
+  color: var(--olive-ink) !important;
+  border-color: var(--olive) !important;
+}
+
+.timetable-setup-screen .chrome-bar button:first-child {
+  background: transparent !important;
+  color: var(--desk-ink) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Auth
+   ------------------------------------------------------------------------- */
+
+.auth-page {
+  min-height: 100svh;
+  background: var(--stage) !important;
+  color: var(--stage-ink);
+}
+
+.auth-main {
+  background: var(--stage) !important;
+}
+
+.auth-mobile-top {
+  color: var(--stage-ink);
+}
+
+.auth-mobile-top .brand,
+.auth-mobile-top .brand-word {
+  color: var(--stage-ink);
+}
+
+.auth-mobile-top .brand-period {
+  color: var(--olive);
+}
+
+.auth-mobile-top a {
+  color: var(--stage-muted) !important;
+}
+
+.auth-mobile-top a:hover {
+  background: var(--stage-raised) !important;
+  color: var(--stage-ink) !important;
+}
+
+.auth-card {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink);
+  box-shadow: none !important;
+}
+
+.auth-card h2 {
+  color: var(--desk-ink) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 22.5px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.015em !important;
+}
+
+.auth-card p {
+  color: var(--desk-muted) !important;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.auth-card label {
+  color: var(--desk-ink) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+.auth-input {
+  height: 48px !important;
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 6px !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
+  font-size: 16px !important;
+}
+
+.auth-input:focus-visible {
+  border-color: var(--olive-deep) !important;
+  outline: 2px solid var(--olive) !important;
+  outline-offset: 2px;
+  box-shadow: none !important;
+}
+
+.auth-submit {
+  min-height: 48px !important;
+  height: 48px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: var(--olive) !important;
+  color: var(--olive-ink) !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.auth-submit:hover {
+  background: color-mix(in srgb, var(--olive) 84%, var(--desk-ink)) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.auth-card button:not(.auth-submit) {
+  border-radius: 6px;
+}
+
+.auth-card input[type="email"],
+.auth-card input[type="text"] {
+  border-radius: 6px !important;
+}
+
+.auth-card [data-input-otp] input,
+.auth-card input[autocomplete="one-time-code"] {
+  border-radius: 6px !important;
+  border-color: var(--desk-line) !important;
+}
+
+.auth-panel > p {
+  color: var(--stage-muted) !important;
+}
+
+.auth-panel > p a {
+  color: var(--stage-ink) !important;
+}
+
+.auth-panel > nav {
+  color: var(--stage-muted) !important;
+}
+
+.auth-panel > nav a {
+  color: var(--stage-muted) !important;
+}
+
+.auth-panel > nav a:hover {
+  color: var(--stage-ink) !important;
+}
+
+.auth-mobile-top a:last-child {
+  color: var(--stage-muted) !important;
+}
+
+/* The form sheet carries the only olive signal on the right half. */
+.auth-card .text-brand-ink {
+  color: var(--desk-ink) !important;
+}
+
+.auth-card .bg-brand-panel {
+  background: var(--accent-wash) !important;
+  border-radius: 2px !important;
+}
+
+.auth-card .text-destructive {
+  color: var(--coral) !important;
+}
+
+.auth-aside {
+  color: var(--stage-ink);
+}
+
+.auth-aside::before {
+  display: none !important;
+}
+
+.auth-aside .brand,
+.auth-aside .brand-word {
+  color: var(--stage-ink);
+}
+
+.auth-aside .brand-period {
+  color: var(--olive);
+}
+
+.auth-aside .page-kicker {
+  color: var(--olive) !important;
+}
+
+.auth-title {
+  max-width: 12ch;
+  margin-top: 10px;
+  color: var(--stage-ink) !important;
+  font-family: var(--font-editorial) !important;
+  font-size: 35.156px !important;
+  font-weight: 600 !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.auth-title .highlighter {
+  padding-inline: 0;
+  background: transparent !important;
+  color: var(--olive) !important;
+  text-decoration: underline;
+  text-decoration-color: var(--olive);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.12em;
+}
+
+.auth-lede {
+  max-width: 30rem;
+  margin-top: 18px;
+  color: var(--stage-muted) !important;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.auth-aside-foot {
+  color: var(--stage-muted) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.auth-stack {
+  position: relative;
+  width: min(24rem, 92%);
+  height: auto;
+  margin-top: 28px;
+}
+
+.auth-stack-sheet {
+  position: static;
+}
+
+.auth-stack-sheet-back {
+  display: none !important;
+}
+
+.auth-stack-sheet-front {
+  min-height: 148px;
+  transform: none !important;
+  border: 1px solid var(--stage-line) !important;
+  border-radius: 2px !important;
+  background: var(--stage-raised) !important;
+  box-shadow: none !important;
+  color: var(--stage-ink);
+}
+
+.auth-stack-meta,
+.auth-stack-foot {
+  color: var(--stage-muted) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.auth-stack p {
+  color: var(--stage-ink) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.auth-stack-rule {
+  background: var(--stage-line);
+}
+
+.auth-stack-rule i {
+  background: var(--olive);
+}
+
+@media (min-width: 1024px) {
+  .auth-page {
+    background: var(--desk) !important;
+  }
+
+  .auth-aside {
+    border-right: 1px solid var(--stage-line) !important;
+    background: var(--stage) !important;
+  }
+
+  .auth-main {
+    background: var(--desk) !important;
+  }
+
+  .auth-panel > p,
+  .auth-panel > nav {
+    color: var(--desk-muted) !important;
+  }
+
+  .auth-panel > p a {
+    color: var(--desk-ink) !important;
+  }
+
+  .auth-panel > nav a {
+    color: var(--desk-muted) !important;
+  }
+
+  .auth-panel > nav a:hover {
+    color: var(--desk-ink) !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Small screens
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .today-screen .page-masthead,
+  .timetable-screen .page-masthead,
+  .timetable-setup-screen .page-masthead {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+    padding: 20px !important;
+  }
+
+  .today-screen .page-title,
+  .timetable-screen .page-title,
+  .timetable-setup-screen .page-title {
+    font-size: 28.125px !important;
+  }
+
+  .today-screen .page-actions,
+  .timetable-screen .page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .today-screen .page-actions > :is(a, button),
+  .timetable-screen .page-actions > :is(a, button) {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .today-screen .page-actions > [role="group"] {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .today-progress {
+    padding: 14px 16px !important;
+  }
+
+  .today-queues {
+    grid-template-columns: 1fr !important;
+    gap: 26px !important;
+  }
+
+  .today-step p:first-child {
+    font-size: 18px;
+  }
+
+  .timetable-days {
+    padding: 8px !important;
+  }
+
+  .timetable-day {
+    min-width: 78px !important;
+    flex-basis: 78px !important;
+  }
+
+  .timetable-layout {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .timetable-day-panel > div:last-child {
+    padding: 8px 12px 14px !important;
+  }
+
+  .timetable-session {
+    padding-left: 8px !important;
+  }
+
+  .timetable-session > div:first-of-type,
+  .timetable-meal > span:first-child,
+  .timetable-blocked > span:first-child {
+    width: 48px !important;
+  }
+
+  .timetable-setup-screen section {
+    padding: 16px !important;
+  }
+
+  .auth-main {
+    padding: 20px 16px !important;
+  }
+
+  .auth-card {
+    padding: 20px !important;
+  }
+
+  .auth-title {
+    font-size: 28.125px !important;
+  }
+
+  .auth-lede {
+    font-size: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timetable-day {
+    transition: none;
+  }
+}

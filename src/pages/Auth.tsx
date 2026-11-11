@@ -1,8 +1,5 @@
 import { Brand } from "@/components/Brand";
-import { ChromeBackdrop } from "@/components/ChromeBackdrop";
-import { PageInk } from "@/components/InkInWater";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Mascot } from "@/components/Mascot";
 import { EASE, enter } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -219,66 +216,56 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   };
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[1.02fr_0.98fr]">
-      {/* The paper wash, then the ink moving through it. The aside carries a
-          heavier plate of its own. */}
-      <ChromeBackdrop intensity={0.8} />
-      <PageInk intensity={1.05} />
+    <div className="auth-page">
       {/* Context panel */}
-      <aside className="chrome-rail relative hidden flex-col justify-between overflow-hidden border-r border-border p-10 lg:flex xl:p-14">
-        <motion.div className="relative flex items-center justify-between gap-3" {...enter(0.05)}>
+      <aside className="auth-aside">
+        <motion.div className="auth-aside-top" {...enter(0.05)}>
           <Brand />
           <ThemeToggle />
         </motion.div>
 
-        <div className="relative flex flex-col items-start">
-          <motion.div
-            className="relative"
-            initial={{ opacity: 0, scale: 0.9, y: 18 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: EASE, delay: 0.1 }}
-          >
-            <motion.div
-              aria-hidden
-              className="absolute left-1/2 top-1/2 size-[236px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-chrome-4/70"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 70, repeat: Infinity, ease: "linear" }}
-            />
-            <Mascot size={196} />
-          </motion.div>
-          <motion.h1
-            className="chrome-title mt-6 max-w-md text-[2.5rem] font-extrabold leading-[1.04] tracking-[-0.04em] xl:text-[2.9rem]"
-            {...enter(0.2)}
-          >
-            Your sets, scores and progress,{" "}
+        <div className="auth-aside-main">
+          <motion.p className="page-kicker" {...enter(0.12)}>
+            <span className="page-kicker-dot" aria-hidden />
+            Your revision desk
+          </motion.p>
+          <motion.h1 className="auth-title" {...enter(0.18)}>
+            Every page, score and gap,{" "}
             <span className="highlighter">kept together.</span>
           </motion.h1>
-          <motion.p
-            className="mt-4 max-w-sm text-[0.95rem] leading-relaxed text-brand-ink/65"
-            {...enter(0.28)}
-          >
-            Sign in to build summaries, flashcards, quizzes and exam practice from your
-            uploads. Everything stays attached to your account.
+          <motion.p className="auth-lede" {...enter(0.26)}>
+            One quiet place for the sets you build, the answers you mark and the
+            gaps worth returning to.
           </motion.p>
 
-          <motion.p
-            className="mt-7 text-[0.85rem] font-medium leading-relaxed text-brand-ink/60"
-            {...enter(0.36)}
-          >
-            Private to your account. No password to remember, just a six-digit email
-            code.
-          </motion.p>
+          <motion.div className="auth-stack" aria-hidden {...enter(0.34)}>
+            <div className="auth-stack-sheet auth-stack-sheet-back" />
+            <div className="auth-stack-sheet auth-stack-sheet-front">
+              <div className="auth-stack-meta">
+                <span>Flashcard 03</span>
+                <span>Cell biology</span>
+              </div>
+              <p>Why does the inner membrane fold?</p>
+              <span className="auth-stack-rule">
+                <i />
+              </span>
+              <div className="auth-stack-foot">
+                <span>Recall</span>
+                <span>7 / 10 marked</span>
+              </div>
+            </div>
+          </motion.div>
         </div>
 
-        <motion.p className="relative text-[0.8rem] text-brand-ink/65" {...enter(0.44)}>
-          Your friends keep their own workspace.
+        <motion.p className="auth-aside-foot" {...enter(0.44)}>
+          Private by default · No password to remember
         </motion.p>
       </aside>
 
       {/* Form panel */}
-      <main className="flex min-h-screen flex-col items-center justify-center px-4 py-10 sm:px-8">
-        <div className="w-full max-w-[440px]">
-          <div className="mb-5 flex items-center justify-between gap-2 lg:hidden">
+      <main className="auth-main">
+        <div className="auth-panel">
+          <div className="auth-mobile-top">
             <Brand />
             <div className="flex items-center gap-2">
               <Link
@@ -292,7 +279,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           </div>
 
           <motion.div
-            className="gizmo-card overflow-hidden p-6 sm:p-8"
+            className="auth-card"
             initial={{ opacity: 0, y: 22, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.6, ease: EASE, delay: 0.12 }}
@@ -310,7 +297,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   {convertingGuest
                     ? "Add an email to keep your sets"
                     : "Sign in to your workspace"}
-                </h2>                  <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
+                </h2>
+                <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
                   {convertingGuest
                     ? "We'll email a six-digit code to confirm the address. Your guest sets and progress stay attached to this account."
                     : "We'll email you a six-digit code. New here? The same form creates your account."}
@@ -333,7 +321,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       autoComplete="email"
                       value={typedEmail}
                       onChange={(event) => setTypedEmail(event.target.value)}
-                      className="h-12 rounded-2xl border-border bg-white pl-10 text-[0.95rem] text-brand-ink placeholder:text-muted-foreground/90 focus-visible:border-brand-pink/50 focus-visible:ring-brand-pink/20"
+                      className="auth-input pl-10"
                       disabled={isLoading}
                       required
                     />
@@ -349,7 +337,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <Button
                     type="submit"
                     disabled={isLoading || typedResendIn > 0}
-                    className="chrome-button mt-4 h-12 w-full rounded-full bg-[#191B27] text-[0.95rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:bg-[#191B27]/40"
+                    className="auth-submit mt-4 w-full"
                   >
                     {isLoading ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -478,7 +466,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     disabled={
                       isLoading || otp.length !== 6 || attemptsLeft === 0
                     }
-                    className="chrome-button mt-5 h-12 w-full rounded-full bg-[#191B27] text-[0.95rem] font-semibold text-white hover:bg-[#2A2D3E] disabled:bg-[#191B27]/40"
+                    className="auth-submit mt-5 w-full"
                   >
                     {isLoading ? (
                       <>
