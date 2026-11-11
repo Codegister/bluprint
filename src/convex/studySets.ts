@@ -1302,6 +1302,39 @@ export const getContentForRepair = internalQuery({
 });
 
 /**
+ * The complete checkpoint for a resumable build: the set and every section
+ * already committed. A continuation action reads this instead of holding the
+ * previous stage's generated content in memory.
+ */
+export const getBuildSnapshot = internalQuery({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const set = await ctx.db.get(setId);
+    if (!set) return null;
+    const [cards, quiz, exams] = await Promise.all([
+      ctx.db
+        .query("flashcards")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+      ctx.db
+        .query("quizQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+      ctx.db
+        .query("examQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+    ]);
+    return {
+      set,
+      cards: byOrder(cards),
+      quiz: byOrder(quiz),
+      exams: byOrder(exams),
+    };
+  },
+});
+
+/**
  * Atomically takes ownership of a generation run. StrictMode in development
  * can fire the page effect twice, and two NVIDIA runs would waste quota.
  */
@@ -1309,13 +1342,13 @@ export const claimForProcessing = internalMutation({
   args: { setId: v.id("studySets") },
   handler: async (ctx, { setId }) => {
     const set = await ctx.db.get(setId);
-    if (!set) return { claimed: false, set: null };
+    if (!set) return { claimed: false, set: null, startedAt: 0 };
     const now = Date.now();
     const stillRunning =
       set.status === "processing" &&
       set.processingStartedAt !== undefined &&
       now - set.processingStartedAt < 10 * 60 * 1000;
-    if (stillRunning) return { claimed: false, set };
+    if (stillRunning) return { claimed: false, set, startedAt: 0 };
 
     await ctx.db.patch(setId, {
       status: "processing",
@@ -1325,7 +1358,38 @@ export const claimForProcessing = internalMutation({
       processingStartedAt: now,
       updatedAt: now,
     });
-    return { claimed: true, set: { ...set, status: "processing" as const } };
+    return {
+      claimed: true,
+      set: { ...set, status: "processing" as const, processingStartedAt: now },
+      startedAt: now,
+    };
+  },
+});
+
+/**
+ * Takes ownership of the next checkpointed stage without spending another
+ * build allowance. The timestamp is the run token: an old or duplicate
+ * continuation can only proceed if it still matches the current run.
+ */
+export const claimContinuation = internalMutation({
+  args: { setId: v.id("studySets"), runStartedAt: v.number() },
+  handler: async (ctx, { setId, runStartedAt }) => {
+    const set = await ctx.db.get(setId);
+    if (
+      !set ||
+      set.status !== "processing" ||
+      set.processingStartedAt !== runStartedAt
+    ) {
+      return { claimed: false as const, startedAt: 0 };
+    }
+    const now = Date.now();
+    // Refresh the stale timer for this stage. A build that takes twenty minutes
+    // across three actions is making progress; it is not a stuck ten-minute run.
+    await ctx.db.patch(setId, {
+      processingStartedAt: now,
+      updatedAt: now,
+    });
+    return { claimed: true as const, startedAt: now };
   },
 });
 

@@ -13,7 +13,7 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { action, internalAction } from "./_generated/server";
 import {
@@ -1166,6 +1166,100 @@ const MAX_REQUESTED_ITEMS = BUILD_MAX;
 
 /** Reports batch completion to the build screen. Cosmetic; failures are ignored. */
 type BatchProgress = (completed: number, target: number) => Promise<void> | void;
+
+type BuildFailureStage = Exclude<BuildStage, "save">;
+const buildFailureStageValidator = v.union(
+  v.literal("summary"),
+  v.literal("cards"),
+  v.literal("quiz"),
+  v.literal("exam"),
+);
+
+/** The inputs every continuation stage derives from the stored set. */
+type BuildPlan = {
+  notes: string;
+  context: StudyContext;
+  syllabus: boolean;
+  requested: { cards: number; quiz: number; exams: number };
+  targetCards: number;
+  targetQuiz: number;
+  targetExam: number;
+};
+
+function planForSet(set: Doc<"studySets">): BuildPlan {
+  const notes = set.notes.trim();
+  const syllabus = set.courseId !== undefined;
+  const requestedCards = Math.min(
+    MAX_REQUESTED_ITEMS,
+    Math.max(BUILD_MIN, set.targetCardCount ?? BUILD_DEFAULTS.cards),
+  );
+  const requestedQuiz = Math.min(
+    MAX_REQUESTED_ITEMS,
+    Math.max(BUILD_MIN, set.targetQuizCount ?? BUILD_DEFAULTS.quiz),
+  );
+  const requestedExam = Math.min(
+    MAX_REQUESTED_ITEMS,
+    Math.max(BUILD_MIN, set.targetExamCount ?? BUILD_DEFAULTS.exam),
+  );
+  const limits = syllabus
+    ? { cards: MAX_REQUESTED_ITEMS, quiz: MAX_REQUESTED_ITEMS, exam: MAX_REQUESTED_ITEMS }
+    : materialLimits(notes);
+  return {
+    notes,
+    context: { course: set.course, examBoard: set.examBoard, level: set.level },
+    syllabus,
+    requested: { cards: requestedCards, quiz: requestedQuiz, exams: requestedExam },
+    targetCards: Math.min(requestedCards, limits.cards),
+    targetQuiz: Math.min(requestedQuiz, limits.quiz),
+    targetExam: Math.min(requestedExam, limits.exam),
+  };
+}
+
+function summaryForSet(set: Doc<"studySets">): Summary {
+  const summary = set.summary;
+  if (!summary) return summaryFromNotes(set.notes, set.course);
+  return {
+    title: summary.title ?? set.title,
+    overview: summary.overview,
+    keyPoints: summary.keyPoints,
+    examFocus: summary.examFocus,
+  };
+}
+
+/** Stored rows use the same shape the generators and the final write expect. */
+function cardsForGeneration(rows: Array<Doc<"flashcards">>): GeneratedCard[] {
+  return rows.map((card) => {
+    const shaped: GeneratedCard = { front: card.front, back: card.back };
+    if (card.beyondNotes !== undefined) shaped.beyondNotes = card.beyondNotes;
+    return shaped;
+  });
+}
+
+function quizForWrite(rows: Array<Doc<"quizQuestions">>) {
+  return rows.map((question) => ({
+    question: question.question,
+    options: question.options,
+    correctIndex: question.correctIndex,
+    explanation: question.explanation,
+    ...(question.type !== undefined ? { type: question.type } : {}),
+    ...(question.answer !== undefined ? { answer: question.answer } : {}),
+    ...(question.acceptedAnswers !== undefined
+      ? { acceptedAnswers: question.acceptedAnswers }
+      : {}),
+    ...(question.beyondNotes !== undefined ? { beyondNotes: question.beyondNotes } : {}),
+  }));
+}
+
+function examsForWrite(rows: Array<Doc<"examQuestions">>) {
+  return rows.map((question) => ({
+    question: question.question,
+    marks: question.marks,
+    modelAnswer: question.modelAnswer,
+    markingGuide: question.markingGuide,
+    ...(question.beyondNotes !== undefined ? { beyondNotes: question.beyondNotes } : {}),
+    ...(question.criteria !== undefined ? { criteria: question.criteria } : {}),
+  }));
+}
 
 /**
  * The per-material ceiling lives in lib/buildCapacity.ts, where it counts
@@ -3125,6 +3219,269 @@ export const processStudySetScheduled = internalAction({
     await processStudySetForUser(ctx, setId, userId),
 });
 
+/**
+ * The second checkpointed stage. It re-reads the cards committed by the first
+ * action, generates the quiz and schedules the exam stage. A run token blocks
+ * an old or duplicate scheduler entry from writing into a newer run.
+ */
+type ContinuationArgs = {
+  setId: Id<"studySets">;
+  userId: Id<"users">;
+  runStartedAt: number;
+  failureStage?: BuildFailureStage;
+};
+
+export const continueStudySetQuiz = internalAction({
+  args: {
+    setId: v.id("studySets"),
+    userId: v.id("users"),
+    runStartedAt: v.number(),
+    failureStage: v.optional(buildFailureStageValidator),
+  },
+  handler: async (ctx, args) => await continueStudySetQuizForUser(ctx, args),
+});
+
+async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArgs) {
+  const claim = await ctx.runMutation(internal.studySets.claimContinuation, {
+    setId: args.setId,
+    runStartedAt: args.runStartedAt,
+  });
+  if (!claim.claimed) return { continued: false };
+
+  const snapshot = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
+    setId: args.setId,
+  });
+  if (
+    !snapshot ||
+    snapshot.set.userId !== args.userId ||
+    snapshot.set.status !== "processing"
+  ) {
+    return { continued: false };
+  }
+
+  const set = snapshot.set;
+  const plan = planForSet(set);
+  const summary = summaryForSet(set);
+  const savedCounts = {
+    cards: set.cardCount,
+    quiz: set.quizCount,
+    exams: set.examCount,
+  };
+  let failureStage = args.failureStage;
+  let currentStage: BuildStage = "quiz";
+
+  try {
+    const apiKeys = resolveNvidiaKeys();
+    let quiz = quizForWrite(snapshot.quiz);
+    if (snapshot.quiz.length === 0) {
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId: args.setId,
+        progress: `Writing ${plan.targetQuiz} quiz questions…`,
+        percent: 58,
+      });
+      const reportQuiz: BatchProgress = async (done, target) => {
+        if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId: args.setId,
+          progress: `Writing quiz questions… ${done} of ${target}`,
+          percent: 58 + (done / Math.max(1, target)) * 20,
+        });
+      };
+      const quizStage = await stage(
+        () =>
+          generateQuiz(
+            apiKeys,
+            plan.notes,
+            cardsForGeneration(snapshot.cards),
+            plan.targetQuiz,
+            Date.now() + 7 * 60 * 1000,
+            reportQuiz,
+            plan.syllabus,
+          ),
+        [],
+      );
+      if (quizStage.failure) {
+        failureStage ??= "quiz";
+      } else if (quizStage.value.length > 0) {
+        quiz = quizStage.value;
+      }
+    } else {
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId: args.setId,
+        progress: "Quiz saved. Continuing with exam questions…",
+        percent: 78,
+      });
+    }
+
+    if (!(await setStillExists(ctx, args.setId))) {
+      return { continued: false, cancelled: true };
+    }
+    currentStage = "save";
+    await ctx.runMutation(internal.studySets.setProgress, {
+      setId: args.setId,
+      progress: "Saving quiz questions…",
+      percent: 78,
+    });
+    await ctx.runMutation(internal.studySets.completeGeneration, {
+      setId: args.setId,
+      summary,
+      cards: toCardArgs(snapshot.cards),
+      quiz,
+      exams: examsForWrite(snapshot.exams),
+      title: summary.title,
+      requested: plan.requested,
+      final: false,
+    });
+    await ctx.runMutation(internal.studySets.setProgress, {
+      setId: args.setId,
+      progress: "Quiz saved. Continuing with exam questions…",
+      percent: 82,
+    });
+    await ctx.scheduler.runAfter(0, internal.ai.continueStudySetExams, {
+      setId: args.setId,
+      userId: args.userId,
+      runStartedAt: claim.startedAt,
+      ...(failureStage ? { failureStage } : {}),
+    });
+    return { continued: true };
+  } catch (error) {
+    if (error instanceof BuildCancelled) {
+      console.error("Study set quiz continuation cancelled (set deleted)", args.setId);
+      return { continued: false, cancelled: true };
+    }
+    console.error("Study set quiz continuation failed", args.setId, error);
+    await recordProviderIncident(ctx, "build", error);
+    const message = buildFailureCopy(
+      currentStage,
+      savedCounts,
+      isRateLimit(error),
+    );
+    await ctx.runMutation(internal.studySets.failGeneration, {
+      setId: args.setId,
+      message,
+    });
+    return { continued: false, failed: true };
+  }
+}
+
+/** The final checkpointed stage: write exams, then mark the set ready. */
+export const continueStudySetExams = internalAction({
+  args: {
+    setId: v.id("studySets"),
+    userId: v.id("users"),
+    runStartedAt: v.number(),
+    failureStage: v.optional(buildFailureStageValidator),
+  },
+  handler: async (ctx, args) => await continueStudySetExamsForUser(ctx, args),
+});
+
+async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationArgs) {
+  const claim = await ctx.runMutation(internal.studySets.claimContinuation, {
+    setId: args.setId,
+    runStartedAt: args.runStartedAt,
+  });
+  if (!claim.claimed) return { continued: false };
+
+  const snapshot = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
+    setId: args.setId,
+  });
+  if (
+    !snapshot ||
+    snapshot.set.userId !== args.userId ||
+    snapshot.set.status !== "processing"
+  ) {
+    return { continued: false };
+  }
+
+  const set = snapshot.set;
+  const plan = planForSet(set);
+  const summary = summaryForSet(set);
+  const savedCounts = {
+    cards: set.cardCount,
+    quiz: set.quizCount,
+    exams: set.examCount,
+  };
+  let failureStage = args.failureStage;
+  let currentStage: BuildStage = "exam";
+
+  try {
+    const apiKeys = resolveNvidiaKeys();
+    let exams = examsForWrite(snapshot.exams);
+    if (snapshot.exams.length === 0) {
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId: args.setId,
+        progress: `Drafting ${plan.targetExam} exam questions…`,
+        percent: 80,
+      });
+      const reportExams: BatchProgress = async (done, target) => {
+        if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId: args.setId,
+          progress: `Drafting exam questions… ${done} of ${target}`,
+          percent: 80 + (done / Math.max(1, target)) * 14,
+        });
+      };
+      const examStage = await stage(
+        () =>
+          generateExams(
+            apiKeys,
+            plan.notes,
+            plan.context,
+            plan.targetExam,
+            Date.now() + 7 * 60 * 1000,
+            reportExams,
+            plan.syllabus,
+          ),
+        [],
+      );
+      if (examStage.failure) {
+        failureStage ??= "exam";
+      } else if (examStage.value.length > 0) {
+        exams = toExamArgs(examStage.value);
+      }
+    }
+
+    if (!(await setStillExists(ctx, args.setId))) {
+      return { continued: false, cancelled: true };
+    }
+    currentStage = "save";
+    await ctx.runMutation(internal.studySets.setProgress, {
+      setId: args.setId,
+      progress: "Saving your set…",
+      percent: 97,
+    });
+    await ctx.runMutation(internal.studySets.completeGeneration, {
+      setId: args.setId,
+      summary,
+      cards: toCardArgs(snapshot.cards),
+      quiz: quizForWrite(snapshot.quiz),
+      exams: toExamArgs(exams),
+      title: summary.title,
+      requested: plan.requested,
+      final: true,
+      ...(failureStage ? { failureNote: partialStageNote(failureStage) } : {}),
+    });
+    return { continued: true };
+  } catch (error) {
+    if (error instanceof BuildCancelled) {
+      console.error("Study set exam continuation cancelled (set deleted)", args.setId);
+      return { continued: false, cancelled: true };
+    }
+    console.error("Study set exam continuation failed", args.setId, error);
+    await recordProviderIncident(ctx, "build", error);
+    const message = buildFailureCopy(
+      currentStage,
+      savedCounts,
+      isRateLimit(error),
+    );
+    await ctx.runMutation(internal.studySets.failGeneration, {
+      setId: args.setId,
+      message,
+    });
+    return { continued: false, failed: true };
+  }
+}
+
 async function processStudySetForUser(
   ctx: ActionCtx,
   setId: Id<"studySets">,
@@ -3135,12 +3492,25 @@ async function processStudySetForUser(
       throw new Error("Study set not found.");
     }
 
+    // A stage interrupted after the flashcard checkpoint can resume where it
+    // stopped. This is what makes the set page's Retry action continue the
+    // build instead of spending a fresh rebuild credit on cards it already has.
+    const resumeStage: "quiz" | "exam" | null =
+      (existing.status === "processing" || existing.status === "error") &&
+      existing.cardCount > 0
+        ? existing.quizCount === 0
+          ? "quiz"
+          : existing.examCount === 0
+            ? "exam"
+            : null
+        : null;
+
     // A rebuild is a second, full AI run over the same notes, so it spends an
-    // allowance like a new set does. The check happens before the claim, so a
-    // refused rebuild leaves the set exactly as it was.
+    // allowance like a new set does. A resume is the same paid run continuing,
+    // so it must not spend another credit.
     const buildKind = existing.status === "queued" ? ("set" as const) : ("rebuild" as const);
     let attemptStartedAt = Date.now();
-    if (existing.status !== "queued") {
+    if (existing.status !== "queued" && !resumeStage) {
       await ctx.runMutation(internal.buildUsage.consume, {
         userId,
         kind: "rebuild",
@@ -3154,7 +3524,7 @@ async function processStudySetForUser(
     if (!claim.claimed || !claim.set) {
       // Another run already owns this set. A rebuild credit was consumed just
       // above, so hand it back rather than charging for a run that never began.
-      if (existing.status !== "queued") {
+      if (existing.status !== "queued" && !resumeStage) {
         try {
           await ctx.runMutation(internal.buildUsage.refund, {
             userId,
@@ -3166,6 +3536,38 @@ async function processStudySetForUser(
         }
       }
       return { started: false };
+    }
+
+    if (resumeStage) {
+      try {
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId,
+          progress:
+            resumeStage === "quiz"
+              ? "Continuing with the quiz…"
+              : "Continuing with exam questions…",
+          percent: resumeStage === "quiz" ? 58 : 80,
+        });
+        await ctx.scheduler.runAfter(
+          0,
+          resumeStage === "quiz"
+            ? internal.ai.continueStudySetQuiz
+            : internal.ai.continueStudySetExams,
+          {
+            setId,
+            userId,
+            runStartedAt: claim.startedAt,
+          },
+        );
+        return { started: true, resumed: true };
+      } catch (resumeError) {
+        console.error("Could not resume the study set build", setId, resumeError);
+        await ctx.runMutation(internal.studySets.failGeneration, {
+          setId,
+          message: "The build could not be resumed. Your finished cards are saved; retry to continue.",
+        });
+        return { started: false, resumed: false };
+      }
     }
 
     // These live outside the try block because the catch needs them: the stage
@@ -3263,7 +3665,7 @@ async function processStudySetForUser(
       // A rebuild leaves the previous set untouched until all new stages are in.
       const canKeepPartial =
         existing.cardCount === 0 && existing.quizCount === 0 && existing.examCount === 0;
-      const stageFailures: Array<{ stage: BuildStage; error: unknown }> = [];
+      const stageFailures: Array<{ stage: BuildFailureStage; error: unknown }> = [];
 
       const savePartial = async (
         nextSummary: Summary,
@@ -3288,7 +3690,7 @@ async function processStudySetForUser(
         });
         // The mutation filters, grounds and deduplicates before storing, so the
         // failure message must use its counts, not the generated lengths.
-        if (saved.stored) {
+        if (saved.stored && saved.counts) {
           savedCounts.cards = saved.counts.cards;
           savedCounts.quiz = saved.counts.quiz;
           savedCounts.exams = saved.counts.exams;
@@ -3332,6 +3734,35 @@ async function processStudySetForUser(
         stageFailures.push({ stage: "cards", error: cardStage.failure });
       } else if (cards.length > 0) {
         await savePartial(summary, cards, [], []);
+      }
+
+      // A fresh build checkpoints what it has and hands the remaining sections
+      // to fresh actions. Each stage then gets its own Convex action budget,
+      // while the card checkpoint remains safe if a later stage is interrupted.
+      if (canKeepPartial) {
+        if (!generatedSummary && cards.length === 0) {
+          const first = stageFailures[0];
+          throw new Error(
+            buildFailureCopy(
+              first?.stage ?? "summary",
+              savedCounts,
+              isRateLimit(first?.error),
+            ),
+          );
+        }
+        if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId,
+          progress: "Flashcards saved. Continuing with the quiz…",
+          percent: 58,
+        });
+        await ctx.scheduler.runAfter(0, internal.ai.continueStudySetQuiz, {
+          setId,
+          userId,
+          runStartedAt: claim.startedAt,
+          ...(stageFailures[0] ? { failureStage: stageFailures[0].stage } : {}),
+        });
+        return { started: true, continued: true };
       }
 
       // A deleted set stops the run at the stage boundary, so the quiz and
