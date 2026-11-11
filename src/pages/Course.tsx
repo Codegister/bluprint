@@ -849,9 +849,11 @@ export default function Course() {
                   </p>
                 </div>
                 <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => handleBuildSet(nextTopic.topic.id)}
                   disabled={busyTopic !== null}
-                  className="h-10 shrink-0 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
+                  className="h-10 shrink-0 rounded-full border-border bg-white px-5 font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
                 >
                   {busyTopic === nextTopic.topic.id ? (
                     <Loader2 className="size-4 animate-spin" />
@@ -880,15 +882,14 @@ export default function Course() {
                 {partOptions.length > 1 && (
                   <Button
                     type="button"
-                    variant="outline"
                     onClick={() => {
                       setBuildSingleTopic(null);
                       setBuildSelection(topicOptions.map((option) => option.id));
                     }}
                     disabled={busyTopic !== null}
-                    className="h-9 rounded-full border-border bg-white px-4 text-[0.78rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+                    className="h-10 rounded-full bg-[#191B27] px-5 text-[0.8rem] font-semibold text-white hover:bg-[#2A2D3E]"
                   >
-                    <Layers3 className="size-3.5" aria-hidden />
+                    <Layers3 className="size-4" aria-hidden />
                     Build from parts
                   </Button>
                 )}
