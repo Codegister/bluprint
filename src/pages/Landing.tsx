@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { savePendingNotes } from "@/lib/pendingNotes";
@@ -73,18 +74,21 @@ export default function Landing() {
           <nav className="home-nav" aria-label="Home">
             <a href="#how">How it works</a>
           </nav>
-          {isAuthenticated ? (
-            <Link to="/tutor" className="home-signin">
-              Open workspace
-            </Link>
-          ) : (
-            <Link
-              to={`/auth?returnTo=${encodeURIComponent("/tutor")}`}
-              className="home-signin"
-            >
-              Sign in
-            </Link>
-          )}
+          <div className="home-header-actions">
+            <ThemeToggle />
+            {isAuthenticated ? (
+              <Link to="/tutor" className="home-signin">
+                Open workspace
+              </Link>
+            ) : (
+              <Link
+                to={`/auth?returnTo=${encodeURIComponent("/tutor")}`}
+                className="home-signin"
+              >
+                Sign in
+              </Link>
+            )}
+          </div>
         </div>
       </header>
 

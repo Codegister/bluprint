@@ -14,7 +14,9 @@ import "../stage-study.css";
 import "../stage-pages.css";
 import "./preview-fonts.css";
 
-const screen = new URLSearchParams(window.location.search).get("screen");
+const previewParams = new URLSearchParams(window.location.search);
+const screen = previewParams.get("screen");
+const previewTheme = previewParams.get("theme") === "dark" ? "dark" : "light";
 const initialPath =
   screen === "auth" ? "/auth" : screen === "timetable" ? "/timetable" : "/today";
 
@@ -24,10 +26,11 @@ function PreviewScreen() {
   return <Today />;
 }
 
-// The preview is always light, so a host machine in dark mode does not change
-// the screenshots. The stage tokens are the same in either mode.
+// The preview defaults to light so a host machine in dark mode does not change
+// the reference captures. `?theme=dark` is available for reviewing the dark
+// palette without changing the viewer's stored preference.
 try {
-  window.localStorage.setItem("bluprint.theme", "light");
+  window.localStorage.setItem("bluprint.theme", previewTheme);
 } catch {
   // Storage is optional in the preview.
 }

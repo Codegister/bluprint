@@ -8,8 +8,7 @@
    screens are rebuilt.
    ------------------------------------------------------------------------- */
 
-:root,
-.dark {
+:root {
   --stage: #0c0708;
   --stage-raised: #15100f;
   --stage-line: #2b2320;
@@ -96,6 +95,44 @@
   --chrome-6: var(--ink-soft);
   --chrome-7: var(--desk-muted);
   --chrome-8: var(--desk-ink);
+  --chrome-hi: var(--desk-raised);
+  --chrome-steel: var(--line-strong);
+  --chrome-line: var(--desk-line);
+  --chrome-edge: var(--desk-line);
+
+  color-scheme: light;
+}
+
+/* The stage identity stays fixed in both modes; the desk is what changes. */
+.dark {
+  --stage: #0c0708;
+  --stage-raised: #15100f;
+  --stage-line: #2b2320;
+  --stage-ink: #f6f1e8;
+  --stage-muted: #b8afa5;
+  --stage-danger: #ffb4a8;
+
+  --desk: #16110f;
+  --desk-raised: #1e1815;
+  --desk-line: #3b322c;
+  --desk-ink: #f6f1e8;
+  --desk-muted: #b8afa5;
+
+  --olive: #9eb07a;
+  --olive-deep: #c0d29a;
+  --olive-ink: #11150d;
+
+  --paper-deep: #211a16;
+  --surface-strong: #241d19;
+  --ink-soft: #d8cec3;
+  --line-strong: #5d4e44;
+  --accent-wash: #262d1d;
+  --highlighter-soft: #2b3321;
+  --coral: #ffb4a8;
+  --success: #c0d29a;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --shadow-strong: rgba(0, 0, 0, 0.7);
+
   --chrome-hi: var(--desk-raised);
   --chrome-steel: var(--line-strong);
   --chrome-line: var(--desk-line);
@@ -310,6 +347,49 @@ body::before {
   color: var(--stage-ink);
 }
 
+.stage-shell .app-rail-account .theme-toggle,
+.stage-shell .app-mobile-header .theme-toggle,
+.stage-home .theme-toggle,
+.auth-page .theme-toggle {
+  border: 1px solid var(--stage-line);
+  border-radius: 2px;
+  background: var(--stage-raised);
+  box-shadow: none;
+  color: var(--stage-ink);
+}
+
+.stage-shell .app-rail-account .theme-toggle:hover,
+.stage-shell .app-mobile-header .theme-toggle:hover,
+.stage-home .theme-toggle:hover,
+.auth-page .theme-toggle:hover {
+  border-color: var(--olive);
+  background: var(--stage-line);
+  color: var(--stage-ink);
+}
+
+.stage-shell .app-rail-account .theme-toggle-labeled {
+  width: 100%;
+  min-height: 40px;
+  height: auto;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  font-size: 16px;
+}
+
+.stage-shell .app-rail-account .theme-toggle-labeled > span:first-child,
+.stage-home .theme-toggle > span:first-child,
+.auth-page .theme-toggle > span:first-child {
+  border: 1px solid var(--stage-line);
+  background: transparent !important;
+  box-shadow: none;
+  color: var(--olive) !important;
+}
+
+.stage-shell .app-rail-account .theme-toggle-labeled > span:last-child {
+  color: var(--stage-muted);
+}
+
 .stage-shell .rail-avatar {
   font-size: 16px;
 }
@@ -382,6 +462,10 @@ body::before {
 .stage-shell .app-main {
   border-left: 1px solid var(--stage-line);
   background: var(--desk);
+}
+
+.dark .stage-shell .app-main {
+  color-scheme: dark;
 }
 
 .stage-shell .app-main :is(a, button, input, textarea, select):focus-visible {
@@ -461,6 +545,13 @@ body::before {
   display: none;
   align-items: center;
   gap: 28px;
+  margin-left: auto;
+}
+
+.home-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-left: auto;
 }
 
@@ -987,6 +1078,10 @@ body::before {
 @media (min-width: 900px) {
   .home-nav {
     display: flex;
+  }
+
+  .home-header-actions {
+    margin-left: 0;
   }
 }
 

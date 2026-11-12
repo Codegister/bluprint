@@ -1,5 +1,6 @@
 import { Brand } from "@/components/Brand";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -333,6 +334,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </button>
           )}
         </div>
+        <ThemeToggle withLabel className="mt-3" />
       </div>
 
       <AlertDialog
@@ -539,6 +541,7 @@ export function AppShell({
       <header className="app-mobile-header sticky top-0 z-30 flex items-center justify-between border-b px-4 py-3 lg:hidden">
         <Brand to="/tutor" />
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <button
             type="button"
             aria-label="Open menu"

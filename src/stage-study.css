@@ -1163,6 +1163,10 @@
   color: #fffdf9 !important;
 }
 
+.dark .set-screen .set-desk [class*="bg-[#191B27]"] {
+  color: var(--olive-ink) !important;
+}
+
 .set-screen .set-desk .rounded-full.bg-brand-panel,
 .set-screen .set-desk .rounded-full[class*="border"] {
   border-radius: 2px;
@@ -1174,6 +1178,14 @@
 
 .papers-screen {
   color: var(--desk-ink);
+}
+
+.dark .papers-screen,
+.dark .past-paper-screen {
+  --paper-accent: #aab8e8;
+  --paper-accent-deep: #c7d2f4;
+  --paper-ink: #10131f;
+  --paper-wash: #202536;
 }
 
 .papers-cover,

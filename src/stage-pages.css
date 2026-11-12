@@ -511,6 +511,10 @@
   font-size: 14px;
 }
 
+.dark .timetable-error {
+  background: #2a1714 !important;
+}
+
 .timetable-layout {
   margin-top: 20px !important;
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr) !important;
