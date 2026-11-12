@@ -1,58 +1,80 @@
 /* ---------------------------------------------------------------------------
    Bluprint stage + desk
-   One stage. One desk. One olive signal.
+   Blueprint & Signal: a cool paper field, deep navy structure and one
+   vermilion signal.
 
    The stage is the shell, Home, covers and empty states. The desk is only for
-   surfaces someone reads or works on. This file deliberately layers over the
-   previous stylesheet so routes outside this pass keep working while their
-   screens are rebuilt.
+   surfaces someone reads or works on. The field is 60% of the screen, the
+   stage and controls are 30%, and the signal is reserved for the one action or
+   emphasis that matters. This file deliberately layers over the previous
+   stylesheet so routes outside this pass keep working while their screens are
+   rebuilt.
    ------------------------------------------------------------------------- */
 
 :root {
-  --stage: #0c0708;
-  --stage-raised: #15100f;
-  --stage-line: #2b2320;
-  --stage-ink: #f6f1e8;
-  --stage-muted: #b8afa5;
+  /* 30% structure: the rail, covers, bold bands and primary controls. */
+  --stage: #17324d;
+  --stage-raised: #1f405f;
+  --stage-line: #2d5578;
+  --stage-ink: #f3f8fb;
+  --stage-muted: #bfd0dd;
   --stage-danger: #ffb4a8;
 
-  --desk: #faf8f5;
-  --desk-raised: #fffdf9;
-  --desk-line: #d8d2c8;
-  --desk-ink: #171210;
-  --desk-muted: #5d564f;
+  /* 60% field: the page, reading desk and raised paper. */
+  --desk: #edf2f5;
+  --desk-raised: #fafcfd;
+  --desk-line: #c3d0da;
+  --desk-ink: #14202b;
+  --desk-muted: #566875;
 
-  --olive: #9eb07a;
-  --olive-deep: #536a36;
-  --olive-ink: #11150d;
+  /* 10% signal: one action, active state or emphasis per screen. */
+  --signal: #d9533a;
+  --signal-deep: #a83a26;
+  --signal-ink: #ffffff;
+  --signal-wash: #f7ded8;
+  --olive: var(--signal);
+  --olive-deep: var(--signal-deep);
+  --olive-ink: var(--signal-ink);
 
-  /* The 10% bold field. One statement band per screen, never the page field. */
-  --bold-field: #536a36;
-  --bold-field-ink: #fffdf9;
-  --bold-field-muted: #e4ecd7;
+  /* A structural band, never a second accent. */
+  --bold-field: var(--stage);
+  --bold-field-ink: var(--stage-ink);
+  --bold-field-muted: #c9d8e4;
 
   /* The old interface tokens are kept on the desk while each screen is
      rebuilt. Nothing dark is allowed on a reading surface. */
   --paper: var(--desk);
-  --paper-deep: #f0ece4;
+  --paper-deep: #e2eaf0;
   --surface: var(--desk-raised);
-  --surface-strong: #fffdf9;
+  --surface-strong: #ffffff;
   --ink: var(--desk-ink);
-  --ink-soft: #3b3630;
+  --ink-soft: #334757;
   --ink-muted: var(--desk-muted);
   --line: var(--desk-line);
-  --line-strong: #b5ada2;
-  --accent: var(--olive);
-  --accent-deep: var(--olive-deep);
-  --accent-wash: #eef2e5;
-  --highlighter: var(--olive);
-  --highlighter-soft: #e7eddd;
-  --button-bg: var(--olive);
-  --button-ink: var(--olive-ink);
-  --success: var(--olive-deep);
-  --coral: #b74432;
-  --shadow: rgba(23, 18, 16, 0.08);
-  --shadow-strong: rgba(23, 18, 16, 0.16);
+  --line-strong: #8fa3b2;
+  --accent: var(--signal);
+  --accent-deep: var(--signal-deep);
+  --accent-wash: var(--signal-wash);
+  --highlighter: var(--signal);
+  --highlighter-soft: var(--signal-wash);
+  --button-bg: var(--signal);
+  --button-ink: var(--signal-ink);
+
+  /* Functional status colours are exempt from the 60/30/10 split. */
+  --success: #176b52;
+  --success-ink: #176b52;
+  --success-wash: #e8f5ef;
+  --success-line: #b7dccd;
+  --danger-ink: #b42318;
+  --danger-wash: #fdecea;
+  --danger-line: #f2b8b5;
+  --warning-ink: #8a4b0f;
+  --warning-wash: #fff4e0;
+  --warning-line: #ebd3a7;
+  --focus: #17324d;
+  --coral: #b42318;
+  --shadow: rgba(20, 32, 43, 0.08);
+  --shadow-strong: rgba(20, 32, 43, 0.16);
 
   --background: var(--desk);
   --foreground: var(--desk-ink);
@@ -69,7 +91,24 @@
   --accent-foreground: var(--olive-ink);
   --border: var(--desk-line);
   --input: var(--line-strong);
-  --ring: var(--olive);
+  --ring: var(--focus);
+  --destructive: var(--danger-ink);
+  --destructive-foreground: #ffffff;
+
+  --chart-1: var(--signal);
+  --chart-2: var(--success);
+  --chart-3: var(--stage);
+  --chart-4: var(--warning-ink);
+  --chart-5: var(--desk-ink);
+
+  --sidebar: var(--desk);
+  --sidebar-foreground: var(--desk-ink);
+  --sidebar-primary: var(--signal);
+  --sidebar-primary-foreground: var(--signal-ink);
+  --sidebar-accent: var(--paper-deep);
+  --sidebar-accent-foreground: var(--desk-ink);
+  --sidebar-border: var(--desk-line);
+  --sidebar-ring: var(--focus);
 
   --brand-ink: var(--desk-ink);
   --brand-cream: var(--desk-raised);
@@ -85,6 +124,15 @@
   --brand-butter: var(--olive);
   --brand-blush: var(--olive);
   --brand-lime: var(--olive-deep);
+  --brand-void: var(--stage);
+
+  /* Subject tags are neutral plates; the signal lives in one place. */
+  --surface-lime: var(--paper-deep);
+  --surface-lilac: var(--paper-deep);
+  --surface-sky: var(--paper-deep);
+  --surface-peach: var(--paper-deep);
+  --surface-mint: var(--paper-deep);
+  --surface-cream: var(--desk);
 
   --chrome-0: var(--desk-raised);
   --chrome-1: var(--desk);
@@ -103,33 +151,52 @@
   color-scheme: light;
 }
 
-/* The stage identity stays fixed in both modes; the desk is what changes. */
+/* The structure stays navy in both modes; the field is what changes. */
 .dark {
-  --stage: #0c0708;
-  --stage-raised: #15100f;
-  --stage-line: #2b2320;
-  --stage-ink: #f6f1e8;
-  --stage-muted: #b8afa5;
+  --stage: #08131c;
+  --stage-raised: #102433;
+  --stage-line: #294558;
+  --stage-ink: #f3f8fb;
+  --stage-muted: #a8bac7;
   --stage-danger: #ffb4a8;
 
-  --desk: #16110f;
-  --desk-raised: #1e1815;
-  --desk-line: #3b322c;
-  --desk-ink: #f6f1e8;
-  --desk-muted: #b8afa5;
+  --desk: #0d1b26;
+  --desk-raised: #142634;
+  --desk-line: #2a4152;
+  --desk-ink: #eaf2f6;
+  --desk-muted: #a8bac7;
 
-  --olive: #9eb07a;
-  --olive-deep: #c0d29a;
-  --olive-ink: #11150d;
+  --signal: #ff7457;
+  --signal-deep: #ff9a85;
+  --signal-ink: #2a120d;
+  --signal-wash: #3b211c;
+  --olive: var(--signal);
+  --olive-deep: var(--signal-deep);
+  --olive-ink: var(--signal-ink);
 
-  --paper-deep: #211a16;
-  --surface-strong: #241d19;
-  --ink-soft: #d8cec3;
-  --line-strong: #5d4e44;
-  --accent-wash: #262d1d;
-  --highlighter-soft: #2b3321;
+  --bold-field: var(--stage-raised);
+  --bold-field-ink: var(--stage-ink);
+  --bold-field-muted: #c6d7e3;
+
+  --paper-deep: #172a38;
+  --surface-strong: #1a2e3c;
+  --ink-soft: #d0dde6;
+  --line-strong: #5a7386;
+  --accent-wash: var(--signal-wash);
+  --highlighter-soft: var(--signal-wash);
+
+  --success: #8fe3bb;
+  --success-ink: #8fe3bb;
+  --success-wash: #153229;
+  --success-line: #2f5c4a;
+  --danger-ink: #ffb4a8;
+  --danger-wash: #3a1d1b;
+  --danger-line: #6e3a41;
+  --warning-ink: #f0c674;
+  --warning-wash: #332a19;
+  --warning-line: #6b5734;
+  --focus: #9cc4de;
   --coral: #ffb4a8;
-  --success: #c0d29a;
   --shadow: rgba(0, 0, 0, 0.45);
   --shadow-strong: rgba(0, 0, 0, 0.7);
 
@@ -171,8 +238,8 @@ body::before {
 }
 
 ::selection {
-  background: var(--olive);
-  color: var(--olive-ink);
+  background: var(--signal);
+  color: var(--signal-ink);
 }
 
 .stage-home a,
@@ -183,7 +250,7 @@ body::before {
 .stage-home :is(a, button, textarea):focus-visible,
 .stage-shell :is(a, button, input, textarea, select):focus-visible,
 .app-stage-sheet :is(a, button, input, textarea, select):focus-visible {
-  outline: 2px solid var(--olive) !important;
+  outline: 2px solid var(--focus) !important;
   outline-offset: 2px !important;
 }
 
@@ -429,7 +496,7 @@ body::before {
 }
 
 .stage-shell .app-rail-account .text-\[\#A81F28\] {
-  color: #eda49b !important;
+  color: var(--stage-danger) !important;
 }
 
 .stage-shell .app-rail-scroll [data-slot="skeleton"] {
@@ -479,7 +546,7 @@ body::before {
 }
 
 .stage-shell .app-main :is(a, button, input, textarea, select):focus-visible {
-  outline-color: var(--desk-ink) !important;
+  outline-color: var(--focus) !important;
 }
 
 @media (max-width: 1023px) {

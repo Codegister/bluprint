@@ -626,7 +626,7 @@ body::before,
 }
 
 .surface-card:hover {
-  border-color: color-mix(in srgb, var(--olive) 42%, var(--desk-line));
+  border-color: color-mix(in srgb, var(--signal) 38%, var(--desk-line));
 }
 
 .stage-shell .app-main {
@@ -648,7 +648,7 @@ body::before,
 }
 
 :is(.stage-home, .stage-shell, .auth-page) :is(a, button, summary, [role="button"]):focus-visible {
-  outline: 2px solid var(--olive) !important;
+  outline: 2px solid var(--focus) !important;
   outline-offset: 2px !important;
 }
 
@@ -749,22 +749,22 @@ html.depth-fallback .set-screen {
 
 /* Quiz feedback colours: status ink is separate from the single action accent. */
 .text-success {
-  color: #0f7a50 !important;
+  color: var(--success-ink) !important;
 }
 
 .text-success-strong {
-  color: #0b6b45 !important;
+  color: var(--success) !important;
 }
 
 .text-danger {
-  color: #a81f28 !important;
+  color: var(--danger-ink) !important;
 }
 
-/* The old ink fill is now the olive action fill. Its white label was inherited
-   from the dark button it used to be, so pin the ink to the fill in both modes. */
+/* The old ink fill is now the action fill. Its label is inherited from the
+   dark button it used to be, so pin the ink to the fill in both modes. */
 .stage-shell [class~="bg-[#191B27]"],
 .stage-shell [class~="bg-[#191B27]"] * {
-  color: var(--olive-ink) !important;
+  color: var(--stage-ink) !important;
 }
 
 /* Stage menus keep their dark paper in both modes; cover copy must not pull

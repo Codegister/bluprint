@@ -32,6 +32,8 @@ type QueuedReview = { cardId: string; rating: 1 | 2 | 3 | 4; at: number };
 
 const SNAPSHOT_PREFIX = "bluprint:offline:set:";
 const QUEUE_KEY = "bluprint:offline:queue";
+/** Fired after a review is safely queued, so the syncer can retry promptly. */
+export const QUEUE_CHANGED_EVENT = "bluprint:offline-queue-changed";
 /** Only the most recent three sets are kept; this is a cache, not an archive. */
 const MAX_SNAPSHOTS = 3;
 
@@ -84,16 +86,39 @@ export function readSetSnapshot(setId: string): SetSnapshot | null {
   }
 }
 
-export function queueReview(cardId: string, rating: 1 | 2 | 3 | 4): void {
+export function queueReview(cardId: string, rating: 1 | 2 | 3 | 4): boolean {
   const store = storage();
-  if (!store) return;
+  if (!store) return false;
   try {
     const queue = readQueue();
     queue.push({ cardId, rating, at: Date.now() });
     store.setItem(QUEUE_KEY, JSON.stringify(queue.slice(-200)));
+    if (
+      typeof window !== "undefined" &&
+      typeof window.dispatchEvent === "function" &&
+      typeof Event !== "undefined"
+    ) {
+      window.dispatchEvent(new Event(QUEUE_CHANGED_EVENT));
+    }
+    return true;
   } catch {
     // Nothing to do: the review is lost, and the card stays due.
+    return false;
   }
+}
+
+/** Whether a failed write is a dropped connection rather than a server refusal. */
+export function isConnectionFailure(error: unknown): boolean {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  return /failed to fetch|network\s*(?:error|request failed|connection was lost)|load failed|fetch failed|timed? ?out|timeout|offline|connection (?:lost|closed|reset)|socket hang up|econn(?:reset|refused)|enotfound/i.test(
+    message,
+  );
 }
 
 export function readQueue(): QueuedReview[] {

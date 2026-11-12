@@ -12,6 +12,6 @@
   <g fill="#0A0F15">
     <path d="M22 17h13.5a9 9 0 0 1 0 18H22V17Z" />
     <path d="M22 35h15a9.5 9.5 0 1 1 0 19H22V35Z" opacity="0.55" />
-    <circle cx="49" cy="18" r="4.5" fill="#0B57D0" />
+    <circle cx="49" cy="18" r="4.5" fill="#D9533A" />
   </g>
 </svg>

@@ -170,6 +170,12 @@ export type StudySetCopyArgs = {
    * the topics that still need generating. Undefined copies the whole set.
    */
   sourceTopicIds?: string[];
+  /**
+   * Maps a source topic id to the equivalent id in the new pathway. Pathway
+   * versions can rename ids while keeping the same title and specification
+   * content, so copied rows must be retagged to the requested id.
+   */
+  sourceTopicIdMap?: Record<string, string>;
   /** The AI brief for the topics not covered by `sourceTopicIds`. */
   generationNotes?: string;
   /**
@@ -224,6 +230,22 @@ function rowsForSourceTopics<T extends { specRef?: string }>(
     const topicId = sourceTopicForRow(source, row.specRef);
     return topicId !== undefined && wanted.has(topicId);
   });
+}
+
+/** Retags a copied row when the requested pathway uses a newer topic id. */
+function remapSpecRef<T extends { specRef?: string }>(
+  row: T,
+  topicIdMap?: Record<string, string>,
+): T {
+  if (!topicIdMap || !row.specRef) return row;
+  const separator = row.specRef.indexOf(":");
+  const sourceId = separator === -1 ? row.specRef : row.specRef.slice(0, separator);
+  const mapped = topicIdMap[sourceId];
+  if (!mapped || mapped === sourceId) return row;
+  return {
+    ...row,
+    specRef: `${mapped}${separator === -1 ? "" : row.specRef.slice(separator)}`,
+  };
 }
 
 /** Lowercase, punctuation-free words, used only for similarity matching. */
@@ -290,20 +312,172 @@ export type CourseReuseQuery = {
   examBoard?: string;
   level?: string;
   topicIds: string[];
+  /**
+   * The new selection's brief. It is optional so callers that only have ids
+   * still work, but when present it lets a topic match by title or specification
+   * content after a pathway version changes its ids.
+   */
+  notes?: string;
   targetCardCount: number;
   targetQuizCount: number;
   targetExamCount: number;
 };
 
+type TopicProfile = {
+  id: string;
+  title: string;
+  specReference?: string;
+  content: string;
+};
+
+/**
+ * Reads the topic sections that `buildTopicNotes` writes into a course brief.
+ * The order matches `topicIds`, which is how a source's old ids are paired with
+ * the titles and specification text stored in its notes.
+ */
+function topicProfiles(notes: string | undefined, ids: string[]): TopicProfile[] {
+  if (!notes || ids.length === 0) return [];
+  const sections: Array<{
+    title: string;
+    specReference?: string;
+    content: string[];
+  }> = [];
+  let current: (typeof sections)[number] | undefined;
+
+  for (const line of notes.split(/\r?\n/)) {
+    const heading = line.match(/^(?:Topic:|Section\s+\d+:)\s*(.+)$/i);
+    if (heading) {
+      const labelled = heading[1]!.trim();
+      const reference = labelled.match(/\(specification\s+([^)]+)\)\s*$/i);
+      current = {
+        title: reference
+          ? labelled.slice(0, reference.index ?? labelled.length).trim()
+          : labelled,
+        ...(reference ? { specReference: reference[1]!.trim() } : {}),
+        content: [],
+      };
+      sections.push(current);
+    } else if (current && !/^Unit:/i.test(line) && !/^Covers:/i.test(line)) {
+      // Unit and section labels are shared by unrelated topics; the summary and
+      // specification bullets are what actually identify the topic.
+      current.content.push(line);
+    }
+  }
+
+  return sections
+    .map((section, index) => ({
+      id: ids[index]!,
+      title: section.title,
+      ...(section.specReference ? { specReference: section.specReference } : {}),
+      content: section.content.join(" ").trim(),
+    }))
+    .filter((section) => section.id !== undefined);
+}
+
+function normalizedTitle(value: string): string {
+  return words(value).join(" ");
+}
+
+function normalizedReference(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9.]+/g, "");
+}
+
+/** How much of the smaller topic body appears in the larger one. */
+function topicContentSimilarity(left: string, right: string): number {
+  const leftWords = new Set(words(left));
+  const rightWords = new Set(words(right));
+  const smaller = Math.min(leftWords.size, rightWords.size);
+  if (smaller < 8) return 0;
+  let shared = 0;
+  for (const word of leftWords) if (rightWords.has(word)) shared += 1;
+  return shared / smaller;
+}
+
+function findProfileMatch(
+  wanted: TopicProfile,
+  candidates: TopicProfile[],
+  used: Set<string>,
+): { profile: TopicProfile; basis: "title" | "specReference" | "specContent" } | null {
+  const available = candidates.filter((candidate) => !used.has(candidate.id));
+  const title = normalizedTitle(wanted.title);
+  if (title) {
+    const byTitle = available.find(
+      (candidate) => normalizedTitle(candidate.title) === title,
+    );
+    if (byTitle) return { profile: byTitle, basis: "title" };
+  }
+
+  const reference = wanted.specReference
+    ? normalizedReference(wanted.specReference)
+    : "";
+  if (reference) {
+    const byReference = available.find(
+      (candidate) =>
+        candidate.specReference !== undefined &&
+        normalizedReference(candidate.specReference) === reference,
+    );
+    if (byReference) return { profile: byReference, basis: "specReference" };
+  }
+
+  let best: { profile: TopicProfile; score: number } | null = null;
+  for (const candidate of available) {
+    const score = topicContentSimilarity(wanted.content, candidate.content);
+    if (score >= 0.6 && (!best || score > best.score)) {
+      best = { profile: candidate, score };
+    }
+  }
+  return best ? { profile: best.profile, basis: "specContent" } : null;
+}
+
 function topicOverlap(
   source: Doc<"studySets">,
   wanted: string[],
-): { matched: string[]; missing: string[] } {
-  const sourceTopics = new Set(topicIdsFor(source));
-  return {
-    matched: wanted.filter((topicId) => sourceTopics.has(topicId)),
-    missing: wanted.filter((topicId) => !sourceTopics.has(topicId)),
-  };
+  queryNotes?: string,
+): {
+  matched: string[];
+  missing: string[];
+  sourceTopicIds: string[];
+  topicIdMap: Record<string, string>;
+} {
+  const sourceTopics = topicIdsFor(source);
+  const sourceSet = new Set(sourceTopics);
+  const matched: string[] = [];
+  const missing: string[] = [];
+  const sourceTopicIds: string[] = [];
+  const topicIdMap: Record<string, string> = {};
+  const used = new Set<string>();
+
+  const sourceProfiles = topicProfiles(source.notes, sourceTopics);
+  const wantedProfiles = queryNotes
+    ? topicProfiles(queryNotes, wanted)
+    : [];
+
+  for (const requestedId of wanted) {
+    if (sourceSet.has(requestedId)) {
+      matched.push(requestedId);
+      sourceTopicIds.push(requestedId);
+      topicIdMap[requestedId] = requestedId;
+      used.add(requestedId);
+      continue;
+    }
+
+    const profile = wantedProfiles.find((entry) => entry.id === requestedId);
+    if (!profile) {
+      missing.push(requestedId);
+      continue;
+    }
+    const found = findProfileMatch(profile, sourceProfiles, used);
+    if (!found) {
+      missing.push(requestedId);
+      continue;
+    }
+    matched.push(requestedId);
+    sourceTopicIds.push(found.profile.id);
+    topicIdMap[found.profile.id] = requestedId;
+    used.add(found.profile.id);
+  }
+
+  return { matched, missing, sourceTopicIds, topicIdMap };
 }
 
 /**
@@ -330,7 +504,7 @@ export function similarCourseSetScore(
 
   const wanted = [...new Set(query.topicIds.filter(Boolean))];
   if (wanted.length === 0) return null;
-  const { matched, missing } = topicOverlap(source, wanted);
+  const { matched, missing } = topicOverlap(source, wanted, query.notes);
   if (matched.length === 0) return null;
 
   const extraTopics = new Set(topicIdsFor(source)).size - matched.length;
@@ -348,6 +522,10 @@ export type CachedReuseMatch = {
   score: number;
   /** Requested topics the source can supply. */
   matchedTopicIds: string[];
+  /** The source rows to copy for `matchedTopicIds`, in the same order. */
+  matchedSourceTopicIds: string[];
+  /** Source topic id -> requested topic id, used to retag copied rows. */
+  topicIdMap: Record<string, string>;
   /** Requested topics still needing generation. */
   missingTopicIds: string[];
 };
@@ -370,7 +548,11 @@ export async function findSimilarCachedStudySet(
     if (!source) continue;
     const score = similarCourseSetScore(source, query);
     if (score === null) continue;
-    const { matched, missing } = topicOverlap(source, wanted);
+    const { matched, missing, sourceTopicIds, topicIdMap } = topicOverlap(
+      source,
+      wanted,
+      query.notes,
+    );
     if (
       !best ||
       score > best.score ||
@@ -381,6 +563,8 @@ export async function findSimilarCachedStudySet(
         source,
         score,
         matchedTopicIds: matched,
+        matchedSourceTopicIds: sourceTopicIds,
+        topicIdMap,
         missingTopicIds: missing,
       };
     }
@@ -429,26 +613,26 @@ export async function copyStudySetContent(
       .collect(),
   ]);
 
-  const cards = partial
+  const copiedCards = partial
     ? rowsForSourceTopics(source, sourceCards, args.sourceTopicIds!)
     : sourceCards;
-  const quiz = partial
+  const copiedQuiz = partial
     ? rowsForSourceTopics(source, sourceQuiz, args.sourceTopicIds!)
     : sourceQuiz;
-  const exams = partial
+  const copiedExams = partial
     ? rowsForSourceTopics(source, sourceExams, args.sourceTopicIds!)
     : sourceExams;
 
   if (partial) {
     const covered = new Set(
-      [...cards, ...quiz, ...exams]
+      [...copiedCards, ...copiedQuiz, ...copiedExams]
         .map((row) => sourceTopicForRow(source, row.specRef))
         .filter((topicId): topicId is string => topicId !== undefined),
     );
     // Never claim a topic is reused when its tagged rows are missing. Falling
     // back to a normal build is safer than a copy with a silent hole.
     if (
-      cards.length + quiz.length + exams.length === 0 ||
+      copiedCards.length + copiedQuiz.length + copiedExams.length === 0 ||
       args.sourceTopicIds!.some((topicId) => !covered.has(topicId))
     ) {
       return null;
@@ -456,15 +640,22 @@ export async function copyStudySetContent(
   } else if (
     // A row that was being rebuilt, or an old cache entry left after a partial
     // write, must not produce a short deck that looks finished.
-    cards.length === 0 ||
-    quiz.length === 0 ||
-    exams.length === 0 ||
-    cards.length !== source.cardCount ||
-    quiz.length !== source.quizCount ||
-    exams.length !== source.examCount
+    copiedCards.length === 0 ||
+    copiedQuiz.length === 0 ||
+    copiedExams.length === 0 ||
+    copiedCards.length !== source.cardCount ||
+    copiedQuiz.length !== source.quizCount ||
+    copiedExams.length !== source.examCount
   ) {
     return null;
   }
+
+  // A title/specification match can map an old source id to a new requested
+  // id. The copied content stays the same, but its tags must follow the new
+  // pathway so coverage and later rebuilds do not point at a missing topic.
+  const cards = copiedCards.map((row) => remapSpecRef(row, args.sourceTopicIdMap));
+  const quiz = copiedQuiz.map((row) => remapSpecRef(row, args.sourceTopicIdMap));
+  const exams = copiedExams.map((row) => remapSpecRef(row, args.sourceTopicIdMap));
 
   const now = Date.now();
   const setId = await ctx.db.insert("studySets", {

@@ -10,6 +10,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   clearQueue,
+  QUEUE_CHANGED_EVENT,
   queueReview,
   readQueue,
   readSetSnapshot,
@@ -19,7 +20,7 @@ import {
 import { plural } from "@/lib/format";
 import { useMutation, useQuery } from "convex/react";
 import { Check, CloudOff, Loader2, RotateCcw, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
 
@@ -53,8 +54,9 @@ export function OfflineBanner() {
   const [open, setOpen] = useState(false);
   const [cardIndex, setCardIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const [queued, setQueued] = useState(0);
+  const [queued, setQueued] = useState(() => readQueue().length);
   const [flushing, setFlushing] = useState(false);
+  const flushingRef = useRef(false);
 
   const snapshot: SetSnapshot | null = useMemo(() => {
     if (!details) return null;
@@ -83,46 +85,76 @@ export function OfflineBanner() {
     if (snapshot) saveSetSnapshot(snapshot);
   }, [snapshot]);
 
-  // Queue length is read on mount and whenever the tab flips offline/online.
-  useEffect(() => {
-    setQueued(readQueue().length);
-    const goOffline = () => setOnline(false);
-    const goOnline = () => {
-      setOnline(true);
-      void flush();
-    };
-    window.addEventListener("offline", goOffline);
-    window.addEventListener("online", goOnline);
-    return () => {
-      window.removeEventListener("offline", goOffline);
-      window.removeEventListener("online", goOnline);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const flush = async () => {
+    if (flushingRef.current) return;
     const queue = readQueue();
-    if (queue.length === 0) return;
+    if (queue.length === 0) {
+      setQueued(0);
+      return;
+    }
+    flushingRef.current = true;
     setFlushing(true);
+    let sent = 0;
     try {
       for (const item of queue) {
         await save({
           cardId: item.cardId as Id<"flashcards">,
           rating: item.rating,
         });
+        // Drop each success immediately: if a later review fails, the earlier
+        // ones must not be sent again on the next retry.
+        clearQueue([item]);
+        sent += 1;
       }
-      clearQueue(queue);
-      setQueued(0);
-      toast.success(
-        `${plural(queue.length, "review")} synced from your offline session.`,
-      );
+      setQueued(readQueue().length);
+      if (sent > 0) {
+        toast.success(
+          `${plural(sent, "review")} synced from your offline session.`,
+        );
+      }
     } catch {
-      // Still offline or the sync failed: keep the queue for the next attempt.
+      // Still offline or the sync failed: keep the unsent queue for the next
+      // attempt, and try again automatically below.
       setQueued(readQueue().length);
     } finally {
+      flushingRef.current = false;
       setFlushing(false);
     }
   };
+
+  // Queue length is kept current as the tab flips offline/online and as a
+  // review is queued by a failed save.
+  useEffect(() => {
+    const goOffline = () => setOnline(false);
+    const goOnline = () => {
+      setOnline(true);
+      void flush();
+    };
+    const queueChanged = () => setQueued(readQueue().length);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    window.addEventListener(QUEUE_CHANGED_EVENT, queueChanged);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener(QUEUE_CHANGED_EVENT, queueChanged);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A failed save can happen while the browser still reports itself online (a
+  // dropped request rather than a full offline transition). Retry in the
+  // background until the queue drains; the online event still flushes at once.
+  useEffect(() => {
+    if (!online || queued === 0) return;
+    const first = window.setTimeout(() => void flush(), 0);
+    const timer = window.setInterval(() => void flush(), 15_000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online, queued]);
 
   const cached = setIdParam ? readSetSnapshot(setIdParam) : null;
   const cards = cached?.cards ?? [];

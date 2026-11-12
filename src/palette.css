@@ -1,0 +1,323 @@
+/* ---------------------------------------------------------------------------
+   Blueprint & Signal — final palette layer.
+
+   The screens were built over several design passes, so a number still carry
+   literal graphite, cream, olive and status colours in their utility classes.
+   Re-pointing those here keeps the 60/30/10 split true everywhere without
+   rewriting each screen:
+
+     60%  cool paper field and raised cards
+     30%  deep navy structure, controls and type
+     10%  one vermilion action / active / emphasis
+
+   Functional red, amber and green are separate from the split: they only ever
+   communicate a state, never decorate a surface.
+   ------------------------------------------------------------------------- */
+
+:root {
+  --info-wash: #e2eaf0;
+}
+
+.dark {
+  --info-wash: #172a38;
+}
+
+/* 30% structure ----------------------------------------------------------- */
+
+html:not(.dark) :is(
+  [class~="bg-[#191B27]"],
+  [class~="bg-[#1F1A13]"],
+  [class~="bg-[#1c2331]"],
+  [class~="bg-[#2A2D3E]"],
+  [class~="bg-[#32333b]"]
+) {
+  background-color: var(--stage) !important;
+}
+
+html:not(.dark) :is(
+  [class~="hover:bg-[#2A2D3E]"]:hover,
+  [class~="hover:bg-[#32333b]"]:hover,
+  [class~="hover:bg-[#1c2331]"]:hover
+) {
+  background-color: var(--stage-raised) !important;
+}
+
+html:not(.dark) [class~="bg-[#191B27]/30"] {
+  background-color: color-mix(in srgb, var(--stage) 30%, transparent) !important;
+}
+
+html:not(.dark) [class~="bg-[#191B27]/25"] {
+  background-color: color-mix(in srgb, var(--stage) 25%, transparent) !important;
+}
+
+html:not(.dark) [class~="disabled:bg-[#191B27]/30"]:disabled {
+  background-color: color-mix(in srgb, var(--stage) 30%, transparent) !important;
+}
+
+html:not(.dark) :is(
+  [class~="border-[#191B27]"],
+  [class~="border-[#4B3F2C]"]
+) {
+  border-color: var(--stage) !important;
+}
+
+html:not(.dark) [class~="accent-[#191B27]"] {
+  accent-color: var(--stage);
+}
+
+/* 60% field and raised paper ------------------------------------------------ */
+
+html:not(.dark) :is(
+  [class~="bg-[#FCFCFD]"],
+  [class~="bg-[#FCFCFA]"],
+  [class~="bg-[#FCFBF8]"],
+  [class~="bg-[#FAFAF7]"],
+  [class~="bg-[#F7F5EF]"],
+  [class~="bg-[#FCFAF4]"],
+  [class~="bg-[#FFFCF4]"],
+  [class~="bg-[#FFFDF9]"],
+  [class~="bg-[#F4F4F7]"]
+) {
+  background-color: var(--desk-raised) !important;
+}
+
+html:not(.dark) :is(
+  [class~="bg-[#E7E7EF]"],
+  [class~="bg-[#E7E7EE]"],
+  [class~="bg-[#EDE9DF]"],
+  [class~="bg-[#EFEAE0]"]
+) {
+  background-color: var(--paper-deep) !important;
+}
+
+/* Functional status surfaces ------------------------------------------------ */
+
+html:not(.dark) :is(
+  [class~="bg-[#FFEEF0]"],
+  [class~="bg-[#FFF1F3]"],
+  [class~="bg-[#FFF7F8]"],
+  [class~="bg-[#FFF7F9]"],
+  [class~="bg-[#FFE3E6]"],
+  [class~="bg-[#FDE8ED]"],
+  [class~="bg-[#FBDDE0]"],
+  [class~="bg-[#f7dfe2]"],
+  [class~="bg-[#FFF6F7]"]
+) {
+  background-color: var(--danger-wash) !important;
+}
+
+html:not(.dark) :is(
+  [class~="bg-[#FFF6E5]"],
+  [class~="bg-[#FFF7E6]"],
+  [class~="bg-[#FFF7E8]"],
+  [class~="bg-[#FFF1D8]"],
+  [class~="bg-[#FFF1DE]"],
+  [class~="bg-[#FFF0DC]"],
+  [class~="bg-[#FFF3E8]"],
+  [class~="bg-[#FFF9EC]"],
+  [class~="bg-[#FFFBF2]"],
+  [class~="bg-[#f4e3bd]"]
+) {
+  background-color: var(--warning-wash) !important;
+}
+
+html:not(.dark) :is(
+  [class~="bg-[#E9FBF3]"],
+  [class~="bg-[#F3FBF7]"],
+  [class~="bg-[#EAFBF0]"],
+  [class~="bg-[#EAF8F0]"],
+  [class~="bg-[#E5F6EE]"],
+  [class~="bg-[#F1FAF6]"],
+  [class~="bg-[#DDF7EB]"],
+  [class~="bg-[#D7F0E3]"],
+  [class~="bg-[#CFF3E2]"]
+) {
+  background-color: var(--success-wash) !important;
+}
+
+html:not(.dark) :is(
+  [class~="bg-[#EFF6FF]"],
+  [class~="bg-[#EAF3FF]"],
+  [class~="bg-[#E3EFFD]"],
+  [class~="bg-[#E7F2FC]"],
+  [class~="bg-[#E8F3FD]"],
+  [class~="bg-[#F3F0FF]"],
+  [class~="bg-[#EFEDFF]"],
+  [class~="bg-[#F1F0FB]"]
+) {
+  background-color: var(--info-wash) !important;
+}
+
+html:not(.dark) :is(
+  [class~="hover:bg-[#FFEEF0]"]:hover,
+  [class~="hover:bg-[#FFE3E6]"]:hover,
+  [class~="hover:bg-[#FBDDE0]"]:hover,
+  [class~="hover:bg-[#FFF6F7]"]:hover
+) {
+  background-color: var(--danger-wash) !important;
+}
+
+html:not(.dark) :is(
+  [class~="hover:bg-[#FFF1D8]"]:hover,
+  [class~="hover:bg-[#FFFBF2]"]:hover
+) {
+  background-color: var(--warning-wash) !important;
+}
+
+html:not(.dark) :is(
+  [class~="hover:bg-[#E5F6EE]"]:hover,
+  [class~="hover:bg-[#DDF7EB]"]:hover
+) {
+  background-color: var(--success-wash) !important;
+}
+
+html:not(.dark) [class~="hover:bg-[#E3EFFD]"]:hover {
+  background-color: var(--info-wash) !important;
+}
+
+html:not(.dark) :is(
+  [class~="bg-[#D24350]"],
+  [class~="bg-[#a32a38]"]
+) {
+  background-color: var(--danger-ink) !important;
+}
+
+html:not(.dark) [class~="bg-[#0B6B45]"] {
+  background-color: var(--success) !important;
+}
+
+html:not(.dark) [class~="bg-[#B7791F]"] {
+  background-color: var(--warning-ink) !important;
+}
+
+html:not(.dark) [class~="bg-[#F0A03C]"] {
+  background-color: var(--signal) !important;
+}
+
+/* Status borders ----------------------------------------------------------- */
+
+html:not(.dark) :is(
+  [class~="border-[#F6D2D6]"],
+  [class~="border-[#E7B3B8]"],
+  [class~="border-[#a0525b]"]
+) {
+  border-color: var(--danger-line) !important;
+}
+
+html:not(.dark) :is(
+  [class~="border-[#F3E2C8]"],
+  [class~="border-[#E8DFC8]"],
+  [class~="border-[#EBD6AB]"],
+  [class~="border-[#F0DCB8]"],
+  [class~="border-[#E7C98B]"],
+  [class~="border-[#8a6b2a]"]
+) {
+  border-color: var(--warning-line) !important;
+}
+
+html:not(.dark) :is(
+  [class~="border-[#A6D9B9]"],
+  [class~="border-[#BDEBD3]"],
+  [class~="border-[#CBE7D8]"],
+  [class~="border-[#CFE7DC]"],
+  [class~="border-[#22A06B]"]
+) {
+  border-color: var(--success-line) !important;
+}
+
+html:not(.dark) :is(
+  [class~="border-[#C9DDF6]"],
+  [class~="border-[#CFC7E8]"]
+) {
+  border-color: var(--desk-line) !important;
+}
+
+/* Status type -------------------------------------------------------------- */
+
+html:not(.dark) :is(
+  [class~="text-[#A81F28]"],
+  [class~="text-[#A81F28]/80"],
+  [class~="text-[#C23B49]"],
+  [class~="text-[#D24350]"],
+  [class~="text-[#B23A55]"],
+  [class~="text-[#8f1d26]"],
+  [class~="text-[#7a131c]"]
+) {
+  color: var(--danger-ink) !important;
+}
+
+html:not(.dark) :is(
+  [class~="text-[#96650A]"],
+  [class~="text-[#96650A]/80"],
+  [class~="text-[#8A5D00]"],
+  [class~="text-[#8A5A12]"],
+  [class~="text-[#8A5410]"],
+  [class~="text-[#7A4B06]"],
+  [class~="text-[#7A5410]"],
+  [class~="text-[#B7791F]"],
+  [class~="text-[#A66A0A]"],
+  [class~="text-[#C2660F]"],
+  [class~="text-[#D08A00]"],
+  [class~="text-[#5b3d00]"]
+) {
+  color: var(--warning-ink) !important;
+}
+
+html:not(.dark) :is(
+  [class~="text-[#0B6B45]"],
+  [class~="text-[#0F7A50]"],
+  [class~="text-[#14866D]"]
+) {
+  color: var(--success-ink) !important;
+}
+
+html:not(.dark) :is(
+  [class~="text-[#1D5FA8]"],
+  [class~="text-[#17509B]"],
+  [class~="text-[#8A4BC6]"]
+) {
+  color: var(--stage) !important;
+}
+
+html:not(.dark) [class~="text-[#D2542A]"] {
+  color: var(--signal-deep) !important;
+}
+
+html:not(.dark) :is(
+  [class~="text-[#2E2418]"],
+  [class~="text-[#1C1A14]"],
+  [class~="text-[#1C1A14]/65"]
+) {
+  color: var(--desk-ink) !important;
+}
+
+/* Structure in dark mode --------------------------------------------------- */
+
+.dark :is(
+  [class~="bg-[#191B27]"],
+  [class~="bg-[#1F1A13]"],
+  [class~="bg-[#1c2331]"],
+  [class~="bg-[#2A2D3E]"],
+  [class~="bg-[#32333b]"]
+) {
+  background-color: var(--stage-raised) !important;
+}
+
+.dark :is(
+  [class~="hover:bg-[#2A2D3E]"]:hover,
+  [class~="hover:bg-[#32333b]"]:hover,
+  [class~="hover:bg-[#1c2331]"]:hover
+) {
+  background-color: var(--stage-line) !important;
+}
+
+.dark :is(
+  [class~="border-[#191B27]"],
+  [class~="border-[#4B3F2C]"]
+) {
+  border-color: var(--stage-line) !important;
+}
+
+.dark [class~="accent-[#191B27]"] {
+  accent-color: var(--signal);
+}

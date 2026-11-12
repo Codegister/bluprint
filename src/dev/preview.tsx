@@ -19,6 +19,7 @@ import "../stage.css";
 import "../stage-study.css";
 import "../stage-pages.css";
 import "../principles.css";
+import "../palette.css";
 import "./preview-fonts.css";
 
 const previewParams = new URLSearchParams(window.location.search);

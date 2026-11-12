@@ -2,27 +2,26 @@
    Stage 2: Course, Study set and Papers
 
    These screens keep the same contract as Home: a near-black stage for the
-   identity of the thing, a warm desk for the work. The stage is a cover, not a
+   identity of the thing, a cool desk for the work. The stage is a cover, not a
    dashboard; a facts strip is a ledger, not a row of cards. The desk is a
-   single column of reading and one olive signal (periwinkle on Papers).
+   single column of reading and one vermilion signal on every screen.
    ------------------------------------------------------------------------- */
 
 :root {
-  --paper-accent: #8599d0;
-  --paper-accent-deep: #46598f;
-  --paper-ink: #121526;
-  --paper-wash: #eef0f7;
+  --paper-accent: var(--signal);
+  --paper-accent-deep: var(--signal-deep);
+  --paper-ink: var(--signal-ink);
+  --paper-wash: var(--signal-wash);
 }
 
-/* Papers are the only screens that use periwinkle. Setting the local token
-   means every default button, ring and active state follows without leaving
-   an olive accent beside it. */
+/* Papers use the one signal too. The old periwinkle exception made this screen
+   read as a separate product. */
 .papers-screen,
 .past-paper-screen {
-  --paper-accent: #8599d0;
-  --paper-accent-deep: #46598f;
-  --paper-ink: #121526;
-  --paper-wash: #eef0f7;
+  --paper-accent: var(--signal);
+  --paper-accent-deep: var(--signal-deep);
+  --paper-ink: var(--signal-ink);
+  --paper-wash: var(--signal-wash);
   --primary: var(--paper-accent);
   --primary-foreground: var(--paper-ink);
   --ring: var(--paper-accent);
@@ -36,10 +35,10 @@
 
 .papers-screen :is(a, button, input, textarea, select):focus-visible,
 .past-paper-screen :is(a, button, input, textarea, select):focus-visible {
-  outline-color: var(--paper-accent) !important;
+  outline-color: var(--focus) !important;
 }
 
-/* Periwinkle is a surface colour here. Small text on the desk uses its deep
+/* The signal is a surface colour here. Small text on the desk uses its deep
    tone so the contrast stays above 4.5:1. */
 .papers-screen .text-brand-sky,
 .past-paper-screen .text-brand-sky {
@@ -177,7 +176,7 @@
   background: currentColor !important;
 }
 
-/* Stage buttons are rectangular and olive. Papers take the periwinkle signal. */
+/* Stage buttons are rectangular and use the single signal. */
 .course-cover button,
 .course-cover .stage-button,
 .past-paper-cover button,
@@ -309,7 +308,7 @@
 }
 
 .course-facts [class*="bg-[#0B6B45]"] {
-  background: var(--olive) !important;
+  background: var(--success) !important;
 }
 
 .course-screen .course-tabs {
@@ -1182,10 +1181,10 @@
 
 .dark .papers-screen,
 .dark .past-paper-screen {
-  --paper-accent: #aab8e8;
-  --paper-accent-deep: #c7d2f4;
-  --paper-ink: #10131f;
-  --paper-wash: #202536;
+  --paper-accent: var(--signal);
+  --paper-accent-deep: var(--signal-deep);
+  --paper-ink: var(--signal-ink);
+  --paper-wash: var(--signal-wash);
 }
 
 .papers-cover,
@@ -1639,4 +1638,36 @@
   .set-action-arrow {
     transition: none;
   }
+}
+
+/* ---------------------------------------------------------------------------
+   Library mastheads
+
+   The course and paper libraries are page headings, not the identity of one
+   course or paper. They therefore follow the desk in light and dark mode
+   instead of staying on the always-dark stage.
+   ------------------------------------------------------------------------- */
+
+:is(.course-library-cover, .papers-cover) {
+  border: 1px solid var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  background-image: none !important;
+  color: var(--desk-ink) !important;
+  box-shadow: none !important;
+}
+
+:is(.course-library-cover, .papers-cover) .page-title {
+  color: var(--desk-ink) !important;
+}
+
+:is(.course-library-cover, .papers-cover) .page-description {
+  color: var(--desk-muted) !important;
+}
+
+:is(.course-library-cover, .papers-cover) .page-kicker {
+  color: var(--signal-deep) !important;
+}
+
+:is(.course-library-cover, .papers-cover) .page-kicker-dot {
+  background: currentColor !important;
 }

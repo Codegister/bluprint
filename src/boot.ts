@@ -15,6 +15,7 @@ import "./stage.css";
 import "./stage-study.css";
 import "./stage-pages.css";
 import "./principles.css";
+import "./palette.css";
 import { hasStoredAuthSession } from "./lib/authSession";
 
 function isHomePath(pathname: string): boolean {

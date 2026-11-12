@@ -907,6 +907,9 @@ async function createTopicSetForUser(
       examBoard: boardLabel,
       level: levelLabel,
       topicIds: chosenIds,
+      // Titles and specification text let a source survive a pathway version
+      // that renumbered its topic ids.
+      notes,
       targetCardCount: targetCards,
       targetQuizCount: targetQuiz,
       targetExamCount: targetExam,
@@ -915,6 +918,7 @@ async function createTopicSetForUser(
       if (similar.missingTopicIds.length === 0) {
         const reusedSimilarId = await copyCachedReuse(ctx, similar, {
           ...copyArgs,
+          sourceTopicIdMap: similar.topicIdMap,
           copyWarnings: false,
         });
         if (reusedSimilarId) return await finishReuse(reusedSimilarId);
@@ -929,7 +933,8 @@ async function createTopicSetForUser(
         );
         const partialSetId = await copyCachedReuse(ctx, similar, {
           ...copyArgs,
-          sourceTopicIds: similar.matchedTopicIds,
+          sourceTopicIds: similar.matchedSourceTopicIds,
+          sourceTopicIdMap: similar.topicIdMap,
           generationNotes: buildTopicNotes(course, missingSections),
           // The copied title already names the full selection; the generated
           // summary describes only the missing topics and must not replace it.

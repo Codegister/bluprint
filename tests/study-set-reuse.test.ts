@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
+import { internal } from "../src/convex/_generated/api";
 import type { MutationCtx } from "../src/convex/_generated/server";
-import { completeGeneration } from "../src/convex/studySets";
+import { processStudySetScheduled } from "../src/convex/ai";
+import { refund } from "../src/convex/buildUsage";
+import {
+  claimForProcessing,
+  completeGeneration,
+  failGeneration,
+  getForProcessing,
+  isActive,
+  setProgress,
+} from "../src/convex/studySets";
 import {
   copyCachedReuse,
   copyCachedStudySet,
@@ -196,6 +206,54 @@ const cacheArgs = (cacheKey: string) => ({
   targetQuizCount: 5,
   targetExamCount: 3,
 });
+
+const FUNCTION_NAME = Symbol.for("functionName");
+
+type InternalHandler = {
+  _handler: (ctx: MutationCtx, args: Record<string, unknown>) => Promise<unknown>;
+};
+
+function functionNameOf(ref: unknown): string {
+  return String((ref as Record<symbol, unknown>)[FUNCTION_NAME]);
+}
+
+/**
+ * A small action context for the generation action. The real internal functions
+ * receive the same in-memory database as `fakeContext`, so the test exercises
+ * the production copy, generation and merge handlers rather than reimplementing
+ * their writes.
+ */
+function actionContext(tables: Tables) {
+  const { ctx: dbCtx } = fakeContext(tables);
+  const functions: Array<[unknown, InternalHandler]> = [
+    [internal.studySets.getForProcessing, getForProcessing as unknown as InternalHandler],
+    [internal.studySets.claimForProcessing, claimForProcessing as unknown as InternalHandler],
+    [internal.studySets.setProgress, setProgress as unknown as InternalHandler],
+    [internal.studySets.isActive, isActive as unknown as InternalHandler],
+    [internal.studySets.completeGeneration, completeGeneration as unknown as InternalHandler],
+    [internal.studySets.failGeneration, failGeneration as unknown as InternalHandler],
+    [internal.buildUsage.refund, refund as unknown as InternalHandler],
+  ];
+  const byName = new Map(
+    functions.map(([ref, fn]) => [functionNameOf(ref), fn]),
+  );
+
+  const run = async (ref: unknown, args: Record<string, unknown>) => {
+    const fn = byName.get(functionNameOf(ref));
+    if (!fn) throw new Error(`Unexpected internal function ${functionNameOf(ref)}`);
+    return await fn._handler(dbCtx, args);
+  };
+
+  return {
+    runQuery: run,
+    runMutation: run,
+    scheduler: {
+      runAfter: async (_delay: number, ref: unknown) => {
+        throw new Error(`Unexpected scheduled function ${functionNameOf(ref)}`);
+      },
+    },
+  };
+}
 
 describe("study set reuse", () => {
   test("clones a finished course set into a clean private copy", async () => {
@@ -435,6 +493,161 @@ describe("study set reuse", () => {
     expect(tables.studySetCache[0]!.uses).toBe(1);
   });
 
+  test("matches a topic by title when a pathway version renumbers it", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    source.topicIds = ["old-cell-structure"];
+    source.topicId = "old-cell-structure";
+    source.specPoints = [
+      { id: "old-cell-structure:0", text: "4.1.1.1 Cells contain organelles." },
+    ];
+    source.notes = [
+      "Course: GCSE Biology",
+      "Exam board: AQA",
+      "",
+      "Syllabus scope for this set:",
+      "",
+      "Topic: Cell structure (specification 4.1.1.1)",
+      "Unit: Cell biology",
+      "Cells contain organelles that carry out specialised functions.",
+      "Covers:",
+      "- Cells contain organelles.",
+    ].join("\n");
+    for (const row of [
+      ...tables.flashcards,
+      ...tables.quizQuestions,
+      ...tables.examQuestions,
+    ]) {
+      row.specRef = "old-cell-structure:0";
+    }
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: "old-source-key",
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+
+    const queryNotes = [
+      "Course: GCSE Biology",
+      "Exam board: AQA",
+      "",
+      "Syllabus scope for this set:",
+      "",
+      "Section 1: Cell structure (specification 4.1.1.1)",
+      "Unit: Cell biology",
+      "Cells contain organelles that carry out specialised functions.",
+      "Covers:",
+      "- Cells contain organelles.",
+      "",
+      "Section 2: Photosynthesis",
+      "Unit: Bioenergetics",
+      "Photosynthesis uses light energy to make glucose and oxygen.",
+      "Covers:",
+      "- Photosynthesis releases oxygen.",
+    ].join("\n");
+    const { ctx } = fakeContext(tables);
+
+    const match = await findSimilarCachedStudySet(ctx, {
+      course: "Biology",
+      examBoard: "AQA",
+      level: "GCSE",
+      topicIds: ["new-cell-structure", "new-photosynthesis"],
+      notes: queryNotes,
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+    });
+    expect(match?.matchedTopicIds).toEqual(["new-cell-structure"]);
+    expect(match?.matchedSourceTopicIds).toEqual(["old-cell-structure"]);
+    expect(match?.missingTopicIds).toEqual(["new-photosynthesis"]);
+
+    const setId = await copyCachedReuse(ctx, match!, {
+      ...cacheArgs(""),
+      title: "Cells and photosynthesis",
+      notes: queryNotes,
+      topicId: "new-cell-structure",
+      topicIds: ["new-cell-structure", "new-photosynthesis"],
+      specPoints: [
+        { id: "new-cell-structure:0", text: "4.1.1.1 Cells contain organelles." },
+        { id: "new-photosynthesis:0", text: "Photosynthesis releases oxygen." },
+      ],
+      sourceTopicIds: match!.matchedSourceTopicIds,
+      sourceTopicIdMap: match!.topicIdMap,
+      generationNotes: "Topic: Photosynthesis\nPhotosynthesis uses light energy to make glucose and oxygen.",
+      titleSource: "user",
+      copyWarnings: false,
+    });
+    expect(setId).not.toBeNull();
+    const copy = tables.studySets.find((row) => row._id === setId)!;
+    expect(copy.status).toBe("queued");
+    expect(copy.topicIds).toEqual(["new-cell-structure", "new-photosynthesis"]);
+    expect(copy.cardCount).toBe(2);
+    expect(copy.quizCount).toBe(1);
+    expect(copy.examCount).toBe(1);
+    expect(
+      [...tables.flashcards, ...tables.quizQuestions, ...tables.examQuestions]
+        .filter((row) => row.setId === setId)
+        .every((row) => row.specRef === "new-cell-structure:0"),
+    ).toBe(true);
+  });
+
+  test("matches a topic by specification content when its title changes", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    source.topicIds = ["old-cell-structure"];
+    source.specPoints = [];
+    source.notes = [
+      "Course: GCSE Biology",
+      "Exam board: AQA",
+      "",
+      "Syllabus scope for this set:",
+      "",
+      "Topic: Cell structure",
+      "Unit: Cell biology",
+      "Cells contain organelles that carry out specialised functions.",
+      "Covers:",
+      "- Cells contain organelles.",
+      "- The nucleus stores genetic material.",
+    ].join("\n");
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: "old-source-key",
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+    const { ctx } = fakeContext(tables);
+
+    const match = await findSimilarCachedStudySet(ctx, {
+      course: "Biology",
+      examBoard: "AQA",
+      level: "GCSE",
+      topicIds: ["new-cell-structure"],
+      notes: [
+        "Course: GCSE Biology",
+        "Exam board: AQA",
+        "",
+        "Syllabus scope for this set:",
+        "",
+        "Topic: Cell biology: cell structure",
+        "Unit: Cell biology",
+        "Cells contain organelles that carry out specialised functions.",
+        "Covers:",
+        "- Cells contain organelles.",
+        "- The nucleus stores genetic material.",
+      ].join("\n"),
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+    });
+    expect(match?.matchedTopicIds).toEqual(["new-cell-structure"]);
+    expect(match?.matchedSourceTopicIds).toEqual(["old-cell-structure"]);
+    expect(match?.missingTopicIds).toEqual([]);
+  });
+
   test("copies only rows tagged to the overlapping topics", async () => {
     const tables = rowsForSource("set:source");
     const source = tables.studySets[0]!;
@@ -569,6 +782,210 @@ describe("study set reuse", () => {
         "Photosynthesis uses light energy to make glucose and oxygen.",
       ),
     ).toBeLessThan(0.55);
+  });
+
+  test("a partial-topic reuse generates the missing topic through the scheduled action and merges it", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    source.topicIds = ["cell-structure"];
+    source.specPoints = [
+      { id: "cell-structure:0", text: "Cells contain organelles." },
+    ];
+    for (const row of [
+      ...tables.flashcards,
+      ...tables.quizQuestions,
+      ...tables.examQuestions,
+    ]) {
+      row.specRef = "cell-structure:0";
+    }
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: "source-key",
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+
+    const notes = [
+      "Course: GCSE Biology",
+      "Exam board: AQA",
+      "Topic: Cell structure",
+      "Cells contain organelles that carry out specialised functions.",
+      "The nucleus stores genetic material and controls the cell.",
+      "Topic: Photosynthesis",
+      "Photosynthesis uses light energy to make glucose and oxygen.",
+      "Chlorophyll absorbs light energy in the chloroplast.",
+      "Photosynthesis releases oxygen as a product.",
+    ].join("\n");
+    const generationNotes = [
+      "Topic: Photosynthesis",
+      "Photosynthesis uses light energy to make glucose and oxygen.",
+      "Chlorophyll absorbs light energy in the chloroplast.",
+      "Photosynthesis releases oxygen as a product.",
+    ].join("\n");
+    const specPoints = [
+      { id: "cell-structure:0", text: "Cells contain organelles." },
+      { id: "photosynthesis:0", text: "Photosynthesis uses light energy." },
+    ];
+    const copyFrom = fakeContext(tables);
+
+    const match = await findSimilarCachedStudySet(copyFrom.ctx, {
+      course: "Biology",
+      examBoard: "AQA",
+      level: "GCSE",
+      topicIds: ["cell-structure", "photosynthesis"],
+      targetCardCount: 3,
+      targetQuizCount: 2,
+      targetExamCount: 2,
+    });
+    expect(match?.matchedTopicIds).toEqual(["cell-structure"]);
+    expect(match?.missingTopicIds).toEqual(["photosynthesis"]);
+
+    const partialId = await copyCachedReuse(copyFrom.ctx, match!, {
+      ...cacheArgs(""),
+      title: "Cells and photosynthesis",
+      notes,
+      topicId: "cell-structure",
+      topicIds: ["cell-structure", "photosynthesis"],
+      specPoints,
+      targetCardCount: 3,
+      targetQuizCount: 2,
+      targetExamCount: 2,
+      sourceTopicIds: match!.matchedTopicIds,
+      generationNotes,
+      titleSource: "user",
+      copyWarnings: false,
+    });
+    expect(partialId).not.toBeNull();
+    const partial = tables.studySets.find((row) => row._id === partialId)!;
+    expect(partial.status).toBe("queued");
+    expect(partial.cardCount).toBe(2);
+    expect(partial.quizCount).toBe(1);
+    expect(partial.examCount).toBe(1);
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    const aiCalls: string[] = [];
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      let content: string;
+      if (prompt.includes("Create a revision summary")) {
+        aiCalls.push("summary");
+        content = JSON.stringify({
+          title: "Photosynthesis",
+          overview:
+            "Photosynthesis uses light energy to make glucose and oxygen in the chloroplast.",
+          keyPoints: [
+            "Photosynthesis uses light energy.",
+            "Chlorophyll absorbs light energy in the chloroplast.",
+            "Glucose and oxygen are products of photosynthesis.",
+          ],
+          examFocus: ["The role of chlorophyll in photosynthesis"],
+        });
+      } else if (prompt.includes("revision flashcards")) {
+        aiCalls.push("cards");
+        content = JSON.stringify({
+          cards: [
+            {
+              front: "What is the role of chlorophyll?",
+              back: "Chlorophyll absorbs light energy.",
+              keyPoint: "Chlorophyll absorbs light energy.",
+            },
+          ],
+        });
+      } else if (prompt.includes("quiz questions")) {
+        aiCalls.push("quiz");
+        content = JSON.stringify({
+          questions: [
+            {
+              question: "Which gas is released as a product of photosynthesis?",
+              type: "typed",
+              answer: "oxygen",
+              acceptedAnswers: ["oxygen"],
+              explanation:
+                "Oxygen is released because photosynthesis uses light energy to make glucose and oxygen.",
+            },
+          ],
+        });
+      } else if (prompt.includes("marking guide")) {
+        aiCalls.push("exam");
+        content = JSON.stringify({
+          questions: [
+            {
+              question: "Explain how chlorophyll supports photosynthesis.",
+              marks: 2,
+              modelAnswer:
+                "Chlorophyll absorbs light energy, which is used to make glucose and oxygen.",
+              markingGuide: [
+                "1 mark: chlorophyll absorbs light energy",
+                "1 mark: the energy is used to make glucose and oxygen",
+              ],
+            },
+          ],
+        });
+      } else {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables);
+      const scheduledHandler = processStudySetScheduled as unknown as {
+        _handler: (
+          ctx: unknown,
+          args: { setId: string; userId: string },
+        ) => Promise<unknown>;
+      };
+      await scheduledHandler._handler(action, {
+        setId: partialId,
+        userId: "user:new",
+      });
+      expect(aiCalls).toEqual(["summary", "cards", "quiz", "exam"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    const finished = tables.studySets.find((row) => row._id === partialId)!;
+    expect(finished.status).toBe("ready");
+    expect(finished.generationNotes).toBeUndefined();
+    expect(finished.cardCount).toBe(3);
+    expect(finished.quizCount).toBe(2);
+    expect(finished.examCount).toBe(2);
+    expect(finished.title).toBe("Cells and photosynthesis");
+    expect(finished.summary?.overview).toContain("Photosynthesis uses light energy");
+
+    const cards = tables.flashcards.filter((row) => row.setId === partialId);
+    expect(cards.map((card) => card.front)).toEqual([
+      "What do cells contain?",
+      "What controls the cell?",
+      "What is the role of chlorophyll?",
+    ]);
+    const quiz = tables.quizQuestions.filter((row) => row.setId === partialId);
+    expect(quiz).toHaveLength(2);
+    expect(quiz.map((question) => question.question)).toContain(
+      "Which gas is released as a product of photosynthesis?",
+    );
+    const exams = tables.examQuestions.filter((row) => row.setId === partialId);
+    expect(exams).toHaveLength(2);
+    expect(exams.map((question) => question.question)).toContain(
+      "Explain how chlorophyll supports photosynthesis.",
+    );
+    expect(tables.studySetCache[0]!.uses).toBe(1);
   });
 
   test("merges generated topics into a partially reused set", async () => {

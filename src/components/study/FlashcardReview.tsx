@@ -8,7 +8,9 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { gradeRecall, normalizeAnswer } from "@/convex/lib/recall";
 import { useDictation } from "@/hooks/use-dictation";
 import { notifyError, readableError } from "@/lib/errors";
+import { isConnectionFailure, queueReview } from "@/lib/offlineCache";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
 import { Check, Keyboard, Mic, MicOff, Sparkles, X } from "lucide-react";
@@ -22,9 +24,9 @@ type StudyCard = Doc<"flashcards"> & { setTitle?: string };
  * A review can be rejected by an older backend that does not know the optional
  * automatic-check fields. Scheduling the card only needs the card id and the
  * rating, so retrying without that metadata is safe when the first write was
- * rejected before it ran. Network failures are deliberately not retried: the
+ * rejected before it ran. Network failures are not retried immediately: the
  * first write may already have committed, and a second call would count the
- * card twice.
+ * card twice. The caller queues those locally instead.
  */
 function canRetryRatingWithoutGrade(error: unknown): boolean {
   const message = error instanceof Error ? error.message : "";
@@ -261,6 +263,15 @@ export function FlashcardReview({
     const card = current;
     setSaving(true);
 
+    const queueForSync = (error: unknown) => {
+      if (!isConnectionFailure(error)) return false;
+      if (!queueReview(card._id, rating)) return false;
+      toast.info(
+        "Connection dropped. This rating is saved on this device and will sync automatically.",
+      );
+      return true;
+    };
+
     try {
       await reviewCard({
         cardId: card._id,
@@ -276,25 +287,33 @@ export function FlashcardReview({
           : {}),
       });
     } catch (error) {
-      // During a deploy the page can briefly reach an older backend that only
-      // knows the rating. The FSRS write does not depend on the automatic-check
-      // metadata, so retry with the fields every version supports rather than
-      // losing the review.
-      if (!grade || !canRetryRatingWithoutGrade(error)) {
+      if (queueForSync(error)) {
+        // The rating is safe on this device; let the app-shell syncer replay it
+        // when the connection returns instead of holding the session open.
+      } else if (!grade || !canRetryRatingWithoutGrade(error)) {
         notifyError(error, "Could not save that review. The card has not moved.");
         return;
-      }
-      try {
-        await reviewCard({ cardId: card._id, rating });
-      } catch (retryError) {
-        // A failed write must not move the student past an unreviewed card or
-        // count it in the session totals. Leave the card in place so they can
-        // retry the rating instead of silently losing the review.
-        notifyError(
-          retryError,
-          "Could not save that review. The card has not moved.",
-        );
-        return;
+      } else {
+        // During a deploy the page can briefly reach an older backend that only
+        // knows the rating. The FSRS write does not depend on the automatic-check
+        // metadata, so retry with the fields every version supports rather than
+        // losing the review.
+        try {
+          await reviewCard({ cardId: card._id, rating });
+        } catch (retryError) {
+          if (queueForSync(retryError)) {
+            // Queued locally above; the session can move on.
+          } else {
+            // A failed write must not move the student past an unreviewed card or
+            // count it in the session totals. Leave the card in place so they can
+            // retry the rating instead of silently losing the review.
+            notifyError(
+              retryError,
+              "Could not save that review. The card has not moved.",
+            );
+            return;
+          }
+        }
       }
     } finally {
       setSaving(false);
