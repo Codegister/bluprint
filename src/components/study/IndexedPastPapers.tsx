@@ -13,13 +13,13 @@ import { Eye, FileText, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 /**
- * The real past papers Save My Exams indexes for a course.
+ * The real past papers a publisher's course listing indexes for a course.
  *
  * Each row opens the exam board's paper or mark scheme inside Bluprint. The
  * first open downloads the file into Bluprint's storage; later opens reuse
  * that copy. The original link is always available in the viewer.
  */
-export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
+export function IndexedPastPapers({ courseId }: { courseId: Id<"courses"> }) {
   const cached = useQuery(api.cognitoLibrary.getPastPapers, { courseId });
   const load = useAction(api.cognitoLibrary.loadPastPapers);
   const [busy, setBusy] = useState(false);
@@ -36,7 +36,7 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
       setError(
         readableError(
           cause,
-          "Save My Exams' past papers could not be read just now.",
+          "The past-paper index could not be read just now.",
         ),
       );
     } finally {
@@ -55,7 +55,7 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
   const years = [...new Set(papers.map((paper) => paper.year))];
 
   return (
-    <section className="savemyexams-papers mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
+    <section className="indexed-papers mt-4 rounded-[2rem] border border-border bg-white p-5 shadow-[0_18px_44px_-34px_rgba(22,24,31,0.4)] sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[0.66rem] font-semibold uppercase tracking-[0.14em] text-chrome-7">
@@ -65,21 +65,22 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
             The actual board papers
           </h2>
           <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
-            Indexed by Save My Exams for this course. Open the exam board&apos;s
-            question paper and mark scheme here, without leaving Bluprint.
+            Indexed from the publisher&apos;s course listing. Open the exam
+            board&apos;s question paper and mark scheme here, without leaving
+            Bluprint.
           </p>
         </div>
         <span className="rounded-full bg-brand-panel px-3 py-1.5 text-[0.7rem] font-semibold text-chrome-7">
           {papers.length > 0
             ? `${papers.length} paper${papers.length === 1 ? "" : "s"}`
-            : "Save My Exams"}
+            : "Paper index"}
         </span>
       </div>
 
       {(busy || cached === undefined) && (
         <div role="status" aria-busy="true" className="mt-4 space-y-2">
           <span className="sr-only">
-            Reading Save My Exams&apos; past-paper list for this course
+            Reading the past-paper list for this course
           </span>
           {[0, 1, 2].map((index) => (
             <div
@@ -120,9 +121,9 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
 
       {!busy && !error && cached && papers.length === 0 && (
         <p className="mt-4 rounded-2xl border border-dashed border-border bg-brand-panel px-4 py-4 text-[0.8rem] leading-relaxed text-muted-foreground">
-          Save My Exams does not publish a matching course for this
-          qualification, or has no papers for it yet. Build a practice paper
-          above to work in this subject&apos;s real format instead.
+          No matching past-paper list was found for this qualification, or it
+          has no papers yet. Build a practice paper above to work in this
+          subject&apos;s real format instead.
         </p>
       )}
 
@@ -194,11 +195,11 @@ export function SaveMyExamsPapers({ courseId }: { courseId: Id<"courses"> }) {
 
       <p className="mt-3 text-[0.7rem] leading-relaxed text-muted-foreground">
         Papers and mark schemes are published by the exam boards; the list is
-        read from Save My Exams. Bluprint stores a cached copy the first time a
-        file is opened, so the viewer does not depend on the publisher&apos;s
-        site. All rights remain with the publisher. For practice written for
-        Bluprint, use the paper builder above. Rights holders can request that a
-        link be removed through the{" "}
+        read from the publisher&apos;s paper index. Bluprint stores a cached copy
+        the first time a file is opened, so the viewer does not depend on the
+        publisher&apos;s site. All rights remain with the publisher. For practice
+        written for Bluprint, use the paper builder above. Rights holders can
+        request that a link be removed through the{" "}
         <a
           href="https://github.com/Codegister/bluprint/issues"
           target="_blank"

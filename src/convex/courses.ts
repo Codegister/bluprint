@@ -20,7 +20,12 @@ import {
 } from "./lib/catalogue";
 import { literatureChoicesFor } from "./lib/literatureChoices";
 import { consumeBuildAllowance } from "./buildUsage";
-import { copyCachedStudySet, studySetReuseKey } from "./lib/studySetReuse";
+import {
+  copyCachedReuse,
+  copyCachedStudySet,
+  findSimilarCachedStudySet,
+  studySetReuseKey,
+} from "./lib/studySetReuse";
 import { requireUserId } from "./lib/requireUser";
 import { SYLLABUS_SCOPE_HEADER } from "./lib/syllabusOutline";
 import { requireOwner, requireVerifiedUser } from "./lib/authorization";
@@ -775,6 +780,7 @@ async function createTopicSetForUser(
         created: false,
         sections: chosen.length,
         cached: false,
+        scheduled: false,
       };
     }
 
@@ -847,8 +853,7 @@ async function createTopicSetForUser(
     await consumeBuildAllowance(ctx, userId, "set");
 
     const now = Date.now();
-    const reusedSetId = await copyCachedStudySet(ctx, {
-      cacheKey,
+    const copyArgs = {
       userId,
       courseId,
       title: title || "Revision topic",
@@ -863,8 +868,8 @@ async function createTopicSetForUser(
       targetCardCount: targetCards,
       targetQuizCount: targetQuiz,
       targetExamCount: targetExam,
-    });
-    if (reusedSetId) {
+    };
+    const finishReuse = async (reusedSetId: Id<"studySets">) => {
       await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
       // The student gets the saved copy immediately; the review runs in the
       // background and appends new material without touching their progress.
@@ -882,7 +887,82 @@ async function createTopicSetForUser(
         created: true,
         sections: chosen.length,
         cached: true,
+        scheduled: false,
       };
+    };
+
+    const reusedSetId = await copyCachedStudySet(ctx, {
+      ...copyArgs,
+      cacheKey,
+    });
+    if (reusedSetId) return await finishReuse(reusedSetId);
+
+    // The exact brief missed, but a finished set with overlapping topics is
+    // still useful. Requested counts are not part of the match: a copy with 12
+    // cards can answer a request for 10, and the background review can add to
+    // it. A source that covers every requested topic is copied whole; one that
+    // covers only some has those rows copied and the rest generated.
+    const similar = await findSimilarCachedStudySet(ctx, {
+      course: courseLabel,
+      examBoard: boardLabel,
+      level: levelLabel,
+      topicIds: chosenIds,
+      targetCardCount: targetCards,
+      targetQuizCount: targetQuiz,
+      targetExamCount: targetExam,
+    });
+    if (similar) {
+      if (similar.missingTopicIds.length === 0) {
+        const reusedSimilarId = await copyCachedReuse(ctx, similar, {
+          ...copyArgs,
+          copyWarnings: false,
+        });
+        if (reusedSimilarId) return await finishReuse(reusedSimilarId);
+      } else {
+        // Only some topics overlap. Copy the finished rows for those topics and
+        // let generation fill the rest into the same set. This is deliberately
+        // queued rather than returned as a ready copy: the mixed set is complete
+        // only after the missing sections have been written.
+        const missingTopicIds = new Set(similar.missingTopicIds);
+        const missingSections = chosen.filter((entry) =>
+          missingTopicIds.has(entry.topic.id),
+        );
+        const partialSetId = await copyCachedReuse(ctx, similar, {
+          ...copyArgs,
+          sourceTopicIds: similar.matchedTopicIds,
+          generationNotes: buildTopicNotes(course, missingSections),
+          // The copied title already names the full selection; the generated
+          // summary describes only the missing topics and must not replace it.
+          titleSource: "user",
+          copyWarnings: false,
+        });
+        if (partialSetId) {
+          await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
+          let partialScheduled = false;
+          try {
+            await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
+              setId: partialSetId,
+              userId,
+            });
+            partialScheduled = true;
+          } catch (error) {
+            console.error(
+              "Could not queue the missing topics for a partial reuse",
+              partialSetId,
+              error,
+            );
+          }
+          return {
+            setId: partialSetId,
+            created: true,
+            sections: chosen.length,
+            // Not a finished copy: the UI should show the normal compiling
+            // state while the missing topics generate.
+            cached: false,
+            scheduled: partialScheduled,
+          };
+        }
+      }
     }
 
     const setId = await ctx.db.insert("studySets", {
@@ -912,7 +992,30 @@ async function createTopicSetForUser(
     });
 
     await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
-    return { setId, created: true, sections: chosen.length, cached: false };
+
+    // Start generation at the point the set is created. The set page used to
+    // be responsible for this, which meant closing or leaving before its effect
+    // ran left the set queued forever. The page trigger remains as a fallback
+    // for old queued sets and scheduler failures, and the server claim keeps
+    // duplicate runs from doing the work twice.
+    let scheduled = false;
+    try {
+      await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
+        setId,
+        userId,
+      });
+      scheduled = true;
+    } catch (error) {
+      console.error("Could not queue this course study set build", setId, error);
+    }
+
+    return {
+      setId,
+      created: true,
+      sections: chosen.length,
+      cached: false,
+      scheduled,
+    };
 }
 
 /**

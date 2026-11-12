@@ -296,7 +296,7 @@ describe("study set acceptance checks", () => {
     expect(quiz.dropped).toBe(1);
   });
 
-  test("14. Anki check: new cards learn quickly, then graduate to review", () => {
+  test("14. Flashcard scheduling check: new cards learn quickly, then graduate to review", () => {
     const now = 1_000_000;
     const again = schedule({}, 1, now);
     const hard = schedule({}, 2, now);

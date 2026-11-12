@@ -46,7 +46,7 @@ export function ExamPractice({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: EASE }}
-        className="gizmo-card p-10 text-center"
+        className="surface-card p-10 text-center"
       >
         <p className="text-sm text-muted-foreground">
           This set has no exam questions yet.
@@ -130,7 +130,7 @@ export function ExamPractice({
 
   return (
     <div className="rise-stagger mx-auto w-full max-w-3xl space-y-4">
-      <div className="gizmo-card p-5">
+      <div className="surface-card p-5">
         <div>
           <p className="font-display text-base font-bold text-brand-ink">
             Exam practice, marked by AI
@@ -156,7 +156,7 @@ export function ExamPractice({
         const criteria = criteriaFor(exam);
 
         return (
-          <article key={exam._id} className="gizmo-card p-5 sm:p-7">
+          <article key={exam._id} className="surface-card p-5 sm:p-7">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-semibold text-muted-foreground">
                 Question {index + 1}

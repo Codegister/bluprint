@@ -13,11 +13,11 @@ import { useEffect, useRef, useState } from "react";
 /**
  * The detailed notes for one pathway topic, shown here rather than linking out.
  *
- * The copy is read once and stored. When Save My Exams has a validated match
- * for the course and a note for the topic, that is what appears; otherwise
- * Bluprint writes the notes from the specification. The stored origin decides
- * which of the two the heading claims, so the reader never passes one off as
- * the other.
+ * The copy is read once and stored. When a published source has a validated
+ * match for the course and a note for the topic, that is what appears;
+ * otherwise Bluprint writes the notes from the specification. The stored origin
+ * decides which of the two the heading claims, so the reader never passes one
+ * off as the other.
  */
 export function TopicNotes({
   courseId,
@@ -57,7 +57,7 @@ export function TopicNotes({
 
   const sections = cached?.sections ?? [];
   const written = cached?.origin === "bluprint";
-  const fromSaveMyExams = cached?.origin === "savemyexams";
+  const fromPublishedNotes = cached?.origin === "savemyexams";
 
   return (
     <motion.div
@@ -74,9 +74,9 @@ export function TopicNotes({
           <p className="mt-0.5 text-[0.78rem] font-semibold text-brand-ink">
             {written
               ? "Written by Bluprint from your specification"
-              : fromSaveMyExams
-                ? "Read here, from Save My Exams' published notes"
-                : "Preparing notes from Save My Exams"}
+              : fromPublishedNotes
+                ? "Read here, from published revision notes"
+                : "Preparing notes from published revision notes"}
           </p>
         </div>
         <button
@@ -207,7 +207,7 @@ export function TopicNotes({
           {cached.sections.length} note sections{" "}
           {written
             ? "written by Bluprint"
-            : `from Save My Exams · ${cached.sources.length} subtopic${
+            : `from published revision notes · ${cached.sources.length} subtopic${
                 cached.sources.length === 1 ? "" : "s"
               }`}{" "}
           · checked {new Date(cached.fetchedAt).toLocaleDateString()}

@@ -148,7 +148,7 @@ export default function RealPapers() {
         />
 
         {open && (
-          <section className="gizmo-card mt-5 p-5 sm:p-6">
+          <section className="surface-card mt-5 p-5 sm:p-6">
             <div className="grid gap-3">
               <label className="text-[0.78rem] font-semibold text-brand-ink">
                 What is it?
@@ -261,7 +261,7 @@ export default function RealPapers() {
           {saved === undefined ? (
             <SkeletonRows rows={3} />
           ) : saved.length === 0 ? (
-            <p className="gizmo-card p-6 text-sm leading-relaxed text-muted-foreground">
+            <p className="surface-card p-6 text-sm leading-relaxed text-muted-foreground">
               No real questions yet. Copy a question and its mark scheme from the
               board's published paper — for example, “AQA Biology 2023 Paper 1,
               Q4” — then add it here. Bluprint marks your answer against the
@@ -279,7 +279,7 @@ export default function RealPapers() {
               });
               const isGrading = gradingId === row._id;
               return (
-                <article key={row._id} className="gizmo-card p-5 sm:p-6">
+                <article key={row._id} className="surface-card p-5 sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="font-display text-[1.05rem] font-bold text-brand-ink">

@@ -7,7 +7,7 @@
  *
  * Every review has an elapsed time, so the probability the student still
  * remembers the card can be worked out before scheduling. Four ratings are
- * used, the same scale Anki and RemNote expose:
+ * used, the same scale common spaced-repetition apps expose:
  *   1 Again · 2 Hard · 3 Good · 4 Easy
  *
  * The weights below are the FSRS-4.5 defaults. They are deliberately not
@@ -50,7 +50,7 @@ export const DAY_MS = 86_400_000;
 /** A failed card returns inside the same session, not tomorrow. */
 export const RELEARN_DELAY_MS = 10 * 60 * 1000;
 
-/** Anki-style graduation after the first successful recall. */
+/** Flashcard-style graduation after the first successful recall. */
 const GRADUATING_INTERVAL_DAYS = 1;
 const EASY_INTERVAL_DAYS = 4;
 
@@ -169,7 +169,7 @@ export function schedule(
 
     // A new card graduates after a short learning step. Good earns the first
     // day; Easy skips ahead to four days. This is deliberately shorter than a
-    // raw FSRS stability estimate, matching the graduating interval Anki uses
+    // raw FSRS stability estimate, matching the usual graduating interval
     // in its default learning steps instead of jumping straight to weeks.
     const intervalDays =
       rating === 4 ? EASY_INTERVAL_DAYS : GRADUATING_INTERVAL_DAYS;

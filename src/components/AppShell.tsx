@@ -265,7 +265,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </Link>
       </div>
 
-      <div className="app-rail-scroll gizmo-scroll relative min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <div className="app-rail-scroll surface-scroll relative min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {sets === undefined ? (
           <div role="status" aria-busy="true" className="space-y-2 px-2 py-2">
             <span className="sr-only">Loading your study sets</span>

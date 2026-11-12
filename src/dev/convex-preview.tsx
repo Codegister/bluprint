@@ -2,6 +2,9 @@ import { api } from "@/convex/_generated/api";
 import {
   previewDayView,
   previewFixtures,
+  previewCourse,
+  previewPaper,
+  previewSet,
 } from "@/dev/preview-fixtures";
 import { getFunctionName } from "convex/server";
 
@@ -31,6 +34,14 @@ export function useQuery(query: unknown, args?: unknown): any {
   if (name === "exports:forAccount") return previewFixtures.accountExport;
   if (name === "settings:aiStatus") return previewFixtures.aiStatus;
   if (name === "courses:listMine") return previewFixtures.courses;
+  if (name === "studySets:getDetails") return previewSet;
+  if (name === "courses:getDetails") return previewCourse;
+  if (name === "coverage:forCourse") return null;
+  if (name === "pastPapers:listForCourse") return [];
+  if (name === "coverage:forSet") return { unmapped: true };
+  if (name === "exports:forSet") return null;
+  if (name === "realPapers:list") return [];
+  if (name === "pastPapers:getDetails") return previewPaper;
 
   return undefined;
 }

@@ -46,7 +46,7 @@ export function RequireAuth({
           <div
             role="status"
             aria-busy="true"
-            className="gizmo-card mt-3 space-y-4 p-7 sm:p-9"
+            className="surface-card mt-3 space-y-4 p-7 sm:p-9"
           >
             <span className="sr-only">Checking your session</span>
             <Skeleton className="mx-auto h-6 w-3/4" />
@@ -86,7 +86,7 @@ export function RequireAuth({
 
         <main className="flex items-center justify-center px-4 pb-20 pt-10">
           <motion.div
-            className="gizmo-card w-full max-w-md p-7 text-center sm:p-9"
+            className="surface-card w-full max-w-md p-7 text-center sm:p-9"
             {...enter(0.04, 16)}
           >
             <motion.div

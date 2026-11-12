@@ -52,13 +52,13 @@ function ScoreRing({
     >
       <div className="grid size-full place-items-center rounded-full bg-white">
         <div>
-          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             Score
           </p>
           <p className="font-display text-3xl font-bold leading-none tabular-nums text-brand-ink">
             {score}/{total}
           </p>
-          <p className="mt-1 text-[0.7rem] font-semibold tabular-nums text-muted-foreground">
+          <p className="mt-1 text-xs font-semibold tabular-nums text-muted-foreground">
             {Math.round(shown)}%
           </p>
         </div>
@@ -145,7 +145,7 @@ export function QuizRunner({
 
   if (quiz.length === 0) {
     return (
-      <div className="gizmo-card p-10 text-center">
+      <div className="surface-card p-10 text-center">
         <p className="text-sm text-muted-foreground">This set has no quiz yet.</p>
       </div>
     );
@@ -159,14 +159,14 @@ export function QuizRunner({
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="gizmo-card mx-auto w-full max-w-2xl p-6 text-center sm:p-9"
+        className="surface-card mx-auto w-full max-w-2xl p-6 text-center sm:p-9"
       >
         <ScoreRing score={result.score} total={result.total} percent={pct} />
 
         {/* The ring carries the one score; this line labels the other figure
             so the two numbers are never mistaken for each other. */}
         {readiness !== undefined && (
-          <p className="mt-4 inline-flex items-center justify-center rounded-full bg-brand-panel px-4 py-1.5 text-[0.82rem] font-semibold tabular-nums text-brand-ink">
+          <p className="mt-4 inline-flex items-center justify-center rounded-full bg-brand-panel px-4 py-1.5 text-xs font-semibold tabular-nums text-brand-ink">
             Exam ready {readiness}%
           </p>
         )}
@@ -179,7 +179,7 @@ export function QuizRunner({
             {result.results.map((item, position) => (
               <div
                 key={item.questionId}
-                className="flex items-center justify-between gap-2 rounded-xl border border-border bg-white px-3 py-1.5 text-[0.76rem]"
+                className="flex items-center justify-between gap-2 rounded-xl border border-border bg-white px-3 py-1.5 text-xs"
               >
                 <span className="font-semibold text-brand-ink">
                   Question {position + 1}
@@ -188,9 +188,9 @@ export function QuizRunner({
                   className={cn(
                     "font-semibold",
                     item.correct
-                      ? "text-[#0B6B45]"
+                      ? "text-success-strong"
                       : item.answered
-                        ? "text-[#A81F28]"
+                        ? "text-danger"
                         : "text-muted-foreground",
                   )}
                 >
@@ -316,7 +316,7 @@ export function QuizRunner({
         <p className="text-sm font-semibold text-brand-ink">
           Question {index + 1} of {quiz.length}
         </p>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-2.5 py-1 text-[0.68rem] font-semibold text-chrome-7">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-2.5 py-1 text-xs font-semibold text-chrome-7">
           {kind === "mcq" ? "Multiple choice" : kind === "cloze" ? "Fill the gap" : (
             <>
               <Keyboard className="size-3" aria-hidden /> Typed answer
@@ -337,11 +337,11 @@ export function QuizRunner({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: EASE }}
-        className="gizmo-card mt-4 p-5 sm:p-7"
+        className="surface-card mt-4 p-5 sm:p-7"
       >
         {question.beyondNotes && (
           <span
-            className="mb-2 inline-block rounded-full bg-brand-panel px-3 py-1 text-[0.7rem] font-semibold text-brand-ink/70"
+            className="mb-2 inline-block rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70"
             title="This question uses material from outside your notes. Check it against them."
           >
             Beyond your notes
@@ -364,16 +364,14 @@ export function QuizRunner({
                   type="button"
                   disabled={checked}
                   onClick={() => setSelected(optionIndex)}
-                  whileHover={checked ? undefined : { x: 2 }}
-                  whileTap={checked ? undefined : { scale: 0.995 }}
                   transition={SPRING}
                   className={cn(
                     "flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left text-sm font-medium transition-colors",
                     !checked &&
                       "border-border bg-white text-brand-ink/85 hover:border-chrome-4 hover:bg-brand-panel",
                     !checked && isSelected && "border-chrome-4 bg-brand-panel text-brand-ink",
-                    isCorrect && "border-[#BDEBD3] bg-[#E9FBF3] text-[#0F7A50]",
-                    isWrongChoice && "border-[#F6D2D6] bg-[#FFEEF0] text-[#A81F28]",
+                    isCorrect && "border-[#BDEBD3] bg-[#E9FBF3] text-success",
+                    isWrongChoice && "border-[#F6D2D6] bg-[#FFEEF0] text-danger",
                     checked &&
                       !isCorrect &&
                       !isWrongChoice &&
@@ -384,9 +382,9 @@ export function QuizRunner({
                     className={cn(
                       "grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold",
                       isCorrect
-                        ? "bg-[#CFF3E2] text-[#0F7A50]"
+                        ? "bg-[#CFF3E2] text-success"
                         : isWrongChoice
-                          ? "bg-[#FBDDE0] text-[#A81F28]"
+                          ? "bg-[#FBDDE0] text-danger"
                           : isSelected
                             ? "bg-chrome-3 text-chrome-7"
                             : "bg-brand-panel text-muted-foreground",
@@ -418,9 +416,9 @@ export function QuizRunner({
                   ? "Type the missing word or phrase"
                   : "Type your answer in a few words"
               }
-              className="resize-none rounded-2xl border-border bg-white text-[0.95rem] leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-4 focus-visible:ring-chrome-6/15"
+              className="resize-none rounded-2xl border-border bg-white text-base leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-4 focus-visible:ring-chrome-6/15"
             />
-            <p className="mt-1.5 text-[0.7rem] font-medium text-muted-foreground">
+            <p className="mt-1.5 text-xs font-medium text-muted-foreground">
               Marked on key words, so small spelling and wording differences
               are accepted.
             </p>
@@ -438,7 +436,7 @@ export function QuizRunner({
               <p
                 className={cn(
                   "text-xs font-semibold",
-                  correct ? "text-[#0F7A50]" : "text-[#A81F28]",
+                  correct ? "text-success" : "text-danger",
                 )}
               >
                 {correct

@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx } from "./_generated/server";
 import {
@@ -53,6 +54,8 @@ import { shortfallFor, shortfallSentence } from "./lib/buildDefaults";
 import { cleanGeneratedText } from "./lib/register";
 import { isSyllabusOutline } from "./lib/syllabusOutline";
 import {
+  copyStudySetContent,
+  findSimilarOwnedStudySet,
   forgetStudySetReuse,
   rememberStudySetForReuse,
 } from "./lib/studySetReuse";
@@ -148,8 +151,11 @@ function isDue(card: { dueAt?: number }, now: number): boolean {
 }
 
 /** Older day rows only counted cards, before quiz questions were included. */
-function questionsOn(day: { cardsReviewed: number; questionsAnswered?: number }): number {
-  return day.questionsAnswered ?? day.cardsReviewed;
+function questionsOn(day: {
+  cardsReviewed?: number;
+  questionsAnswered?: number;
+}): number {
+  return day.questionsAnswered ?? day.cardsReviewed ?? 0;
 }
 
 /**
@@ -210,7 +216,9 @@ async function bumpStudyDay(
 
   if (today) {
     await ctx.db.patch(today._id, {
-      cardsReviewed: today.cardsReviewed + cards,
+      // Older rows can predate one of the counters; a missing value must not
+      // turn the whole review into NaN and reject the write.
+      cardsReviewed: (today.cardsReviewed ?? 0) + cards,
       questionsAnswered: questionsOn(today) + questions,
       updatedAt: now,
     });
@@ -744,49 +752,107 @@ export const create = mutation({
     const title =
       args.title.trim().slice(0, 80) ||
       (args.sourceType === "text" ? "Pasted notes" : "Untitled study set");
+    const titleSource = args.titleSource ?? "user";
+    const course = safeLabel(args.course);
+    const examBoard = safeLabel(args.examBoard);
+    const level = safeLabel(args.level);
+    const sourceLabel = safeLabel(args.sourceLabel);
+    // The sliders allow 1–100 of each; the generation action then caps the
+    // request at what the material can actually support. The defaults come
+    // from the one build config the product quotes everywhere.
+    const targetCardCount = targetCount(
+      args.targetCardCount,
+      BUILD_MIN,
+      BUILD_MAX,
+      BUILD_DEFAULTS.cards,
+    );
+    const targetQuizCount = targetCount(
+      args.targetQuizCount,
+      BUILD_MIN,
+      BUILD_MAX,
+      BUILD_DEFAULTS.quiz,
+    );
+    const targetExamCount = targetCount(
+      args.targetExamCount,
+      BUILD_MIN,
+      BUILD_MAX,
+      BUILD_DEFAULTS.exam,
+    );
 
-    return await ctx.db.insert("studySets", {
+    // A student's own earlier notes can seed this set when enough of the text
+    // overlaps. This is a same-account path: uploaded or pasted material never
+    // enters the shared course cache.
+    if (args.sourceType === "text" && args.sourceImageIds.length === 0) {
+      const source = await findSimilarOwnedStudySet(ctx, userId, {
+        notes,
+        course,
+        examBoard,
+        level,
+        targetCardCount,
+        targetQuizCount,
+        targetExamCount,
+      });
+      if (source) {
+        const reusedId = await copyStudySetContent(ctx, source, {
+          userId,
+          title,
+          titleSource,
+          notes,
+          sourceLabel,
+          course,
+          examBoard,
+          level,
+          targetCardCount,
+          targetQuizCount,
+          targetExamCount,
+          // The source warnings describe its notes, which may differ from this
+          // similar target. The copied set stays quiet until it is rebuilt.
+          copyWarnings: false,
+        });
+        if (reusedId) return reusedId;
+      }
+    }
+
+    const setId = await ctx.db.insert("studySets", {
       userId,
       title,
       // Defaults to "user": a name is never overwritten unless the caller says
       // it was derived from the upload.
-      titleSource: args.titleSource ?? "user",
+      titleSource,
       notes,
       sourceType: args.sourceType,
-      sourceLabel: safeLabel(args.sourceLabel),
-      course: safeLabel(args.course),
-      examBoard: safeLabel(args.examBoard),
-      level: safeLabel(args.level),
+      sourceLabel,
+      course,
+      examBoard,
+      level,
       sourceImageIds: args.sourceImageIds.slice(0, 10),
       status: "queued",
       progress: "Queued",
       cardCount: 0,
       quizCount: 0,
       examCount: 0,
-      // The sliders allow 1–100 of each; the generation action then caps the
-      // request at what the material can actually support. The defaults come
-      // from the one build config the product quotes everywhere.
-      targetCardCount: targetCount(
-        args.targetCardCount,
-        BUILD_MIN,
-        BUILD_MAX,
-        BUILD_DEFAULTS.cards,
-      ),
-      targetQuizCount: targetCount(
-        args.targetQuizCount,
-        BUILD_MIN,
-        BUILD_MAX,
-        BUILD_DEFAULTS.quiz,
-      ),
-      targetExamCount: targetCount(
-        args.targetExamCount,
-        BUILD_MIN,
-        BUILD_MAX,
-        BUILD_DEFAULTS.exam,
-      ),
+      targetCardCount,
+      targetQuizCount,
+      targetExamCount,
       knownCount: 0,
       updatedAt: now,
     });
+
+    // Start the long generation from the server, not from the set page. The
+    // student can close the dialog, leave the page or reload and the build
+    // keeps running. The page's fallback trigger is idempotent through
+    // claimForProcessing.
+    try {
+      await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
+        setId,
+        userId,
+      });
+    } catch (error) {
+      // The set is already saved; opening it still starts a queued build.
+      console.error("Could not queue this study set build", setId, error);
+    }
+
+    return setId;
   },
 });
 
@@ -995,7 +1061,8 @@ async function applyReview(
 
   const now = Date.now();
   const source = review?.source ?? "self";
-  const firstExposure = card.reviewCount === 0;
+  const reviewCount = card.reviewCount ?? 0;
+  const firstExposure = reviewCount === 0;
   // A self-rated pass on the first sighting cannot earn more than Hard. The
   // automatic check is the evidence; tapping Good without one should not skip
   // the learning step FSRS would otherwise require.
@@ -1017,7 +1084,7 @@ async function applyReview(
   await ctx.db.patch(cardId, {
     // Hard is still a successful recall in FSRS; only Again is a lapse.
     status: effectiveRating >= 2 ? "known" : "again",
-    reviewCount: card.reviewCount + 1,
+    reviewCount: reviewCount + 1,
     lastReviewedAt: now,
     dueAt: next.dueAt,
     intervalDays: next.intervalDays,
@@ -1043,12 +1110,13 @@ async function applyReview(
     reviewedAt: now,
   });
 
-  let knownCount = set.knownCount;
+  let knownCount = set.knownCount ?? 0;
   if (effectiveRating >= 2 && card.status !== "known") knownCount += 1;
   if (effectiveRating === 1 && card.status === "known") knownCount -= 1;
+  const cardCount = set.cardCount ?? knownCount;
 
   await ctx.db.patch(set._id, {
-    knownCount: Math.max(0, Math.min(set.cardCount, knownCount)),
+    knownCount: Math.max(0, Math.min(cardCount, knownCount)),
     lastStudiedAt: now,
     updatedAt: now,
   });
@@ -1665,20 +1733,61 @@ export const completeGeneration = internalMutation({
     final: v.optional(v.boolean()),
     // A section that failed while the rest finished, shown beside the set.
     failureNote: v.optional(v.string()),
+    // Keep rows that were copied from another set (a partial reuse) and add the
+    // generated content for the missing topics.
+    keepExisting: v.optional(v.boolean()),
   },
   handler: async (
     ctx,
-    { setId, summary, cards, quiz, exams, title, requested, final, failureNote },
+    {
+      setId,
+      summary,
+      cards,
+      quiz,
+      exams,
+      title,
+      requested,
+      final,
+      failureNote,
+      keepExisting: keepExistingArg,
+    },
   ) => {
     const set = await ctx.db.get(setId);
     // Deleted mid-build: stop quietly rather than writing into a missing set.
     if (!set) return { stored: false };
 
+    const keepExisting = keepExistingArg === true;
+    const preservedCards = keepExisting
+      ? byOrder(
+          await ctx.db
+            .query("flashcards")
+            .withIndex("by_set", (q) => q.eq("setId", setId))
+            .collect(),
+        )
+      : [];
+    const preservedQuiz = keepExisting
+      ? byOrder(
+          await ctx.db
+            .query("quizQuestions")
+            .withIndex("by_set", (q) => q.eq("setId", setId))
+            .collect(),
+        )
+      : [];
+    const preservedExams = keepExisting
+      ? byOrder(
+          await ctx.db
+            .query("examQuestions")
+            .withIndex("by_set", (q) => q.eq("setId", setId))
+            .collect(),
+        )
+      : [];
+
     const generatedTitle = title ? shortTitle(title) : "";
     const named = generatedTitle.length >= 3 && set.titleSource !== "user";
 
-    // Makes retrying a failed or interrupted run safe.
-    await deleteStudySetContent(ctx, setId);
+    // Makes retrying a failed or interrupted run safe. A partial reuse keeps
+    // its copied rows; only the generated section is replaced.
+    if (!keepExisting) await deleteStudySetContent(ctx, setId);
 
     const now = Date.now();
     const specPoints = set.specPoints ?? [];
@@ -1703,9 +1812,10 @@ export const completeGeneration = internalMutation({
     // A card is a fact from the notes, not a copy of them. This pass grounds,
     // shortens and deduplicates the deck before any count is written.
     const { cards: contentCards } = prepareCards(storedCards, set.notes);
+    const allCards = [...preservedCards, ...contentCards];
     // The summary and the deck cannot disagree: one key point per card, in the
     // same order, each derived from that card's question and answer.
-    const keyPoints = keyPointsForCards(contentCards);
+    const keyPoints = keyPointsForCards(allCards);
 
     const keyPointLinks =
       specPoints.length > 0
@@ -1732,13 +1842,14 @@ export const completeGeneration = internalMutation({
         ? (matchSpecPoint(text, specPoints).id ?? undefined)
         : undefined;
 
+    const cardOffset = preservedCards.length;
     for (const [index, card] of contentCards.entries()) {
       await ctx.db.insert("flashcards", {
         setId,
         userId: set.userId,
         front: card.front,
         back: card.back,
-        order: index,
+        order: cardOffset + index,
         beyondNotes: card.beyondNotes,
         specRef: tag(`${card.front} ${card.back}`),
         // Stored at generation, never derived from the answer's length at
@@ -1768,6 +1879,7 @@ export const completeGeneration = internalMutation({
       { level, subject },
     );
 
+    const quizOffset = preservedQuiz.length;
     for (const [index, question] of preparedQuiz.items.entries()) {
       await ctx.db.insert("quizQuestions", {
         setId,
@@ -1785,12 +1897,13 @@ export const completeGeneration = internalMutation({
         specRef: tag(
           `${question.question} ${question.answer ?? ""} ${question.explanation}`,
         ),
-        order: index,
+        order: quizOffset + index,
         missCount: 0,
         correctCount: 0,
       });
     }
 
+    const examOffset = preservedExams.length;
     for (const [index, question] of storedExams.entries()) {
       await ctx.db.insert("examQuestions", {
         setId,
@@ -1806,21 +1919,25 @@ export const completeGeneration = internalMutation({
           question.criteria
             ? alignCriteria(question.criteria)
             : alignCriteria(toCriteria(question.markingGuide)),
-        order: index,
+        order: examOffset + index,
       });
     }
+
+    const cardTotal = preservedCards.length + contentCards.length;
+    const quizTotal = preservedQuiz.length + preparedQuiz.items.length;
+    const examTotal = preservedExams.length + storedExams.length;
 
     // One rule for every shortfall, using the numbers that were actually
     // stored. The page never gets a second, contradictory explanation.
     const generationNote = [
-      contentCards.length < requested.cards
-        ? shortfallSentence(contentCards.length, requested.cards)
+      cardTotal < requested.cards
+        ? shortfallSentence(cardTotal, requested.cards)
         : "",
-      preparedQuiz.items.length < requested.quiz
-        ? shortfallFor("quiz", preparedQuiz.items.length, requested.quiz)
+      quizTotal < requested.quiz
+        ? shortfallFor("quiz", quizTotal, requested.quiz)
         : "",
-      storedExams.length < requested.exams
-        ? shortfallFor("exam", storedExams.length, requested.exams)
+      examTotal < requested.exams
+        ? shortfallFor("exam", examTotal, requested.exams)
         : "",
     ]
       .filter(Boolean)
@@ -1829,12 +1946,14 @@ export const completeGeneration = internalMutation({
     // If a section of the notes never made it into a card, question or exam
     // item, say so on the set page instead of dropping it silently.
     const coverage = sourceCoverage(set.notes, [
-      ...contentCards.map((card) => `${card.front} ${card.back}`),
-      ...preparedQuiz.items.map(
+      ...allCards.map((card) => `${card.front} ${card.back}`),
+      ...[...preservedQuiz, ...preparedQuiz.items].map(
         (question) =>
           `${question.question} ${question.answer ?? ""} ${question.explanation}`,
       ),
-      ...storedExams.map((question) => `${question.question} ${question.modelAnswer}`),
+      ...[...preservedExams, ...storedExams].map(
+        (question) => `${question.question} ${question.modelAnswer}`,
+      ),
     ]);
     const summaryCoverage = sourceCoverage(set.notes, [
       summaryToStore.overview,
@@ -1846,9 +1965,9 @@ export const completeGeneration = internalMutation({
       // The generator's short topic title replaces a name derived from the
       // upload, and leaves a name the student typed alone.
       ...(named ? { title: generatedTitle, titleSource: "auto" as const } : {}),
-      cardCount: contentCards.length,
-      quizCount: preparedQuiz.items.length,
-      examCount: storedExams.length,
+      cardCount: cardTotal,
+      quizCount: quizTotal,
+      examCount: examTotal,
       knownCount: 0,
       generationNote:
         final === false
@@ -1877,6 +1996,9 @@ export const completeGeneration = internalMutation({
             progress: undefined,
             errorMessage: undefined,
             processingStartedAt: undefined,
+            // The missing topics are now generated; a later rebuild must use the
+            // complete brief rather than treating this as a partial reuse.
+            generationNotes: undefined,
           }),
       updatedAt: now,
     });
@@ -1897,9 +2019,9 @@ export const completeGeneration = internalMutation({
     return {
       stored: true,
       counts: {
-        cards: contentCards.length,
-        quiz: preparedQuiz.items.length,
-        exams: storedExams.length,
+        cards: cardTotal,
+        quiz: quizTotal,
+        exams: examTotal,
       },
     };
   },

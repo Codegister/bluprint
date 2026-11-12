@@ -1,0 +1,889 @@
+/* ---------------------------------------------------------------------------
+   Bluprint principles
+
+   One display face, one text face, one numeric face. Five type steps. Two
+   surface radii, and one elevation. Legacy screens keep their class names, but
+   their old size utilities resolve to this scale instead of another one-off
+   value. This file is loaded after the screen stylesheets so it is the single
+   place where those decisions live.
+   ------------------------------------------------------------------------- */
+
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --type-hero: 56px;
+  --leading-hero: 1.02;
+  --type-section: 34px;
+  --leading-section: 1.1;
+  --type-lead: 20px;
+  --leading-lead: 1.5;
+  --type-title: 28px;
+  --leading-title: 1.15;
+  --type-body: 16px;
+  --leading-body: 1.6;
+  --type-meta: 12px;
+  --leading-meta: 1.4;
+
+  --radius-stage: 2px;
+  --radius-desk: 6px;
+  --elevation: 0 1px 0 rgba(23, 18, 16, 0.08);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  line-height: var(--leading-body);
+}
+
+/* The display face is a role, not a utility. Small UI labels that inherited
+   the old display class become text; headings and figures keep Fraunces. */
+.font-display {
+  font-family: var(--font-sans) !important;
+}
+
+:is(h1, h2).font-display,
+.font-display.tabular-nums,
+.font-display[class*="[1.6rem]"],
+.font-display[class*="[1.8rem]"],
+.font-display[class*="[2rem]"],
+.font-display.text-2xl,
+.font-display.text-3xl {
+  font-family: var(--font-display) !important;
+}
+
+:is(h1, h2) {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+h1 {
+  font-size: var(--type-section);
+  line-height: var(--leading-section);
+  font-variation-settings: "opsz" 40;
+}
+
+h2 {
+  font-size: var(--type-title);
+  line-height: var(--leading-title);
+  font-variation-settings: "opsz" 32;
+}
+
+h3,
+h4 {
+  font-family: var(--font-sans);
+  font-size: var(--type-lead);
+  line-height: var(--leading-lead);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+/* Stage heroes. */
+.home-title {
+  font-size: var(--type-hero) !important;
+  line-height: var(--leading-hero) !important;
+  font-weight: 500 !important;
+  font-variation-settings: "opsz" 96;
+  letter-spacing: -0.04em !important;
+}
+
+.home-section-title,
+.home-close-title {
+  font-size: var(--type-section) !important;
+  line-height: var(--leading-section) !important;
+  font-weight: 500 !important;
+  font-variation-settings: "opsz" 40;
+  letter-spacing: -0.03em !important;
+}
+
+/* A cover title on the desk; still display, but one step below the stage. */
+.home-paper-cover-title,
+.home-mark-score {
+  font-family: var(--font-display) !important;
+  font-size: var(--type-title) !important;
+  line-height: var(--leading-title) !important;
+  font-variation-settings: "opsz" 32;
+  font-weight: 500 !important;
+  letter-spacing: -0.025em;
+}
+
+.home-mark-score {
+  font-variation-settings: "opsz" 40;
+}
+
+.page-title,
+.today-screen .page-title,
+.timetable-screen .page-title,
+.timetable-setup-screen .page-title,
+.auth-title,
+.papers-cover .page-title,
+.course-library-cover .page-title {
+  font-family: var(--font-display) !important;
+  font-size: var(--type-section) !important;
+  line-height: var(--leading-section) !important;
+  font-weight: 500 !important;
+  font-variation-settings: "opsz" 40;
+  letter-spacing: -0.03em !important;
+}
+
+.set-title-text,
+.set-title-input {
+  font-family: var(--font-display) !important;
+  font-size: var(--type-section) !important;
+  line-height: var(--leading-section) !important;
+  font-weight: 500 !important;
+  font-variation-settings: "opsz" 40;
+  letter-spacing: -0.03em !important;
+}
+
+.set-section-title,
+.auth-card h2 {
+  font-family: var(--font-display) !important;
+  font-size: var(--type-title) !important;
+  line-height: var(--leading-title) !important;
+  font-weight: 500 !important;
+  font-variation-settings: "opsz" 32;
+  letter-spacing: -0.02em !important;
+}
+
+.papers-screen article h3 {
+  font-family: var(--font-sans) !important;
+}
+
+/* Reading lead. A page has one of these, directly under its display line. */
+.home-lede,
+.page-description,
+.auth-lede,
+.papers-cover .page-description,
+.course-library-cover .page-description {
+  font-size: var(--type-lead) !important;
+  line-height: var(--leading-lead) !important;
+}
+
+/* The stage landing page has one reading size and one display size above it;
+   its old 18px inheritance is not a sixth step. */
+.stage-home {
+  font-size: var(--type-body);
+}
+
+.home-lede {
+  font-size: var(--type-body) !important;
+}
+
+.home-step-title,
+.home-flash-question {
+  font-size: var(--type-body) !important;
+}
+
+.home-paper-cover-title,
+.home-mark-score,
+.home-paper-cover-foot strong {
+  font-size: var(--type-section) !important;
+}
+
+.home-paper-cover-foot strong {
+  font-variation-settings: "opsz" 40;
+}
+
+[class*="[2.4rem]"] {
+  font-variation-settings: "opsz" 40;
+}
+
+[class*="[1.5rem]"],
+.font-display.text-lg {
+  font-variation-settings: "opsz" 32;
+}
+
+/* Legacy desk labels and buttons resolve to the text and meta steps. */
+.brand-word,
+:is(#root, #preview-root) .home-flash-question {
+  font-family: var(--font-sans) !important;
+  font-size: var(--type-body) !important;
+}
+
+.app-button-base {
+  font-size: var(--type-body) !important;
+}
+
+.app-main :is([class*="[0.66rem]"]) {
+  font-size: var(--type-meta) !important;
+}
+
+.app-main :is([class*="[0.85rem]"]) {
+  font-size: var(--type-body) !important;
+}
+
+.app-main .font-display[class*="[1rem]"] {
+  font-size: var(--type-lead) !important;
+}
+
+.timetable-screen [class*="[0.66rem]"] :is(span, p) {
+  font-size: var(--type-meta) !important;
+}
+
+.auth-stack-meta,
+.auth-stack-foot {
+  font-size: var(--type-meta) !important;
+}
+
+.auth-stack-sheet > p {
+  font-size: var(--type-lead) !important;
+}
+
+.auth-page .auth-card h2 {
+  font-size: var(--type-title) !important;
+}
+
+/* The desk keeps four steps: title, section, body, meta. */
+:is(#root, #preview-root) .app-main h2,
+:is(#root, #preview-root) .auth-page h2 {
+  font-family: var(--font-display) !important;
+  font-size: var(--type-title) !important;
+  line-height: var(--leading-title) !important;
+  font-weight: 500 !important;
+  font-variation-settings: "opsz" 32;
+  letter-spacing: -0.02em !important;
+}
+
+:is(#root, #preview-root) .home-footer-inner,
+:is(#root, #preview-root) .home-footer nav,
+:is(#root, #preview-root) .home-header,
+:is(#root, #preview-root) .home-header-inner,
+:is(#root, #preview-root) .home-nav,
+:is(#root, #preview-root) .home-header-actions,
+:is(#root, #preview-root) .home-brand,
+:is(#root, #preview-root) .home-nav a,
+:is(#root, #preview-root) .home-signin,
+:is(#root, #preview-root) .app-button-base {
+  font-size: var(--type-body) !important;
+}
+
+:is(#root, #preview-root) .home-paper-flash-foot strong {
+  font-family: var(--font-display) !important;
+  font-size: var(--type-section) !important;
+  line-height: var(--leading-section) !important;
+  font-variation-settings: "opsz" 40;
+  font-weight: 500 !important;
+}
+
+:is(#root, #preview-root) .today-screen .page-description,
+:is(#root, #preview-root) .timetable-screen .page-description,
+:is(#root, #preview-root) .timetable-setup-screen .page-description,
+:is(#root, #preview-root) .auth-lede {
+  font-size: var(--type-body) !important;
+}
+
+:is(#root, #preview-root) .auth-stack-sheet > p {
+  font-size: var(--type-body) !important;
+}
+
+:is(#root, #preview-root) .today-screen .page-actions > :is(a, button),
+:is(#root, #preview-root) .timetable-screen .page-actions > :is(a, button) {
+  font-size: var(--type-body) !important;
+}
+
+:is(#root, #preview-root) .today-queue li a > span:not(:last-child),
+:is(#root, #preview-root) .today-queue p,
+:is(#root, #preview-root) .today-step p:first-child,
+:is(#root, #preview-root) .today-step p:last-child,
+:is(#root, #preview-root) .today-sprint .surface-card p:first-child,
+:is(#root, #preview-root) .today-sprint .surface-card p:last-child {
+  font-size: var(--type-body) !important;
+}
+
+:is(#root, #preview-root) .today-queue li a > span:last-child {
+  font-size: var(--type-meta) !important;
+}
+
+:is(#root, #preview-root) .today-how > .mono-label {
+  font-size: var(--type-meta) !important;
+}
+
+:is(#root, #preview-root) .timetable-day .font-display {
+  font-family: var(--font-display) !important;
+  font-size: var(--type-title) !important;
+  line-height: 1 !important;
+  font-variation-settings: "opsz" 32;
+}
+
+:is(#root, #preview-root) .timetable-day-panel p.font-display {
+  font-size: var(--type-body) !important;
+}
+
+:is(#root, #preview-root) .timetable-session > div:first-of-type,
+:is(#root, #preview-root) .timetable-session > div:first-of-type p,
+:is(#root, #preview-root) .timetable-meal > span:first-child,
+:is(#root, #preview-root) .timetable-meal > span:first-child :is(span, p),
+:is(#root, #preview-root) .timetable-blocked > span:first-child,
+:is(#root, #preview-root) .timetable-blocked > span:first-child :is(span, p) {
+  font-size: var(--type-meta) !important;
+}
+
+:is(#root, #preview-root) .timetable-session p[class*="[0.7rem]"],
+:is(#root, #preview-root) .timetable-meal .text-brand-ink\/70,
+:is(#root, #preview-root) .timetable-blocked .text-brand-ink\/70 {
+  font-size: var(--type-meta) !important;
+}
+
+:is(#root, #preview-root) .timetable-session p[class*="[0.88rem]"],
+:is(#root, #preview-root) .timetable-side > section p,
+:is(#root, #preview-root) .timetable-side > section dd,
+:is(#root, #preview-root) .timetable-empty p,
+:is(#root, #preview-root) .timetable-setup-screen section p {
+  font-size: var(--type-body) !important;
+}
+
+:is(#root, #preview-root) .timetable-side > section dt {
+  font-size: var(--type-meta) !important;
+}
+
+:is(#root, #preview-root) .timetable-side > section dl {
+  font-size: var(--type-body) !important;
+}
+
+
+/* The set stage bar is ink on a dark ground; the cover is desk ink on paper. */
+:is(#root, #preview-root) .set-stage-bar .brand-word {
+  color: var(--stage-ink) !important;
+}
+
+:is(#root, #preview-root) .set-stage-bar .brand-period {
+  color: var(--olive) !important;
+}
+
+:is(#root, #preview-root) .course-cover :is(h1, p, a),
+:is(#root, #preview-root) .past-paper-cover :is(h1, p, a) {
+  color: var(--desk-ink) !important;
+}
+
+:is(#root, #preview-root) .course-cover .text-brand-ink,
+:is(#root, #preview-root) .past-paper-cover .text-brand-ink {
+  color: var(--desk-ink) !important;
+}
+
+/* Set screens keep the same four steps as the rest of the desk. */
+:is(#root, #preview-root) .set-title-text,
+:is(#root, #preview-root) .set-title-input {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-family: var(--font-display) !important;
+  font-size: var(--type-section) !important;
+  line-height: var(--leading-section) !important;
+  font-weight: 500 !important;
+  font-variation-settings: "opsz" 40;
+}
+
+:is(#root, #preview-root) .set-screen h2,
+:is(#root, #preview-root) .set-section-title,
+:is(#root, #preview-root) .set-overview h2,
+:is(#root, #preview-root) .set-mode h2 {
+  font-family: var(--font-display) !important;
+  font-size: var(--type-title) !important;
+  line-height: var(--leading-title) !important;
+  font-weight: 500 !important;
+  font-variation-settings: "opsz" 32;
+}
+
+:is(#root, #preview-root) .set-screen [class*="[1.05rem]"],
+:is(#root, #preview-root) .set-screen [class*="[1.1rem]"],
+:is(#root, #preview-root) .set-screen [class*="[1.5rem]"],
+:is(#root, #preview-root) .set-screen .font-display.text-lg {
+  font-size: var(--type-title) !important;
+}
+
+:is(#root, #preview-root) .set-lede,
+:is(#root, #preview-root) .set-action-title,
+:is(#root, #preview-root) .set-action-note,
+:is(#root, #preview-root) .set-note,
+:is(#root, #preview-root) .set-mode p {
+  font-size: var(--type-body) !important;
+}
+
+/* Body copy. */
+.home-step-copy,
+.home-paper-spec-copy,
+.home-flash-answer,
+.home-mark-question,
+.home-mark-answer,
+.home-build-label,
+.home-build textarea,
+.stage-button,
+.auth-card :is(p, label, input, textarea, button) {
+  font-size: var(--type-body) !important;
+  line-height: var(--leading-body) !important;
+}
+
+/* Meta is the smallest step, never a fraction of a pixel below 12. */
+.home-kicker,
+.home-build-hint,
+.home-guest,
+.home-error,
+.home-footer,
+.home-footer p,
+.home-footer nav a,
+.home-mark-meta,
+.home-mark-note,
+.home-step-index,
+.home-paper-meta,
+.home-paper-facts,
+.home-paper-spec-meta,
+.path-stamp-label,
+.home-paper-cover-foot,
+.home-paper-cover-foot span,
+.home-paper-flash-foot,
+.home-paper-flash-foot span,
+.page-kicker,
+.mono-label,
+.set-eyebrow,
+.set-meta,
+.set-guest,
+.set-facts dt,
+.auth-aside-foot,
+.today-progress p,
+.timetable-day span,
+.timetable-day-panel > div:first-child p:first-child {
+  font-size: var(--type-meta) !important;
+  line-height: var(--leading-meta) !important;
+}
+
+.set-action-title {
+  font-size: var(--type-lead) !important;
+  line-height: var(--leading-lead) !important;
+}
+
+.home-paper-cover-title,
+.home-paper-cover-foot strong,
+.home-flash-question {
+  font-family: var(--font-display) !important;
+}
+
+.home-flash-question {
+  font-variation-settings: "opsz" 32;
+  font-weight: 500;
+}
+
+/* The existing one-off size utilities now resolve to the same five steps.
+   The selectors deliberately do not add another scale of their own. */
+:is(
+  [class*="text-"][class*="[0.56rem]"],
+  [class*="text-"][class*="[0.58rem]"],
+  [class*="text-"][class*="[0.6rem]"],
+  [class*="text-"][class*="[0.62rem]"],
+  [class*="text-"][class*="[0.64rem]"],
+  [class*="text-"][class*="[0.65rem]"],
+  [class*="text-"][class*="[0.66rem]"],
+  [class*="text-"][class*="[0.68rem]"],
+  [class*="text-"][class*="[0.7rem]"],
+  [class*="text-"][class*="[0.72rem]"],
+  [class*="text-"][class*="[0.74rem]"],
+  [class*="text-"][class*="[0.75rem]"],
+  [class*="text-"][class*="[0.76rem]"],
+  [class*="text-"][class*="[0.78rem]"],
+  [class*="text-"][class*="[0.8rem]"],
+  [class*="text-"][class*="[0.82rem]"],
+  [class*="text-"][class*="[0.84rem]"],
+  [class*="text-"][class*="[0.85rem]"],
+  [class*="text-"][class*="[0.86rem]"],
+  [class*="text-"][class*="[0.88rem]"],
+  [class*="text-"][class*="[10px]"],
+  .text-xs,
+  .text-sm
+) {
+  font-size: var(--type-meta) !important;
+  line-height: var(--leading-meta) !important;
+}
+
+:is(
+  [class*="text-"][class*="[0.9rem]"],
+  [class*="text-"][class*="[0.92rem]"],
+  [class*="text-"][class*="[0.94rem]"],
+  [class*="text-"][class*="[0.95rem]"],
+  [class*="text-"][class*="[0.98rem]"],
+  [class*="text-"][class*="[1rem]"],
+  [class*="text-"][class*="[1.02rem]"],
+  .text-base
+) {
+  font-size: var(--type-body) !important;
+  line-height: var(--leading-body) !important;
+}
+
+:is(
+  [class*="text-"][class*="[1.05rem]"],
+  [class*="text-"][class*="[1.06rem]"],
+  [class*="text-"][class*="[1.1rem]"],
+  [class*="text-"][class*="[1.15rem]"],
+  [class*="text-"][class*="[1.2rem]"],
+  [class*="text-"][class*="[1.22rem]"],
+  [class*="text-"][class*="[1.25rem]"],
+  [class*="text-"][class*="[1.3rem]"],
+  [class*="text-"][class*="[1.35rem]"],
+  [class*="text-"][class*="[1.4rem]"],
+  [class*="text-"][class*="[1.5rem]"],
+  [class*="text-"][class*="[1.55rem]"],
+  .text-lg,
+  .text-xl
+) {
+  font-size: var(--type-lead) !important;
+  line-height: var(--leading-lead) !important;
+}
+
+:is(
+  [class*="text-"][class*="[1.6rem]"],
+  [class*="text-"][class*="[1.8rem]"],
+  [class*="text-"][class*="[2rem]"],
+  .text-2xl
+) {
+  font-size: var(--type-title) !important;
+  line-height: var(--leading-title) !important;
+}
+
+:is(
+  [class*="text-"][class*="[2.4rem]"],
+  .text-3xl,
+  .text-4xl
+) {
+  font-size: var(--type-section) !important;
+  line-height: var(--leading-section) !important;
+}
+
+:is(.text-5xl, .text-6xl) {
+  font-size: var(--type-hero) !important;
+  line-height: var(--leading-hero) !important;
+}
+
+/* Two rectangular radii: 2 on the stage, 6 on the desk. Capsules and avatars
+   are circles, not a third surface radius. */
+:is(
+  [class*="rounded-[0.6rem]"],
+  [class*="rounded-[0.7rem]"],
+  [class*="rounded-lg"],
+  [class*="rounded-xl"],
+  [class*="rounded-2xl"],
+  [class*="rounded-3xl"],
+  [class*="rounded-[1.4rem]"],
+  [class*="rounded-[1.5rem]"],
+  [class*="rounded-[1.6rem]"],
+  [class*="rounded-[1.7rem]"],
+  [class*="rounded-[1.75rem]"],
+  [class*="rounded-[2rem]"]
+) {
+  border-radius: var(--radius-desk) !important;
+}
+
+.app-button-base {
+  box-shadow: none !important;
+}
+
+:is(#root, #preview-root) [data-slot="button"] {
+  border-radius: var(--radius-desk) !important;
+}
+
+:is(#root, #preview-root) [data-slot="button"][class*="rounded-full"]:not([class*="size-"]) {
+  border-radius: var(--radius-desk) !important;
+}
+
+:is(#root, #preview-root) .today-screen .page-actions > [data-slot="button"],
+:is(#root, #preview-root) .timetable-screen .page-actions > [data-slot="button"] {
+  border-radius: var(--radius-stage) !important;
+}
+
+:is(#root, #preview-root) .set-menu-panel,
+:is(#root, #preview-root) [class*="shadow-lg"],
+:is(#root, #preview-root) [class*="shadow-xl"],
+:is(#root, #preview-root) [class*="shadow-2xl"] {
+  box-shadow: var(--elevation) !important;
+}
+
+body::before,
+.app-rail::after {
+  background-image: none !important;
+}
+
+:is([class*="shadow-lg"], [class*="shadow-xl"], [class*="shadow-2xl"], [class*="shadow-md"]) {
+  box-shadow: var(--elevation) !important;
+}
+
+.timetable-day {
+  box-shadow: none !important;
+}
+
+.surface-card {
+  border-radius: var(--radius-desk) !important;
+  box-shadow: none !important;
+  transition:
+    border-color 160ms ease-out,
+    background-color 160ms ease-out,
+    transform 90ms ease-out;
+}
+
+.surface-card {
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out;
+}
+
+.surface-card:hover {
+  border-color: color-mix(in srgb, var(--olive) 42%, var(--desk-line));
+}
+
+.stage-shell .app-main {
+  min-height: 100svh;
+}
+
+/* Every interactive surface answers a pointer and a key. */
+:is(.stage-home, .stage-shell, .auth-page) :is(a, button, summary, [role="button"]) {
+  transition:
+    color 160ms ease-out,
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    opacity 160ms ease-out,
+    transform 90ms ease-out;
+}
+
+:is(.stage-home, .stage-shell, .auth-page) :is(a, button, summary, [role="button"]):active {
+  transform: scale(0.985);
+}
+
+:is(.stage-home, .stage-shell, .auth-page) :is(a, button, summary, [role="button"]):focus-visible {
+  outline: 2px solid var(--olive) !important;
+  outline-offset: 2px !important;
+}
+
+.app-stage-sheet {
+  box-shadow: var(--elevation) !important;
+}
+
+/* Figures, times and mark schemes. Scores stay with the display face; tables
+   and timers use the mono face and never change width as a digit changes. */
+:is(.font-mono, .mono-label, time, code, kbd, [data-numeric]) {
+  font-family: var(--font-mono) !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Counts, times and table figures take the mono face; a deliberate score
+   numeral keeps the display face but still uses tabular figures. */
+:is(.tabular-nums, .timetable-session > div:first-of-type, .set-facts dd):not(.font-display):not(.home-mark-score) {
+  font-family: var(--font-mono) !important;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+:is(.tabular-nums, dd, .home-mark-score, .set-facts dd) {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* Opening a set is the one depth move: the stage gives way to the desk. */
+@supports (view-transition-name: none) {
+  ::view-transition-old(root) {
+    animation: depth-out 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: 50% 0;
+  }
+
+  ::view-transition-new(root) {
+    animation: depth-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: 50% 0;
+  }
+}
+
+html.depth-fallback .stage-shell .app-main,
+html.depth-fallback .set-screen {
+  animation: depth-fade 200ms ease-out both;
+}
+
+@keyframes depth-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes depth-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.998);
+  }
+}
+
+@keyframes depth-fade {
+  from {
+    opacity: 0.78;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.stage-home, .stage-shell, .auth-page) :is(a, button, summary, [role="button"]),
+  .surface-card {
+    transition: none;
+  }
+
+  :is(.stage-home, .stage-shell, .auth-page) :is(a, button, summary, [role="button"]):active {
+    transform: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
+
+  html.depth-fallback .stage-shell .app-main,
+  html.depth-fallback .set-screen {
+    animation: none !important;
+  }
+}
+
+/* Quiz feedback colours: status ink is separate from the single action accent. */
+.text-success {
+  color: #0f7a50 !important;
+}
+
+.text-success-strong {
+  color: #0b6b45 !important;
+}
+
+.text-danger {
+  color: #a81f28 !important;
+}
+
+/* The old ink fill is now the olive action fill. Its white label was inherited
+   from the dark button it used to be, so pin the ink to the fill in both modes. */
+.stage-shell [class~="bg-[#191B27]"],
+.stage-shell [class~="bg-[#191B27]"] * {
+  color: var(--olive-ink) !important;
+}
+
+/* Stage menus keep their dark paper in both modes; cover copy must not pull
+   their labels back to desk ink. */
+:is(#root, #preview-root) :is(.course-cover, .past-paper-cover) details > div button {
+  color: var(--stage-ink) !important;
+}
+
+:is(#root, #preview-root) :is(.course-cover, .past-paper-cover) details > div button.text-destructive {
+  color: var(--stage-danger) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   60 / 30 / 10
+   The desk is the 60% field, stage dark the 30% frame, and one deep olive
+   statement band carries the 10% bold. These are emphasis surfaces, so their
+   copy is always fixed to the band's own ink in both themes.
+
+   Home carries the same ratio through its opening stage, desk process and one
+   olive close band. Auth uses a 30% stage aside, a 10% olive spine and a 60%
+   desk form panel on desktop.
+   ------------------------------------------------------------------------- */
+
+/* Today: the calibration note is the screen's editorial aside. */
+:is(#root, #preview-root) .today-calibration {
+  border: 1px solid var(--bold-field) !important;
+  border-radius: 6px !important;
+  background: var(--bold-field) !important;
+  padding: 20px 22px !important;
+}
+
+:is(#root, #preview-root) .today-calibration .mono-label {
+  color: var(--bold-field-muted) !important;
+}
+
+:is(#root, #preview-root) .today-calibration p:nth-of-type(2),
+:is(#root, #preview-root) .today-calibration p:last-child {
+  color: var(--bold-field-ink) !important;
+}
+
+/* Course: the next topic is the one action the page is asking for. */
+:is(#root, #preview-root) .course-screen .course-next {
+  border-color: var(--bold-field) !important;
+  background: var(--bold-field) !important;
+}
+
+:is(#root, #preview-root) .course-screen .course-next > div > p:first-child {
+  color: var(--bold-field-muted) !important;
+}
+
+:is(#root, #preview-root) .course-screen .course-next h2 {
+  color: var(--bold-field-ink) !important;
+}
+
+:is(#root, #preview-root) .course-screen .course-next > div > p:last-child {
+  color: var(--bold-field-muted) !important;
+}
+
+:is(#root, #preview-root) .course-screen .course-next button {
+  border-color: var(--desk-raised) !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
+}
+
+/* Timetable: caught-up sessions are a status, stated once and loudly. */
+:is(#root, #preview-root) .timetable-missed {
+  border-color: var(--bold-field) !important;
+  background: var(--bold-field) !important;
+  color: var(--bold-field-ink) !important;
+}
+
+:is(#root, #preview-root) .timetable-missed p,
+:is(#root, #preview-root) .timetable-missed span,
+:is(#root, #preview-root) .timetable-missed svg,
+:is(#root, #preview-root) .timetable-missed .text-\[\#7A5410\] {
+  color: var(--bold-field-ink) !important;
+}
+
+/* Past paper: the cover is the student's name for the task, not the paper. */
+:is(#root, #preview-root) .past-paper-screen .past-paper-cover {
+  border-color: var(--bold-field) !important;
+  background: var(--bold-field) !important;
+  color: var(--bold-field-ink) !important;
+}
+
+:is(#root, #preview-root) .past-paper-screen .past-paper-cover :is(h1, p, a) {
+  color: var(--bold-field-ink) !important;
+}
+
+:is(#root, #preview-root) .past-paper-screen .past-paper-cover > a:first-child,
+:is(#root, #preview-root) .past-paper-screen .past-paper-cover > div > p:first-of-type {
+  color: var(--bold-field-muted) !important;
+}
+
+:is(#root, #preview-root) .past-paper-screen .past-paper-cover button,
+:is(#root, #preview-root) .past-paper-screen .past-paper-cover .stage-button {
+  border-color: var(--desk-raised) !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
+}
+
+/* Papers: the empty desk gets the same bold note, not another grey card. */
+:is(#root, #preview-root) .papers-screen .surface-card.text-muted-foreground {
+  border-color: var(--bold-field) !important;
+  background: var(--bold-field) !important;
+  color: var(--bold-field-ink) !important;
+}
+
+/* Quiz: the facts strip is the fixed point the question reads against. */
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .set-facts {
+  border-color: var(--bold-field) !important;
+  background: var(--bold-field) !important;
+  color: var(--bold-field-ink) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .set-facts :is(dt, dd, span, p) {
+  color: var(--bold-field-ink) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .set-facts dt {
+  color: var(--bold-field-muted) !important;
+}

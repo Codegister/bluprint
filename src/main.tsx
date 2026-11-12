@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { DepthTransition } from "@/components/DepthTransition";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/use-auth";
 import { installResizeObserverGuard } from "@/lib/resizeGuard";
@@ -9,6 +10,7 @@ import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import { MotionConfig } from "framer-motion";
+import { hasStoredAuthSession } from "@/lib/authSession";
 import React, {
   StrictMode,
   useEffect,
@@ -24,11 +26,9 @@ import {
   Routes,
   useLocation,
 } from "react-router";
-import "./index.css";
-import "./redesign.css";
-import "./stage.css";
-import "./stage-study.css";
-import "./stage-pages.css";
+
+// Styles are owned by src/boot.ts, so the static Home is styled without
+// waiting for this dynamically loaded app chunk.
 
 // Installed before React mounts so every observer in the app (including the
 // ones created by framer-motion and Radix) is covered. See lib/resizeGuard.ts.
@@ -128,7 +128,7 @@ class RootErrorBoundary extends React.Component<
               {this.state.message}
             </p>
             {this.state.stack && (
-              <pre className="mt-3 text-left text-[10px] leading-4 text-muted-foreground/80 max-h-40 overflow-auto rounded border border-border/60 p-2">
+              <pre className="mt-3 text-left text-xs leading-4 text-muted-foreground/80 max-h-40 overflow-auto rounded border border-border/60 p-2">
                 {this.state.stack}
               </pre>
             )}
@@ -164,7 +164,11 @@ const BASE_PATH = import.meta.env.BASE_URL.replace(/\/+$/, "") || "/";
  */
 function HomeRoute() {
   const { isLoading, isAuthenticated } = useAuth();
-  if (isLoading) return <RouteLoading />;
+  // A signed-out visitor already has the static form from index.html. Do not
+  // replace it with a skeleton just because the auth round trip is still in
+  // flight; Landing can render while Convex confirms the session. A visitor
+  // with a stored token keeps the app loader, since Home will redirect them.
+  if (isLoading && hasStoredAuthSession()) return <RouteLoading />;
   return isAuthenticated ? <Navigate to="/tutor" replace /> : <Landing />;
 }
 
@@ -236,6 +240,7 @@ createRoot(document.getElementById("root")!).render(
         <ThemeProvider>
           <ConvexAuthProvider client={convex}>
           <BrowserRouter basename={BASE_PATH}>
+            <DepthTransition />
             <RouteSyncer />
             <RouteFade>
               <Suspense fallback={<RouteLoading />}>

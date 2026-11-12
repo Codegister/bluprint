@@ -3,7 +3,7 @@
  *
  * Every format is built from the same rows the app shows, so an export is a
  * copy of the account rather than a summary of it. The client turns these into
- * CSV, Anki text and a JSON file (see src/lib/studyExport.ts).
+ * CSV, flashcard text and a JSON file (see src/lib/studyExport.ts).
  */
 
 import { v } from "convex/values";

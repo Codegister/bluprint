@@ -6,7 +6,7 @@ import { calibrationFor, calibrationSentence } from "../src/convex/lib/calibrati
 import { assembleMock, parseMarkScheme, schemeIsUsable } from "../src/convex/lib/realPaper";
 import {
   accountExportJson,
-  cardsToAnkiText,
+  cardsToFlashcardText,
   cardsToCsv,
   csvField,
   exportSlug,
@@ -229,8 +229,8 @@ describe("exports", () => {
     expect(csv).toContain('"A ""quoted"" answer');
   });
 
-  test("the Anki file carries its directives and no tabs inside a field", () => {
-    const text = cardsToAnkiText(cards);
+  test("the flashcard file carries its directives and no tabs inside a field", () => {
+    const text = cardsToFlashcardText(cards);
     expect(text.split("\n")[0]).toBe("#separator:tab");
     expect(text).toContain("#html:true");
     const row = text.split("\n")[5]!;

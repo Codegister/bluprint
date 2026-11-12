@@ -107,13 +107,13 @@
   /* The five accent slots keep their old class names so every existing screen
      picks up the new palette without being rewritten. They are now anodised
      metal tints (ice, pearl, steel-blue, bronze, verdigris) rather than the
-     Gizmo pastels. */
-  --color-gizmo-lime: var(--gizmo-lime);
-  --color-gizmo-lilac: var(--gizmo-lilac);
-  --color-gizmo-sky: var(--gizmo-sky);
-  --color-gizmo-peach: var(--gizmo-peach);
-  --color-gizmo-mint: var(--gizmo-mint);
-  --color-gizmo-cream: var(--gizmo-cream);
+     Legacy pastels. */
+  --color-surface-lime: var(--surface-lime);
+  --color-surface-lilac: var(--surface-lilac);
+  --color-surface-sky: var(--surface-sky);
+  --color-surface-peach: var(--surface-peach);
+  --color-surface-mint: var(--surface-mint);
+  --color-surface-cream: var(--surface-cream);
 }
 
 /* ---------------------------------------------------------------------------
@@ -155,12 +155,12 @@
 
   /* One accent, plus neutral. Every tint below is either the action blue's
      surface or a step on the neutral ramp — no tan badges, no purple dots. */
-  --gizmo-lime: #e3edf9; /* accent tint */
-  --gizmo-lilac: #e8ecf1; /* neutral tint */
-  --gizmo-sky: #e3edf9; /* accent tint */
-  --gizmo-peach: #e8ecf1; /* neutral tint */
-  --gizmo-mint: #e3edf9; /* accent tint */
-  --gizmo-cream: #f1f4f8; /* light neutral */
+  --surface-lime: #e3edf9; /* accent tint */
+  --surface-lilac: #e8ecf1; /* neutral tint */
+  --surface-sky: #e3edf9; /* accent tint */
+  --surface-peach: #e8ecf1; /* neutral tint */
+  --surface-mint: #e3edf9; /* accent tint */
+  --surface-cream: #f1f4f8; /* light neutral */
 
   /* Every control hue resolves to the single action accent; secondary marks
      use the neutral ink. */
@@ -287,12 +287,12 @@
   --brand-void: #05080c;
 
   /* Deep anodised tints; light type still reads on every one. */
-  --gizmo-lime: #1f3d59;
-  --gizmo-lilac: #333b4c;
-  --gizmo-sky: #19384c;
-  --gizmo-peach: #41382b;
-  --gizmo-mint: #193b31;
-  --gizmo-cream: #242f3b;
+  --surface-lime: #1f3d59;
+  --surface-lilac: #333b4c;
+  --surface-sky: #19384c;
+  --surface-peach: #41382b;
+  --surface-mint: #193b31;
+  --surface-cream: #242f3b;
 
   --brand-pink: #6da8ff;
   --brand-pink-deep: #8fbdff;
@@ -471,22 +471,22 @@
 
   /* Specular reflections: white at the centre with a cool halo, like light
      caught on a curved steel surface. */
-  .gizmo-blob {
+  .surface-blob {
     position: absolute;
     border-radius: 9999px;
     filter: blur(72px);
     opacity: calc(var(--chrome-intensity, 1) * 0.62);
-    animation: gizmo-blob 26s ease-in-out infinite alternate;
+    animation: surface-blob 26s ease-in-out infinite alternate;
     will-change: transform;
   }
-  .gizmo-blob-lime {
+  .surface-blob-lime {
     top: -16%;
     left: -8%;
     width: 48%;
     height: 46%;
     background-color: rgba(255, 255, 255, 0.95);
   }
-  .gizmo-blob-lilac {
+  .surface-blob-lilac {
     top: -8%;
     right: -10%;
     width: 42%;
@@ -494,7 +494,7 @@
     background-color: rgba(176, 205, 228, 0.8);
     animation-delay: -9s;
   }
-  .gizmo-blob-peach {
+  .surface-blob-peach {
     bottom: -20%;
     right: 4%;
     width: 38%;
@@ -505,14 +505,14 @@
 
   /* Two wide reflections travel across the page on different loops, which is
      what makes the backdrop read as moving chrome rather than a grey box. */
-  .gizmo-flow {
+  .surface-flow {
     position: absolute;
     inset: -12%;
     overflow: hidden;
     opacity: calc(var(--chrome-intensity, 1) * 0.85);
     pointer-events: none;
   }
-  .gizmo-ribbon {
+  .surface-ribbon {
     position: absolute;
     left: -70%;
     width: 150%;
@@ -522,7 +522,7 @@
     will-change: transform, opacity;
     animation: ribbon-cross 38s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
-  .gizmo-ribbon-lime {
+  .surface-ribbon-lime {
     top: 0%;
     background: linear-gradient(
       90deg,
@@ -533,7 +533,7 @@
     );
     animation-duration: 41s;
   }
-  .gizmo-ribbon-lilac {
+  .surface-ribbon-lilac {
     top: 36%;
     height: 28%;
     background: linear-gradient(
@@ -546,7 +546,7 @@
     animation-duration: 55s;
     animation-delay: -19s;
   }
-  .gizmo-ribbon-sky {
+  .surface-ribbon-sky {
     top: 70%;
     height: 26%;
     background: linear-gradient(
@@ -602,14 +602,14 @@
   /* Light mode is one flat neutral sheet. The moving ribbons, soft blobs and
      dot grid were a multicolour wash behind every card, so they are removed
      here; the dark theme keeps them. */
-  html:not(.dark) .chrome-backdrop .gizmo-flow,
-  html:not(.dark) .chrome-backdrop .gizmo-blob,
-  html:not(.dark) .chrome-backdrop .gizmo-dots {
+  html:not(.dark) .chrome-backdrop .surface-flow,
+  html:not(.dark) .chrome-backdrop .surface-blob,
+  html:not(.dark) .chrome-backdrop .surface-dots {
     display: none;
   }
 
   /* A fine engineering grid: reads as the surface of a machined plate. */
-  .gizmo-dots {
+  .surface-dots {
     position: absolute;
     inset: 0;
     background-image: radial-gradient(
@@ -728,7 +728,7 @@
 
   /* Every card. A crisp edge and a 2px offset shadow do the work, so the card
      looks pressed onto the plate rather than floating in a haze. */
-  .gizmo-card {
+  .surface-card {
     @apply rounded-3xl border border-border bg-card;
     background-image: var(--chrome-surface);
     box-shadow:
@@ -922,13 +922,13 @@
   }
 
   /* Sidebar / settings rows. */
-  .gizmo-row {
+  .surface-row {
     @apply flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-[0.95rem] font-medium text-brand-ink/80 transition-colors;
   }
-  .gizmo-row:hover {
+  .surface-row:hover {
     @apply bg-brand-panel text-brand-ink;
   }
-  .gizmo-row-active {
+  .surface-row-active {
     @apply bg-brand-panel font-semibold text-brand-ink;
   }
 
@@ -957,18 +957,18 @@
     display: none;
   }
 
-  .gizmo-scroll {
+  .surface-scroll {
     scrollbar-width: thin;
     scrollbar-color: var(--chrome-4) transparent;
   }
-  .gizmo-scroll::-webkit-scrollbar {
+  .surface-scroll::-webkit-scrollbar {
     width: 8px;
   }
-  .gizmo-scroll::-webkit-scrollbar-thumb {
+  .surface-scroll::-webkit-scrollbar-thumb {
     border-radius: 999px;
     background: var(--chrome-4);
   }
-  .gizmo-scroll::-webkit-scrollbar-track {
+  .surface-scroll::-webkit-scrollbar-track {
     background: transparent;
   }
 
@@ -1156,7 +1156,7 @@
       0 2px 0 rgba(0, 0, 0, 0.5),
       0 26px 44px -34px rgba(0, 0, 0, 0.95);
   }
-  .dark .gizmo-card {
+  .dark .surface-card {
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.07),
       0 2px 0 rgba(0, 0, 0, 0.55),
@@ -1180,7 +1180,7 @@
   .dark .sticker {
     border-color: var(--chrome-edge);
     /* A translucent gloss, not an opaque fill, so a sticker that also carries
-       bg-gizmo-lime / sky / lilac keeps its accent tint in dark mode. */
+       bg-surface-lime / sky / lilac keeps its accent tint in dark mode. */
     background-image: linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.12) 0%,
@@ -1197,7 +1197,7 @@
       transparent 96%
     );
   }
-  .dark .gizmo-dots,
+  .dark .surface-dots,
   .dark .blueprint-grid,
   .dark .dot-grid,
   .dark .paper-grid,
@@ -1214,16 +1214,16 @@
       radial-gradient(circle, rgba(226, 238, 250, 0.07) 1px, transparent 1px),
       var(--chrome-panel);
   }
-  .dark .gizmo-flow {
+  .dark .surface-flow {
     opacity: calc(var(--chrome-intensity, 1) * 0.45);
   }
-  .dark .gizmo-blob-lime {
+  .dark .surface-blob-lime {
     background-color: rgba(108, 158, 206, 0.34);
   }
-  .dark .gizmo-blob-lilac {
+  .dark .surface-blob-lilac {
     background-color: rgba(72, 108, 152, 0.3);
   }
-  .dark .gizmo-blob-peach {
+  .dark .surface-blob-peach {
     background-color: rgba(110, 92, 156, 0.24);
   }
   /* Deep ink on a near-black sheet: screen lifts each plume just enough to
@@ -1296,22 +1296,22 @@
   .dark [class~="text-brand-cream"] {
     color: #f2f7fc;
   }
-  .dark :is([class~="text-gizmo-lime"]) {
+  .dark :is([class~="text-surface-lime"]) {
     color: #cbe6ff;
   }
-  .dark :is([class~="text-gizmo-lilac"]) {
+  .dark :is([class~="text-surface-lilac"]) {
     color: #e0e7f1;
   }
-  .dark :is([class~="text-gizmo-sky"]) {
+  .dark :is([class~="text-surface-sky"]) {
     color: #bfe3fb;
   }
-  .dark :is([class~="text-gizmo-peach"]) {
+  .dark :is([class~="text-surface-peach"]) {
     color: #f1ddb9;
   }
-  .dark :is([class~="text-gizmo-mint"]) {
+  .dark :is([class~="text-surface-mint"]) {
     color: #c0ecdb;
   }
-  .dark :is([class~="text-gizmo-cream"]) {
+  .dark :is([class~="text-surface-cream"]) {
     color: #e7eef7;
   }
 
@@ -1638,7 +1638,7 @@
 
 /* The reflections drift in opposite directions. Transform-only, so the layer
    stays on the compositor. */
-@keyframes gizmo-blob {
+@keyframes surface-blob {
   0% {
     transform: translate3d(0, 0, 0) scale(1);
   }
@@ -1727,12 +1727,12 @@
   .animate-rise,
   .nav-active-bar,
   .pulse-ring::after,
-  .gizmo-blob,
-  .gizmo-ribbon,
+  .surface-blob,
+  .surface-ribbon,
   .rise-stagger > * {
     animation: none;
   }
-  .gizmo-ribbon {
+  .surface-ribbon {
     opacity: 0.5;
   }
   .lift:hover {

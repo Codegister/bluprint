@@ -89,7 +89,7 @@ const schema = defineSchema(
       ),
       sourceLabel: v.optional(v.string()),
       // Free-text course label picked when the set is created (e.g. "Biology").
-      // Used to group and filter decks the way StudySmarter and Gizmo do.
+      // Used to group and filter decks the way comparable study apps do.
       course: v.optional(v.string()),
       // Exam context picked alongside the course. The board and level steer
       // how exam questions are phrased and how written answers are marked.
@@ -130,6 +130,10 @@ const schema = defineSchema(
       specPoints: v.optional(
         v.array(v.object({ id: v.string(), text: v.string() })),
       ),
+      // The AI-only brief for a partially reused set. `notes` keeps the full
+      // requested scope; this names only the topics that still need generating,
+      // while copied rows already cover the overlapping topics.
+      generationNotes: v.optional(v.string()),
       summary: v.optional(
         v.object({
           // Optional only because sets built before titles existed are already

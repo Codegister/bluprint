@@ -18,6 +18,36 @@ type Rating = 1 | 2 | 3 | 4;
 
 type StudyCard = Doc<"flashcards"> & { setTitle?: string };
 
+/**
+ * A review can be rejected by an older backend that does not know the optional
+ * automatic-check fields. Scheduling the card only needs the card id and the
+ * rating, so retrying without that metadata is safe when the first write was
+ * rejected before it ran. Network failures are deliberately not retried: the
+ * first write may already have committed, and a second call would count the
+ * card twice.
+ */
+function canRetryRatingWithoutGrade(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : "";
+  if (!message.trim()) return false;
+  if (
+    /Failed to fetch|NetworkError|fetch failed|timed out|timeout|offline|abort/i.test(
+      message,
+    )
+  ) {
+    return false;
+  }
+  // These are ownership or existence failures; omitting the grade cannot fix
+  // them, and the original message is the useful one to show.
+  if (
+    /Flashcard not found|Study set not found|Please sign in|does not belong|not found|deleted|unauthenticated/i.test(
+      message,
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /** Due cards first, then authored order. */
 function sortCards(cards: StudyCard[]): StudyCard[] {
   return [...cards].sort(
@@ -62,7 +92,7 @@ const RATINGS: Array<{
 ];
 
 /**
- * Flashcards open on the question, like an Anki card. The student can reveal
+ * Flashcards open on the question, like a physical card. The student can reveal
  * the answer and rate it, or type/dictate an answer first for the automatic
  * concept-unit check. The rating buttons schedule the next showing; they do
  * not replace the check.
@@ -246,11 +276,26 @@ export function FlashcardReview({
           : {}),
       });
     } catch (error) {
-      // A failed write must not move the student past an unreviewed card or
-      // count it in the session totals. Leave the card in place so they can
-      // retry the rating instead of silently losing the review.
-      notifyError(error, "Could not save that review. The card has not moved.");
-      return;
+      // During a deploy the page can briefly reach an older backend that only
+      // knows the rating. The FSRS write does not depend on the automatic-check
+      // metadata, so retry with the fields every version supports rather than
+      // losing the review.
+      if (!grade || !canRetryRatingWithoutGrade(error)) {
+        notifyError(error, "Could not save that review. The card has not moved.");
+        return;
+      }
+      try {
+        await reviewCard({ cardId: card._id, rating });
+      } catch (retryError) {
+        // A failed write must not move the student past an unreviewed card or
+        // count it in the session totals. Leave the card in place so they can
+        // retry the rating instead of silently losing the review.
+        notifyError(
+          retryError,
+          "Could not save that review. The card has not moved.",
+        );
+        return;
+      }
     } finally {
       setSaving(false);
     }
@@ -276,7 +321,7 @@ export function FlashcardReview({
 
   if (queue.length === 0) {
     return (
-      <div className="gizmo-card p-10 text-center">
+      <div className="surface-card p-10 text-center">
         <Mascot size={92} float={false} className="mx-auto" />
         <p className="mt-3 text-sm text-muted-foreground">
           This set has no flashcards yet.
@@ -287,7 +332,7 @@ export function FlashcardReview({
 
   if (!current) {
     return (
-      <div className="gizmo-card p-10 text-center">
+      <div className="surface-card p-10 text-center">
         <Mascot size={92} float={false} className="mx-auto" />
         <p className="mt-3 text-sm text-muted-foreground">
           These cards changed while you were reviewing. Reload to start a fresh
@@ -307,7 +352,7 @@ export function FlashcardReview({
         initial={{ opacity: 0, y: 12, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.5, ease: EASE }}
-        className="gizmo-card mx-auto w-full max-w-2xl p-6 text-center sm:p-9"
+        className="surface-card mx-auto w-full max-w-2xl p-6 text-center sm:p-9"
       >
         <div className="mx-auto flex size-28 items-center justify-center">
           <Mascot size={112} float={false} />
@@ -399,7 +444,7 @@ export function FlashcardReview({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={SPRING}
-        className="gizmo-card mt-4 p-6 sm:p-7"
+        className="surface-card mt-4 p-6 sm:p-7"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
@@ -435,7 +480,7 @@ export function FlashcardReview({
           <div className="mt-5 rounded-2xl border border-border bg-[#FCFBF8] p-4">
             <p className="text-sm leading-relaxed text-brand-ink/75">
               Try to recall the answer first. Reveal it when you are ready, then
-              rate how it felt — just like flipping an Anki card.
+              rate how it felt — just like flipping a physical card.
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Button

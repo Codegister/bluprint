@@ -16,7 +16,7 @@
   <link rel="canonical" href="https://codegister.github.io/bluprint/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Bluprint" />
-  <meta property="og:title" content="Bluprint: your notes come back marked" />
+  <meta property="og:title" content="Bluprint: your handwriting, marked against the scheme" />
   <meta
     property="og:description"
     content="Turn your notes into flashcards, quiz questions and an exam answer marked against the scheme."
@@ -28,7 +28,7 @@
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:image" content="https://codegister.github.io/bluprint/logo.svg" />
   <meta name="twitter:image:alt" content="Bluprint" />
-  <meta name="twitter:title" content="Bluprint: your notes come back marked" />
+  <meta name="twitter:title" content="Bluprint: your handwriting, marked against the scheme" />
   <meta
     name="twitter:description"
     content="Turn your notes into flashcards, quiz questions and an exam answer marked against the scheme."
@@ -36,10 +36,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Public+Sans:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
     rel="stylesheet"
   />
-  <title>Bluprint: your notes come back marked</title>
+  <title>Bluprint: your handwriting, marked against the scheme</title>
+  <style>
+    #home-shell { display: none; }
+    html.home-shell #home-shell { display: block; }
+    html.home-shell .boot-loader { display: none; }
+  </style>
   <script src="%BASE_URL%theme-init.js"></script>
   <script type="module" src="/src/vly-runtime.ts"></script>
 </head>
@@ -62,7 +67,7 @@
           justify-content: center;
           gap: 16px;
           background: #0c0708;
-          font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+          font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
           color: #f6f1e8;
         }
         .boot-loader__mark {
@@ -86,7 +91,8 @@
         }
         .boot-loader__text {
           color: #b8afa5;
-          font-size: 18px;
+          font-size: 16px;
+          line-height: 1.6;
         }
         @keyframes boot-slide {
           0% {
@@ -107,8 +113,68 @@
       <div class="boot-loader__bar"><span></span></div>
       <p class="boot-loader__text">Opening your study space…</p>
     </div>
+    <!-- Performance: the signed-out Home hero is painted and interactive
+         before the app bundle arrives. home-boot.js handles its first submit;
+         React replaces the whole node later and takes over with the same draft.
+         Keep this copy in sync with src/pages/Landing.tsx. -->
+    <div id="home-shell">
+      <div class="stage-home">
+        <header class="home-header">
+          <div class="home-wrap home-header-inner">
+            <a href="%BASE_URL%" class="home-brand" aria-label="Bluprint home">Bluprint<span>.</span></a>
+            <div class="home-header-actions">
+              <a href="%BASE_URL%auth?returnTo=%2Ftutor" class="home-signin">Sign in</a>
+            </div>
+          </div>
+        </header>
+        <main>
+          <section class="home-wrap home-hero" aria-labelledby="home-title">
+            <div class="home-hero-copy">
+              <p class="home-kicker">Revision from your notes</p>
+              <h1 id="home-title" class="home-title">Your handwriting, marked against the scheme.</h1>
+              <p class="home-lede">Bluprint turns a page into flashcards, quiz questions and an exam answer marked against the scheme.</p>
+
+              <form class="home-build">
+                <label for="home-notes" class="home-build-label">Build a set from your notes</label>
+                <div class="home-build-row">
+                  <textarea id="home-notes" name="notes" rows="2" maxlength="20000" placeholder="Paste a page from your notebook…" aria-describedby="home-notes-hint"></textarea>
+                  <button type="submit" class="stage-button">Build a set
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-right" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  </button>
+                </div>
+                <p id="home-notes-hint" class="home-build-hint">Nothing leaves this page until you build.</p>
+                <a href="%BASE_URL%auth?returnTo=%2Ftutor" class="home-guest">Start a guest session</a>
+              </form>
+            </div>
+
+            <div class="home-paper-field" aria-hidden="true">
+              <div class="home-paper home-paper-spec">
+                <div class="home-paper-spec-meta"><span>Specification</span><span>AQA · 3.1.1</span></div>
+                <p class="home-paper-spec-copy">Cells are the basic unit of living organisms.</p>
+              </div>
+              <div class="home-paper home-paper-cover">
+                <div class="home-paper-meta"><span>Set 04</span><span>Cell biology</span></div>
+                <p class="home-paper-cover-title">Cell structure and transport</p>
+                <p class="home-paper-facts">8 cards · 24 quiz · 2 exam</p>
+                <div class="home-paper-cover-foot"><span>AQA · GCSE</span><strong>7 / 10</strong></div>
+              </div>
+              <div class="home-paper home-paper-flash">
+                <div class="home-paper-meta"><span>Flashcard 03</span><span>Cell structure</span></div>
+                <p class="home-flash-question">Why does the inner membrane fold?</p>
+                <p class="home-flash-answer">Cristae increase the surface area for ATP production.</p>
+                <div class="home-paper-flash-foot"><span>Marked against the scheme</span><strong>2 / 2</strong></div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
   </div>
-  <script type="module" src="/src/main.tsx"></script>
+  <!-- Async and after the form, so the first Home submit is wired as soon as
+       the markup exists, without the app bundle. -->
+  <script async src="%BASE_URL%home-boot.js"></script>
+  <script type="module" src="/src/boot.ts"></script>
 </body>
 
 </html>

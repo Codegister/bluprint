@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import type { MutationCtx } from "../src/convex/_generated/server";
+import { completeGeneration } from "../src/convex/studySets";
 import {
+  copyCachedReuse,
   copyCachedStudySet,
+  copyStudySetContent,
+  findSimilarCachedStudySet,
+  findSimilarOwnedStudySet,
+  notesSimilarity,
   rememberStudySetForReuse,
   studySetReuseKey,
   studySetReuseKeyForSet,
@@ -341,5 +347,314 @@ describe("study set reuse", () => {
     tables.studySets.push(uploaded);
     await rememberStudySetForReuse(ctx, "set:upload");
     expect(tables.studySetCache).toHaveLength(1);
+  });
+
+  test("reuses a course set whose counts differ, as long as it covers the topics", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: "some-old-key",
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+    const { ctx } = fakeContext(tables);
+
+    const match = await findSimilarCachedStudySet(ctx, {
+      course: "Biology",
+      examBoard: "AQA",
+      level: "GCSE",
+      topicIds: ["cell-structure"],
+      targetCardCount: 20,
+      targetQuizCount: 10,
+      targetExamCount: 5,
+    });
+    expect(match?.source._id).toBe("set:source");
+
+    const setId = await copyCachedReuse(ctx, match!, {
+      ...cacheArgs(""),
+      targetCardCount: 20,
+      targetQuizCount: 10,
+      targetExamCount: 5,
+    });
+    expect(setId).not.toBeNull();
+    const copy = tables.studySets.find((row) => row._id === setId)!;
+    expect(copy.status).toBe("ready");
+    expect(copy.cardCount).toBe(2);
+    expect(copy.targetCardCount).toBe(20);
+    expect(tables.studySetCache[0]!.uses).toBe(1);
+  });
+
+  test("reuses the overlapping topics when the selection is wider", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    source.topicIds = ["cell-structure"];
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: "some-old-key",
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+    const { ctx } = fakeContext(tables);
+
+    const match = await findSimilarCachedStudySet(ctx, {
+      course: "Biology",
+      examBoard: "AQA",
+      level: "GCSE",
+      topicIds: ["cell-structure", "cell-transport"],
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+    });
+    expect(match?.matchedTopicIds).toEqual(["cell-structure"]);
+    expect(match?.missingTopicIds).toEqual(["cell-transport"]);
+
+    const setId = await copyCachedReuse(ctx, match!, {
+      ...cacheArgs(""),
+      topicId: "cell-structure",
+      topicIds: ["cell-structure", "cell-transport"],
+      sourceTopicIds: match!.matchedTopicIds,
+      generationNotes: `${NOTES}\nTopic: Cell transport`,
+      titleSource: "user",
+    });
+    expect(setId).not.toBeNull();
+
+    const copy = tables.studySets.find((row) => row._id === setId)!;
+    expect(copy.status).toBe("queued");
+    expect(copy.topicIds).toEqual(["cell-structure", "cell-transport"]);
+    expect(copy.cardCount).toBe(2);
+    expect(copy.quizCount).toBe(1);
+    expect(copy.examCount).toBe(1);
+    expect(copy.generationNotes).toContain("Cell transport");
+    expect(copy.summary).toBeUndefined();
+    expect(tables.flashcards.filter((row) => row.setId === setId)).toHaveLength(2);
+    expect(tables.studySetCache[0]!.uses).toBe(1);
+  });
+
+  test("copies only rows tagged to the overlapping topics", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    source.topicIds = ["cell-structure", "cell-transport"];
+    source.specPoints = [
+      { id: "cell-structure:0", text: "Cells contain organelles." },
+      { id: "cell-transport:0", text: "Membranes control transport." },
+    ];
+    for (const row of [
+      ...tables.flashcards,
+      ...tables.quizQuestions,
+      ...tables.examQuestions,
+    ]) {
+      row.specRef = "cell-structure:0";
+    }
+    tables.flashcards.push({
+      ...tables.flashcards[0]!,
+      _id: "card:transport",
+      order: 2,
+      front: "How does diffusion move particles?",
+      back: "From high to low concentration.",
+      specRef: "cell-transport:0",
+    });
+    tables.quizQuestions.push({
+      ...tables.quizQuestions[0]!,
+      _id: "quiz:transport",
+      order: 1,
+      question: "What is osmosis?",
+      specRef: "cell-transport:0",
+    });
+    tables.examQuestions.push({
+      ...tables.examQuestions[0]!,
+      _id: "exam:transport",
+      order: 1,
+      question: "Describe diffusion.",
+      specRef: "cell-transport:0",
+    });
+    source.cardCount = 3;
+    source.quizCount = 2;
+    source.examCount = 2;
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: "some-old-key",
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+    const { ctx } = fakeContext(tables);
+
+    const match = await findSimilarCachedStudySet(ctx, {
+      course: "Biology",
+      examBoard: "AQA",
+      level: "GCSE",
+      topicIds: ["cell-structure", "cell-transport", "photosynthesis"],
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+    });
+    expect(match?.matchedTopicIds).toEqual(["cell-structure", "cell-transport"]);
+    expect(match?.missingTopicIds).toEqual(["photosynthesis"]);
+
+    const setId = await copyCachedReuse(ctx, match!, {
+      ...cacheArgs(""),
+      topicIds: ["cell-structure", "photosynthesis"],
+      sourceTopicIds: ["cell-structure"],
+      generationNotes: `${NOTES}\nTopic: Photosynthesis`,
+      titleSource: "user",
+    });
+    expect(setId).not.toBeNull();
+
+    const cards = tables.flashcards.filter((row) => row.setId === setId);
+    expect(cards.map((card) => card.front)).toEqual([
+      "What do cells contain?",
+      "What controls the cell?",
+    ]);
+    expect(cards.some((card) => card.specRef === "cell-transport:0")).toBe(false);
+    expect(tables.quizQuestions.filter((row) => row.setId === setId)).toHaveLength(1);
+    expect(tables.examQuestions.filter((row) => row.setId === setId)).toHaveLength(1);
+  });
+
+  test("reuses a student's own set when their pasted notes overlap", async () => {
+    const tables = rowsForSource("set:source");
+    const { ctx } = fakeContext(tables);
+
+    const source = await findSimilarOwnedStudySet(ctx, "user:source", {
+      notes: `${NOTES}\nCells also have a membrane.`,
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+    });
+    expect(source).not.toBeNull();
+
+    const setId = await copyStudySetContent(ctx, source!, {
+      userId: "user:source",
+      title: "My notes again",
+      titleSource: "user",
+      notes: `${NOTES}\nCells also have a membrane.`,
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+      copyWarnings: false,
+    });
+    expect(setId).not.toBeNull();
+    expect(tables.studySets.find((row) => row._id === setId)!.courseId).toBeUndefined();
+
+    expect(
+      await findSimilarOwnedStudySet(ctx, "user:other", {
+        notes: NOTES,
+        targetCardCount: 10,
+        targetQuizCount: 5,
+        targetExamCount: 3,
+      }),
+    ).toBeNull();
+
+    expect(
+      await findSimilarOwnedStudySet(ctx, "user:source", {
+        notes: "Photosynthesis uses light energy to make glucose and oxygen.",
+        targetCardCount: 10,
+        targetQuizCount: 5,
+        targetExamCount: 3,
+      }),
+    ).toBeNull();
+  });
+
+  test("notes similarity follows overlapping text, not exact wording", () => {
+    const edited = NOTES.replace("Cells contain organelles.", "Cells contain many organelles.");
+    expect(notesSimilarity(NOTES, edited)).toBeGreaterThan(0.55);
+    expect(
+      notesSimilarity(
+        NOTES,
+        "Photosynthesis uses light energy to make glucose and oxygen.",
+      ),
+    ).toBeLessThan(0.55);
+  });
+
+  test("merges generated topics into a partially reused set", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    const targetId = "set:partial";
+    tables.studySets.push({
+      ...source,
+      _id: targetId,
+      userId: "user:new",
+      status: "queued",
+      summary: undefined,
+      generationNotes: `${NOTES}\nTopic: Cell transport`,
+      notes: `${NOTES}\nDiffusion moves particles from high to low concentration.`,
+      topicId: "cell-structure",
+      topicIds: ["cell-structure", "cell-transport"],
+      cardCount: 1,
+      quizCount: 1,
+      examCount: 1,
+      targetCardCount: 2,
+      targetQuizCount: 1,
+      targetExamCount: 1,
+    });
+    tables.flashcards.push({
+      ...tables.flashcards[0]!,
+      _id: "card:copied",
+      setId: targetId,
+      userId: "user:new",
+      front: "What do cells contain?",
+      back: "Organelles.",
+      order: 0,
+    });
+    tables.quizQuestions.push({
+      ...tables.quizQuestions[0]!,
+      _id: "quiz:copied",
+      setId: targetId,
+      userId: "user:new",
+      order: 0,
+    });
+    tables.examQuestions.push({
+      ...tables.examQuestions[0]!,
+      _id: "exam:copied",
+      setId: targetId,
+      userId: "user:new",
+      order: 0,
+    });
+    const { ctx } = fakeContext(tables);
+    const handler = (completeGeneration as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<any>;
+    })._handler;
+
+    const result = await handler(ctx, {
+      setId: targetId,
+      summary: {
+        title: "Cell transport",
+        overview: "Cells move substances across membranes.",
+        keyPoints: ["Diffusion moves particles."],
+        examFocus: ["Diffusion"],
+      },
+      cards: [
+        {
+          front: "What is diffusion?",
+          back: "Diffusion moves particles from high to low concentration.",
+        },
+      ],
+      quiz: [],
+      exams: [],
+      title: "Cell transport",
+      requested: { cards: 2, quiz: 1, exams: 1 },
+      final: true,
+      keepExisting: true,
+    });
+
+    expect(result.stored).toBe(true);
+    const copy = tables.studySets.find((row) => row._id === targetId)!;
+    expect(copy.status).toBe("ready");
+    expect(copy.cardCount).toBe(2);
+    expect(copy.quizCount).toBe(1);
+    expect(copy.examCount).toBe(1);
+    expect(copy.generationNotes).toBeUndefined();
+    const cards = tables.flashcards.filter((row) => row.setId === targetId);
+    expect(cards.map((card) => card.front)).toEqual([
+      "What do cells contain?",
+      "What is diffusion?",
+    ]);
+    expect(tables.quizQuestions.filter((row) => row.setId === targetId)).toHaveLength(1);
+    expect(tables.examQuestions.filter((row) => row.setId === targetId)).toHaveLength(1);
   });
 });

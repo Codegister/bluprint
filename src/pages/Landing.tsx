@@ -8,6 +8,24 @@ import { useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 
 const MIN_NOTES = 40;
+const HOME_DRAFT_KEY = "bluprint:home-draft";
+
+/** The static hero writes this key before React arrives; read it once here. */
+function readHomeDraft(): string {
+  try {
+    return window.sessionStorage.getItem(HOME_DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function clearHomeDraft(): void {
+  try {
+    window.sessionStorage.removeItem(HOME_DRAFT_KEY);
+  } catch {
+    // Storage can be unavailable; navigation must still work.
+  }
+}
 
 /**
  * Public Home. It is the stage: one sentence, one action and real paper
@@ -17,7 +35,7 @@ const MIN_NOTES = 40;
 export default function Landing() {
   const navigate = useNavigate();
   const { isAuthenticated, signIn } = useAuth();
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(readHomeDraft);
   const [guestBusy, setGuestBusy] = useState(false);
   const [guestError, setGuestError] = useState("");
 
@@ -38,6 +56,7 @@ export default function Landing() {
   function startFromHero() {
     if (tooShort) return;
     if (trimmed) savePendingNotes(trimmed);
+    clearHomeDraft();
     if (isAuthenticated) {
       navigate("/tutor?new=1");
       return;
@@ -57,6 +76,7 @@ export default function Landing() {
     try {
       if (trimmed.length >= MIN_NOTES) savePendingNotes(trimmed);
       await signIn("anonymous");
+      clearHomeDraft();
       navigate("/tutor");
     } catch (error) {
       setGuestError(readableError(error, "Could not start a guest session. Please try again."));
@@ -97,7 +117,7 @@ export default function Landing() {
           <div className="home-hero-copy">
             <p className="home-kicker">Revision from your notes</p>
             <h1 id="home-title" className="home-title">
-              Your notes come back marked.
+              Your handwriting, marked against the scheme.
             </h1>
             <p className="home-lede">
               Bluprint turns a page into flashcards, quiz questions and an exam answer
@@ -200,7 +220,7 @@ export default function Landing() {
             <div>
               <p className="home-kicker">After the paste</p>
               <h2 id="how-title" className="home-section-title">
-                A page becomes a set. Then it marks you.
+                A page becomes a set, and every mark names a gap.
               </h2>
               <ol className="home-steps">
                 <li className="home-step">
@@ -254,7 +274,7 @@ export default function Landing() {
           <div className="home-wrap home-close-inner">
             <p className="home-kicker">Start with one page</p>
             <h2 id="close-title" className="home-close-title">
-              Open a page. Leave with the gaps named.
+              Open a page. Leave with the scheme's gaps named.
             </h2>
             <a href="#home-notes" className="stage-button">
               Build a set from your notes

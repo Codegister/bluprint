@@ -173,7 +173,7 @@ export function ExplainDialog({
 
           <div
             ref={scrollRef}
-            className="gizmo-scroll min-h-[190px] flex-1 overflow-y-auto px-4 py-4 sm:px-5"
+            className="surface-scroll min-h-[190px] flex-1 overflow-y-auto px-4 py-4 sm:px-5"
           >
             {turns.length === 0 && pending ? (
               <div className="flex h-40 flex-col items-center justify-center text-center">

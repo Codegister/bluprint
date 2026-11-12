@@ -426,7 +426,7 @@ export function CreateSetDialog({
         sourceImageIds,
       });
 
-      toast.success("Set created. Bluprint is compiling it now.");
+      toast.success("Set created. Opening it now.");
       reset();
       onOpenChange(false);
       navigate(`/sets/${setId}`);

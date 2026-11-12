@@ -106,7 +106,7 @@ export function SkeletonPageHeader() {
 export function SkeletonStudySetPage() {
   return (
     <Busy label="Loading your study set" className="space-y-4">
-      <div className="gizmo-card p-5 sm:p-6" aria-hidden="true">
+      <div className="surface-card p-5 sm:p-6" aria-hidden="true">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1 space-y-3">
             <Skeleton className="h-3 w-24" />
@@ -128,7 +128,7 @@ export function SkeletonStudySetPage() {
           ))}
         </div>
       </div>
-      <div className="gizmo-card space-y-4 p-5 sm:p-6" aria-hidden="true">
+      <div className="surface-card space-y-4 p-5 sm:p-6" aria-hidden="true">
         <Skeleton className="h-4 w-32" />
         <SkeletonText lines={4} />
         <Skeleton className="h-24 w-full rounded-2xl" />
@@ -143,7 +143,7 @@ export function SkeletonCoursePage() {
   return (
     <Busy label="Loading your course pathway" className="space-y-4">
       <SkeletonPageHeader />
-      <div className="gizmo-card space-y-4 p-5 sm:p-6" aria-hidden="true">
+      <div className="surface-card space-y-4 p-5 sm:p-6" aria-hidden="true">
         <div className="flex items-center justify-between gap-3">
           <Skeleton className="h-3 w-32" />
           <Skeleton className="h-6 w-16 rounded-full" />
@@ -155,7 +155,7 @@ export function SkeletonCoursePage() {
           ))}
         </div>
       </div>
-      <div className="gizmo-card overflow-hidden" aria-hidden="true">
+      <div className="surface-card overflow-hidden" aria-hidden="true">
         {[0, 1, 2, 3].map((index) => (
           <div
             key={index}
@@ -179,7 +179,7 @@ export function SkeletonPastPaperPage() {
   return (
     <Busy label="Loading your past paper" className="space-y-4">
       <SkeletonPageHeader />
-      <div className="gizmo-card space-y-4 p-5 sm:p-6" aria-hidden="true">
+      <div className="surface-card space-y-4 p-5 sm:p-6" aria-hidden="true">
         <div className="flex flex-wrap gap-2">
           {[0, 1, 2, 3].map((index) => (
             <Skeleton key={index} className="h-7 w-24 rounded-full" />
@@ -187,7 +187,7 @@ export function SkeletonPastPaperPage() {
         </div>
         <Skeleton className="h-2.5 w-full rounded-full" />
       </div>
-      <div className="gizmo-card space-y-4 p-5 sm:p-6" aria-hidden="true">
+      <div className="surface-card space-y-4 p-5 sm:p-6" aria-hidden="true">
         <Skeleton className="h-4 w-40" />
         <SkeletonText lines={3} />
         <Skeleton className="h-28 w-full rounded-2xl" />
@@ -219,7 +219,7 @@ export function SkeletonTimetablePage() {
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]" aria-hidden="true">
-        <div className="gizmo-card overflow-hidden">
+        <div className="surface-card overflow-hidden">
           <div className="border-b border-border/60 px-4 py-3">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="mt-2 h-3.5 w-40" />
@@ -254,7 +254,7 @@ export function SkeletonBuilderPage() {
           <Skeleton key={index} className="h-7 flex-1 rounded-full" />
         ))}
       </div>
-      <div className="gizmo-card space-y-5 p-5 sm:p-6" aria-hidden="true">
+      <div className="surface-card space-y-5 p-5 sm:p-6" aria-hidden="true">
         <div className="space-y-2">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-5 w-2/3 max-w-sm" />

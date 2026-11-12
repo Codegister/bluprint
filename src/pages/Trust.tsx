@@ -4,7 +4,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router";
 
-const UPDATED = "10 November 2026";
+const UPDATED = "12 November 2026";
 
 /**
  * The three public trust pages.
@@ -41,7 +41,14 @@ const COPY: Record<
           "In a Convex database and file storage operated for this deployment. Access is checked on the server for every query, so one account cannot read another account's sets.",
           "When a set is generated or an answer is marked, the relevant notes or answer are sent to NVIDIA's API for processing. They are not used to train a public model by Bluprint, and Bluprint keeps no separate copy outside its database.",
           "The NVIDIA_API_KEY used for those calls is stored in the deployment's server environment. It is never sent to the browser.",
-          "Course pathways and topic notes are read from published exam-board specification pages or from Save My Exams' published revision notes. The course page says which source a pathway used; a notes-based pathway is not presented as the board's specification.",
+          "Course pathways and topic notes are read from published exam-board specification pages, published revision notes, and published past-paper indexes. The course page says whether a pathway follows a specification or a notes-based route; a notes-based pathway is not presented as the board's specification.",
+        ],
+      },
+      {
+        heading: "Education sources",
+        body: [
+          "Some course pathways, revision notes and past-paper indexes are read from published pages on third-party education services, including Save My Exams, Cognito and Physics & Maths Tutor. They are named here for transparency; Bluprint does not use their names as product branding.",
+          "Those pages and papers remain the property of their publishers and are subject to their terms. Bluprint caches what it needs to show the material in the app and does not claim ownership of it. A rights holder can ask for a link or cached copy to be removed through the Contact page.",
         ],
       },
       {
@@ -98,6 +105,7 @@ const COPY: Record<
         heading: "Your content",
         body: [
           "Your notes and uploads stay yours. They are stored and processed only to provide the study features described on the Privacy page.",
+          "Exports are generated from your own set. If you import an export into another study app, that app's privacy policy applies to the copy you give it.",
         ],
       },
     ],

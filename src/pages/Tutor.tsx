@@ -716,7 +716,7 @@ export default function TutorPage() {
 
         <div
           ref={scrollRef}
-          className="gizmo-scroll max-h-[70vh] min-h-[320px] overflow-y-auto px-4 py-5 sm:px-5"
+          className="surface-scroll max-h-[70vh] min-h-[320px] overflow-y-auto px-4 py-5 sm:px-5"
         >
           {messages === undefined ? (
             // Bubble-shaped placeholders keep the transcript's height steady

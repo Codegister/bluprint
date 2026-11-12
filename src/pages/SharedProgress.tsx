@@ -46,7 +46,7 @@ export default function SharedProgress() {
         {data === undefined ? (
           <SkeletonRows rows={4} />
         ) : data === null ? (
-          <div className="gizmo-card mt-6 p-8 text-center">
+          <div className="surface-card mt-6 p-8 text-center">
             <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-brand-panel text-muted-foreground">
               <Link2Off className="size-5" aria-hidden />
             </span>
@@ -60,7 +60,7 @@ export default function SharedProgress() {
           </div>
         ) : (
           <>
-            <section className="gizmo-card mt-4 p-6">
+            <section className="surface-card mt-4 p-6">
               <p className="mono-label text-chrome-7">Shared progress</p>
               <h1 className="mt-1 font-display text-[1.5rem] font-extrabold text-brand-ink">
                 {data.name ? `${data.name}'s revision` : "Revision progress"}
@@ -121,7 +121,7 @@ export default function SharedProgress() {
               )}
             </section>
 
-            <section className="gizmo-card mt-4 p-6">
+            <section className="surface-card mt-4 p-6">
               <h2 className="font-display text-[1rem] font-bold text-brand-ink">
                 Weak spots
               </h2>

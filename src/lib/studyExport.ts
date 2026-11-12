@@ -3,10 +3,10 @@
  *
  * The privacy page promises the student owns their content, so every format is
  * generated from the same data the app shows and nothing is held back. CSV is
- * for spreadsheets; the Anki file is Anki's own tab-separated import format,
- * which imports directly through File → Import (a binary .apkg would need a
- * SQLite writer on the server for no extra data). The account export is JSON so
- * nothing is lost to formatting.
+ * for spreadsheets; the flashcard file uses a common tab-separated import
+ * format that spaced-repetition apps accept through their own import screen
+ * (a binary package would need a SQLite writer on the server for no extra
+ * data). The account export is JSON so nothing is lost to formatting.
  */
 
 export type ExportCard = { front: string; back: string };
@@ -22,18 +22,19 @@ export function cardsToCsv(cards: ExportCard[]): string {
   return rows.map((row) => row.map(csvField).join(",")).join("\r\n");
 }
 
-/** Removes the characters that would break Anki's line-based import. */
-function ankiField(value: string): string {
+/** Removes the characters that would break a line-based flashcard import. */
+function flashcardField(value: string): string {
   return value.replace(/\t/g, " ").replace(/\r?\n/g, "<br>").trim();
 }
 
 /**
- * Anki's plain-text import file. The header lines are Anki's own directives, so
- * front/back map to the first two fields of a Basic note.
+ * Plain-text flashcard import file. The header lines tell compatible apps how
+ * the fields are separated and mapped, so front/back land in the first two
+ * fields of a basic card.
  */
-export function cardsToAnkiText(cards: ExportCard[]): string {
+export function cardsToFlashcardText(cards: ExportCard[]): string {
   const header = ["#separator:tab", "#html:true", "#columns:Front\tBack", "#tags column:3"];
-  const rows = cards.map((card) => `${ankiField(card.front)}\t${ankiField(card.back)}\tbluprint`);
+  const rows = cards.map((card) => `${flashcardField(card.front)}\t${flashcardField(card.back)}\tbluprint`);
   return [...header, ...rows].join("\n");
 }
 

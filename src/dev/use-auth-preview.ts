@@ -1,15 +1,16 @@
 import { previewUser } from "@/dev/preview-fixtures";
 
-function isAuthScreen() {
-  return new URLSearchParams(window.location.search).get("screen") === "auth";
+function isSignedOutScreen() {
+  const screen = new URLSearchParams(window.location.search).get("screen");
+  return screen === "auth" || screen === "home";
 }
 
 export function useAuth() {
-  const authScreen = isAuthScreen();
+  const signedOut = isSignedOutScreen();
   return {
     isLoading: false,
-    isAuthenticated: !authScreen,
-    user: authScreen ? undefined : previewUser,
+    isAuthenticated: !signedOut,
+    user: signedOut ? undefined : previewUser,
     signIn: async (..._args: unknown[]) => undefined,
     signOut: async () => undefined,
   };

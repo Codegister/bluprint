@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { NextStep } from "@/components/NextStep";
 import { SkeletonCoursePage } from "@/components/Skeletons";
-import { SaveMyExamsPapers } from "@/components/study/SaveMyExamsPapers";
+import { IndexedPastPapers } from "@/components/study/IndexedPastPapers";
 import { LiteratureTextChoices } from "@/components/study/LiteratureTextChoices";
 import { TopicNotes } from "@/components/study/TopicNotes";
 import { CoursePastPapers } from "@/components/study/CoursePastPapers";
@@ -134,6 +134,14 @@ function MissingCard() {
       </Button>
     </div>
   );
+}
+
+/** Keeps old saved pathway copy from naming a source provider in the UI. */
+function publicPathwayText(value: string): string {
+  return value
+    .replace(/Save My Exams/gi, "published revision notes")
+    .replace(/\bCognito\b/gi, "the published course outline")
+    .replace(/Physics\s*&\s*Maths Tutor/gi, "the published paper index");
 }
 
 /** Indeterminate bar for a pathway that is still being mapped. */
@@ -628,7 +636,7 @@ export default function Course() {
                       if (menu instanceof HTMLDetailsElement) menu.open = false;
                       openTutor();
                     }}
-                    className="block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel"
+                    className="block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-cream hover:bg-brand-panel"
                   >
                     Ask the tutor
                   </button>
@@ -640,7 +648,7 @@ export default function Course() {
                       if (menu instanceof HTMLDetailsElement) menu.open = false;
                       void handleRetry();
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel disabled:opacity-40"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-cream hover:bg-brand-panel disabled:opacity-40"
                   >
                     <RotateCcw
                       className={cn("size-3.5", retrying && "animate-spin")}
@@ -773,13 +781,13 @@ export default function Course() {
                 </span>
               </div>
               <p className="mt-4 max-w-3xl text-[0.88rem] leading-relaxed text-brand-ink/75">
-                {pathway.overview}
+                {publicPathwayText(pathway.overview)}
               </p>
               <p className="mt-3 text-[0.72rem] leading-relaxed text-muted-foreground">
                 {pathway.source === "specification"
                   ? "Mapped directly from the board's published specification. Every reference above is the board's own."
                   : pathway.source === "savemyexams"
-                    ? "This pathway follows Save My Exams' published revision notes. It is a notes-based route through the course, not the board's specification document."
+                    ? "This pathway follows published revision notes. It is a notes-based route through the course, not the board's specification document."
                     : "Built from the published course outline. Always check your exam board's current specification before relying on a topic list."}                </p>
                 </section>
 
@@ -1188,10 +1196,10 @@ export default function Course() {
                   Notes for every topic in this course
                 </h2>
                 <p className="mt-1 max-w-2xl text-[0.84rem] leading-relaxed text-muted-foreground">
-                  Open a topic to read its notes. Save My Exams notes are shown
-                  when Bluprint can match the course safely; where it cannot,
-                  Bluprint writes them from the specification. Each one is
-                  prepared once and kept for next time.
+                  Open a topic to read its notes. Published notes are shown when
+                  Bluprint can match the course safely; where it cannot, Bluprint
+                  writes them from the specification. Each one is prepared once
+                  and kept for next time.
                 </p>
 
                 {pathway.units.length === 0 ? (
@@ -1308,7 +1316,7 @@ export default function Course() {
                   papers={pathway.papers}
                 />
 
-                <SaveMyExamsPapers courseId={course._id} />
+                <IndexedPastPapers courseId={course._id} />
             </>)}
 
             {currentSection === "practice" && practiceTab === "topics" && (<>

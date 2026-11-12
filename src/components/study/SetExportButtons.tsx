@@ -2,8 +2,8 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { notifyError } from "@/lib/errors";
 import {
-  cardsToAnkiText,
   cardsToCsv,
+  cardsToFlashcardText,
   downloadTextFile,
   exportSlug,
 } from "@/lib/studyExport";
@@ -12,24 +12,25 @@ import { Download, FileJson } from "lucide-react";
 import { useState } from "react";
 
 /**
- * Exports for one set: the cards as CSV, and as Anki's tab-separated import
- * file (Anki imports it directly from File → Import; a binary .apkg would need
- * a SQLite writer for the same data). The privacy page promises the content is
- * the student's, and this is where they get it.
+ * Exports for one set: the cards as CSV, and as a tab-separated flashcard
+ * import file (spaced-repetition apps import it through their own import
+ * screen; a binary package would need a SQLite writer for the same data). The
+ * privacy page promises the content is the student's, and this is where they
+ * get it.
  */
 export function SetExportButtons({ setId }: { setId: Id<"studySets"> }) {
   const data = useQuery(api.exports.forSet, { setId });
   const [busy, setBusy] = useState<string | null>(null);
 
-  const run = async (kind: "csv" | "anki" | "json") => {
+  const run = async (kind: "csv" | "flashcards" | "json") => {
     if (!data) return;
     setBusy(kind);
     try {
       const slug = exportSlug(data.title);
       if (kind === "csv") {
         downloadTextFile(`${slug}-cards.csv`, cardsToCsv(data.cards), "text/csv;charset=utf-8");
-      } else if (kind === "anki") {
-        downloadTextFile(`${slug}-anki.txt`, cardsToAnkiText(data.cards));
+      } else if (kind === "flashcards") {
+        downloadTextFile(`${slug}-flashcards.txt`, cardsToFlashcardText(data.cards));
       } else {
         downloadTextFile(
           `${slug}.json`,
@@ -51,14 +52,14 @@ export function SetExportButtons({ setId }: { setId: Id<"studySets"> }) {
         Export this set
       </summary>
       <p className="mt-2 text-[0.76rem] leading-relaxed text-muted-foreground">
-        CSV for a spreadsheet, an Anki import file for spaced repetition, or the
-        full set as JSON including your answers, marks and review history.
+        CSV for a spreadsheet, a flashcard import file for spaced repetition, or
+        the full set as JSON including your answers, marks and review history.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         {(
           [
             ["csv", "Cards (CSV)"],
-            ["anki", "Anki file"],
+            ["flashcards", "Flashcard file"],
             ["json", "Everything (JSON)"],
           ] as const
         ).map(([kind, label]) => (

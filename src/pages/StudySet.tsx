@@ -996,7 +996,7 @@ export default function StudySet() {
               (details.cards.length > 0 &&
               dueCards.length === 0 &&
               !reviewAhead ? (
-                <div className="gizmo-card mx-auto w-full max-w-2xl p-7 text-center sm:p-9">
+                <div className="surface-card mx-auto w-full max-w-2xl p-7 text-center sm:p-9">
                   <Mascot size={92} float={false} className="mx-auto" />
                   <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-[#E9FBF3] px-3 py-1 text-xs font-semibold text-[#0B6B45]">
                     <CheckCircle2 className="size-3.5" aria-hidden />
@@ -1226,7 +1226,7 @@ export default function StudySet() {
 
   return (
     <AppShell focus>
-      <div className="set-screen">{body}</div>
+      <div className="set-screen" data-section={activeSection}>{body}</div>
     </AppShell>
   );
 }

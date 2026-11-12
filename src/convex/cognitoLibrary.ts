@@ -256,7 +256,7 @@ async function readPublishedNotes(
   }
   if (!reachedIndex && indexError) {
     throw new Error(
-      "Save My Exams' notes could not be reached just now. Try again in a moment.",
+              "The published notes could not be reached just now. Try again in a moment.",
     );
   }
   if (indexes.length === 0) return { sections: [], sources: [] };
@@ -282,7 +282,7 @@ async function readPublishedNotes(
   });
   if (!reachedPage && pageError) {
     throw new Error(
-      "Save My Exams' notes could not be reached just now. Try again in a moment.",
+              "The published notes could not be reached just now. Try again in a moment.",
     );
   }
 
@@ -358,7 +358,7 @@ export const loadTopicNotes = action({
     });
     if (resolved.status === "unavailable") {
       throw new Error(
-        "Save My Exams could not be reached just now. Try again in a moment.",
+        "The notes source could not be reached just now. Try again in a moment.",
       );
     }
 
@@ -432,7 +432,7 @@ export const loadPastPapers = action({
     });
     if (resolved.status === "unavailable") {
       throw new Error(
-        "Save My Exams' past-paper list could not be reached just now. Try again in a moment.",
+        "The past-paper list could not be reached just now. Try again in a moment.",
       );
     }
 
@@ -450,7 +450,7 @@ export const loadPastPapers = action({
     const page = await fetchSaveMyExamsPage(resolved.course.pastPapersPath);
     if (page.status === "error") {
       throw new Error(
-        "Save My Exams' past-paper list could not be reached just now. Try again in a moment.",
+        "The past-paper list could not be reached just now. Try again in a moment.",
       );
     }
 

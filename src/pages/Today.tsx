@@ -359,7 +359,7 @@ export default function Today() {
 
       {/* One compact progress strip; the sprint picker lives in the header. */}
       <motion.section
-        className="today-progress gizmo-card mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3"
+        className="today-progress surface-card mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3"
         aria-label="Today's progress"
         {...enter(0.08)}
       >
@@ -411,11 +411,11 @@ export default function Today() {
 
           <div className="mt-3">
             {sprintCards === undefined ? (
-              <div className="gizmo-card p-6">
+              <div className="surface-card p-6">
                 <SkeletonRows rows={2} />
               </div>
             ) : sprintCards.length === 0 ? (
-              <div className="gizmo-card p-6 text-center">
+              <div className="surface-card p-6 text-center">
                 <p className="text-sm font-semibold text-brand-ink">
                   No cards are ready for a sprint yet
                 </p>
@@ -454,7 +454,7 @@ export default function Today() {
 
       {/* Due queue + weak spots */}
       <section className="today-queues mt-6 grid gap-3 lg:grid-cols-2">
-        <div className="today-queue today-due gizmo-card overflow-hidden">
+        <div className="today-queue today-due surface-card overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-3.5">
             <h2 className="font-display text-[1rem] font-bold text-brand-ink">
               Due now
@@ -494,7 +494,7 @@ export default function Today() {
           )}
         </div>
 
-        <div className="today-queue today-weak gizmo-card overflow-hidden">
+        <div className="today-queue today-weak surface-card overflow-hidden">
           <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-3.5">
             <h2 className="font-display text-[1rem] font-bold text-brand-ink">
               Weak spots

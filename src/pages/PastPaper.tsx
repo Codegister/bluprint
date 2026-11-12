@@ -297,7 +297,7 @@ export default function PastPaper() {
           </section>
         ) : !ready ? (
           <section className="mt-4 rounded-[2rem] border border-border bg-white p-6 sm:p-8">
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#B7791F]">
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.1em] text-[#8A5A12]">
               Writing your paper
             </p>
             <h2 className="mt-1 font-display text-[1.3rem] font-bold text-brand-ink">

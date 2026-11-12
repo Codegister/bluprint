@@ -185,7 +185,7 @@ export default function Mock() {
         )}
 
         {!attempt && !report && (
-          <section className="gizmo-card mt-4 p-5 sm:p-6">
+          <section className="surface-card mt-4 p-5 sm:p-6">
             <p className="text-sm leading-relaxed text-brand-ink/80">
               The paper is built from the written questions in this set, up to 100
               marks. If the set is shorter than that, the mock is shorter too — it
@@ -236,7 +236,7 @@ export default function Mock() {
         )}
 
         {attempt && current && (
-          <section className="gizmo-card mt-4 overflow-hidden">
+          <section className="surface-card mt-4 overflow-hidden">
             <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3 sm:px-5">
               <p className="text-[0.78rem] font-semibold text-brand-ink">
                 Question {index + 1} of {questions.length} · {markLabel(current.marks)}
@@ -291,7 +291,7 @@ export default function Mock() {
         )}
 
         {report && (
-          <section className="gizmo-card mt-4 p-5 sm:p-6">
+          <section className="surface-card mt-4 p-5 sm:p-6">
             <p className="font-display text-[1.1rem] font-bold text-brand-ink">
               {report.earnedMarks} of {markLabel(report.totalMarks)} ·{" "}
               {clock(report.secondsUsed)} used of {clock(report.secondsAllowed)}

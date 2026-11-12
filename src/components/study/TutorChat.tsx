@@ -241,7 +241,7 @@ export function TutorChat({
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <section className="gizmo-card overflow-hidden">
+      <section className="surface-card overflow-hidden">
         <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-4 sm:px-5">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 font-display text-[0.98rem] font-bold text-brand-ink">
@@ -296,7 +296,7 @@ export function TutorChat({
 
         <div
           ref={scrollRef}
-          className="gizmo-scroll max-h-[520px] min-h-[300px] overflow-y-auto px-4 py-5 sm:px-5"
+          className="surface-scroll max-h-[520px] min-h-[300px] overflow-y-auto px-4 py-5 sm:px-5"
         >
           {messages === undefined ? (
             <SkeletonChat bubbles={3} />

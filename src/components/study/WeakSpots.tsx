@@ -23,7 +23,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
 
   if (data === null) {
     return (
-      <div className="gizmo-card p-8 text-center text-sm text-muted-foreground">
+      <div className="surface-card p-8 text-center text-sm text-muted-foreground">
         This set is not available.
       </div>
     );
@@ -54,7 +54,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="gizmo-card p-6 sm:p-7"
+        className="surface-card p-6 sm:p-7"
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>

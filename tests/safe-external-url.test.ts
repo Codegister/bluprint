@@ -3,8 +3,8 @@ import { hostOf, safeExternalUrl } from "../src/lib/safeExternalUrl";
 
 describe("safeExternalUrl", () => {
   test("allows normal web links", () => {
-    expect(safeExternalUrl("https://www.bbc.co.uk/bitesize")).toBe(
-      "https://www.bbc.co.uk/bitesize",
+    expect(safeExternalUrl("https://www.example.com/revision")).toBe(
+      "https://www.example.com/revision",
     );
     expect(safeExternalUrl("http://example.com/a?b=1")).toBe(
       "http://example.com/a?b=1",

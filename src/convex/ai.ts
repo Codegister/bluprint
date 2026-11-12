@@ -1187,7 +1187,13 @@ type BuildPlan = {
 };
 
 function planForSet(set: Doc<"studySets">): BuildPlan {
-  const notes = set.notes.trim();
+  // A partially reused set already has rows for some topics. `generationNotes`
+  // scopes the AI to the missing topics, while `notes` keeps the full brief for
+  // coverage and the set page.
+  const notes = (set.generationNotes?.trim() || set.notes).trim();
+  const reusedCards = set.generationNotes !== undefined ? set.cardCount : 0;
+  const reusedQuiz = set.generationNotes !== undefined ? set.quizCount : 0;
+  const reusedExams = set.generationNotes !== undefined ? set.examCount : 0;
   const syllabus = set.courseId !== undefined;
   const requestedCards = Math.min(
     MAX_REQUESTED_ITEMS,
@@ -1209,9 +1215,11 @@ function planForSet(set: Doc<"studySets">): BuildPlan {
     context: { course: set.course, examBoard: set.examBoard, level: set.level },
     syllabus,
     requested: { cards: requestedCards, quiz: requestedQuiz, exams: requestedExam },
-    targetCards: Math.min(requestedCards, limits.cards),
-    targetQuiz: Math.min(requestedQuiz, limits.quiz),
-    targetExam: Math.min(requestedExam, limits.exam),
+    // The copied rows count toward the student's requested totals; only the
+    // shortfall is generated.
+    targetCards: Math.max(0, Math.min(requestedCards, limits.cards) - reusedCards),
+    targetQuiz: Math.max(0, Math.min(requestedQuiz, limits.quiz) - reusedQuiz),
+    targetExam: Math.max(0, Math.min(requestedExam, limits.exam) - reusedExams),
   };
 }
 
@@ -2322,6 +2330,7 @@ async function runTutorBuild(
     created: boolean;
     sections: number;
     cached: boolean;
+    scheduled: boolean;
   };
   try {
     result = await ctx.runMutation(internal.courses.createTopicSetForTutor, {
@@ -2343,11 +2352,12 @@ async function runTutorBuild(
     };
   }
 
-  let started = false;
-  if (result.created && !result.cached) {
+  // The course mutation now starts generation itself. Only retry here when that
+  // first scheduler write failed; a second enqueue would run the same claim
+  // twice for no benefit.
+  let started = result.created && !result.cached && result.scheduled;
+  if (result.created && !result.cached && !result.scheduled) {
     try {
-      // Start the long generation now. Waiting for the student to open the set
-      // would make "build me a quiz" only a link, not an action.
       await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
         setId: result.setId,
         userId,
@@ -2646,7 +2656,7 @@ async function scrapeSaveMyExamsPathway(
   );
   const pathway = buildPathwayFromOutline(course, {
     label: `${course.examBoard} ${course.level} ${course.subject}`,
-    intro: `A ${course.level} ${course.subject} pathway built from Save My Exams' published revision notes: ${outline.sections.length} units, ${topicCount} topics and ${outline.pageCount} note pages.`,
+    intro: `A ${course.level} ${course.subject} pathway built from published revision notes: ${outline.sections.length} units, ${topicCount} topics and ${outline.pageCount} note pages.`,
     sections: outline.sections,
   });
   pathway.sourceUrl = outline.sourceUrl;
@@ -3802,6 +3812,7 @@ async function processStudySetForUser(
     // stopped. This is what makes the set page's Retry action continue the
     // build instead of spending a fresh rebuild credit on cards it already has.
     const resumeStage: "quiz" | "exam" | null =
+      existing.generationNotes === undefined &&
       (existing.status === "processing" || existing.status === "error") &&
       existing.cardCount > 0
         ? existing.quizCount === 0
@@ -3887,7 +3898,7 @@ async function processStudySetForUser(
 
     try {
       const apiKeys = resolveNvidiaKeys();
-      let notes = existing.notes.trim();
+      let notes = (existing.generationNotes?.trim() || existing.notes).trim();
 
       if (existing.sourceImageIds.length > 0) {
         await ctx.runMutation(internal.studySets.setProgress, {
@@ -3949,9 +3960,14 @@ async function processStudySetForUser(
           // brief. The requested counts (already capped) are the real ceiling.
           { cards: MAX_REQUESTED_ITEMS, quiz: MAX_REQUESTED_ITEMS, exam: MAX_REQUESTED_ITEMS }
         : materialLimits(notes);
-      const targetCards = Math.min(requestedCards, limits.cards);
-      const targetQuiz = Math.min(requestedQuiz, limits.quiz);
-      const targetExam = Math.min(requestedExam, limits.exam);
+      // Copied rows already count toward the requested totals. Generate only
+      // the shortfall, for the missing topics named in `generationNotes`.
+      const reusedCards = existing.generationNotes !== undefined ? existing.cardCount : 0;
+      const reusedQuiz = existing.generationNotes !== undefined ? existing.quizCount : 0;
+      const reusedExams = existing.generationNotes !== undefined ? existing.examCount : 0;
+      const targetCards = Math.max(0, Math.min(requestedCards, limits.cards) - reusedCards);
+      const targetQuiz = Math.max(0, Math.min(requestedQuiz, limits.quiz) - reusedQuiz);
+      const targetExam = Math.max(0, Math.min(requestedExam, limits.exam) - reusedExams);
       // Leave room inside Convex's action limit for the final writes.
       const deadline = Date.now() + 8 * 60 * 1000;
 
@@ -3970,6 +3986,7 @@ async function processStudySetForUser(
       // set: if a later stage fails, the student can still open what finished.
       // A rebuild leaves the previous set untouched until all new stages are in.
       const canKeepPartial =
+        existing.generationNotes === undefined &&
         existing.cardCount === 0 && existing.quizCount === 0 && existing.examCount === 0;
       const stageFailures: Array<{ stage: BuildFailureStage; error: unknown }> = [];
 
@@ -4175,6 +4192,9 @@ async function processStudySetForUser(
         cards: toCardArgs(cards),
         quiz,
         exams: toExamArgs(exams),
+        // Keep the copied rows for overlapping topics; only the missing topics
+        // were generated above.
+        keepExisting: existing.generationNotes !== undefined,
         // A short topic name replaces a name derived from the first line of the
         // upload. A name the student typed is never overwritten.
         title: summary.title,

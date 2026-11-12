@@ -36,7 +36,7 @@
 .timetable-setup-screen .page-title {
   max-width: 20ch;
   color: var(--stage-ink) !important;
-  font-family: var(--font-editorial) !important;
+  font-family: var(--font-display) !important;
   font-size: 35.156px !important;
   font-weight: 600 !important;
   line-height: 1.04 !important;
@@ -327,19 +327,19 @@
   letter-spacing: -0.015em;
 }
 
-.today-sprint .gizmo-card {
+.today-sprint .surface-card {
   border: 1px solid var(--desk-line) !important;
   border-radius: 6px !important;
   background: var(--desk-raised) !important;
   box-shadow: none !important;
 }
 
-.today-sprint .gizmo-card p:first-child {
+.today-sprint .surface-card p:first-child {
   color: var(--desk-ink);
   font-size: 18px;
 }
 
-.today-sprint .gizmo-card p:last-child {
+.today-sprint .surface-card p:last-child {
   color: var(--desk-muted);
   font-size: 14px;
   line-height: 1.6;
@@ -999,8 +999,8 @@
 }
 
 .auth-input:focus-visible {
-  border-color: var(--olive-deep) !important;
-  outline: 2px solid var(--olive) !important;
+  border-color: var(--bold-field) !important;
+  outline: 2px solid var(--bold-field) !important;
   outline-offset: 2px;
   box-shadow: none !important;
 }
@@ -1010,15 +1010,15 @@
   height: 48px !important;
   border: 0 !important;
   border-radius: 6px !important;
-  background: var(--olive) !important;
-  color: var(--olive-ink) !important;
+  background: var(--bold-field) !important;
+  color: var(--bold-field-ink) !important;
   box-shadow: none !important;
   font-size: 14px !important;
   font-weight: 700 !important;
 }
 
 .auth-submit:hover {
-  background: color-mix(in srgb, var(--olive) 84%, var(--desk-ink)) !important;
+  background: color-mix(in srgb, var(--bold-field) 84%, var(--stage-ink)) !important;
   box-shadow: none !important;
   transform: none !important;
 }
@@ -1101,7 +1101,7 @@
   max-width: 12ch;
   margin-top: 10px;
   color: var(--stage-ink) !important;
-  font-family: var(--font-editorial) !important;
+  font-family: var(--font-display) !important;
   font-size: 35.156px !important;
   font-weight: 600 !important;
   line-height: 1.04 !important;
@@ -1183,18 +1183,44 @@
   background: var(--olive);
 }
 
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .auth-stack-sheet-front {
+    padding: 0.8rem 0.85rem;
+  }
+
+  .auth-stack-meta,
+  .auth-stack-foot {
+    gap: 8px;
+    font-size: 9px;
+    letter-spacing: 0.055em;
+  }
+
+  .auth-stack p {
+    font-size: 16px;
+  }
+}
+
 @media (min-width: 1024px) {
+  /* 30% stage · 10% olive spine · 60% desk. The form is the working field;
+     the context panel keeps the screen's stage identity. */
   .auth-page {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 7fr) !important;
     background: var(--desk) !important;
   }
 
   .auth-aside {
+    padding-inline: clamp(1.75rem, 2.1vw, 2.75rem) !important;
     border-right: 1px solid var(--stage-line) !important;
     background: var(--stage) !important;
   }
 
   .auth-main {
+    border-left: clamp(32px, 10vw, 144px) solid var(--bold-field) !important;
     background: var(--desk) !important;
+  }
+
+  .auth-main :is(a, button, input):focus-visible {
+    outline-color: var(--bold-field) !important;
   }
 
   .auth-panel > p,

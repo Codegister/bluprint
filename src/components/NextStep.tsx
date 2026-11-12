@@ -28,7 +28,7 @@ export function NextStep({
         className,
       )}
     >
-      <span className="shrink-0 text-[0.64rem] font-bold uppercase tracking-[0.12em] text-brand-sky">
+      <span className="shrink-0 text-[0.64rem] font-bold uppercase tracking-[0.12em] text-brand-mint">
         Next
       </span>
       <span className="min-w-0 flex-1">
@@ -41,7 +41,7 @@ export function NextStep({
           </span>
         )}
       </span>
-      <ArrowRight className="size-4 shrink-0 text-brand-sky" aria-hidden />
+      <ArrowRight className="size-4 shrink-0 text-brand-mint" aria-hidden />
     </Link>
   );
 }

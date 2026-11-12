@@ -82,10 +82,10 @@ The `.dark` block re-points the same ramp for gunmetal (0 is the raised highligh
 off-white ink) instead of introducing a second set of class names.
 
 `--border` is `#7e8c9b` and `--input` is `#5c6a7a`, deliberately dark enough that a card
-or a field can be seen against the steel page. The old Gizmo accent class names are kept
+or a field can be seen against the steel page. The legacy accent class names are kept
 so existing screens did not need rewriting, but their values are now anodised metal tints
-(ice, pearl, steel blue, bronze, verdigris) exposed as `bg-gizmo-lime`, `bg-gizmo-lilac`,
-`bg-gizmo-sky`, `bg-gizmo-peach`, `bg-gizmo-mint` and `bg-gizmo-cream`. Semantic red,
+(ice, pearl, steel blue, bronze, verdigris) exposed as `bg-surface-lime`, `bg-surface-lilac`,
+`bg-surface-sky`, `bg-surface-peach`, `bg-surface-mint` and `bg-surface-cream`. Semantic red,
 green and amber are kept only for errors, correct answers and warnings.
 
 The stylesheet also lifts hand-written opacity steps such as `text-brand-ink/55` to fixed
@@ -384,12 +384,12 @@ Sets built from a course topic link back to that course.
   so progress is re-matched by title; a topic whose title changed loses its tick. Study sets
   are never deleted when a course is removed; they stay in the library without a course
   link.
-- **Course is free text with presets.** StudySmarter asks for an education system and Gizmo
-  links a school; both are heavier than this app needs. A course label per set is enough to
-  group decks, and it stays optional.
+- **Course is free text with presets.** Asking for an education system or linking a school
+  is heavier than this app needs. A course label per set is enough to group decks, and it
+  stays optional.
 - **Days are UTC.** The daily goal and streak use UTC calendar days so two friends in
-  different time zones see consistent numbers. A 4 a.m. local cut-off, as Anki uses, is not
-  implemented.
+  different time zones see consistent numbers. A 4 a.m. local cut-off, as some flashcard
+  apps use, is not implemented.
 - **Ten questions a day starts the streak; the goal itself follows the exam date.** The
   goal is a display target, not a hard limit: any number of questions counts and nothing is
   blocked. A day only keeps the streak at the Starter tier, so one stray card cannot fake a
@@ -752,8 +752,8 @@ seconds in the browser and rejected above 8 MB. `NVIDIA_ASR_MODEL` and
 
 ## How a set is compiled
 
-- Creating a set saves it immediately with status **queued**.
-- Opening the set triggers one server action. An atomic claim prevents duplicate runs.
+- Creating a set saves it immediately and starts one server action, so leaving the page does not stop the build. Opening a queued set also triggers the action as a fallback. An atomic claim prevents duplicate runs.
+- A finished course-topic set can seed a copy for a later request that covers the same topics, even when the requested card, quiz and exam counts differ. A student's own pasted notes can similarly reuse one of their earlier sets when enough text overlaps; personal material is never added to the shared course cache.
 - The action reads stored images (one vision request per image), writes the extracted
   notes to the set, then asks NVIDIA in sequence for the summary, flashcards, quiz (a mix
   of multiple choice, cloze and typed answers), and exam questions. Progress messages are
@@ -822,7 +822,7 @@ same rate-limit messages as the rest of the app.
 - AQA GCSE Biology (8461) does not use a notes-site index at all. Its pathway is a checked
   specification map in AQA's own 4.x numbering, with active transport and the required
   practicals, and no "Exam Skills" part. The course page states which source a pathway
-  used; every other pathway is labelled notes-based when it follows Save My Exams pages.
+  used; every other pathway is labelled notes-based when it follows published notes pages.
 - If there is no published page for a course, the deterministic starter map keeps it
   usable, and a rebuild replaces it once the outline is published. Students are never asked
   to retry.
@@ -854,12 +854,13 @@ same rate-limit messages as the rest of the app.
 - Marking topics complete is manual. A topic's linked study set, card counts, and course
   scores are derived from the set, not duplicated.
 
-### Owner decision: Save My Exams licensing
+### Owner decision: notes-source licensing
 
-Bluprint reads published Save My Exams note pages for courses that are not covered by the
-checked AQA GCSE Biology specification map. Whether that reading is licensed is unresolved.
-This is a decision for the service owner; the code does not change or remove that source in
-this audit, and no licence claim is made on the course page.
+Bluprint reads published note pages for courses that are not covered by the checked AQA
+GCSE Biology specification map. Whether that reading is licensed is unresolved. This is a
+decision for the service owner; the code does not change or remove that source in this
+audit, and no licence claim is made on the course page. The providers used are listed in
+the privacy page.
 
 ## Route metadata, names and empty states
 

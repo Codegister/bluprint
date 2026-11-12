@@ -26,10 +26,10 @@
   --olive-deep: #536a36;
   --olive-ink: #11150d;
 
-  --font-editorial: "Fraunces", Georgia, serif;
-  --font-sans: "Public Sans", Arial, sans-serif;
-  --font-display: "Public Sans", Arial, sans-serif;
-  --font-mono: "Public Sans", Arial, sans-serif;
+  /* The 10% bold field. One statement band per screen, never the page field. */
+  --bold-field: #536a36;
+  --bold-field-ink: #fffdf9;
+  --bold-field-muted: #e4ecd7;
 
   /* The old interface tokens are kept on the desk while each screen is
      rebuilt. Nothing dark is allowed on a reading surface. */
@@ -184,7 +184,17 @@ body::before {
 .stage-shell :is(a, button, input, textarea, select):focus-visible,
 .app-stage-sheet :is(a, button, input, textarea, select):focus-visible {
   outline: 2px solid var(--olive) !important;
-  outline-offset: 3px !important;
+  outline-offset: 2px !important;
+}
+
+/* On the desk half, the pale stage signal is too quiet against paper. */
+.stage-home :is(.home-process, .home-close) :is(a, button, textarea):focus-visible {
+  outline-color: var(--bold-field) !important;
+}
+
+/* The close button sits on the bold olive band, so its focus ring is light. */
+.stage-home .home-close :is(a, button):focus-visible {
+  outline-color: var(--bold-field-ink) !important;
 }
 
 /* Shell ------------------------------------------------------------------ */
@@ -499,11 +509,13 @@ body::before {
 
 /* Home ------------------------------------------------------------------- */
 
+/* The page is the 60% desk field. The stage is the dark 30% opening and
+   footer, and the olive statement band near the close is the 10% signal. */
 .stage-home {
   min-height: 100svh;
   overflow-x: clip;
-  background: var(--stage);
-  color: var(--stage-ink);
+  background: var(--desk);
+  color: var(--desk-ink);
   font-family: var(--font-sans);
   font-size: 18px;
   line-height: 1.6;
@@ -519,6 +531,8 @@ body::before {
   position: relative;
   z-index: 10;
   border-bottom: 1px solid var(--stage-line);
+  background: var(--stage);
+  color: var(--stage-ink);
 }
 
 .home-header-inner {
@@ -576,12 +590,28 @@ body::before {
 }
 
 .home-hero {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
-  min-height: calc(100svh - 73px);
+  min-height: min(780px, calc(100svh - 73px));
   align-items: center;
   gap: clamp(40px, 6vw, 96px);
   padding-block: clamp(40px, 7vh, 84px) clamp(56px, 8vh, 104px);
+  color: var(--stage-ink);
+}
+
+/* The hero content lives in the page wrap, but the stage itself is full-bleed. */
+.home-hero::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  z-index: -1;
+  width: 100vw;
+  transform: translateX(-50%);
+  background: var(--stage);
+  pointer-events: none;
 }
 
 .home-hero-copy {
@@ -608,7 +638,7 @@ body::before {
 }
 
 .stage-display {
-  font-family: var(--font-editorial);
+  font-family: var(--font-display);
   font-weight: 500;
   letter-spacing: -0.035em;
 }
@@ -617,7 +647,7 @@ body::before {
   max-width: 12ch;
   margin-top: 16px;
   color: var(--stage-ink);
-  font-family: var(--font-editorial);
+  font-family: var(--font-display);
   font-size: 35.156px;
   font-weight: 500;
   letter-spacing: -0.035em;
@@ -699,6 +729,18 @@ body::before {
 .stage-button:hover {
   border-color: color-mix(in srgb, var(--olive) 82%, var(--stage-ink));
   background: color-mix(in srgb, var(--olive) 82%, var(--stage-ink));
+}
+
+/* Home's action is the bold olive signal, not the softer stage olive. */
+.stage-home .stage-button {
+  border-color: var(--bold-field);
+  background: var(--bold-field);
+  color: var(--bold-field-ink);
+}
+
+.stage-home .stage-button:hover {
+  border-color: color-mix(in srgb, var(--bold-field) 84%, var(--stage-ink));
+  background: color-mix(in srgb, var(--bold-field) 84%, var(--stage-ink));
 }
 
 .stage-button:disabled {
@@ -794,14 +836,14 @@ body::before {
   grid-row: 1;
   margin-top: 12px;
   padding: 24px;
-  border-top: 2px solid var(--olive);
+  border-top: 2px solid var(--bold-field);
 }
 
 .home-paper-cover-title {
   max-width: 9ch;
   margin-top: 28px;
   color: var(--desk-ink);
-  font-family: var(--font-editorial);
+  font-family: var(--font-display);
   font-size: 28.125px;
   font-weight: 500;
   letter-spacing: -0.03em;
@@ -830,7 +872,7 @@ body::before {
 }
 
 .home-paper-cover-foot strong {
-  color: var(--olive-deep);
+  color: var(--bold-field);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -854,7 +896,7 @@ body::before {
 
 .home-flash-answer {
   margin-top: 16px;
-  border-left: 2px solid var(--olive);
+  border-left: 2px solid var(--bold-field);
   padding-left: 12px;
   color: var(--desk-muted);
   font-size: 18px;
@@ -885,11 +927,21 @@ body::before {
 
 .home-process,
 .home-close {
-  border-top: 1px solid var(--stage-line);
+  border-top: 1px solid var(--desk-line);
 }
 
 .home-process {
   padding-block: clamp(64px, 10vh, 128px);
+  background: var(--desk);
+  color: var(--desk-ink);
+}
+
+.home-process .home-kicker {
+  color: var(--desk-muted);
+}
+
+.home-process .home-kicker::before {
+  background: var(--bold-field);
 }
 
 .home-process-grid {
@@ -902,8 +954,8 @@ body::before {
 .home-section-title {
   max-width: 12ch;
   margin-top: 16px;
-  color: var(--stage-ink);
-  font-family: var(--font-editorial);
+  color: var(--desk-ink);
+  font-family: var(--font-display);
   font-size: 35.156px;
   font-weight: 500;
   letter-spacing: -0.035em;
@@ -913,7 +965,7 @@ body::before {
 .home-steps {
   max-width: 34rem;
   margin-top: 36px;
-  border-top: 1px solid var(--stage-line);
+  border-top: 1px solid var(--desk-line);
 }
 
 .home-step {
@@ -921,18 +973,18 @@ body::before {
   grid-template-columns: 44px minmax(0, 1fr);
   gap: 16px;
   padding-block: 18px;
-  border-bottom: 1px solid var(--stage-line);
+  border-bottom: 1px solid var(--desk-line);
 }
 
 .home-step-index {
-  color: var(--olive);
+  color: var(--bold-field);
   font-size: 18px;
   line-height: 1.6;
   font-variant-numeric: tabular-nums;
 }
 
 .home-step-title {
-  color: var(--stage-ink);
+  color: var(--desk-ink);
   font-size: 22.5px;
   font-weight: 600;
   letter-spacing: -0.025em;
@@ -941,7 +993,7 @@ body::before {
 
 .home-step-copy {
   margin-top: 4px;
-  color: var(--stage-muted);
+  color: var(--desk-muted);
   font-size: 18px;
   line-height: 1.6;
 }
@@ -952,8 +1004,9 @@ body::before {
   padding: 28px;
   border: 1px solid var(--desk-line);
   border-radius: 2px;
-  background: var(--desk);
+  background: var(--desk-raised);
   color: var(--desk-ink);
+  box-shadow: 8px 8px 0 color-mix(in srgb, var(--desk-ink) 7%, transparent);
 }
 
 .home-mark-meta {
@@ -994,26 +1047,40 @@ body::before {
 
 .home-mark-note {
   margin-top: 28px;
-  color: var(--olive-deep);
+  color: var(--bold-field);
   font-size: 18px;
   line-height: 1.6;
 }
 
 .home-close {
-  padding-block: clamp(72px, 11vh, 144px);
+  padding-block: clamp(48px, 8vh, 96px);
+  background: var(--desk);
 }
 
+/* The one bold field on the page. It is the 10% accent, not a second page
+   colour: the desk still surrounds it on every side. */
 .home-close-inner {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  padding-block: clamp(28px, 4vh, 48px);
+  background: var(--bold-field);
+  color: var(--bold-field-ink);
+}
+
+.home-close .home-kicker {
+  color: var(--bold-field-muted);
+}
+
+.home-close .home-kicker::before {
+  background: var(--bold-field-muted);
 }
 
 .home-close-title {
   max-width: 13ch;
   margin-top: 16px;
-  color: var(--stage-ink);
-  font-family: var(--font-editorial);
+  color: var(--bold-field-ink);
+  font-family: var(--font-display);
   font-size: 35.156px;
   font-weight: 500;
   letter-spacing: -0.035em;
@@ -1022,10 +1089,20 @@ body::before {
 
 .home-close .stage-button {
   margin-top: 28px;
+  border-color: var(--desk-raised);
+  background: var(--desk-raised);
+  color: var(--desk-ink);
+}
+
+.home-close .stage-button:hover {
+  border-color: var(--desk);
+  background: var(--desk);
 }
 
 .home-footer {
   border-top: 1px solid var(--stage-line);
+  background: var(--stage);
+  color: var(--stage-muted);
 }
 
 .home-footer-inner {

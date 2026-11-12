@@ -38,15 +38,15 @@ export function ChromeBackdrop({
       {/* Three specular ribbons crossing the page at different speeds. This is
           what makes the backdrop read as moving metal rather than a static
           grey wash; the reflections and dot grid sit on top of it. */}
-      <span className="gizmo-flow">
-        <span className="gizmo-ribbon gizmo-ribbon-lime" />
-        <span className="gizmo-ribbon gizmo-ribbon-lilac" />
-        <span className="gizmo-ribbon gizmo-ribbon-sky" />
+      <span className="surface-flow">
+        <span className="surface-ribbon surface-ribbon-lime" />
+        <span className="surface-ribbon surface-ribbon-lilac" />
+        <span className="surface-ribbon surface-ribbon-sky" />
       </span>
-      <span className="gizmo-blob gizmo-blob-lime" />
-      <span className="gizmo-blob gizmo-blob-lilac" />
-      <span className="gizmo-blob gizmo-blob-peach" />
-      <span className="gizmo-dots" />
+      <span className="surface-blob surface-blob-lime" />
+      <span className="surface-blob surface-blob-lilac" />
+      <span className="surface-blob surface-blob-peach" />
+      <span className="surface-dots" />
     </div>
   );
 }

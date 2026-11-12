@@ -30,12 +30,7 @@
   --shadow: rgba(17, 21, 31, 0.12);
   --shadow-strong: rgba(17, 21, 31, 0.28);
 
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui,
-    sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
-
-  --radius: 0.8rem;
+  --radius: 6px;
 
   /* Existing tokens re-pointed at the new palette. */
   --background: var(--paper);
@@ -97,12 +92,12 @@
   --brand-butter: #a77c16;
   --brand-blush: #e7b7ae;
 
-  --gizmo-lime: var(--highlighter-soft);
-  --gizmo-lilac: #ece8f5;
-  --gizmo-sky: var(--accent-wash);
-  --gizmo-peach: #f8e8df;
-  --gizmo-mint: #e1f3ea;
-  --gizmo-cream: #f3f0e5;
+  --surface-lime: var(--highlighter-soft);
+  --surface-lilac: #ece8f5;
+  --surface-sky: var(--accent-wash);
+  --surface-peach: #f8e8df;
+  --surface-mint: #e1f3ea;
+  --surface-cream: #f3f0e5;
 
   --chrome-hi: var(--surface-strong);
   --chrome-steel: var(--line-strong);
@@ -203,12 +198,12 @@
   --brand-butter: #ffd66b;
   --brand-blush: #ffc9d6;
 
-  --gizmo-lime: var(--highlighter-soft);
-  --gizmo-lilac: #262239;
-  --gizmo-sky: var(--accent-wash);
-  --gizmo-peach: #33251f;
-  --gizmo-mint: #153229;
-  --gizmo-cream: #23251d;
+  --surface-lime: var(--highlighter-soft);
+  --surface-lilac: #262239;
+  --surface-sky: var(--accent-wash);
+  --surface-peach: #33251f;
+  --surface-mint: #153229;
+  --surface-cream: #23251d;
 
   --chrome-hi: var(--surface-strong);
   --chrome-steel: var(--line-strong);
@@ -349,7 +344,7 @@ select {
 
 .chrome-plate,
 .chrome-hero,
-.gizmo-card {
+.surface-card {
   border: 1px solid var(--line);
   border-radius: 1.15rem;
   background-color: var(--surface);
@@ -366,7 +361,7 @@ select {
 
 .dark .chrome-plate,
 .dark .chrome-hero,
-.dark .gizmo-card {
+.dark .surface-card {
   box-shadow:
     4px 4px 0 rgba(0, 0, 0, 0.42),
     0 1px 0 rgba(255, 255, 255, 0.05) inset;
