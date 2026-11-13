@@ -5,9 +5,8 @@ import { Moon, Sun } from "lucide-react";
 /**
  * The light / dark switch.
  *
- * Icon-only by default so it can sit in a header. `withLabel` is the wider
- * sidebar row, which names the mode that is currently on and the one a click
- * will switch to.
+ * Icon-only by default so it can sit in a header or sidebar. `withLabel` is an
+ * optional wider row, which names the mode that is currently on.
  */
 export function ThemeToggle({
   className,

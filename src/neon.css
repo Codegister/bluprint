@@ -532,8 +532,8 @@ body {
 
 .stage-home {
   background:
-    radial-gradient(70% 48% at 86% 2%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 62%),
-    radial-gradient(48% 40% at 6% 65%, color-mix(in srgb, #44e5b0 7%, transparent), transparent 70%),
+    radial-gradient(70% 48% at 86% 2%, color-mix(in srgb, var(--signal) 26%, transparent), transparent 62%),
+    radial-gradient(48% 40% at 6% 65%, color-mix(in srgb, #44e5b0 12%, transparent), transparent 70%),
     var(--stage);
   color: var(--stage-ink);
   font-size: 17px;
@@ -545,8 +545,8 @@ body {
   z-index: 0;
   display: block !important;
   background-image:
-    linear-gradient(color-mix(in srgb, var(--signal) 5.5%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--signal) 5.5%, transparent) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, var(--signal) 9%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--signal) 9%, transparent) 1px, transparent 1px);
   background-size: 72px 72px;
   content: "";
   mask-image: radial-gradient(80% 70% at 52% 28%, #000 0%, transparent 85%);
@@ -646,10 +646,10 @@ body {
   width: 100vw;
   transform: translateX(-50%);
   background:
-    radial-gradient(36% 44% at 22% 30%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 68%),
-    radial-gradient(46% 54% at 82% 68%, color-mix(in srgb, var(--storm) 68%, transparent), transparent 74%),
-    linear-gradient(112deg, transparent 34%, color-mix(in srgb, var(--signal) 13%, transparent) 49%, transparent 64%);
-  animation: hero-ambient 32s ease-in-out infinite;
+    radial-gradient(36% 44% at 22% 30%, color-mix(in srgb, var(--signal) 30%, transparent), transparent 68%),
+    radial-gradient(46% 54% at 82% 68%, color-mix(in srgb, var(--storm) 86%, transparent), transparent 74%),
+    linear-gradient(112deg, transparent 34%, color-mix(in srgb, var(--signal) 20%, transparent) 49%, transparent 64%);
+  animation: hero-ambient 16s ease-in-out infinite;
   animation-delay: -6s;
   pointer-events: none;
   will-change: transform;
@@ -994,9 +994,9 @@ body {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(42% 58% at 86% 8%, color-mix(in srgb, var(--signal) 14%, transparent), transparent 72%),
-    radial-gradient(50% 70% at 12% 88%, color-mix(in srgb, var(--storm-raised) 62%, transparent), transparent 76%);
-  animation: section-ambient 36s ease-in-out infinite;
+    radial-gradient(42% 58% at 86% 8%, color-mix(in srgb, var(--signal) 22%, transparent), transparent 72%),
+    radial-gradient(50% 70% at 12% 88%, color-mix(in srgb, var(--storm-raised) 78%, transparent), transparent 76%);
+  animation: section-ambient 18s ease-in-out infinite;
   animation-delay: -9s;
   pointer-events: none;
   will-change: transform;
@@ -1281,8 +1281,8 @@ body {
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(52% 42% at 100% 0%, color-mix(in srgb, var(--signal) 11%, transparent), transparent 70%),
-    radial-gradient(40% 48% at 0% 100%, color-mix(in srgb, var(--storm) 38%, transparent), transparent 76%),
+    radial-gradient(52% 42% at 100% 0%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 70%),
+    radial-gradient(40% 48% at 0% 100%, color-mix(in srgb, var(--storm) 54%, transparent), transparent 76%),
     var(--desk) !important;
 }
 
@@ -1295,12 +1295,12 @@ body {
   inset: -14%;
   z-index: -1;
   background:
-    radial-gradient(38% 44% at 14% 16%, color-mix(in srgb, var(--signal) 30%, transparent), transparent 66%),
-    radial-gradient(44% 54% at 84% 76%, color-mix(in srgb, var(--storm) 72%, transparent), transparent 70%),
-    linear-gradient(color-mix(in srgb, var(--desk-line) 42%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--desk-line) 42%, transparent) 1px, transparent 1px);
+    radial-gradient(38% 44% at 14% 16%, color-mix(in srgb, var(--signal) 44%, transparent), transparent 66%),
+    radial-gradient(44% 54% at 84% 76%, color-mix(in srgb, var(--storm) 88%, transparent), transparent 70%),
+    linear-gradient(color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px);
   background-size: auto, auto, 64px 64px, 64px 64px;
-  animation: desk-ambient 24s ease-in-out infinite;
+  animation: desk-ambient 14s ease-in-out infinite;
   animation-delay: -7s;
   pointer-events: none;
   will-change: transform;
@@ -1316,10 +1316,10 @@ body {
   background: linear-gradient(
     110deg,
     transparent 38%,
-    color-mix(in srgb, var(--signal) 13%, transparent) 49%,
+    color-mix(in srgb, var(--signal) 22%, transparent) 49%,
     transparent 60%
   );
-  animation: ambient-sweep 22s ease-in-out infinite;
+  animation: ambient-sweep 12s ease-in-out infinite;
   animation-delay: -5s;
   pointer-events: none;
   will-change: transform;
@@ -2251,9 +2251,9 @@ body {
   inset: -8%;
   z-index: -1;
   background:
-    radial-gradient(44% 50% at 86% 12%, color-mix(in srgb, var(--signal) 14%, transparent), transparent 72%),
-    radial-gradient(50% 60% at 8% 90%, color-mix(in srgb, var(--storm) 42%, transparent), transparent 76%);
-  animation: section-ambient 40s ease-in-out infinite;
+    radial-gradient(44% 50% at 86% 12%, color-mix(in srgb, var(--signal) 24%, transparent), transparent 72%),
+    radial-gradient(50% 60% at 8% 90%, color-mix(in srgb, var(--storm) 60%, transparent), transparent 76%);
+  animation: section-ambient 20s ease-in-out infinite;
   animation-delay: -12s;
   pointer-events: none;
   will-change: transform;
@@ -2274,9 +2274,9 @@ body {
   inset: -10%;
   z-index: -1;
   background:
-    radial-gradient(48% 46% at 24% 24%, color-mix(in srgb, var(--signal) 12%, transparent), transparent 70%),
-    radial-gradient(44% 52% at 84% 82%, color-mix(in srgb, var(--storm-raised) 62%, transparent), transparent 74%);
-  animation: section-ambient 38s ease-in-out infinite;
+    radial-gradient(48% 46% at 24% 24%, color-mix(in srgb, var(--signal) 20%, transparent), transparent 70%),
+    radial-gradient(44% 52% at 84% 82%, color-mix(in srgb, var(--storm-raised) 78%, transparent), transparent 74%);
+  animation: section-ambient 19s ease-in-out infinite;
   animation-delay: -16s;
   pointer-events: none;
   will-change: transform;
@@ -2523,44 +2523,44 @@ body {
 @keyframes hero-ambient {
   0%,
   100% {
-    transform: translateX(-50%) translate3d(-2%, -1%, 0) scale(1.04);
+    transform: translateX(-50%) translate3d(-3%, -2%, 0) scale(1.06);
   }
 
   50% {
-    transform: translateX(-50%) translate3d(2.5%, 2%, 0) scale(1.1);
+    transform: translateX(-50%) translate3d(4%, 3%, 0) scale(1.14);
   }
 }
 
 @keyframes section-ambient {
   0%,
   100% {
-    transform: translate3d(-2%, 0, 0) scale(1.04);
+    transform: translate3d(-3%, -1%, 0) scale(1.06);
   }
 
   50% {
-    transform: translate3d(2.5%, -2%, 0) scale(1.1);
+    transform: translate3d(4%, -3%, 0) scale(1.14);
   }
 }
 
 @keyframes desk-ambient {
   0%,
   100% {
-    transform: translate3d(-3%, -1.5%, 0) scale(1.06);
+    transform: translate3d(-4%, -2%, 0) scale(1.08);
   }
 
   50% {
-    transform: translate3d(4%, 2.5%, 0) scale(1.12);
+    transform: translate3d(6%, 4%, 0) scale(1.18);
   }
 }
 
 @keyframes ambient-sweep {
   0%,
   100% {
-    transform: translate3d(-12%, -1%, 0) rotate(-1deg);
+    transform: translate3d(-18%, -1%, 0) rotate(-1deg);
   }
 
   50% {
-    transform: translate3d(12%, 1%, 0) rotate(1deg);
+    transform: translate3d(18%, 1%, 0) rotate(1deg);
   }
 }
 
@@ -2794,5 +2794,884 @@ html:not(.dark) body {
 
 :root:not(.dark) .set-menu-panel button:hover {
   background: var(--desk) !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Soft glass
+
+   A final material pass over every layer. Shapes move onto a larger radius
+   scale, and working surfaces become translucent tinted glass rather than
+   flat paper: sage for fields and structure, peach for raised cards, and the
+   signal for the one primary action. Dark mode uses the same material with
+   storm-charcoal tint instead of the daytime peach.
+   ------------------------------------------------------------------------- */
+
+:root {
+  --radius-soft-sm: 14px;
+  --radius-soft-md: 20px;
+  --radius-soft-lg: 28px;
+  --radius-soft-xl: 34px;
+  --glass-blur: 22px;
+  --glass-tint-sage: color-mix(in srgb, var(--desk) 78%, transparent);
+  --glass-tint-sage-strong: color-mix(in srgb, var(--desk) 88%, transparent);
+  --glass-tint-peach: color-mix(in srgb, var(--desk-raised) 82%, transparent);
+  --glass-tint-peach-strong: color-mix(in srgb, var(--desk-raised) 90%, transparent);
+  --glass-line: color-mix(in srgb, var(--desk-line) 62%, transparent);
+  --glass-highlight: color-mix(in srgb, white 30%, transparent);
+  --glass-sheen: linear-gradient(
+    145deg,
+    color-mix(in srgb, white 28%, transparent) 0%,
+    color-mix(in srgb, white 8%, transparent) 26%,
+    transparent 48%
+  );
+  --glass-shadow: 0 28px 70px -46px color-mix(in srgb, var(--signal-deep) 34%, transparent);
+  --glass-card-bg:
+    var(--glass-sheen),
+    linear-gradient(
+      152deg,
+      color-mix(in srgb, var(--signal) 5%, var(--glass-tint-peach)) 0%,
+      var(--glass-tint-peach) 58%,
+      color-mix(in srgb, var(--desk) 8%, var(--glass-tint-peach)) 100%
+    );
+  --glass-sage-bg:
+    var(--glass-sheen),
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--signal) 3%, var(--glass-tint-sage)) 0%,
+      var(--glass-tint-sage) 72%
+    );
+  --glass-signal-bg:
+    var(--glass-sheen),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, white 10%, var(--signal)) 0%,
+      color-mix(in srgb, var(--signal) 88%, transparent) 52%,
+      color-mix(in srgb, var(--signal-deep) 84%, transparent) 100%
+    );
+}
+
+.dark {
+  --glass-tint-sage: color-mix(in srgb, var(--desk) 76%, transparent);
+  --glass-tint-sage-strong: color-mix(in srgb, var(--desk) 86%, transparent);
+  --glass-tint-peach: color-mix(in srgb, var(--desk-raised) 78%, transparent);
+  --glass-tint-peach-strong: color-mix(in srgb, var(--desk-raised) 88%, transparent);
+  --glass-line: color-mix(in srgb, var(--desk-line) 58%, transparent);
+  --glass-highlight: color-mix(in srgb, white 13%, transparent);
+  --glass-sheen: linear-gradient(
+    145deg,
+    color-mix(in srgb, white 9%, transparent) 0%,
+    color-mix(in srgb, white 3%, transparent) 26%,
+    transparent 46%
+  );
+  --glass-shadow: 0 30px 80px -48px rgba(0, 0, 0, 0.86);
+}
+
+/* Softer utility radii. Pills stay pills; every intermediate corner gets a
+   generous curve instead of the old 2–10px steps. */
+:is(#root, #preview-root) :is(.app-main, .set-screen, .stage-home, .auth-page) :is(
+  [class*="rounded-[0.4rem]"],
+  [class*="rounded-[0.45rem]"],
+  [class*="rounded-[0.5rem]"],
+  [class*="rounded-[0.55rem]"],
+  [class*="rounded-[0.6rem]"],
+  [class*="rounded-[0.65rem]"],
+  [class*="rounded-[0.7rem]"],
+  [class*="rounded-sm"],
+  [class*="rounded-md"],
+  [class*="rounded-lg"]
+) {
+  border-radius: var(--radius-soft-sm) !important;
+}
+
+:is(#root, #preview-root) :is(.app-main, .set-screen, .stage-home, .auth-page) :is(
+  [class*="rounded-xl"],
+  [class*="rounded-2xl"],
+  [class*="rounded-[1rem]"],
+  [class*="rounded-[1.15rem]"],
+  [class*="rounded-[1.5rem]"]
+) {
+  border-radius: var(--radius-soft-md) !important;
+}
+
+:is(#root, #preview-root) :is(.app-main, .set-screen, .stage-home, .auth-page) :is(
+  [class*="rounded-3xl"],
+  [class*="rounded-[1.6rem]"],
+  [class*="rounded-[1.7rem]"],
+  [class*="rounded-[2rem]"]
+) {
+  border-radius: var(--radius-soft-lg) !important;
+}
+
+/* Shared card material ---------------------------------------------------- */
+
+:is(#root, #preview-root) :is(.surface-card, .chrome-plate, .chrome-hero) {
+  border: 1px solid var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.18);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.18);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+  color: var(--desk-ink);
+}
+
+:is(#root, #preview-root) .app-main :is(.surface-card, .chrome-plate, .chrome-hero) {
+  border-color: var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.18);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.18);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+/* Set cards carry several older, more specific graphite rules. */
+:is(#root, #preview-root) .set-screen[data-section] .surface-card,
+:is(#root, #preview-root) .set-screen[data-section] .set-mode .surface-card {
+  border-color: var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.18);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.18);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+:is(#root, #preview-root) .app-main :is(div, section, article, aside, form)[class*="bg-card"],
+:is(#root, #preview-root) .app-main :is(div, section, article, aside, form)[class*="bg-white"],
+:is(#root, #preview-root) .app-main :is(div, section, article, aside, form)[class*="bg-[#FCFCFD]"],
+:is(#root, #preview-root) .app-main :is(div, section, article, aside, form)[class*="bg-[#FCFCFA]"] {
+  border-color: var(--glass-line) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.14);
+  backdrop-filter: blur(18px) saturate(1.14);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+/* Covers, mastheads and structural bands -------------------------------- */
+
+:is(#root, #preview-root) .app-main :is(
+  .today-screen .page-masthead,
+  .timetable-screen .page-masthead,
+  .timetable-setup-screen .page-masthead,
+  .papers-cover,
+  .course-library-cover,
+  .course-cover,
+  .past-paper-cover,
+  .set-cover
+) {
+  border: 1px solid var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.18);
+  backdrop-filter: blur(24px) saturate(1.18);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+:is(#root, #preview-root) .app-main :is(.set-facts, .set-screen[data-section] .set-facts) {
+  border: 1px solid var(--glass-line) !important;
+  border-radius: var(--radius-soft-md) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.16);
+  backdrop-filter: blur(20px) saturate(1.16);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+  overflow: hidden;
+}
+
+:is(#root, #preview-root) .app-main .set-stage-bar {
+  border-bottom-color: var(--glass-line) !important;
+  border-radius: 0 0 var(--radius-soft-lg) var(--radius-soft-lg) !important;
+  background: var(--glass-sage-bg) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.16);
+  backdrop-filter: blur(24px) saturate(1.16);
+  box-shadow: 0 18px 42px -38px color-mix(in srgb, var(--signal-deep) 26%, transparent);
+}
+
+:is(#root, #preview-root) .app-main :is(.timetable-day-panel, .papers-screen .surface-card.text-muted-foreground) {
+  border-color: var(--glass-line) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.14);
+  backdrop-filter: blur(20px) saturate(1.14);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+/* Daytime overrides for a few named panels are written with three levels of
+   specificity; this equally specific group is later, so the tint survives. */
+:root :is(#root, #preview-root) .app-main :is(
+  .today-calibration,
+  .today-how,
+  .today-queue,
+  .today-progress,
+  .timetable-missed,
+  .timetable-blocked,
+  .timetable-meal,
+  .course-next,
+  .course-assessment,
+  .course-facts,
+  .papers-cover,
+  .papers-screen .surface-card
+) {
+  border-color: var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.14);
+  backdrop-filter: blur(20px) saturate(1.14);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+/* The shell and rail ------------------------------------------------------ */
+
+:is(#root, #preview-root) .app-rail {
+  border-right: 1px solid var(--glass-line) !important;
+  border-radius: 0 var(--radius-soft-lg) var(--radius-soft-lg) 0;
+  background:
+    var(--glass-sheen),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--signal) 5%, var(--glass-tint-peach)) 0%,
+      var(--glass-tint-sage) 44%,
+      var(--glass-tint-sage) 100%
+    ) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.14);
+  backdrop-filter: blur(28px) saturate(1.14);
+  box-shadow: inset -1px 0 0 var(--glass-highlight);
+}
+
+:is(#root, #preview-root) .app-rail-link {
+  border-radius: var(--radius-soft-sm) !important;
+}
+
+:is(#root, #preview-root) .app-rail-link .rail-icon {
+  border-radius: 11px !important;
+}
+
+:is(#root, #preview-root) .app-rail-link.rail-active {
+  border-color: color-mix(in srgb, var(--signal) 40%, transparent) !important;
+  background: var(--glass-signal-bg) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 28%, transparent),
+    0 12px 26px -24px color-mix(in srgb, var(--signal) 70%, transparent) !important;
+  color: var(--signal-ink) !important;
+}
+
+:is(#root, #preview-root) .app-rail-link.rail-active :is(.rail-icon, .rail-icon svg) {
+  color: var(--signal-ink) !important;
+}
+
+:is(#root, #preview-root) .app-mobile-header,
+:is(#root, #preview-root) .app-stage-sheet {
+  border-color: var(--glass-line) !important;
+  border-radius: 0 0 var(--radius-soft-md) var(--radius-soft-md);
+  background: var(--glass-sage-bg) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.16);
+  backdrop-filter: blur(26px) saturate(1.16);
+  box-shadow: 0 18px 44px -38px color-mix(in srgb, var(--signal-deep) 26%, transparent);
+}
+
+/* Controls --------------------------------------------------------------- */
+
+:is(#root, #preview-root) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([data-input-otp]), textarea, select) {
+  border: 1px solid var(--glass-line) !important;
+  border-radius: var(--radius-soft-sm) !important;
+  background: var(--glass-sage-bg) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  backdrop-filter: blur(14px) saturate(1.12);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 color-mix(in srgb, var(--desk-line) 20%, transparent) !important;
+  color: var(--desk-ink) !important;
+}
+
+:is(#root, #preview-root) .stage-home .home-build textarea {
+  border-color: var(--glass-line) !important;
+  border-radius: var(--radius-soft-sm) !important;
+  background: var(--glass-sage-bg) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  backdrop-filter: blur(14px) saturate(1.12);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 color-mix(in srgb, var(--desk-line) 20%, transparent) !important;
+}
+
+:is(#root, #preview-root) :is([data-slot="button"], .stage-button, .set-start, .auth-submit) {
+  border-radius: var(--radius-soft-sm) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.16);
+  backdrop-filter: blur(14px) saturate(1.16);
+}
+
+:root :is(#root, #preview-root) :is(.app-main, .set-screen, .stage-home, .auth-page) :is(
+  [data-slot="button"][data-variant="default"],
+  .stage-button,
+  .set-start,
+  .auth-submit
+) {
+  border-color: color-mix(in srgb, var(--signal) 72%, var(--glass-highlight)) !important;
+  border-radius: var(--radius-soft-sm) !important;
+  background: var(--glass-signal-bg) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
+    0 16px 34px -24px color-mix(in srgb, var(--signal) 64%, transparent) !important;
+  color: var(--signal-ink) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+/* Set screens are outside the app shell, so they get their own glass scope. */
+:root :is(#root, #preview-root) .set-screen :is(.surface-card, .set-facts),
+:root :is(#root, #preview-root) .set-screen :is(div, section, article, aside, form)[class*="bg-card"],
+:root :is(#root, #preview-root) .set-screen :is(div, section, article, aside, form)[class*="bg-white"] {
+  border-color: var(--glass-line) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.16);
+  backdrop-filter: blur(22px) saturate(1.16);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+:root :is(#root, #preview-root) .set-screen .set-facts {
+  border-radius: var(--radius-soft-md) !important;
+}
+
+:root :is(#root, #preview-root) .set-screen .set-action {
+  border-radius: var(--radius-soft-md) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.14);
+  backdrop-filter: blur(18px) saturate(1.14);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+:root :is(#root, #preview-root) .set-screen .set-stage-bar {
+  border-bottom-color: var(--glass-line) !important;
+  border-radius: 0 0 var(--radius-soft-lg) var(--radius-soft-lg) !important;
+  background: var(--glass-sage-bg) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.16);
+  backdrop-filter: blur(26px) saturate(1.16);
+  box-shadow: 0 18px 44px -38px color-mix(in srgb, var(--signal-deep) 26%, transparent);
+}
+
+:is(#root, #preview-root) .set-screen .set-action-badge {
+  border-radius: 8px !important;
+}
+
+:is(#root, #preview-root) .set-screen :is(button, a, summary) {
+  border-radius: 12px !important;
+}
+
+:is(#root, #preview-root) :is(.app-main, .set-screen, .stage-home, .auth-page) :is([class*="rounded-full"]) {
+  border-radius: 999px !important;
+}
+
+:is(#root, #preview-root) .course-screen :is(summary, .path-stamp, .path-part-mark) {
+  border-radius: 12px !important;
+}
+
+:is(#root, #preview-root) .course-screen :is(button, a, summary) {
+  border-radius: 12px !important;
+}
+
+:is(#root, #preview-root) .timetable-days {
+  border: 1px solid var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.14);
+  backdrop-filter: blur(20px) saturate(1.14);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+:is(#root, #preview-root) .stage-home .home-mark-note {
+  border-radius: 8px !important;
+}
+
+/* The sidebar theme control is now icon-only; keep it on the same glass. */
+:is(#root, #preview-root) .stage-shell .app-rail-account .theme-toggle {
+  border: 1px solid var(--glass-line) !important;
+  border-radius: 12px !important;
+  background: var(--glass-sage-bg) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  backdrop-filter: blur(14px) saturate(1.12);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 12px 26px -24px var(--shadow-strong) !important;
+  color: var(--desk-ink) !important;
+}
+
+:is(#root, #preview-root) .stage-shell .app-rail-account .theme-toggle:hover {
+  border-color: color-mix(in srgb, var(--signal) 52%, var(--glass-line)) !important;
+  background: var(--glass-card-bg) !important;
+  color: var(--signal-deep) !important;
+}
+
+/* Sidebar chrome and profile avatar ------------------------------------- */
+
+:is(#root, #preview-root) .stage-shell .app-rail-link {
+  min-height: 40px;
+  padding-block: 0.4rem !important;
+  border-radius: 12px !important;
+}
+
+.stage-shell .app-rail-link .rail-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+/* The current destination is a soft tinted row with one solid signal tile.
+   It reads as a state, not a full-width warning bar. */
+:is(#root, #preview-root) .stage-shell .app-rail-link.rail-active {
+  border-color: color-mix(in srgb, var(--signal) 34%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 16%, var(--desk-raised)) !important;
+  box-shadow: none !important;
+  color: var(--desk-ink) !important;
+}
+
+:is(#root, #preview-root) .stage-shell .app-rail-link.rail-active .rail-icon {
+  border-color: transparent !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+:is(#root, #preview-root) .stage-shell .app-rail-link.rail-active:hover {
+  border-color: color-mix(in srgb, var(--signal) 44%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 22%, var(--desk-raised)) !important;
+  color: var(--desk-ink) !important;
+}
+
+.stage-shell .app-rail-collapse {
+  border: 1px solid var(--glass-line);
+  border-radius: 10px;
+  background: var(--glass-sage-bg);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  color: var(--stage-muted);
+}
+
+.stage-shell .app-rail-collapse:hover {
+  border-color: color-mix(in srgb, var(--signal) 38%, var(--glass-line));
+  background: var(--glass-card-bg);
+  color: var(--stage-ink);
+}
+
+.user-avatar {
+  border: 1px solid color-mix(in srgb, var(--desk-ink) 14%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 5px 14px -10px var(--shadow-strong);
+  transition: transform 160ms ease-out;
+}
+
+.profile-avatar-button:hover .user-avatar {
+  transform: translateY(-1px);
+}
+
+.profile-avatar-button:active .user-avatar {
+  transform: translateY(0) scale(0.97);
+}
+
+.profile-avatar-edit {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  background: var(--glass-tint-sage-strong);
+  box-shadow: 0 4px 10px -6px var(--shadow-strong);
+  color: var(--signal);
+}
+
+.profile-avatar-button:hover .profile-avatar-edit {
+  border-color: color-mix(in srgb, var(--signal) 44%, var(--glass-line));
+  color: var(--signal-deep);
+}
+
+/* The mobile sheet renders in a portal outside .stage-shell, so its rail needs
+   the same compact row and state treatment explicitly. */
+.app-stage-sheet .app-rail-link {
+  min-height: 40px;
+  padding-block: 0.4rem !important;
+  border-radius: 12px !important;
+  font-size: 0.95rem !important;
+}
+
+.app-stage-sheet .app-rail-link .rail-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.app-stage-sheet .app-rail-link.rail-active {
+  border-color: color-mix(in srgb, var(--signal) 34%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 16%, var(--desk-raised)) !important;
+  box-shadow: none !important;
+  color: var(--desk-ink) !important;
+}
+
+.app-stage-sheet .app-rail-link.rail-active .rail-icon {
+  border-color: transparent !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+.app-stage-sheet .app-rail-link.rail-active:hover {
+  border-color: color-mix(in srgb, var(--signal) 44%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 22%, var(--desk-raised)) !important;
+  color: var(--desk-ink) !important;
+}
+
+.app-stage-sheet .app-rail-account .theme-toggle {
+  border-color: var(--glass-line) !important;
+  border-radius: 12px !important;
+  background: var(--glass-sage-bg) !important;
+}
+
+/* The ambient sweep extends beyond the app surface; clip the desk rather than
+   letting that layer create a horizontal scrollbar on narrow screens. */
+.stage-shell .app-main {
+  overflow-x: clip;
+}
+
+:is(#root, #preview-root) :is(
+  [data-slot="button"][data-variant="outline"],
+  [data-slot="button"][data-variant="secondary"],
+  [data-slot="button"][data-variant="ghost"]
+) {
+  border-color: var(--glass-line) !important;
+  background: var(--glass-card-bg) !important;
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 12px 28px -26px color-mix(in srgb, var(--signal-deep) 24%, transparent) !important;
+  color: var(--desk-ink) !important;
+}
+
+:is(#root, #preview-root) [data-slot="button"][data-variant="ghost"] {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+:is(#root, #preview-root) [data-slot="button"][data-variant="destructive"] {
+  border-color: var(--danger-line) !important;
+  background: color-mix(in srgb, var(--danger-wash) 84%, transparent) !important;
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 14px 30px -26px var(--danger-ink) !important;
+  color: var(--danger-ink) !important;
+}
+
+:root :is(#root, #preview-root) :is(.today-screen, .timetable-screen) .page-actions > :is(a, button, [data-slot="button"]) {
+  border-radius: var(--radius-soft-sm) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.16);
+  backdrop-filter: blur(14px) saturate(1.16);
+}
+
+:root :is(#root, #preview-root) :is(.today-screen, .timetable-screen) .page-actions > [data-slot="button"][data-variant="default"] {
+  border-color: color-mix(in srgb, var(--signal) 72%, var(--glass-highlight)) !important;
+  background: var(--glass-signal-bg) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
+    0 16px 34px -24px color-mix(in srgb, var(--signal) 64%, transparent) !important;
+  color: var(--signal-ink) !important;
+}
+
+:root :is(#root, #preview-root) :is(.today-screen, .timetable-screen) .page-actions > [data-slot="button"]:not([data-variant="default"]) {
+  border-color: var(--glass-line) !important;
+  background: var(--glass-card-bg) !important;
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+  color: var(--desk-ink) !important;
+}
+
+:root :is(#root, #preview-root) .stage-home .home-close .stage-button {
+  border-color: var(--signal-ink) !important;
+  border-radius: var(--radius-soft-sm) !important;
+  background: var(--signal-ink) !important;
+  box-shadow: none !important;
+  color: var(--signal) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Menus, sheets and dialogs --------------------------------------------- */
+
+:is(#root, #preview-root) :is(
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="popover-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"],
+  .set-menu-panel
+) {
+  border: 1px solid var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-tint-peach-strong) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.18);
+  backdrop-filter: blur(30px) saturate(1.18);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 34px 90px -48px color-mix(in srgb, var(--signal-deep) 30%, transparent) !important;
+  color: var(--desk-ink) !important;
+}
+
+:is(#root, #preview-root) :is(.set-menu-panel button, [data-slot="dropdown-menu-item"], [data-slot="select-item"]) {
+  border-radius: 12px !important;
+}
+
+:is(#root, #preview-root) :is([data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"], [data-slot="sheet-overlay"]) {
+  background: color-mix(in srgb, var(--bold-field) 48%, transparent) !important;
+  -webkit-backdrop-filter: blur(5px) saturate(0.94);
+  backdrop-filter: blur(5px) saturate(0.94);
+}
+
+:is(#root, #preview-root) [data-sonner-toast] {
+  border: 1px solid var(--glass-line) !important;
+  border-radius: var(--radius-soft-md) !important;
+  background: var(--glass-tint-peach-strong) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.16);
+  backdrop-filter: blur(24px) saturate(1.16);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+/* Public landing and auth ----------------------------------------------- */
+
+:is(#root, #preview-root) .stage-home .home-header {
+  border-bottom-color: var(--glass-line);
+  background: color-mix(in srgb, var(--glass-tint-sage) 88%, transparent) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.16);
+  backdrop-filter: blur(24px) saturate(1.16);
+}
+
+:is(#root, #preview-root) .stage-home :is(.home-build, .home-paper) {
+  border-color: var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.16);
+  backdrop-filter: blur(22px) saturate(1.16);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+:is(#root, #preview-root) .stage-home .home-paper-spec {
+  border-color: var(--glass-line) !important;
+  background: var(--glass-sage-bg) !important;
+  color: var(--storm-ink);
+}
+
+:is(#root, #preview-root) .stage-home .home-mark-sheet {
+  border-color: var(--glass-line) !important;
+  border-radius: var(--radius-soft-md) !important;
+  background: var(--glass-sheen), color-mix(in srgb, var(--mark-paper) 88%, transparent) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  backdrop-filter: blur(18px) saturate(1.1);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+:is(#root, #preview-root) .stage-home .home-process {
+  background: var(--glass-sheen), color-mix(in srgb, var(--storm) 78%, transparent) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.12);
+  backdrop-filter: blur(24px) saturate(1.12);
+}
+
+:is(#root, #preview-root) .stage-home .home-close-inner {
+  border-color: color-mix(in srgb, var(--signal) 62%, var(--glass-highlight)) !important;
+  border-radius: var(--radius-soft-xl) !important;
+  background: var(--glass-signal-bg) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.2);
+  backdrop-filter: blur(26px) saturate(1.2);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 26%, transparent),
+    0 36px 90px -58px color-mix(in srgb, var(--signal) 66%, transparent) !important;
+}
+
+:is(#root, #preview-root) .auth-page :is(.auth-card, .auth-stack-sheet) {
+  border-color: var(--glass-line) !important;
+  border-radius: var(--radius-soft-lg) !important;
+  background: var(--glass-card-bg) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.16);
+  backdrop-filter: blur(28px) saturate(1.16);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+:is(#root, #preview-root) .auth-page .auth-aside {
+  background: var(--glass-sage-bg) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.14);
+  backdrop-filter: blur(26px) saturate(1.14);
+}
+
+:is(#root, #preview-root) .auth-page .auth-input {
+  border-color: var(--glass-line) !important;
+  border-radius: var(--radius-soft-sm) !important;
+  background: var(--glass-sage-bg) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  backdrop-filter: blur(14px) saturate(1.12);
+}
+
+/* Browsers without backdrop blur still get the tint and the soft shape. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :is(#root, #preview-root) :is(
+    .surface-card,
+    .chrome-plate,
+    .chrome-hero,
+    .app-rail,
+    .auth-card,
+    .home-build,
+    .home-paper,
+    .home-mark-sheet,
+    .set-facts,
+    .set-stage-bar,
+    [data-slot="dialog-content"],
+    [data-slot="sheet-content"],
+    .set-menu-panel
+  ) {
+    background: var(--desk-raised) !important;
+  }
+}
+
+/* Standalone set stage ----------------------------------------------------
+   A set opens outside the app rail, but its cover and desk should still sit
+   on the same living surface as the rest of the workspace. The identity bar
+   remains opaque; the cover and desk let the ambient fields read through.
+   ------------------------------------------------------------------------- */
+
+:is(#root, #preview-root) .set-screen {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background:
+    radial-gradient(52% 42% at 100% 0%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 70%),
+    radial-gradient(40% 48% at 0% 100%, color-mix(in srgb, var(--storm) 54%, transparent), transparent 76%),
+    var(--desk) !important;
+}
+
+:is(#root, #preview-root) .set-screen::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  z-index: -1;
+  background:
+    radial-gradient(38% 44% at 14% 16%, color-mix(in srgb, var(--signal) 44%, transparent), transparent 66%),
+    radial-gradient(44% 54% at 84% 76%, color-mix(in srgb, var(--storm) 88%, transparent), transparent 70%),
+    linear-gradient(color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px);
+  background-size: auto, auto, 64px 64px, 64px 64px;
+  animation: desk-ambient 14s ease-in-out infinite;
+  animation-delay: -7s;
+  pointer-events: none;
+  will-change: transform;
+}
+
+:is(#root, #preview-root) .set-screen::after {
+  content: "";
+  position: absolute;
+  inset: -30% -35%;
+  z-index: -1;
+  background: linear-gradient(
+    110deg,
+    transparent 38%,
+    color-mix(in srgb, var(--signal) 22%, transparent) 49%,
+    transparent 60%
+  );
+  animation: ambient-sweep 12s ease-in-out infinite;
+  animation-delay: -5s;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* The stage and desk carry the set's layout, not a second opaque fill. */
+:is(#root, #preview-root) .set-screen :is(.set-stage, .set-desk) {
+  background: transparent !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(#root, #preview-root) .set-screen::before,
+  :is(#root, #preview-root) .set-screen::after {
+    animation: none !important;
+    will-change: auto;
+  }
+}
+
+/* Course and past-paper detail screens are rendered inside the app shell, so
+   they already sit on the shared ambient surface. Keep their roots
+   transparent so no page-level fill can mask the grid or the sweep. */
+:is(#root, #preview-root) :is(.course-screen, .past-paper-screen) {
+  background: transparent !important;
+}
+
+/* Identity covers are the first large panel on these pages. A lighter peach
+   tint lets the desk grid pass through instead of turning the cover back into
+   an opaque card; the low blur keeps the lines readable while softening the
+   moving wash directly behind the title. */
+:is(#root, #preview-root) :is(.app-main, .focus-main) :is(.course-screen, .past-paper-screen) :is(.course-cover, .past-paper-cover) {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, white 14%, transparent) 0%,
+      color-mix(in srgb, white 4%, transparent) 26%,
+      transparent 48%
+    ),
+    linear-gradient(
+      152deg,
+      color-mix(in srgb, var(--signal) 6%, color-mix(in srgb, var(--desk-raised) 50%, transparent)) 0%,
+      color-mix(in srgb, var(--desk-raised) 42%, transparent) 58%,
+      color-mix(in srgb, var(--desk-raised) 36%, transparent) 100%
+    ) !important;
+  -webkit-backdrop-filter: blur(1px) saturate(1.08);
+  backdrop-filter: blur(1px) saturate(1.08);
+}
+
+/* The facts strip continues the cover's glass band rather than switching back
+   to opaque paper immediately below it. */
+:is(#root, #preview-root) .stage-shell .app-main .course-screen .course-facts {
+  border-color: var(--glass-line) !important;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, white 12%, transparent) 0%,
+      color-mix(in srgb, white 3%, transparent) 30%,
+      transparent 52%
+    ),
+    linear-gradient(
+      152deg,
+      color-mix(in srgb, var(--signal) 5%, color-mix(in srgb, var(--desk-raised) 50%, transparent)) 0%,
+      color-mix(in srgb, var(--desk-raised) 42%, transparent) 60%,
+      color-mix(in srgb, var(--desk-raised) 36%, transparent) 100%
+    ) !important;
+  -webkit-backdrop-filter: blur(1px) saturate(1.08);
+  backdrop-filter: blur(1px) saturate(1.08);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
 }
 

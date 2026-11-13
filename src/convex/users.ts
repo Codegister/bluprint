@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { isAvatarId } from "../lib/avatars";
 import { deleteStudySetContent } from "./studySets";
 import { forgetStudySetReuse } from "./lib/studySetReuse";
 
@@ -36,6 +37,20 @@ export const updateDisplayName = mutation({
     }
     await ctx.db.patch(userId, { name: cleaned });
     return { name: cleaned };
+  },
+});
+
+/** Stores one of the built-in profile pictures on the user row. */
+export const updateAvatar = mutation({
+  args: { avatar: v.string() },
+  handler: async (ctx, { avatar }) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) throw new Error("Sign in to change your profile picture.");
+    if (!isAvatarId(avatar)) {
+      throw new Error("That profile picture is not available.");
+    }
+    await ctx.db.patch(userId, { avatar });
+    return { avatar };
   },
 });
 

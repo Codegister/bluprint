@@ -8,6 +8,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { emailOtp } from "./auth/emailOtp";
+import { randomAvatarId } from "../lib/avatars";
 
 /**
  * The auth configuration also owns the two server-side protections that cannot
@@ -143,10 +144,12 @@ const authConfig = convexAuth({
       const userData: {
         name?: string;
         image?: string;
+        avatar?: string;
         email?: string;
         emailVerificationTime?: number;
         isAnonymous?: boolean;
       } = {};
+      userData.avatar = randomAvatarId();
       if (typeof profile.name === "string") userData.name = profile.name;
       if (typeof profile.image === "string") userData.image = profile.image;
       if (email) userData.email = email;

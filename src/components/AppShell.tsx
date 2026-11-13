@@ -1,6 +1,8 @@
 import { Brand } from "@/components/Brand";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { ProfilePictureDialog } from "@/components/ProfilePictureDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserAvatar } from "@/components/UserAvatar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,17 +25,21 @@ import { api } from "@/convex/_generated/api";
 import { AccountExportButton } from "@/components/study/ShareAndExport";
 import { useAuth } from "@/hooks/use-auth";
 import { notifyError } from "@/lib/errors";
-import { displayName, initialFor } from "@/lib/format";
+import { displayName } from "@/lib/format";
 import { guestKeepWorkHref } from "@/lib/authRedirect";
+import type { AvatarId } from "@/lib/avatars";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { motion, useScroll } from "framer-motion";
 import {
   CalendarDays,
+  Camera,
   FileText,
   GraduationCap,
   Loader2,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Sparkles,
   Target,
   Trash2,
@@ -134,7 +140,15 @@ function DeckRow({
   );
 }
 
-function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+function Sidebar({
+  onNavigate,
+  collapsed = false,
+  onToggleCollapsed,
+}: {
+  onNavigate?: () => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+}) {
   const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -148,7 +162,11 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const [nameOpen, setNameOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState(user?.name ?? "");
   const [savingName, setSavingName] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
   const updateDisplayName = useMutation(api.users.updateDisplayName);
+  const updateAvatar = useMutation(api.users.updateAvatar);
+  const avatarSeed = user?._id ?? user?.email ?? "guest";
 
   const decks = useMemo(
     () =>
@@ -179,6 +197,20 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     await performSignOut();
   };
 
+  const handleSaveAvatar = async (avatar: AvatarId) => {
+    if (savingAvatar) return;
+    setSavingAvatar(true);
+    try {
+      await updateAvatar({ avatar });
+      toast.success("Profile picture updated.");
+      setAvatarOpen(false);
+    } catch (error) {
+      notifyError(error, "Could not update your profile picture.");
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
+
   const performDelete = async () => {
     setDeleting(true);
     try {
@@ -200,11 +232,41 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="app-rail relative flex h-full flex-col overflow-hidden">
 
-      <div className="relative px-5 pb-5 pt-6">
-        <Brand to="/tutor" onNavigate={onNavigate} />
+      <div
+        className={cn(
+          "app-rail-header relative flex items-center justify-between border-b border-border pb-4 pt-5",
+          collapsed ? "gap-1 px-2" : "px-4",
+        )}
+      >
+        <Brand markOnly={collapsed} to="/tutor" onNavigate={onNavigate} />
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-controls="app-sidebar"
+            aria-expanded={!collapsed}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "app-rail-collapse grid shrink-0 place-items-center transition-colors",
+              collapsed ? "size-7" : "size-8",
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="size-4" aria-hidden />
+            ) : (
+              <PanelLeftClose className="size-4" aria-hidden />
+            )}
+          </button>
+        )}
       </div>
 
-      <nav className="app-rail-nav relative flex flex-col gap-1 px-3">
+      <nav
+        className={cn(
+          "app-rail-nav relative flex flex-col gap-1",
+          collapsed ? "px-2" : "px-3",
+        )}
+      >
         {navItems.map((item) => {
           // Everything reached from the tutor home — a saved set, a scoped
           // conversation — keeps the Home tab lit, because that is the
@@ -220,9 +282,14 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               key={item.label}
               to={item.to}
               aria-current={active ? "page" : undefined}
+              aria-label={collapsed ? item.label : undefined}
+              title={collapsed ? item.label : undefined}
               onClick={onNavigate}
               className={cn(
-                "app-rail-link relative flex items-center gap-2.5 rounded-[0.7rem] px-2.5 py-2.5 text-[0.95rem] font-medium transition-colors",
+                "app-rail-link relative flex items-center rounded-[0.7rem] font-medium transition-colors",
+                collapsed
+                  ? "justify-center px-0 py-2.5"
+                  : "gap-2.5 px-2.5 py-2.5 text-[0.95rem]",
                 active
                   ? `font-semibold ${item.active}`
                   : "text-brand-ink hover:bg-white/80",
@@ -232,7 +299,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   re-rendered by every page, and a projection-driven bar drifted
                   whenever the page underneath changed height (for example while
                   picking an exam board). */}
-              {active && (
+              {active && !collapsed && (
                 <span
                   aria-hidden
                   className="nav-active-bar absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand-sky"
@@ -246,13 +313,18 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <Icon className="size-[15px]" aria-hidden />
               </span>
-              {item.label}
+              {!collapsed && item.label}
             </Link>
           );
         })}
       </nav>
 
-      <div className="relative mt-5 flex items-center justify-between px-4 pb-2">
+      <div
+        className={cn(
+          "relative mt-5 items-center justify-between px-4 pb-2",
+          collapsed ? "hidden" : "flex",
+        )}
+      >
         <p className="rail-section-label px-1 text-[0.72rem] font-semibold text-muted-foreground">
           Your sets
         </p>
@@ -265,7 +337,12 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </Link>
       </div>
 
-      <div className="app-rail-scroll surface-scroll relative min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <div
+        className={cn(
+          "app-rail-scroll surface-scroll relative min-h-0 flex-1 overflow-y-auto px-2 pb-4",
+          collapsed && "hidden",
+        )}
+      >
         {sets === undefined ? (
           <div role="status" aria-busy="true" className="space-y-2 px-2 py-2">
             <span className="sr-only">Loading your study sets</span>
@@ -292,50 +369,88 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </div>
 
-      <div className="app-rail-account relative border-t border-border px-4 py-4">
-        <div className="flex items-center gap-2.5">
-          <span className="rail-avatar grid size-9 shrink-0 place-items-center rounded-[0.55rem] text-[0.85rem] font-bold">
-            {initialFor(user?.name, user?.email)}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[0.85rem] font-semibold text-brand-ink">
-              {displayName(user?.name, user?.email)}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setNameDraft(user?.name ?? "");
-                setNameOpen(true);
-              }}
-              className="text-[0.68rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
-            >
-              {user?.name ? "Edit name" : "Set a name"}
-            </button>
-            <p className="truncate text-[0.72rem] text-muted-foreground">
-              {user?.email ?? "Guest"}
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+      <div
+        className={cn(
+          "app-rail-account relative mt-auto border-t border-border",
+          collapsed ? "px-2 py-3" : "px-4 py-4",
+        )}
+      >
+        <div className={cn("flex items-center gap-2.5", collapsed && "justify-center")}>
           <button
             type="button"
-            onClick={handleSignOut}
-            className="text-[0.76rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+            onClick={() => setAvatarOpen(true)}
+            aria-label="Change profile picture"
+            title="Change profile picture"
+            className="profile-avatar-button relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           >
-            Sign out
+            <UserAvatar
+              avatar={user?.avatar}
+              seed={avatarSeed}
+              name={user?.name}
+              size="md"
+            />
+            <span className="profile-avatar-edit" aria-hidden>
+              <Camera className="size-2.5" strokeWidth={2.4} />
+            </span>
           </button>
-          {user && !user.isAnonymous && (
-            <button
-              type="button"
-              onClick={() => setDeleteOpen(true)}
-              className="text-[0.76rem] font-semibold text-[#A81F28] underline-offset-2 hover:underline"
-            >
-              Delete account
-            </button>
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[0.85rem] font-semibold text-brand-ink">
+                {displayName(user?.name, user?.email)}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setNameDraft(user?.name ?? "");
+                  setNameOpen(true);
+                }}
+                className="text-[0.68rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+              >
+                {user?.name ? "Edit name" : "Set a name"}
+              </button>
+              <p className="truncate text-[0.72rem] text-muted-foreground">
+                {user?.email ?? "Guest"}
+              </p>
+            </div>
           )}
         </div>
-        <ThemeToggle withLabel className="mt-3" />
+        {!collapsed ? (
+          <>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="text-[0.76rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+              >
+                Sign out
+              </button>
+              {user && !user.isAnonymous && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(true)}
+                  className="text-[0.76rem] font-semibold text-[#A81F28] underline-offset-2 hover:underline"
+                >
+                  Delete account
+                </button>
+              )}
+            </div>
+            <ThemeToggle className="mt-3" />
+          </>
+        ) : (
+          <div className="mt-3 flex justify-center">
+            <ThemeToggle />
+          </div>
+        )}
       </div>
+
+      <ProfilePictureDialog
+        open={avatarOpen}
+        onOpenChange={setAvatarOpen}
+        currentAvatar={user?.avatar}
+        seed={avatarSeed}
+        saving={savingAvatar}
+        onSave={(avatar) => void handleSaveAvatar(avatar)}
+      />
 
       <AlertDialog
         open={confirmingGuestSignOut}
@@ -509,6 +624,28 @@ export function AppShell({
   focus?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem("bluprint.sidebar.collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(
+          "bluprint.sidebar.collapsed",
+          next ? "1" : "0",
+        );
+      } catch {
+        // A private-mode storage failure must not break the navigation.
+      }
+      return next;
+    });
+  };
   // A single accent rule that fills as the page scrolls. It replaces the
   // decorative colour wash as the thing that makes a long screen feel alive.
   const { scrollYProgress } = useScroll();
@@ -534,8 +671,18 @@ export function AppShell({
         className="app-progress fixed inset-x-0 top-0 z-40 h-[2px] origin-left"
         style={{ scaleX: scrollYProgress }}
       />
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[264px] border-r border-border lg:block">
-        <Sidebar />
+      <aside
+        id="app-sidebar"
+        aria-label="Workspace navigation"
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 hidden border-r border-border transition-[width] duration-300 ease-out lg:block",
+          sidebarCollapsed ? "lg:w-[88px]" : "lg:w-[264px]",
+        )}
+      >
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={toggleSidebar}
+        />
       </aside>
 
       <header className="app-mobile-header sticky top-0 z-30 flex items-center justify-between border-b px-4 py-3 lg:hidden">
@@ -565,7 +712,12 @@ export function AppShell({
       {/* One mount for the offline copy and its queue, on every screen. */}
       <OfflineBanner />
 
-      <main className="app-main relative lg:pl-[264px]">
+      <main
+        className={cn(
+          "app-main relative transition-[padding] duration-300 ease-out",
+          sidebarCollapsed ? "lg:pl-[88px]" : "lg:pl-[264px]",
+        )}
+      >
         {/* The shell is the stage; the work sits on the desk. */}
         <div className="app-content relative mx-auto w-full max-w-[1180px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
           <GuestNotice />
