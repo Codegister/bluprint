@@ -31,7 +31,7 @@ html:not(.dark) :is(
   [class~="bg-[#2A2D3E]"],
   [class~="bg-[#32333b]"]
 ) {
-  background-color: var(--stage) !important;
+  background-color: var(--signal) !important;
 }
 
 html:not(.dark) :is(
@@ -39,30 +39,30 @@ html:not(.dark) :is(
   [class~="hover:bg-[#32333b]"]:hover,
   [class~="hover:bg-[#1c2331]"]:hover
 ) {
-  background-color: var(--stage-raised) !important;
+  background-color: var(--signal-deep) !important;
 }
 
 html:not(.dark) [class~="bg-[#191B27]/30"] {
-  background-color: color-mix(in srgb, var(--stage) 30%, transparent) !important;
+  background-color: color-mix(in srgb, var(--signal) 30%, transparent) !important;
 }
 
 html:not(.dark) [class~="bg-[#191B27]/25"] {
-  background-color: color-mix(in srgb, var(--stage) 25%, transparent) !important;
+  background-color: color-mix(in srgb, var(--signal) 25%, transparent) !important;
 }
 
 html:not(.dark) [class~="disabled:bg-[#191B27]/30"]:disabled {
-  background-color: color-mix(in srgb, var(--stage) 30%, transparent) !important;
+  background-color: color-mix(in srgb, var(--signal) 30%, transparent) !important;
 }
 
 html:not(.dark) :is(
   [class~="border-[#191B27]"],
   [class~="border-[#4B3F2C]"]
 ) {
-  border-color: var(--stage) !important;
+  border-color: var(--signal) !important;
 }
 
 html:not(.dark) [class~="accent-[#191B27]"] {
-  accent-color: var(--stage);
+  accent-color: var(--signal);
 }
 
 /* 60% field and raised paper ------------------------------------------------ */

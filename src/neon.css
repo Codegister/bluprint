@@ -2586,3 +2586,213 @@ body {
     will-change: auto;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Daylight finish
+
+   The app no longer leaves any component on the night ground when the light
+   theme is active. The public landing and auth used to opt out and stay dark;
+   they now join the same 60/30/10 desk, with sage as the field, peach as the
+   raised paper and the secluded-orange signal carrying actions and speech.
+   Every rule here is scoped to html without .dark, so the matte identity of
+   the dark theme is untouched.
+   ------------------------------------------------------------------------- */
+
+html:not(.dark) {
+  background: var(--desk);
+}
+
+html:not(.dark) body {
+  background: var(--desk);
+}
+
+/* Public stage and auth become daylight pages instead of permanent night. */
+:root:not(.dark) :is(.stage-home, .auth-page) {
+  --stage: var(--desk);
+  --stage-raised: var(--desk-raised);
+  --stage-line: var(--desk-line);
+  --stage-ink: var(--desk-ink);
+  --stage-muted: var(--desk-muted);
+  --stage-danger: var(--danger-ink);
+  --signal: #865b42;
+  --signal-deep: #6a3f2a;
+  --signal-ink: #fff8f2;
+  --signal-wash: #f1d9cf;
+  --storm: #c5d6c9;
+  --storm-raised: #d8e4da;
+  --storm-line: #a8bdad;
+  --storm-ink: #203027;
+  --storm-muted: #506458;
+  --bold-field: #22352a;
+  --bold-field-ink: #f8f3eb;
+  --bold-field-muted: #b6c8ba;
+  --focus: #865b42;
+  color-scheme: light;
+}
+
+/* Auth: sage field, peach sheet, one brown spine and one brown action. */
+:root:not(.dark) .auth-main {
+  border-left-color: var(--signal) !important;
+}
+
+:root:not(.dark) .auth-card {
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
+  box-shadow: 0 30px 80px -58px var(--shadow-strong) !important;
+}
+
+:root:not(.dark) .auth-card :is(h2, label, .text-brand-ink) {
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) .auth-card p {
+  color: var(--desk-muted) !important;
+}
+
+:root:not(.dark) .auth-input,
+:root:not(.dark) .auth-card [data-slot="input-otp-slot"] {
+  border-color: var(--desk-line) !important;
+  background: var(--desk) !important;
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) .auth-card .bg-brand-panel {
+  border-color: var(--desk-line) !important;
+  background: var(--signal-wash) !important;
+}
+
+:root:not(.dark) .auth-card button:not(.auth-submit) {
+  color: var(--desk-ink) !important;
+}
+
+/* Shells and the set/quiz band were still painted with --stage directly. */
+:root:not(.dark) :is(.stage-shell, .focus-shell, .focus-shell .focus-main, .set-screen, .set-stage) {
+  background-color: var(--desk) !important;
+}
+
+/* Today: calibration is an editorial aside, not a black panel. */
+:root:not(.dark) :is(#root, #preview-root) .today-calibration {
+  border: 1px solid var(--desk-line) !important;
+  background: var(--storm-raised) !important;
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .today-calibration .mono-label {
+  color: var(--signal-deep) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .today-calibration p {
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .today-calibration p:last-child {
+  color: var(--desk-muted) !important;
+}
+
+/* Timetable: a caught-up notice is a warm status, not a dark slab. */
+:root:not(.dark) :is(#root, #preview-root) .timetable-missed {
+  border-color: var(--warning-line) !important;
+  background: var(--warning-wash) !important;
+  color: var(--warning-ink) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .timetable-missed :is(p, span, svg) {
+  color: var(--warning-ink) !important;
+}
+
+/* Course: the next topic is a peach card with the signal on its action. */
+:root:not(.dark) :is(#root, #preview-root) .course-screen .course-next {
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
+  box-shadow: none !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .course-screen .course-next h2 {
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .course-screen .course-next > div > p:first-child {
+  color: var(--signal-deep) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .course-screen .course-next > div > p:last-child {
+  color: var(--desk-muted) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .course-screen .course-next button {
+  border-color: var(--signal) !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+/* Papers: cover and empty-desk callout both sit on daylight paper. */
+:root:not(.dark) :is(#root, #preview-root) :is(.papers-cover, .course-library-cover) {
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
+  box-shadow: none !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) :is(.papers-cover, .course-library-cover) .page-title {
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) :is(.papers-cover, .course-library-cover) .page-description {
+  color: var(--desk-muted) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) :is(.papers-cover, .course-library-cover) .page-kicker {
+  color: var(--signal-deep) !important;
+}
+
+:root:not(.dark) :is(#root, #preview-root) .papers-screen .surface-card.text-muted-foreground {
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
+}
+
+/* Set and quiz top bar: sage structure, dark ink, brown menu controls. */
+:root:not(.dark) .set-stage-bar {
+  border-bottom: 1px solid var(--desk-line) !important;
+  background: var(--storm-raised) !important;
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) .set-stage-bar .brand,
+:root:not(.dark) :is(#root, #preview-root) .set-stage-bar .brand-word {
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) .set-stage-bar .brand-period {
+  color: var(--signal) !important;
+}
+
+:root:not(.dark) .set-stage-bar .set-back {
+  color: var(--desk-muted) !important;
+}
+
+:root:not(.dark) .set-stage-bar .set-back:hover {
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) .set-stage-bar .set-menu-trigger {
+  border-color: var(--desk-line) !important;
+  background: var(--desk) !important;
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) .set-menu-panel {
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+}
+
+:root:not(.dark) .set-menu-panel button {
+  color: var(--desk-ink) !important;
+}
+
+:root:not(.dark) .set-menu-panel button:hover {
+  background: var(--desk) !important;
+}
+
