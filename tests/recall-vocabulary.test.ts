@@ -3,8 +3,10 @@ import { describe, expect, test } from "bun:test";
 import {
   gradeShortAnswer,
   gradeVocabularyAnswer,
+  gradeVocabularyRecall,
   isLanguageCourse,
   isShortAnswer,
+  vocabularyAnswerCandidates,
 } from "../src/convex/lib/recall";
 
 describe("language vocabulary marking", () => {
@@ -41,5 +43,20 @@ describe("language vocabulary marking", () => {
 
   test("the existing short-answer grader refuses a wholly different term", () => {
     expect(gradeShortAnswer("la casa", [], "el perro").correct).toBe(false);
+  });
+
+  test("extracts the target term from a sentence-length vocabulary card", () => {
+    const front =
+      "What is the Spanish word for 'my' when referring to a masculine singular noun?";
+    const back =
+      "The Spanish word for 'my' with a masculine singular noun is 'mi'. It does not change for gender or number, only the possessed noun does. Example: 'mi hermano' (my brother).";
+    expect(vocabularyAnswerCandidates(front, back)).toContain("mi");
+    expect(vocabularyAnswerCandidates(front, back)).not.toContain("my");
+    expect(vocabularyAnswerCandidates(front, back)).not.toContain("mi hermano");
+    expect(gradeVocabularyRecall(front, back, "mi")).toMatchObject({
+      correct: true,
+      score: 1,
+    });
+    expect(gradeVocabularyRecall(front, back, "my").correct).toBe(false);
   });
 });

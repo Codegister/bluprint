@@ -5,7 +5,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/convex/_generated/api";
 import { useAiAvailability } from "@/lib/useAiAvailability";
 import type { Doc } from "@/convex/_generated/dataModel";
-import { gradeRecall, normalizeAnswer } from "@/convex/lib/recall";
+import {
+  gradeRecall,
+  gradeVocabularyRecall,
+  normalizeAnswer,
+} from "@/convex/lib/recall";
 import { useDictation } from "@/hooks/use-dictation";
 import { notifyError, readableError } from "@/lib/errors";
 import { isConnectionFailure, queueReview } from "@/lib/offlineCache";
@@ -202,6 +206,19 @@ export function FlashcardReview({
 
     const card = current;
     const answer = typed;
+    // Vocabulary backs can be full sentences ("The Spanish word ... is 'mi'").
+    // Extract and check the quoted term before falling back to concept units.
+    const vocabulary = gradeVocabularyRecall(card.front, card.back, answer);
+    if (vocabulary.correct) {
+      setGrade({
+        correct: true,
+        score: 1,
+        note: "Matched the card answer.",
+        coveredUnits: vocabulary.coveredUnits ?? [],
+        missedUnits: [],
+      });
+      return;
+    }
     const local = gradeRecall(card.back, answer, {
       threshold: card.recallThreshold ?? 0.75,
       units: card.recallUnits,

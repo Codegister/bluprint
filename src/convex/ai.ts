@@ -39,9 +39,11 @@ import { filterGuideToNotes } from "./lib/noteSupport";
 import {
   gradeRecall,
   gradeVocabularyAnswer,
+  gradeVocabularyRecall,
   isLanguageCourse,
   isShortAnswer,
   normalizeAnswer,
+  vocabularyAnswerCandidates,
 } from "./lib/recall";
 import {
   isNearDuplicateStudyItem,
@@ -5472,18 +5474,42 @@ export const gradeRecallAnswer = action({
     }
 
     const { card, set } = data;
-    if (isLanguageCourse(set.course) && isShortAnswer(card.back)) {
-      const local = gradeVocabularyAnswer(card.back, response);
-      return {
-        correct: local.correct,
-        score: local.score,
-        note: local.correct
-          ? "You matched the card."
-          : `You said “${response.slice(0, 80)}”. The card says “${card.back}”. A different word is a different fact.`,
-        coveredUnits: local.correct ? [card.back] : [],
-        missedUnits: local.correct ? [] : [card.back],
-        method: "exact",
-      };
+    if (isLanguageCourse(set.course)) {
+      // A vocabulary back may be a sentence such as "The Spanish word for
+      // 'my' is 'mi'." Extract the target term before grading; otherwise the
+      // student's one-word answer is measured against every word in the
+      // explanation and always reports 0 key units.
+      const candidates = vocabularyAnswerCandidates(card.front, card.back);
+      const local = gradeVocabularyRecall(card.front, card.back, response);
+      if (candidates.length > 0 || isShortAnswer(card.back)) {
+        const answer =
+          local.coveredUnits?.[0] ??
+          candidates[0] ??
+          (local.correct ? card.back : "the card answer");
+        return {
+          correct: local.correct,
+          score: local.score,
+          note: local.correct
+            ? "You matched the card."
+            : `You said “${response.slice(0, 80)}”. The card says “${answer}”. A different word is a different fact.`,
+          coveredUnits: local.correct ? [answer] : [],
+          missedUnits: local.correct ? [] : [answer],
+          method: local.method ?? "exact",
+        };
+      }
+      if (isShortAnswer(card.back)) {
+        const fallback = gradeVocabularyAnswer(card.back, response);
+        return {
+          correct: fallback.correct,
+          score: fallback.score,
+          note: fallback.correct
+            ? "You matched the card."
+            : `You said “${response.slice(0, 80)}”. The card says “${card.back}”. A different word is a different fact.`,
+          coveredUnits: fallback.correct ? [card.back] : [],
+          missedUnits: fallback.correct ? [] : [card.back],
+          method: "exact",
+        };
+      }
     }
 
     // One measure in every path: the share of the model answer's concept units

@@ -398,6 +398,79 @@ export function gradeVocabularyAnswer(
   return gradeShortAnswer(wanted || expected, [], offered || response);
 }
 
+/**
+ * Pulls the answer term out of a language card whose back is a sentence rather
+ * than a bare word. Vocabulary cards often say "The Spanish word for 'my' is
+ * 'mi'."; the student should be marked against "mi", not against every word in
+ * that sentence. Quoted terms are preferred, with a short unquoted phrase after
+ * "is"/"means" as a fallback.
+ */
+export function vocabularyAnswerCandidates(
+  front: string,
+  back: string,
+): string[] {
+  const frontWords = new Set(normalizeAnswer(front).split(" "));
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (raw: string) => {
+    const clean = raw.replace(/\s+/g, " ").trim().replace(/^[.,;:]+|[.,;:]+$/g, "");
+    const normalized = normalizeAnswer(clean);
+    const words = contentWords(clean);
+    if (
+      !normalized ||
+      words.length === 0 ||
+      words.length > 6 ||
+      frontWords.has(normalized) ||
+      seen.has(normalized)
+    ) {
+      return;
+    }
+    seen.add(normalized);
+    candidates.push(clean);
+  };
+
+  // Grade the answer in the card's opening sentence. Later sentences are
+  // often examples ("mi hermano"), and accepting those as the answer would let
+  // a longer example substitute for the actual vocabulary item.
+  const source = back.split(/[.!?;]/)[0]?.trim() || back;
+  for (const match of source.matchAll(/['"“”‘’`]([^'"“”‘’`]{1,80})['"“”‘’`]/g)) {
+    add(match[1] ?? "");
+  }
+
+  for (const match of source.matchAll(
+    /\b(?:is|means|translates as|translation is)\s+(?:the\s+)?([^.!?;]{1,60})/gi,
+  )) {
+    const phrase = (match[1] ?? "").split(/[,(]/)[0] ?? "";
+    add(phrase.replace(/^['"“”‘’`]+|['"“”‘’`]+$/g, ""));
+  }
+
+  return candidates;
+}
+
+/** Marks a language card against the term extracted from its answer. */
+export function gradeVocabularyRecall(
+  front: string,
+  back: string,
+  response: string,
+): ShortAnswerGrade {
+  const candidates = vocabularyAnswerCandidates(front, back);
+  let best: ShortAnswerGrade = { correct: false, score: 0, method: "none" };
+  for (const candidate of candidates) {
+    const grade = gradeVocabularyAnswer(candidate, response);
+    if (grade.correct) {
+      return {
+        ...grade,
+        coveredUnits: [candidate],
+        missedUnits: [],
+        method: "exact",
+      };
+    }
+    if (grade.score > best.score) best = grade;
+  }
+  return best;
+}
+
 /** The concept units a card answer requires, de-duplicated and stemmed. */
 export function deriveRecallUnits(answer: string): string[] {
   const seen = new Set<string>();
