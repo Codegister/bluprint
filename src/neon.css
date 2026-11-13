@@ -18,46 +18,51 @@
   --stage-muted: #a6aeb4;
   --stage-danger: #ff8a5b;
 
-  /* Field: the reading and working desk. */
-  --desk: #e5e8ea;
-  --desk-raised: #f3f5f6;
-  --desk-line: #c3c9cd;
-  --desk-ink: #171a1c;
-  --desk-muted: #596268;
+  /* Daylight 60 / 30 / 10, after YesColours' warmer-twist reel:
+     https://www.instagram.com/yes.colours/reel/DdrT-0OOBnG/
+     The paint swatches sample near #a0d5b9, #ead6d0 and #865b42. They are
+     softened here so the 60% field stays readable at screen scale: 60%
+     Calming Green desk, 30% Serene Peach surfaces and rail, 10% Secluded
+     Orange for actions and focus. */
+  --desk: #e3ede5;
+  --desk-raised: #f3e0da;
+  --desk-line: #bfcec1;
+  --desk-ink: #1d2b24;
+  --desk-muted: #57675c;
 
-  /* Storm is the primary; safety orange is the one accent. */
-  --signal: #ff5a1f;
-  --signal-deep: #9e3500;
-  --signal-ink: #120704;
-  --signal-wash: #ffe1d2;
+  --signal: #865b42;
+  --signal-deep: #6a3f2a;
+  --signal-ink: #fff8f2;
+  --signal-wash: #f1d9cf;
   --olive: var(--signal);
   --olive-deep: var(--signal-deep);
   --olive-ink: var(--signal-ink);
 
-  --storm: #d5dade;
-  --storm-raised: #e2e6e8;
-  --storm-line: #aeb7bc;
-  --storm-ink: #171b1e;
-  --storm-muted: #525c63;
+  --storm: #c5d6c9;
+  --storm-raised: #d8e4da;
+  --storm-line: #a8bdad;
+  --storm-ink: #203027;
+  --storm-muted: #506458;
 
-  --mark-paper: #f4f6f7;
-  --mark-ink: #15191b;
-  --mark-muted: #5b656b;
+  --mark-paper: #fff8f4;
+  --mark-ink: #1d2b24;
+  --mark-muted: #5a6b60;
 
-  /* Structural bands. */
-  --bold-field: #0b0c0d;
-  --bold-field-ink: #e9ecee;
-  --bold-field-muted: #a6aeb4;
+  /* Structural bands: a deep shade of the dominant green keeps dark bands
+     inside the daylight palette instead of introducing a separate black. */
+  --bold-field: #22352a;
+  --bold-field-ink: #f8f3eb;
+  --bold-field-muted: #b6c8ba;
 
   --paper: var(--desk);
-  --paper-deep: #d8dde0;
+  --paper-deep: #ead4cc;
   --surface: var(--desk-raised);
-  --surface-strong: #ffffff;
+  --surface-strong: #fff9f5;
   --ink: var(--desk-ink);
-  --ink-soft: #2f363b;
+  --ink-soft: #33443a;
   --ink-muted: var(--desk-muted);
   --line: var(--desk-line);
-  --line-strong: #7c868c;
+  --line-strong: #9a8b80;
   --accent: var(--signal);
   --accent-deep: var(--signal-deep);
   --accent-wash: var(--signal-wash);
@@ -66,20 +71,20 @@
   --button-bg: var(--signal);
   --button-ink: var(--signal-ink);
 
-  --success: #3a4247;
-  --success-ink: #2a3034;
-  --success-wash: #e8ecef;
-  --success-line: #b9c2c8;
-  --danger-ink: #a33b0b;
-  --danger-wash: #ffe8dc;
-  --danger-line: #efb79d;
-  --warning-ink: #8a4a1e;
-  --warning-wash: #fff1e8;
-  --warning-line: #e8c1ac;
-  --focus: #ff5a1f;
-  --coral: #a33b0b;
-  --shadow: rgba(11, 12, 13, 0.12);
-  --shadow-strong: rgba(11, 12, 13, 0.22);
+  --success: #47624f;
+  --success-ink: #324a3a;
+  --success-wash: #e3eee4;
+  --success-line: #b4c9b8;
+  --danger-ink: #8e3b2a;
+  --danger-wash: #f6ddd5;
+  --danger-line: #d8a99b;
+  --warning-ink: #7a5420;
+  --warning-wash: #f6e6cc;
+  --warning-line: #dcc39d;
+  --focus: #865b42;
+  --coral: #8e3b2a;
+  --shadow: rgba(46, 35, 28, 0.14);
+  --shadow-strong: rgba(46, 35, 28, 0.24);
 
   --background: var(--desk);
   --foreground: var(--desk-ink);
@@ -94,14 +99,14 @@
   --muted: var(--paper-deep);
   --muted-foreground: var(--desk-muted);
   --accent-foreground: var(--desk-ink);
-  --destructive: #c2410c;
+  --destructive: #a8462d;
   --border: var(--desk-line);
   --input: var(--desk-line);
   --ring: var(--signal);
   --chart-1: var(--signal-deep);
-  --chart-2: #4e585f;
-  --chart-3: #ff8a5b;
-  --chart-4: #8a4a1e;
+  --chart-2: #47624f;
+  --chart-3: #a8bdad;
+  --chart-4: #7a5420;
   --chart-5: var(--desk-ink);
   --sidebar: var(--desk-raised);
   --sidebar-foreground: var(--desk-ink);
@@ -152,12 +157,14 @@
   --font-serif: "Fraunces", "Iowan Old Style", Georgia, serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
   --radius-desk: 10px;
-  --elevation: 0 18px 45px -30px rgba(11, 12, 13, 0.45);
+  --elevation: 0 18px 45px -30px rgba(46, 35, 28, 0.34);
 
   color-scheme: light;
 }
 
 .dark {
+  /* Dark 60 / 30 / 10: 60% matte stage, 30% raised storm structure, 10%
+     safety-orange signal. */
   --stage: #08090a;
   --stage-raised: #15181a;
   --stage-line: #31383d;
@@ -502,6 +509,26 @@ body {
 }
 
 /* Home ------------------------------------------------------------------- */
+
+/* The public stage is deliberately dark in both themes. Pin its accents and
+   structural storm tokens to the night palette so the softer daylight
+   terracotta never drops onto a black hero with poor contrast. */
+.stage-home,
+.auth-page {
+  --signal: #ff5a1f;
+  --signal-deep: #ffb08a;
+  --signal-ink: #120704;
+  --signal-wash: #3a1b0c;
+  --storm: #3d454b;
+  --storm-raised: #4a535a;
+  --storm-line: #657077;
+  --storm-ink: #f0f2f3;
+  --storm-muted: #c0c8cd;
+  --bold-field: #0b0d0e;
+  --bold-field-ink: #eceef0;
+  --bold-field-muted: #a3abb1;
+  --focus: #ff5a1f;
+}
 
 .stage-home {
   background:
