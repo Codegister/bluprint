@@ -358,8 +358,8 @@ body {
 :is(#root, #preview-root) :is(
   button[class~="bg-[#191B27]"],
   a[class~="bg-[#191B27]"],
-  button[class~="bg-primary"],
-  a[class~="bg-primary"],
+  button[class~="bg-primary"]:not([class~="bg-destructive"]),
+  a[class~="bg-primary"]:not([class~="bg-destructive"]),
   .stage-button,
   .set-start,
   .auth-submit
@@ -385,6 +385,80 @@ body {
   background: color-mix(in srgb, var(--signal) 86%, white) !important;
   color: var(--signal-ink) !important;
   transform: translateY(-1px);
+}
+
+/* Dialogs and popovers are portaled to <body>, outside the app root. The dark
+   palette maps their legacy `bg-[#191B27]` to a near-black surface, while the
+   Button foreground stays near-black too. Keep those primary controls on the
+   same signal surface as the ones inside the app shell. */
+:is(
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="popover-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"]
+) :is(
+  button[class~="bg-[#191B27]"],
+  a[class~="bg-[#191B27]"],
+  button[class~="bg-primary"]:not([class~="bg-destructive"]),
+  a[class~="bg-primary"]:not([class~="bg-destructive"]),
+  .stage-button,
+  .set-start,
+  .auth-submit
+):not(:disabled) {
+  border: 1px solid var(--signal) !important;
+  border-radius: 999px !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--signal) 18%, transparent),
+    0 12px 32px -18px color-mix(in srgb, var(--signal) 65%, transparent) !important;
+  font-weight: 700 !important;
+}
+
+:is(
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="popover-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"]
+) :is(
+  button[class~="bg-[#191B27]"]:hover,
+  a[class~="bg-[#191B27]"]:hover,
+  .stage-button:hover,
+  .set-start:hover,
+  .auth-submit:hover
+):not(:disabled) {
+  border-color: var(--signal) !important;
+  background: color-mix(in srgb, var(--signal) 86%, white) !important;
+  color: var(--signal-ink) !important;
+  transform: translateY(-1px);
+}
+
+/* Disabled primary actions in a portal cannot inherit the dark palette's
+   near-black surface with primary ink. Keep a muted signal surface and use the
+   regular desk ink so the label stays legible while the opacity still reads as
+   unavailable. */
+:is(
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="popover-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="select-content"]
+) :is(
+  button[class~="bg-[#191B27]"]:disabled,
+  button[class~="bg-primary"]:not([class~="bg-destructive"]):disabled,
+  .stage-button:disabled,
+  .set-start:disabled,
+  .auth-submit:disabled
+) {
+  border-color: color-mix(in srgb, var(--signal) 38%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 16%, var(--desk-raised)) !important;
+  color: var(--desk-ink) !important;
+  box-shadow: none !important;
 }
 
 :is(#root, #preview-root) :is(.stage-button, .set-start, .auth-submit) {
@@ -3654,6 +3728,193 @@ html:not(.dark) body {
 /* The facts strip continues the cover's glass band rather than switching back
    to opaque paper immediately below it. */
 :is(#root, #preview-root) .stage-shell .app-main .course-screen .course-facts {
+  border-color: var(--glass-line) !important;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, white 12%, transparent) 0%,
+      color-mix(in srgb, white 3%, transparent) 30%,
+      transparent 52%
+    ),
+    linear-gradient(
+      152deg,
+      color-mix(in srgb, var(--signal) 5%, color-mix(in srgb, var(--desk-raised) 50%, transparent)) 0%,
+      color-mix(in srgb, var(--desk-raised) 42%, transparent) 60%,
+      color-mix(in srgb, var(--desk-raised) 36%, transparent) 100%
+    ) !important;
+  -webkit-backdrop-filter: blur(1px) saturate(1.08);
+  backdrop-filter: blur(1px) saturate(1.08);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    var(--glass-shadow) !important;
+}
+
+/* Landing lava ------------------------------------------------------------
+   The public stage gets a slow molten field rather than a static glow. Four
+   blurred colour blooms drift, rotate and change position at different rates
+   behind the page grid; the hero keeps a translucent veil so the copy stays
+   readable while the heat moves underneath it.
+   ------------------------------------------------------------------------- */
+
+.stage-home {
+  --lava-hot: #ff5a1f;
+  --lava-mid: #c92a00;
+  --lava-deep: #701407;
+  --lava-amber: #ffb347;
+  background:
+    radial-gradient(52% 48% at 78% 8%, color-mix(in srgb, var(--lava-mid) 18%, transparent), transparent 68%),
+    radial-gradient(42% 38% at 14% 76%, color-mix(in srgb, var(--lava-hot) 10%, transparent), transparent 72%),
+    var(--stage);
+}
+
+.stage-home::before {
+  z-index: 1;
+}
+
+.stage-home > * {
+  z-index: 2;
+}
+
+.stage-home::after {
+  content: "";
+  position: fixed;
+  inset: -18%;
+  z-index: 0;
+  background:
+    radial-gradient(38% 44% at 18% 30%, color-mix(in srgb, var(--lava-hot) 76%, transparent), transparent 68%),
+    radial-gradient(34% 50% at 78% 58%, color-mix(in srgb, var(--lava-mid) 84%, transparent), transparent 70%),
+    radial-gradient(52% 46% at 54% 102%, color-mix(in srgb, var(--lava-deep) 92%, transparent), transparent 72%),
+    radial-gradient(26% 30% at 86% 16%, color-mix(in srgb, var(--lava-amber) 68%, transparent), transparent 70%);
+  background-size: 120% 125%, 115% 130%, 140% 130%, 100% 115%;
+  background-position: 0% 0%, 100% 100%, 50% 120%, 80% 0%;
+  filter: blur(22px) saturate(1.35);
+  animation: lava-flow 22s ease-in-out infinite;
+  animation-delay: -8s;
+  opacity: 0.88;
+  pointer-events: none;
+  will-change: transform, background-position;
+}
+
+.home-hero::before {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--stage) 90%, transparent) 0%,
+      color-mix(in srgb, var(--stage) 72%, transparent) 42%,
+      color-mix(in srgb, var(--stage) 34%, transparent) 78%,
+      transparent 100%
+    ),
+    linear-gradient(180deg, color-mix(in srgb, var(--stage) 48%, transparent), transparent 30%);
+}
+
+.home-hero::after {
+  z-index: -2;
+  background:
+    radial-gradient(32% 28% at 28% 64%, color-mix(in srgb, var(--lava-hot) 76%, transparent), transparent 70%),
+    radial-gradient(24% 24% at 70% 28%, color-mix(in srgb, var(--lava-amber) 58%, transparent), transparent 72%),
+    radial-gradient(48% 38% at 56% 112%, color-mix(in srgb, var(--lava-mid) 75%, transparent), transparent 72%);
+  filter: blur(16px) saturate(1.3);
+  animation: lava-hero 16s ease-in-out infinite;
+  animation-delay: -5s;
+  opacity: 0.9;
+}
+
+@keyframes lava-flow {
+  0%,
+  100% {
+    transform: translate3d(-4%, -2%, 0) rotate(-2deg) scale(1.08);
+    background-position: 0% 0%, 100% 100%, 50% 120%, 80% 0%;
+  }
+
+  33% {
+    transform: translate3d(3%, 4%, 0) rotate(2deg) scale(1.15);
+    background-position: 16% 12%, 84% 80%, 40% 92%, 64% 18%;
+  }
+
+  66% {
+    transform: translate3d(5%, -3%, 0) rotate(-1deg) scale(1.1);
+    background-position: 28% 6%, 70% 92%, 62% 108%, 92% 12%;
+  }
+}
+
+@keyframes lava-hero {
+  0%,
+  100% {
+    transform: translateX(-50%) translate3d(-3%, 2%, 0) scale(1.06) rotate(-2deg);
+  }
+
+  50% {
+    transform: translateX(-50%) translate3d(3%, -4%, 0) scale(1.16) rotate(2deg);
+  }
+}
+
+:root:not(.dark) .stage-home {
+  --lava-hot: #df6a3f;
+  --lava-mid: #bf4b2c;
+  --lava-deep: #963a26;
+  --lava-amber: #e8aa5f;
+}
+
+:root:not(.dark) .stage-home::after {
+  filter: blur(26px) saturate(1.2);
+  opacity: 0.46;
+}
+
+:root:not(.dark) .home-hero::after {
+  filter: blur(18px) saturate(1.15);
+  opacity: 0.52;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-home::after,
+  .home-hero::after {
+    animation: none !important;
+    will-change: auto;
+  }
+}
+
+/* Selection and pressed states ------------------------------------------- */
+
+/* Toggles and segmented controls already carry their own selected fill; the
+   ring makes the state visible at a glance without replacing that meaning. */
+:is(#root, #preview-root) :is(button, [role="button"], [role="option"])[aria-pressed="true"],
+:is(#root, #preview-root) [aria-selected="true"],
+:is(#root, #preview-root) [aria-checked="true"],
+:is(#root, #preview-root) [data-state="on"],
+:is(#root, #preview-root) [data-state="checked"] {
+  outline: 2px solid color-mix(in srgb, var(--signal) 78%, transparent);
+  outline-offset: 2px;
+}
+
+/* The first-run subject list previously left a selected course on the same
+   white surface as an untouched row. Give the whole row the signal tint so
+   the check mark is not the only cue. */
+:is(#root, #preview-root) .app-main .setup-subject-row[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--signal) 10%, var(--desk-raised)) 0%,
+      color-mix(in srgb, var(--signal) 5%, var(--desk-raised)) 100%
+    ) !important;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--signal) 15%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 26%, transparent) !important;
+}
+
+:is(#root, #preview-root) .app-main .setup-subject-row[aria-pressed="true"]:hover {
+  border-color: color-mix(in srgb, var(--signal) 68%, var(--desk-line)) !important;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--signal) 14%, var(--desk-raised)) 0%,
+      color-mix(in srgb, var(--signal) 8%, var(--desk-raised)) 100%
+    ) !important;
+}
+
+/* The past-paper summary bar uses the same tint as the course facts strip, so
+   both detail pages keep the grid visible through their stats. */
+:is(#root, #preview-root) .stage-shell .app-main .past-paper-screen .past-paper-facts {
   border-color: var(--glass-line) !important;
   background:
     linear-gradient(

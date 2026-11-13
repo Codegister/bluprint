@@ -636,7 +636,7 @@ export default function Course() {
                       if (menu instanceof HTMLDetailsElement) menu.open = false;
                       openTutor();
                     }}
-                    className="block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-cream hover:bg-brand-panel"
+                    className="block w-full rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel"
                   >
                     Ask the tutor
                   </button>
@@ -648,7 +648,7 @@ export default function Course() {
                       if (menu instanceof HTMLDetailsElement) menu.open = false;
                       void handleRetry();
                     }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-cream hover:bg-brand-panel disabled:opacity-40"
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[0.82rem] font-medium text-brand-ink hover:bg-brand-panel disabled:opacity-40"
                   >
                     <RotateCcw
                       className={cn("size-3.5", retrying && "animate-spin")}

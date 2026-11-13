@@ -1173,6 +1173,16 @@
   color: var(--olive-ink) !important;
 }
 
+/* The specification list is reference material, so it starts folded and keeps
+   its covered count visible in the header. */
+.set-spec-points > summary .set-spec-chevron {
+  transition: transform 160ms ease;
+}
+
+.set-spec-points[open] > summary .set-spec-chevron {
+  transform: rotate(180deg);
+}
+
 .set-screen .set-desk [class*="bg-[#191B27]"] {
   background: var(--olive-deep) !important;
   color: #fffdf9 !important;

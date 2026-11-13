@@ -144,7 +144,7 @@ export default function Landing() {
                   aria-describedby="home-notes-hint"
                 />
                 <button type="submit" className="stage-button" disabled={tooShort}>
-                  Build a set
+                  Log in
                   <ArrowRight size={18} strokeWidth={1.8} aria-hidden />
                 </button>
               </div>

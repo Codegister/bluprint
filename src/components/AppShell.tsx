@@ -478,7 +478,7 @@ function Sidebar({
                   `/auth?link=1&returnTo=${encodeURIComponent(location.pathname)}`,
                 );
               }}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-brand-sky px-4 text-[0.82rem] font-semibold text-white hover:bg-brand-sky/90"
+              className="inline-flex h-10 items-center justify-center rounded-full bg-brand-sky px-4 text-[0.82rem] font-semibold text-[var(--signal-ink)] hover:bg-brand-sky/90"
             >
               Add an email to keep them
             </button>
@@ -535,7 +535,7 @@ function Sidebar({
               <button
                 type="submit"
                 disabled={savingName}
-                className="inline-flex h-10 items-center justify-center rounded-full bg-brand-sky px-4 text-[0.82rem] font-semibold text-white disabled:opacity-60"
+                className="inline-flex h-10 items-center justify-center rounded-full bg-brand-sky px-4 text-[0.82rem] font-semibold text-[var(--signal-ink)] disabled:opacity-60"
               >
                 {savingName ? "Saving…" : "Save name"}
               </button>

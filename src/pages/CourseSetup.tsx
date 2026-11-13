@@ -274,7 +274,7 @@ function SubjectRow({
       whileTap={unavailable ? undefined : { scale: 0.995 }}
       transition={SPRING}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
+        "setup-subject-row flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors",
         unavailable && "cursor-not-allowed opacity-45",
         active
           ? "border-chrome-6/50 bg-white shadow-[0_8px_20px_-18px_rgba(22,24,31,0.6)]"

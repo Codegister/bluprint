@@ -44,7 +44,7 @@ function CourseRow({ course }: { course: CourseSummary }) {
               {course.subject}
             </h3>
             {course.isNew && (
-              <span className="rounded-full bg-chrome-7 px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-[0.04em] text-white">
+              <span className="rounded-full bg-chrome-7 px-2 py-0.5 text-[0.58rem] font-bold uppercase tracking-[0.04em] text-[var(--signal-ink)]">
                 New
               </span>
             )}

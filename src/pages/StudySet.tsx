@@ -30,6 +30,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   CircleDashed,
   Layers3,
   Loader2,
@@ -552,49 +553,56 @@ function OverviewView({
   const coveredIds = new Set(data.coverage.covered.map((point) => point.id));
 
   return (
-    <section className="rounded-[2rem] border border-border bg-card p-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-display text-[1.05rem] font-bold text-brand-ink">
-          Specification points
-        </h2>
-        <span className="rounded-full bg-brand-panel px-2.5 py-0.5 text-[0.7rem] font-bold tabular-nums text-brand-ink/70">
-          {coveredIds.size} of {data.points.length} covered
+    <details className="set-spec-points rounded-[2rem] border border-border bg-card">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-6 transition-colors hover:bg-brand-panel/40 [&::-webkit-details-marker]:hidden">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+          <span className="font-display text-[1.05rem] font-bold text-brand-ink">
+            Specification points
+          </span>
+          <span className="rounded-full bg-brand-panel px-2.5 py-0.5 text-[0.7rem] font-bold tabular-nums text-brand-ink/70">
+            {coveredIds.size} of {data.points.length} covered
+          </span>
         </span>
+        <ChevronDown
+          className="set-spec-chevron size-4 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+      </summary>
+      <div className="border-t border-border px-6 pb-6 pt-4">
+        <p className="text-[0.78rem] leading-relaxed text-muted-foreground">
+          The statements this set was built from. Ticked points already have cards
+          or questions behind them.
+        </p>
+        <ol className="mt-4 space-y-2">
+          {data.points.map((point) => {
+            const isCovered = coveredIds.has(point.id);
+            return (
+              <li
+                key={point.id}
+                className={cn(
+                  "flex items-start gap-2.5 rounded-xl px-3 py-2 text-[0.86rem] leading-relaxed",
+                  isCovered
+                    ? "bg-[#F3FBF7] text-brand-ink/85"
+                    : "bg-brand-panel/60 text-muted-foreground",
+                )}
+              >
+                {isCovered ? (
+                  <CheckCircle2
+                    className="mt-0.5 size-4 shrink-0 text-[#0B6B45]"
+                    aria-hidden
+                  />
+                ) : (
+                  <CircleDashed className="mt-0.5 size-4 shrink-0" aria-hidden />
+                )}
+                <span>{point.text}</span>
+                <span className="sr-only">
+                  {isCovered ? "Covered" : "Not covered"}
+                </span>
+              </li>
+            );
+          })}        </ol>
       </div>
-      <p className="mt-1 text-[0.78rem] leading-relaxed text-muted-foreground">
-        The statements this set was built from. Ticked points already have cards
-        or questions behind them.
-      </p>
-      <ol className="mt-4 space-y-2">
-        {data.points.map((point) => {
-          const isCovered = coveredIds.has(point.id);
-          return (
-            <li
-              key={point.id}
-              className={cn(
-                "flex items-start gap-2.5 rounded-xl px-3 py-2 text-[0.86rem] leading-relaxed",
-                isCovered
-                  ? "bg-[#F3FBF7] text-brand-ink/85"
-                  : "bg-brand-panel/60 text-muted-foreground",
-              )}
-            >
-              {isCovered ? (
-                <CheckCircle2
-                  className="mt-0.5 size-4 shrink-0 text-[#0B6B45]"
-                  aria-hidden
-                />
-              ) : (
-                <CircleDashed className="mt-0.5 size-4 shrink-0" aria-hidden />
-              )}
-              <span>{point.text}</span>
-              <span className="sr-only">
-                {isCovered ? "Covered" : "Not covered"}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </section>
+    </details>
   );
 }
 
