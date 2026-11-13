@@ -1,9 +1,9 @@
 /* ---------------------------------------------------------------------------
    Stage 3: Today, Timetable and Auth
 
-   The queue and the planner open with a stage cover and put the day's work on
-   the desk. Auth is the one split surface: the invitation stays on the stage
-   and the form is the first sheet of paper.
+   The queue and the planner open with a cover and put the day's work on the
+   desk. Both follow the page's light/dark mode. Auth is the one split surface:
+   the invitation stays on the stage and the form is the first sheet of paper.
    ------------------------------------------------------------------------- */
 
 /* The shared cover for the signed-in queue and planner. */
@@ -86,13 +86,14 @@
   text-underline-offset: 0.18em;
 }
 
-/* One rectangular olive action on the cover. */
+/* One rectangular signal action on the cover. At 13px the bright signal with
+   white ink is only 4.0:1, so the action uses the deep signal instead. */
 .today-screen .page-actions > :is(a, button),
 .timetable-screen .page-actions > :is(a, button) {
   min-height: 44px;
   border: 0 !important;
   border-radius: 2px !important;
-  background: var(--olive) !important;
+  background: var(--olive-deep) !important;
   color: var(--olive-ink) !important;
   box-shadow: none !important;
   font-size: 13px !important;
@@ -101,7 +102,7 @@
 
 .today-screen .page-actions > :is(a, button):hover,
 .timetable-screen .page-actions > :is(a, button):hover {
-  background: color-mix(in srgb, var(--olive) 84%, var(--stage-ink)) !important;
+  background: color-mix(in srgb, var(--olive-deep) 88%, var(--desk-ink)) !important;
 }
 
 /* Today's length picker belongs to the cover, not the desk. */
@@ -124,7 +125,7 @@
 }
 
 .today-screen .page-actions > [role="group"] button[aria-pressed="true"] {
-  background: var(--olive) !important;
+  background: var(--olive-deep) !important;
   color: var(--olive-ink) !important;
 }
 
@@ -134,7 +135,7 @@
 }
 
 .today-screen .page-actions > [role="group"] button[aria-pressed="true"]:hover {
-  background: var(--olive) !important;
+  background: var(--olive-deep) !important;
   color: var(--olive-ink) !important;
 }
 
@@ -463,8 +464,8 @@
 }
 
 .timetable-day[aria-pressed="true"] {
-  border-color: var(--olive) !important;
-  background: var(--olive) !important;
+  border-color: var(--olive-deep) !important;
+  background: var(--olive-deep) !important;
   color: var(--olive-ink) !important;
 }
 
@@ -473,7 +474,7 @@
 }
 
 .timetable-day[aria-pressed="true"] span {
-  color: color-mix(in srgb, var(--olive-ink) 76%, transparent) !important;
+  color: var(--olive-ink) !important;
 }
 
 .timetable-day .font-display {
@@ -1011,20 +1012,21 @@
   box-shadow: none !important;
 }
 
+/* The form's one action carries the 10% signal, not a second navy panel. */
 .auth-submit {
   min-height: 48px !important;
   height: 48px !important;
   border: 0 !important;
   border-radius: 6px !important;
-  background: var(--bold-field) !important;
-  color: var(--bold-field-ink) !important;
+  background: var(--signal-deep) !important;
+  color: var(--signal-ink) !important;
   box-shadow: none !important;
   font-size: 14px !important;
   font-weight: 700 !important;
 }
 
 .auth-submit:hover {
-  background: color-mix(in srgb, var(--bold-field) 84%, var(--stage-ink)) !important;
+  background: color-mix(in srgb, var(--signal-deep) 88%, var(--desk-ink)) !important;
   box-shadow: none !important;
   transform: none !important;
 }
@@ -1353,8 +1355,8 @@
   }
 }
 
-/* Timetable setup is a desk workflow, not a day cover. It follows the page's
-   light/dark mode; the timetable itself keeps its stage cover. */
+/* Timetable setup is a desk workflow, not a day cover. All three follow the
+   page's light/dark mode. */
 .timetable-setup-screen .page-masthead {
   border: 1px solid var(--desk-line) !important;
   background: var(--desk-raised) !important;
@@ -1378,4 +1380,32 @@
 
 .timetable-setup-screen .page-kicker-dot {
   background: currentColor !important;
+}
+
+/* Today and Timetable are cover + ledger, and both follow the page mode. The
+   attached progress strip and day picker get their own desk mapping so they do
+   not stay as dark footers under a light cover. */
+.today-screen .page-masthead,
+.timetable-screen .page-masthead {
+  --stage: var(--desk-raised);
+  --stage-raised: var(--desk-raised);
+  --stage-line: var(--desk-line);
+  --stage-ink: var(--desk-ink);
+  --stage-muted: var(--desk-muted);
+}
+
+.today-screen .page-kicker,
+.timetable-screen .page-kicker,
+.today-screen .page-masthead p a,
+.timetable-screen .page-masthead p a {
+  color: var(--signal-deep) !important;
+}
+
+.today-progress,
+.timetable-days {
+  --stage: var(--desk);
+  --stage-raised: var(--desk-raised);
+  --stage-line: var(--desk-line);
+  --stage-ink: var(--desk-ink);
+  --stage-muted: var(--desk-muted);
 }

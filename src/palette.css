@@ -321,3 +321,21 @@ html:not(.dark) :is(
 .dark [class~="accent-[#191B27]"] {
   accent-color: var(--signal);
 }
+
+/* The course library action is the page's one signal in both modes. The
+   legacy navy utility otherwise made it structural only in light mode. */
+.course-library-cover .page-actions > :is(a, button) {
+  background: var(--signal-deep) !important;
+  color: var(--signal-ink) !important;
+}
+
+/* A disabled set action still has to read as a control. The generic 30% stage
+   wash plus white text turned the quiz's Check answer button near-invisible in
+   light mode; paper-deep and muted ink keep it clear in both modes. */
+:is(#root, #preview-root) .set-screen .set-desk button:disabled {
+  border: 0 !important;
+  background: var(--paper-deep) !important;
+  color: var(--desk-muted) !important;
+  box-shadow: inset 0 0 0 1px var(--desk-line) !important;
+  opacity: 1 !important;
+}

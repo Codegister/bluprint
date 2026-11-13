@@ -6,14 +6,14 @@
 (function () {
   try {
     var stored = window.localStorage.getItem("bluprint.theme");
-    var dark =
-      stored === "dark" ||
-      (stored !== "light" &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
+    // The product is dark-first. Light remains an explicit, stored choice.
+    var dark = stored !== "light";
     document.documentElement.classList.toggle("dark", dark);
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
   } catch (error) {
-    /* Storage can be blocked; the light sheet is the safe default. */
+    /* Storage can be blocked; the dark stage is the safe default. */
+    document.documentElement.classList.add("dark");
+    document.documentElement.style.colorScheme = "dark";
   }
 
   /*

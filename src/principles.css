@@ -344,17 +344,17 @@ h4 {
 }
 
 
-/* The set stage bar is ink on a dark ground; the cover is desk ink on paper. */
+/* Covers use the page mode's ink; the brand keeps the one signal period. */
 :is(#root, #preview-root) .set-stage-bar .brand-word {
-  color: var(--stage-ink) !important;
+  color: var(--bold-field-ink) !important;
 }
 
 :is(#root, #preview-root) .set-stage-bar .brand-period {
   color: var(--olive) !important;
 }
 
-:is(#root, #preview-root) .course-cover :is(h1, p, a),
-:is(#root, #preview-root) .past-paper-cover :is(h1, p, a) {
+:is(#root, #preview-root) .course-cover h1,
+:is(#root, #preview-root) .past-paper-cover h1 {
   color: var(--desk-ink) !important;
 }
 
@@ -843,27 +843,30 @@ html.depth-fallback .set-screen {
   color: var(--bold-field-ink) !important;
 }
 
-/* Past paper: the cover is the student's name for the task, not the paper. */
+/* Past paper: the cover follows the page mode and keeps the one signal action. */
 :is(#root, #preview-root) .past-paper-screen .past-paper-cover {
-  border-color: var(--bold-field) !important;
-  background: var(--bold-field) !important;
-  color: var(--bold-field-ink) !important;
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
 }
 
-:is(#root, #preview-root) .past-paper-screen .past-paper-cover :is(h1, p, a) {
-  color: var(--bold-field-ink) !important;
+:is(#root, #preview-root) .past-paper-screen .past-paper-cover h1 {
+  color: var(--desk-ink) !important;
 }
 
-:is(#root, #preview-root) .past-paper-screen .past-paper-cover > a:first-child,
+:is(#root, #preview-root) .past-paper-screen .past-paper-cover > a:first-child {
+  color: var(--desk-muted) !important;
+}
+
 :is(#root, #preview-root) .past-paper-screen .past-paper-cover > div > p:first-of-type {
-  color: var(--bold-field-muted) !important;
+  color: var(--signal-deep) !important;
 }
 
 :is(#root, #preview-root) .past-paper-screen .past-paper-cover button,
 :is(#root, #preview-root) .past-paper-screen .past-paper-cover .stage-button {
-  border-color: var(--desk-raised) !important;
-  background: var(--desk-raised) !important;
-  color: var(--desk-ink) !important;
+  border-color: var(--signal-deep) !important;
+  background: var(--signal-deep) !important;
+  color: var(--signal-ink) !important;
 }
 
 /* Papers: the empty desk gets the same bold note, not another grey card. */
@@ -875,15 +878,15 @@ html.depth-fallback .set-screen {
 
 /* Quiz: the facts strip is the fixed point the question reads against. */
 :is(#root, #preview-root) .set-screen[data-section="quiz"] .set-facts {
-  border-color: var(--bold-field) !important;
-  background: var(--bold-field) !important;
-  color: var(--bold-field-ink) !important;
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  color: var(--desk-ink) !important;
 }
 
 :is(#root, #preview-root) .set-screen[data-section="quiz"] .set-facts :is(dt, dd, span, p) {
-  color: var(--bold-field-ink) !important;
+  color: var(--desk-ink) !important;
 }
 
 :is(#root, #preview-root) .set-screen[data-section="quiz"] .set-facts dt {
-  color: var(--bold-field-muted) !important;
+  color: var(--desk-muted) !important;
 }

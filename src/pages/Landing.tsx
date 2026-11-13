@@ -38,6 +38,7 @@ export default function Landing() {
   const [notes, setNotes] = useState(readHomeDraft);
   const [guestBusy, setGuestBusy] = useState(false);
   const [guestError, setGuestError] = useState("");
+  const [demoRevealed, setDemoRevealed] = useState(false);
 
   const heroRef = useRef<HTMLElement | null>(null);
   const reducedMotion = useReducedMotion();
@@ -173,7 +174,8 @@ export default function Landing() {
           <motion.div
             className="home-paper-field"
             style={reducedMotion ? undefined : { y: paperY }}
-            aria-hidden="true"
+            role="group"
+            aria-label="A preview of a study set"
           >
             <div className="home-paper home-paper-spec">
               <div className="home-paper-spec-meta">
@@ -204,9 +206,23 @@ export default function Landing() {
                 <span>Cell structure</span>
               </div>
               <p className="home-flash-question">Why does the inner membrane fold?</p>
-              <p className="home-flash-answer">
+              <p
+                id="home-demo-answer"
+                className="home-flash-answer"
+                data-revealed={demoRevealed}
+                aria-hidden={!demoRevealed}
+              >
                 Cristae increase the surface area for ATP production.
               </p>
+              <button
+                type="button"
+                className="home-flash-reveal"
+                aria-expanded={demoRevealed}
+                aria-controls="home-demo-answer"
+                onClick={() => setDemoRevealed((revealed) => !revealed)}
+              >
+                {demoRevealed ? "Hide answer" : "Reveal answer"}
+              </button>
               <div className="home-paper-flash-foot">
                 <span>Marked against the scheme</span>
                 <strong>2 / 2</strong>

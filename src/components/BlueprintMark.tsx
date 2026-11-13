@@ -105,7 +105,7 @@ export function BlueprintGlyph({
         <path d="M32 44h24M44 32v24M184 196h24M196 184v24" />
       </g>
 
-      <g fill="#8b9aa8" fontFamily="JetBrains Mono, monospace" fontSize="7">
+      <g fill="#8b9aa8" fontFamily="IBM Plex Mono, monospace" fontSize="7">
         <text x="27" y="76">A1</text>
         <text x="196" y="76">B1</text>
         <text x="196" y="228">B4</text>

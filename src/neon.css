@@ -1,0 +1,2367 @@
+/* ---------------------------------------------------------------------------
+   Storm / matte / safety — final visual layer.
+
+   Matte black is the ground, storm grey carries the structure, and safety
+   orange is the only loud colour. It appears on primary actions, focus and
+   the few places that need attention, never as a decorative wash. This file
+   loads after every screen stylesheet, so it can re-point the old Blueprint
+   tokens once and keep the whole app in one visual language instead of patching
+   each screen separately.
+   ------------------------------------------------------------------------- */
+
+:root {
+  /* Structure: matte black is the stage; daylight only changes the desk. */
+  --stage: #0b0c0d;
+  --stage-raised: #17191b;
+  --stage-line: #30363a;
+  --stage-ink: #e9ecee;
+  --stage-muted: #a6aeb4;
+  --stage-danger: #ff8a5b;
+
+  /* Field: the reading and working desk. */
+  --desk: #e5e8ea;
+  --desk-raised: #f3f5f6;
+  --desk-line: #c3c9cd;
+  --desk-ink: #171a1c;
+  --desk-muted: #596268;
+
+  /* Storm is the primary; safety orange is the one accent. */
+  --signal: #ff5a1f;
+  --signal-deep: #9e3500;
+  --signal-ink: #120704;
+  --signal-wash: #ffe1d2;
+  --olive: var(--signal);
+  --olive-deep: var(--signal-deep);
+  --olive-ink: var(--signal-ink);
+
+  --storm: #d5dade;
+  --storm-raised: #e2e6e8;
+  --storm-line: #aeb7bc;
+  --storm-ink: #171b1e;
+  --storm-muted: #525c63;
+
+  --mark-paper: #f4f6f7;
+  --mark-ink: #15191b;
+  --mark-muted: #5b656b;
+
+  /* Structural bands. */
+  --bold-field: #0b0c0d;
+  --bold-field-ink: #e9ecee;
+  --bold-field-muted: #a6aeb4;
+
+  --paper: var(--desk);
+  --paper-deep: #d8dde0;
+  --surface: var(--desk-raised);
+  --surface-strong: #ffffff;
+  --ink: var(--desk-ink);
+  --ink-soft: #2f363b;
+  --ink-muted: var(--desk-muted);
+  --line: var(--desk-line);
+  --line-strong: #7c868c;
+  --accent: var(--signal);
+  --accent-deep: var(--signal-deep);
+  --accent-wash: var(--signal-wash);
+  --highlighter: var(--signal);
+  --highlighter-soft: var(--signal-wash);
+  --button-bg: var(--signal);
+  --button-ink: var(--signal-ink);
+
+  --success: #3a4247;
+  --success-ink: #2a3034;
+  --success-wash: #e8ecef;
+  --success-line: #b9c2c8;
+  --danger-ink: #a33b0b;
+  --danger-wash: #ffe8dc;
+  --danger-line: #efb79d;
+  --warning-ink: #8a4a1e;
+  --warning-wash: #fff1e8;
+  --warning-line: #e8c1ac;
+  --focus: #ff5a1f;
+  --coral: #a33b0b;
+  --shadow: rgba(11, 12, 13, 0.12);
+  --shadow-strong: rgba(11, 12, 13, 0.22);
+
+  --background: var(--desk);
+  --foreground: var(--desk-ink);
+  --card: var(--desk-raised);
+  --card-foreground: var(--desk-ink);
+  --popover: var(--desk-raised);
+  --popover-foreground: var(--desk-ink);
+  --primary: var(--signal);
+  --primary-foreground: var(--signal-ink);
+  --secondary: var(--paper-deep);
+  --secondary-foreground: var(--desk-ink);
+  --muted: var(--paper-deep);
+  --muted-foreground: var(--desk-muted);
+  --accent-foreground: var(--desk-ink);
+  --destructive: #c2410c;
+  --border: var(--desk-line);
+  --input: var(--desk-line);
+  --ring: var(--signal);
+  --chart-1: var(--signal-deep);
+  --chart-2: #4e585f;
+  --chart-3: #ff8a5b;
+  --chart-4: #8a4a1e;
+  --chart-5: var(--desk-ink);
+  --sidebar: var(--stage);
+  --sidebar-foreground: var(--stage-ink);
+  --sidebar-primary: var(--signal);
+  --sidebar-primary-foreground: var(--signal-ink);
+  --sidebar-accent: var(--stage-raised);
+  --sidebar-accent-foreground: var(--stage-ink);
+  --sidebar-border: var(--stage-line);
+  --sidebar-ring: var(--signal);
+
+  --brand-panel: var(--paper-deep);
+  --brand-ink: var(--desk-ink);
+  --brand-sky: var(--signal-deep);
+  --brand-pink: var(--signal-deep);
+  --brand-mint: var(--signal-deep);
+  --brand-violet: var(--signal-deep);
+  --brand-peach: var(--signal-deep);
+  --brand-teal: var(--signal-deep);
+  --brand-butter: var(--signal-deep);
+  --brand-blush: var(--signal-deep);
+  --brand-lime: var(--signal-deep);
+  --brand-void: var(--stage);
+  --brand-cream: var(--desk);
+
+  --surface-lime: var(--signal-wash);
+  --surface-lilac: var(--paper-deep);
+  --surface-sky: var(--paper-deep);
+  --surface-peach: var(--paper-deep);
+  --surface-mint: var(--signal-wash);
+  --surface-cream: var(--desk);
+
+  --chrome-0: var(--desk-raised);
+  --chrome-1: var(--desk);
+  --chrome-2: var(--paper-deep);
+  --chrome-3: var(--desk-line);
+  --chrome-4: var(--line-strong);
+  --chrome-5: var(--desk-muted);
+  --chrome-6: var(--ink-soft);
+  --chrome-7: var(--desk-muted);
+  --chrome-8: var(--desk-ink);
+  --chrome-hi: var(--desk-raised);
+  --chrome-steel: var(--line-strong);
+  --chrome-line: var(--desk-line);
+  --chrome-edge: var(--desk-line);
+
+  --font-display: "Space Grotesk", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --radius-desk: 10px;
+  --elevation: 0 18px 45px -30px rgba(11, 12, 13, 0.45);
+
+  color-scheme: light;
+}
+
+.dark {
+  --stage: #08090a;
+  --stage-raised: #15181a;
+  --stage-line: #31383d;
+  --stage-ink: #eceef0;
+  --stage-muted: #a3abb1;
+  --stage-danger: #ff8a5b;
+
+  --desk: #0c0e0f;
+  --desk-raised: #1b1f22;
+  --desk-line: #353d43;
+  --desk-ink: #eceef0;
+  --desk-muted: #a0a9af;
+
+  --signal: #ff5a1f;
+  --signal-deep: #ffb08a;
+  --signal-ink: #120704;
+  --signal-wash: #3a1b0c;
+
+  --storm: #3d454b;
+  --storm-raised: #4a535a;
+  --storm-line: #657077;
+  --storm-ink: #f0f2f3;
+  --storm-muted: #c0c8cd;
+
+  --mark-paper: #e3e7e9;
+  --mark-ink: #14181a;
+  --mark-muted: #59646b;
+
+  --bold-field: #0b0d0e;
+  --bold-field-ink: #eceef0;
+  --bold-field-muted: #a3abb1;
+
+  --paper-deep: #252b30;
+  --surface-strong: #2c3338;
+  --ink-soft: #cdd3d7;
+  --line-strong: #79848b;
+
+  --success: #c7ced3;
+  --success-ink: #dde2e5;
+  --success-wash: #23292d;
+  --success-line: #4f5a61;
+  --danger-ink: #ff8a5b;
+  --danger-wash: #31160c;
+  --danger-line: #7a3b20;
+  --warning-ink: #ffb184;
+  --warning-wash: #2d1a10;
+  --warning-line: #6b3b24;
+  --focus: #ff5a1f;
+  --coral: #ff8a5b;
+  --shadow: rgba(0, 0, 0, 0.52);
+  --shadow-strong: rgba(0, 0, 0, 0.82);
+
+  --info-wash: #1d2327;
+  --destructive: #ff7a3d;
+  --ring: var(--signal);
+  --elevation: 0 24px 70px -40px rgba(0, 0, 0, 0.95);
+
+  color-scheme: dark;
+}
+
+/* Base ------------------------------------------------------------------- */
+
+html {
+  background: var(--stage);
+  scrollbar-color: var(--desk-line) var(--stage);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--stage);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid var(--stage);
+  border-radius: 999px;
+  background: var(--desk-line);
+}
+
+body {
+  background-color: var(--desk);
+  background-image:
+    radial-gradient(58% 34% at 100% 0%, color-mix(in srgb, var(--signal) 5%, transparent), transparent 72%),
+    radial-gradient(46% 40% at 0% 100%, color-mix(in srgb, var(--storm) 28%, transparent), transparent 76%),
+    linear-gradient(color-mix(in srgb, var(--desk-line) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--desk-line) 16%, transparent) 1px, transparent 1px);
+  background-size: auto, auto, 56px 56px, 56px 56px;
+  color: var(--desk-ink);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+:is(h1, h2, h3, h4, .font-display, .page-title, .home-title, .set-section-title, .set-title-text) {
+  font-family: var(--font-display) !important;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+:is(#root, #preview-root) .font-display {
+  font-family: var(--font-display) !important;
+}
+
+:is(.mono-label, .page-kicker, .set-kicker, .set-eyebrow, .home-kicker) {
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+}
+
+/* Focus is an instrument light, not a soft halo. */
+:is(#root, #preview-root) :is(a, button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--signal) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+/* Cards ------------------------------------------------------------------ */
+
+:is(#root, #preview-root) :is(.surface-card, .chrome-plate) {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: var(--radius-desk) !important;
+  background:
+    linear-gradient(155deg, color-mix(in srgb, var(--signal) 3%, var(--desk-raised)) 0%, var(--desk-raised) 44%, var(--desk-raised) 100%) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
+    0 24px 70px -48px var(--shadow-strong) !important;
+  color: var(--desk-ink);
+}
+
+.dark :is(#root, #preview-root) :is(.surface-card, .chrome-plate) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 28px 80px -52px #000 !important;
+}
+
+/* Inputs ----------------------------------------------------------------- */
+
+:is(#root, #preview-root) :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([data-input-otp]),
+  textarea,
+  select
+) {
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--desk-raised) 88%, var(--desk) 12%) !important;
+  color: var(--desk-ink) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent) !important;
+}
+
+/* The OTP field is a transparent input laid over six visible slots. Keep the
+   generic field treatment off it, or it paints a single box over the slots. */
+:is(#root, #preview-root) .auth-card input[data-input-otp] {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+:is(#root, #preview-root) :is(textarea, input):focus {
+  border-color: color-mix(in srgb, var(--signal) 70%, var(--desk-line)) !important;
+}
+
+:is(#root, #preview-root) :is(textarea, input)::placeholder {
+  color: color-mix(in srgb, var(--desk-muted) 86%, transparent) !important;
+}
+
+/* Keep the hero's note field on the matte stage in both themes. */
+:is(#root, #preview-root) .stage-home .home-build textarea {
+  background: color-mix(in srgb, var(--stage) 65%, transparent) !important;
+  color: var(--stage-ink) !important;
+}
+
+:is(#root, #preview-root) .stage-home .home-build textarea::placeholder {
+  color: color-mix(in srgb, var(--stage-muted) 86%, transparent) !important;
+}
+
+/* Primary actions: one safety-orange key, never a second accent. */
+:is(#root, #preview-root) :is(
+  button[class~="bg-[#191B27]"],
+  a[class~="bg-[#191B27]"],
+  button[class~="bg-primary"],
+  a[class~="bg-primary"],
+  .stage-button,
+  .set-start,
+  .auth-submit
+):not(:disabled) {
+  border: 1px solid var(--signal) !important;
+  border-radius: 999px !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--signal) 18%, transparent),
+    0 12px 32px -18px color-mix(in srgb, var(--signal) 65%, transparent) !important;
+  font-weight: 700 !important;
+}
+
+:is(#root, #preview-root) :is(
+  button[class~="bg-[#191B27]"]:hover,
+  a[class~="bg-[#191B27]"]:hover,
+  .stage-button:hover,
+  .set-start:hover,
+  .auth-submit:hover
+):not(:disabled) {
+  border-color: var(--signal) !important;
+  background: color-mix(in srgb, var(--signal) 86%, white) !important;
+  color: var(--signal-ink) !important;
+  transform: translateY(-1px);
+}
+
+:is(#root, #preview-root) :is(.stage-button, .set-start, .auth-submit) {
+  border-radius: 999px !important;
+}
+
+/* Secondary controls are glass, not white paper. */
+:is(#root, #preview-root) :is(button, a, label)[class*="bg-white"] {
+  border-color: var(--desk-line) !important;
+  background: color-mix(in srgb, var(--desk-raised) 76%, transparent) !important;
+  color: var(--desk-ink) !important;
+  box-shadow: none !important;
+}
+
+:is(#root, #preview-root) :is(button, a, label)[class*="bg-white"]:hover {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 9%, var(--desk-raised)) !important;
+}
+
+:is(#root, #preview-root) :is(button, a):disabled {
+  cursor: not-allowed;
+}
+
+/* The previous palette made disabled set actions paper-grey. Keep that
+   legibility, but match the dark glass controls. */
+:is(#root, #preview-root) .set-screen .set-desk button:disabled {
+  border: 1px solid var(--desk-line) !important;
+  background: color-mix(in srgb, var(--desk-raised) 55%, var(--desk)) !important;
+  color: var(--desk-muted) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+/* Dark-mode literal utility classes -------------------------------------- */
+
+.dark :is(#root, #preview-root) :is(
+  [class~="bg-white"],
+  [class~="bg-[#FCFCFD]"],
+  [class~="bg-[#FCFCFA]"],
+  [class~="bg-[#FCFBF8]"],
+  [class~="bg-[#FAFAF7]"],
+  [class~="bg-[#F7F5EF]"],
+  [class~="bg-[#FCFAF4]"],
+  [class~="bg-[#FFFCF4]"],
+  [class~="bg-[#FFFDF9]"],
+  [class~="bg-[#F4F4F7]"],
+  [class~="bg-[#E7E7EF]"],
+  [class~="bg-[#E7E7EE]"],
+  [class~="bg-[#EDE9DF]"],
+  [class~="bg-[#EFEAE0]"]
+) {
+  background-color: var(--desk-raised) !important;
+}
+
+.dark :is(#root, #preview-root) :is(
+  [class~="bg-[#FFEEF0]"],
+  [class~="bg-[#FFF1F3]"],
+  [class~="bg-[#FFF7F8]"],
+  [class~="bg-[#FFF7F9]"],
+  [class~="bg-[#FFE3E6]"],
+  [class~="bg-[#FDE8ED]"],
+  [class~="bg-[#FBDDE0]"],
+  [class~="bg-[#f7dfe2]"],
+  [class~="bg-[#FFF6F7]"]
+) {
+  background-color: var(--danger-wash) !important;
+}
+
+.dark :is(#root, #preview-root) :is(
+  [class~="bg-[#E9FBF3]"],
+  [class~="bg-[#F3FBF7]"],
+  [class~="bg-[#F0FBF5]"],
+  [class~="bg-[#DDF7EB]"]
+) {
+  background-color: var(--success-wash) !important;
+}
+
+.dark :is(#root, #preview-root) :is(
+  [class~="bg-[#FFF6E5]"],
+  [class~="bg-[#FFF7E6]"],
+  [class~="bg-[#FFF7E8]"],
+  [class~="bg-[#FFF1D8]"],
+  [class~="bg-[#FFF1DE]"],
+  [class~="bg-[#FFF0DC]"],
+  [class~="bg-[#FFF3E8]"],
+  [class~="bg-[#FFF9EC]"],
+  [class~="bg-[#FFFBF2]"]
+) {
+  background-color: var(--warning-wash) !important;
+}
+
+/* Functional text in dark mode keeps the bright status ink, never the
+   light-mode dark ink on a dark wash. */
+.dark :is(#root, #preview-root) :is(
+  [class~="text-[#0B6B45]"],
+  [class~="text-[#0F7A50]"],
+  [class~="text-[#176B52]"]
+) {
+  color: var(--success-ink) !important;
+}
+
+/* Solid success marks are storm grey in the dark; white symbols stay legible. */
+.dark :is(#root, #preview-root) [class*="bg-[#0B6B45]"] {
+  background-color: var(--storm) !important;
+}
+
+.dark :is(#root, #preview-root) :is(
+  [class~="text-[#A81F28]"],
+  [class~="text-[#B42318]"],
+  [class~="text-[#D24350]"]
+) {
+  color: var(--danger-ink) !important;
+}
+
+.dark :is(#root, #preview-root) :is(
+  [class~="text-[#7A4B06]"],
+  [class~="text-[#96650A]"],
+  [class~="text-[#A66A0A]"],
+  [class~="text-[#C2660F]"]
+) {
+  color: var(--warning-ink) !important;
+}
+
+/* Home ------------------------------------------------------------------- */
+
+.stage-home {
+  background:
+    radial-gradient(70% 48% at 86% 2%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 62%),
+    radial-gradient(48% 40% at 6% 65%, color-mix(in srgb, #44e5b0 7%, transparent), transparent 70%),
+    var(--stage);
+  color: var(--stage-ink);
+  font-size: 17px;
+}
+
+.stage-home::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block !important;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--signal) 3.5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--signal) 3.5%, transparent) 1px, transparent 1px);
+  background-size: 72px 72px;
+  content: "";
+  mask-image: radial-gradient(80% 70% at 52% 28%, #000 0%, transparent 85%);
+  pointer-events: none;
+}
+
+.stage-home > * {
+  position: relative;
+  z-index: 1;
+}
+
+.home-wrap {
+  width: min(1260px, 100%);
+  padding-inline: clamp(20px, 4vw, 44px);
+}
+
+.home-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid color-mix(in srgb, var(--signal) 16%, var(--stage-line));
+  background: color-mix(in srgb, var(--stage) 78%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.home-header-inner {
+  height: 68px;
+}
+
+.home-brand {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.045em;
+}
+
+.home-brand span {
+  color: var(--signal);
+}
+
+.home-header .brand-word,
+.home-brand {
+  color: var(--stage-ink);
+}
+
+.home-nav a,
+.home-signin {
+  color: var(--stage-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.home-nav a:hover,
+.home-signin:hover {
+  color: var(--signal);
+}
+
+.home-signin {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  border: 1px solid var(--stage-line);
+  border-radius: 999px;
+  padding-inline: 16px;
+  background: color-mix(in srgb, var(--stage-raised) 64%, transparent);
+  color: var(--stage-ink);
+  text-decoration: none;
+}
+
+.home-signin:hover {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--stage-line));
+  color: var(--signal);
+}
+
+.home-hero {
+  min-height: min(800px, calc(100svh - 69px));
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(38px, 6vw, 92px);
+  padding-block: clamp(52px, 8vh, 96px) clamp(64px, 9vh, 112px);
+}
+
+.home-hero::before {
+  background: var(--stage);
+}
+
+/* A slow desk-lamp glow and storm haze. The layer only moves on the
+   compositor; the text sits above it and never moves. */
+.home-hero::after {
+  content: "";
+  position: absolute;
+  inset-block: -12%;
+  left: 50%;
+  z-index: -1;
+  width: 100vw;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(32% 42% at 25% 37%, color-mix(in srgb, var(--signal) 8%, transparent), transparent 70%),
+    radial-gradient(38% 46% at 79% 66%, color-mix(in srgb, var(--storm) 54%, transparent), transparent 74%),
+    linear-gradient(112deg, transparent 34%, color-mix(in srgb, var(--signal) 7%, transparent) 49%, transparent 64%);
+  animation: hero-ambient 42s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.home-hero-copy {
+  max-width: 38rem;
+}
+
+.home-kicker {
+  gap: 10px;
+  color: var(--signal);
+  font-size: 10px !important;
+  line-height: 1.4;
+}
+
+.home-kicker::before {
+  width: 26px;
+  background: var(--signal);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--signal) 60%, transparent);
+}
+
+.home-title {
+  max-width: 12.5ch;
+  margin-top: 22px;
+  color: var(--stage-ink);
+  font-size: clamp(3rem, 5.1vw, 4.9rem);
+  font-weight: 700;
+  letter-spacing: -0.065em;
+  line-height: 0.95;
+  text-wrap: balance;
+}
+
+.home-lede {
+  max-width: 44ch;
+  margin-top: 22px;
+  color: color-mix(in srgb, var(--stage-muted) 92%, white);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.home-build {
+  max-width: 34rem;
+  margin-top: 34px;
+  border: 1px solid color-mix(in srgb, var(--signal) 14%, var(--stage-line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--stage-raised) 62%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 26px 70px -54px #000;
+  padding: 15px;
+  backdrop-filter: blur(14px);
+}
+
+.home-build-label {
+  margin-bottom: 9px;
+  color: var(--stage-muted);
+  font-family: var(--font-mono);
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.home-build-row {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.stage-home .home-build textarea {
+  min-height: 74px;
+  flex: 1;
+  resize: none;
+  border: 1px solid color-mix(in srgb, var(--stage-line) 82%, var(--signal)) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--stage) 65%, transparent) !important;
+  padding: 11px 13px !important;
+  color: var(--stage-ink) !important;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.stage-home .home-build .stage-button {
+  align-self: stretch;
+  min-height: 74px;
+  border-radius: 8px !important;
+  padding-inline: 20px;
+  white-space: nowrap;
+}
+
+.home-build-hint,
+.home-guest {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+}
+
+.home-build-hint {
+  margin-top: 9px !important;
+  color: color-mix(in srgb, var(--stage-muted) 76%, transparent) !important;
+}
+
+.home-guest {
+  color: var(--stage-muted) !important;
+}
+
+.home-guest:hover {
+  color: var(--signal) !important;
+}
+
+.home-error {
+  color: var(--stage-danger);
+}
+
+/* The hero's glass file stack. */
+.home-paper-field {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: 570px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  justify-self: end;
+  padding: 8px 0 0;
+}
+
+.home-paper-field::before {
+  position: absolute;
+  inset: -14% -10% -8%;
+  z-index: -1;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, color-mix(in srgb, var(--storm) 58%, transparent), transparent 76%),
+    radial-gradient(closest-side, color-mix(in srgb, var(--signal) 11%, transparent), transparent 78%);
+  content: "";
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.home-paper {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--signal) 12%, var(--stage-line));
+  border-radius: 10px;
+  background:
+    linear-gradient(150deg, color-mix(in srgb, var(--signal) 5%, var(--stage-raised)), var(--stage-raised) 58%);
+  color: var(--stage-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 30px 70px -48px #000;
+  backdrop-filter: blur(16px);
+}
+
+.home-paper-spec {
+  width: 76%;
+  align-self: flex-end;
+  order: 1;
+  transform: rotate(1.5deg);
+  border-color: var(--storm-line);
+  background: var(--storm);
+  color: var(--storm-ink);
+  padding: 18px 20px;
+  opacity: 1;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--storm-ink) 7%, transparent),
+    0 28px 64px -44px #000;
+}
+
+.home-paper-spec .home-paper-spec-meta {
+  color: var(--storm-muted);
+}
+
+.home-paper-spec .home-paper-spec-copy {
+  color: var(--storm-ink);
+}
+
+.home-paper-cover {
+  order: 2;
+  transform: rotate(-1deg);
+  border-top: 2px solid var(--signal);
+  padding: 24px 26px;
+}
+
+.home-paper-flash {
+  width: 88%;
+  align-self: flex-end;
+  order: 3;
+  transform: rotate(1deg);
+  padding: 20px 22px;
+}
+
+.home-paper-cover::before {
+  position: absolute;
+  top: -2px;
+  right: 22px;
+  width: 54px;
+  height: 2px;
+  background: var(--stage);
+  content: "";
+}
+
+.home-paper-spec-meta,
+.home-paper-meta {
+  gap: 12px;
+  color: var(--stage-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.home-paper-spec-copy {
+  margin-top: 18px;
+  color: color-mix(in srgb, var(--stage-ink) 80%, var(--stage-muted));
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.home-paper-cover-title {
+  max-width: 10ch;
+  margin-top: 24px;
+  color: var(--stage-ink);
+  font-size: clamp(1.9rem, 3.4vw, 2.8rem);
+  font-weight: 700;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.home-paper-facts {
+  margin-top: 16px;
+  color: var(--stage-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+.home-paper-cover-foot {
+  margin-top: 28px;
+  padding-top: 12px;
+  border-top: 1px solid var(--stage-line);
+  color: var(--stage-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.home-paper-cover-foot strong {
+  color: var(--signal);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.home-flash-question {
+  margin-top: 24px;
+  color: var(--stage-ink);
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 2.1vw, 1.45rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+}
+
+.home-flash-answer {
+  margin-top: 14px;
+  border-left: 2px solid var(--signal);
+  padding-left: 12px;
+  color: var(--stage-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease;
+}
+
+.home-flash-answer[data-revealed="false"] {
+  opacity: 0.52;
+  filter: blur(5px);
+  user-select: none;
+}
+
+.home-flash-reveal {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, var(--signal) 35%, var(--stage-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--signal) 8%, transparent);
+  padding-inline: 12px;
+  color: var(--signal);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-flash-reveal:hover {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.home-paper-flash-foot {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid var(--stage-line);
+  color: var(--stage-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.home-paper-flash-foot strong {
+  color: var(--stage-ink);
+  font-family: var(--font-mono);
+  font-size: 16px;
+}
+
+/* Process ---------------------------------------------------------------- */
+
+/* Colour roles, not decoration: matte black is the ground, storm grey carries
+   the method, safety orange is the action and the page's one loud panel. */
+.home-process {
+  position: relative;
+  isolation: isolate;
+  border-top: 1px solid var(--storm-line);
+  background: var(--storm);
+  color: var(--storm-ink);
+  padding-block: clamp(80px, 12vh, 150px);
+}
+
+.home-process::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(42% 58% at 86% 8%, color-mix(in srgb, var(--signal) 7%, transparent), transparent 72%),
+    radial-gradient(50% 70% at 12% 88%, color-mix(in srgb, var(--storm-raised) 44%, transparent), transparent 76%);
+  animation: section-ambient 48s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.home-process .home-kicker {
+  color: var(--signal-deep);
+}
+
+.home-process .home-kicker::before {
+  background: var(--signal-deep);
+}
+
+.home-section-title {
+  max-width: 13ch;
+  margin-top: 18px;
+  color: var(--storm-ink);
+  font-size: clamp(2.2rem, 4.3vw, 3.65rem);
+  font-weight: 700;
+  letter-spacing: -0.06em;
+  line-height: 0.98;
+}
+
+.home-steps {
+  max-width: 36rem;
+  margin-top: 42px;
+  border-top: 1px solid var(--storm-line);
+}
+
+.home-step {
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 18px;
+  padding-block: 22px;
+  border-bottom: 1px solid var(--storm-line);
+}
+
+.home-step-index {
+  color: var(--signal-deep);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.home-step-title {
+  color: var(--storm-ink);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.home-step-copy {
+  color: var(--storm-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.home-mark-sheet {
+  position: relative;
+  overflow: hidden;
+  width: min(100%, 630px);
+  transform: rotate(-1.1deg);
+  border: 1px solid color-mix(in srgb, var(--mark-ink) 16%, var(--mark-paper));
+  border-radius: 3px;
+  background:
+    linear-gradient(150deg, #fbfcfc, var(--mark-paper) 54%);
+  color: var(--mark-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 36px 90px -54px rgba(0, 0, 0, 0.72);
+  padding: clamp(22px, 4vw, 34px);
+}
+
+.home-mark-sheet::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--mark-ink);
+  content: "";
+}
+
+.home-mark-meta {
+  color: var(--mark-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-mark-score {
+  margin-top: 34px;
+  color: var(--mark-ink);
+  font-family: var(--font-serif) !important;
+  font-size: clamp(3.2rem, 7vw, 5.2rem);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 0.9;
+}
+
+.home-mark-question {
+  margin-top: 20px;
+  color: var(--mark-ink);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.home-mark-answer {
+  margin-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--mark-ink) 18%, transparent);
+  padding-top: 16px;
+  color: var(--mark-muted);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.home-mark-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  border: 1px solid color-mix(in srgb, var(--mark-ink) 22%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--signal) 46%, var(--mark-paper));
+  padding: 6px 10px;
+  color: var(--mark-ink);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.home-mark-note::before {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--mark-ink);
+  content: "";
+}
+
+/* Close: the page's one full acid panel. */
+.home-close {
+  border-top: 1px solid var(--stage-line);
+  background: var(--stage);
+  padding-block: clamp(56px, 8vh, 92px);
+}
+
+.home-close-inner {
+  border: 1px solid var(--signal);
+  border-radius: 16px;
+  background:
+    radial-gradient(60% 120% at 100% 0%, color-mix(in srgb, white 22%, transparent), transparent 70%),
+    var(--signal);
+  color: var(--signal-ink);
+  box-shadow: 0 40px 100px -60px color-mix(in srgb, var(--signal) 60%, transparent);
+  padding: clamp(26px, 5vw, 56px);
+}
+
+.home-close .home-kicker {
+  color: color-mix(in srgb, var(--signal-ink) 88%, transparent);
+}
+
+.home-close .home-kicker::before {
+  background: color-mix(in srgb, var(--signal-ink) 88%, transparent);
+}
+
+.home-close-title {
+  max-width: 15ch;
+  margin-top: 16px;
+  color: var(--signal-ink);
+  font-size: clamp(2.3rem, 5vw, 4.4rem);
+  font-weight: 700;
+  letter-spacing: -0.065em;
+  line-height: 0.93;
+}
+
+.home-close .stage-button {
+  margin-top: 30px;
+  border: 1px solid var(--signal-ink) !important;
+  border-radius: 999px !important;
+  background: var(--signal-ink) !important;
+  color: var(--signal) !important;
+  box-shadow: none !important;
+}
+
+.home-close .stage-button:hover {
+  background: color-mix(in srgb, var(--signal-ink) 86%, white) !important;
+  color: var(--signal-ink) !important;
+}
+
+.home-close-lede {
+  color: color-mix(in srgb, var(--signal-ink) 82%, transparent) !important;
+}
+
+.home-footer {
+  border-top: 1px solid var(--stage-line);
+  background: var(--stage);
+  color: var(--stage-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.home-footer-inner {
+  padding-block: 22px;
+}
+
+/* Shell ------------------------------------------------------------------ */
+
+.stage-shell {
+  background: var(--stage);
+}
+
+.stage-shell > aside,
+.stage-shell .app-rail {
+  border-color: var(--stage-line) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--signal) 4%, var(--stage)) 0%, var(--stage) 28%),
+    var(--stage) !important;
+}
+
+.stage-shell .app-rail-link {
+  min-height: 43px;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  color: var(--stage-muted) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em;
+}
+
+.stage-shell .app-rail-link:hover {
+  border-color: var(--stage-line) !important;
+  background: var(--stage-raised) !important;
+  color: var(--stage-ink) !important;
+}
+
+.stage-shell .app-rail-link.rail-active {
+  border-color: var(--signal) !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+  box-shadow: 0 12px 30px -22px color-mix(in srgb, var(--signal) 75%, transparent) !important;
+}
+
+.stage-shell .app-rail-link.rail-active .rail-icon {
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--signal-ink) !important;
+}
+
+.stage-shell .app-rail-link .rail-icon {
+  color: var(--stage-muted) !important;
+}
+
+.stage-shell .app-rail-link:hover .rail-icon {
+  color: var(--stage-ink) !important;
+}
+
+.stage-shell .app-rail-link.rail-active:hover {
+  background: color-mix(in srgb, var(--signal) 88%, white) !important;
+  color: var(--signal-ink) !important;
+}
+
+.stage-shell .app-rail .brand-period {
+  color: var(--signal);
+}
+
+.stage-shell .app-rail .brand-word,
+.stage-shell .app-mobile-header .brand-word {
+  font-family: var(--font-display) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.04em !important;
+}
+
+.stage-shell .app-main {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(55% 40% at 100% 0%, color-mix(in srgb, var(--signal) 6%, transparent), transparent 70%),
+    var(--desk) !important;
+}
+
+/* The working desk breathes behind the cards, not through them. */
+.stage-shell .app-main::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  z-index: -1;
+  background:
+    radial-gradient(34% 40% at 18% 16%, color-mix(in srgb, var(--signal) 5%, transparent), transparent 72%),
+    radial-gradient(46% 54% at 88% 78%, color-mix(in srgb, var(--storm) 16%, transparent), transparent 76%);
+  animation: section-ambient 56s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* The wrapper repeats the desk colour; clear it so the ambient wash above
+   the main surface can read through. The main element still owns the fill. */
+.stage-shell .app-content {
+  background: transparent !important;
+}
+
+:root:not(.dark) .stage-shell .app-main {
+  color-scheme: light;
+}
+
+.stage-shell .app-mobile-header {
+  border-color: var(--stage-line) !important;
+  background: color-mix(in srgb, var(--stage) 90%, transparent) !important;
+  backdrop-filter: blur(16px);
+}
+
+.stage-shell .app-mobile-header .brand {
+  color: var(--stage-ink);
+}
+
+/* Page furniture --------------------------------------------------------- */
+
+:is(#root, #preview-root) .page-masthead {
+  border-bottom: 1px solid var(--desk-line);
+  padding-bottom: 24px;
+}
+
+:is(#root, #preview-root) .page-title {
+  color: var(--desk-ink);
+  font-size: clamp(2rem, 3.4vw, 2.9rem);
+  font-weight: 700;
+  letter-spacing: -0.055em;
+  line-height: 1;
+  text-wrap: balance;
+}
+
+:is(#root, #preview-root) .page-description {
+  color: var(--desk-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+:is(#root, #preview-root) :is(.page-kicker, .set-kicker) {
+  color: var(--signal-deep) !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.14em !important;
+}
+
+:is(#root, #preview-root) .page-kicker-dot {
+  background: var(--signal-deep) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--signal) 55%, transparent);
+}
+
+:is(#root, #preview-root) .page-actions > :is(a, button) {
+  border-radius: 999px !important;
+}
+
+:is(#root, #preview-root) :is(.today-progress, .today-how, .today-sprint .surface-card) {
+  border-color: var(--desk-line) !important;
+  border-radius: 10px !important;
+  background: color-mix(in srgb, var(--desk-raised) 82%, transparent) !important;
+  box-shadow: none !important;
+}
+
+/* Covers are instrument panels: dark glass, acid rule, mono metadata. */
+:is(#root, #preview-root) :is(
+  .today-screen .page-masthead,
+  .timetable-screen .page-masthead,
+  .timetable-setup-screen .page-masthead,
+  .papers-cover,
+  .course-library-cover,
+  .set-cover,
+  .set-stage
+) {
+  color: var(--stage-ink);
+}
+
+:is(#root, #preview-root) :is(
+  .today-screen .page-masthead,
+  .timetable-screen .page-masthead,
+  .timetable-setup-screen .page-masthead,
+  .papers-cover,
+  .course-library-cover
+) {
+  border: 1px solid var(--stage-line) !important;
+  border-radius: 12px !important;
+  background:
+    radial-gradient(70% 130% at 100% 0%, color-mix(in srgb, var(--signal) 9%, transparent), transparent 68%),
+    var(--stage) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+:is(#root, #preview-root) :is(
+  .today-screen .page-title,
+.timetable-screen .page-title,
+.timetable-setup-screen .page-title,
+.papers-cover .page-title,
+.course-library-cover .page-title
+) {
+  color: var(--stage-ink) !important;
+  font-size: clamp(2.1rem, 4vw, 3.2rem) !important;
+  letter-spacing: -0.055em !important;
+  text-wrap: balance;
+}
+
+:is(#root, #preview-root) :is(
+  .today-screen .page-description,
+  .timetable-screen .page-description,
+  .timetable-setup-screen .page-description,
+  .papers-cover .page-description,
+  .course-library-cover .page-description
+) {
+  color: var(--stage-muted) !important;
+}
+
+:is(#root, #preview-root) :is(
+  .today-screen .page-kicker,
+  .timetable-screen .page-kicker,
+  .timetable-setup-screen .page-kicker,
+  .papers-cover .page-kicker,
+  .course-library-cover .page-kicker
+) {
+  color: var(--signal) !important;
+}
+
+:is(#root, #preview-root) :is(
+  .today-screen .page-actions > :is(a, button),
+  .timetable-screen .page-actions > :is(a, button)
+) {
+  border-color: var(--signal) !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+/* Covers use the signal as structure, not as a coloured page. */
+:is(#root, #preview-root) :is(.course-cover, .past-paper-cover, .papers-cover, .course-library-cover) {
+  background:
+    radial-gradient(80% 120% at 90% 0%, color-mix(in srgb, var(--signal) 8%, transparent), transparent 64%),
+    var(--stage) !important;
+  color: var(--stage-ink);
+}
+
+/* Study set -------------------------------------------------------------- */
+
+.set-screen {
+  background: transparent !important;
+  color: var(--desk-ink);
+}
+
+.set-stage {
+  background:
+    radial-gradient(50% 30% at 90% -5%, color-mix(in srgb, var(--signal) 9%, transparent), transparent 65%),
+    var(--stage) !important;
+  color: var(--stage-ink);
+}
+
+.set-stage-bar {
+  padding-top: 17px;
+}
+
+.set-stage-bar .brand-period {
+  color: var(--signal);
+}
+
+.set-back {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.set-menu-trigger {
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--stage-raised) 70%, transparent) !important;
+}
+
+.set-cover {
+  padding-bottom: 26px;
+}
+
+.set-eyebrow {
+  color: var(--signal) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.15em !important;
+}
+
+.set-title-text {
+  color: var(--stage-ink) !important;
+  font-size: clamp(2.3rem, 4vw, 3.35rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.055em !important;
+  line-height: 0.98 !important;
+}
+
+.set-title button {
+  color: var(--signal) !important;
+}
+
+.set-meta,
+.set-guest {
+  color: var(--stage-muted) !important;
+  font-family: var(--font-mono);
+  font-size: 9px !important;
+  letter-spacing: 0.03em;
+}
+
+.set-guest a {
+  color: var(--signal) !important;
+}
+
+.set-start {
+  min-height: 46px !important;
+  border: 1px solid var(--signal) !important;
+  border-radius: 999px !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 12px 34px -24px color-mix(in srgb, var(--signal) 80%, transparent) !important;
+}
+
+.set-start:hover {
+  background: color-mix(in srgb, var(--signal) 86%, white) !important;
+}
+
+.set-start-count {
+  border-color: color-mix(in srgb, var(--signal-ink) 22%, transparent) !important;
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--signal-ink) 10%, transparent);
+  color: var(--signal-ink) !important;
+}
+
+.set-facts {
+  border: 1px solid var(--stage-line);
+  border-radius: 0 0 12px 12px;
+  background: color-mix(in srgb, var(--stage-raised) 76%, transparent);
+}
+
+.set-facts > div {
+  border-right-color: var(--stage-line);
+}
+
+.set-facts dt {
+  color: var(--stage-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.set-facts dd {
+  color: var(--stage-ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.set-desk {
+  border-top-color: var(--stage-line) !important;
+  background:
+    radial-gradient(55% 35% at 100% 0%, color-mix(in srgb, var(--signal) 6%, transparent), transparent 68%),
+    var(--desk) !important;
+}
+
+.set-tabs {
+  gap: 6px !important;
+  border-bottom-color: var(--desk-line) !important;
+  padding-bottom: 8px;
+}
+
+.set-tab {
+  display: inline-flex !important;
+  min-height: 36px !important;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 0 !important;
+  border-radius: 999px !important;
+  padding: 0 14px !important;
+  color: var(--desk-muted) !important;
+  font-family: var(--font-mono);
+  font-size: 10px !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.set-sticky-start {
+  display: none !important;
+}
+
+.set-tab:hover {
+  background: var(--paper-deep) !important;
+  color: var(--desk-ink) !important;
+}
+
+.set-tab.is-active {
+  border-color: var(--signal) !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+  box-shadow: none !important;
+}
+
+.set-overview-intro .set-section-title,
+.set-section-title {
+  color: var(--desk-ink);
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+
+/* Study modes become three instrument tiles, not three list rows. */
+.set-actions {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px !important;
+  border-top: 0 !important;
+}
+
+.set-action {
+  display: flex !important;
+  min-height: 148px;
+  flex-direction: column;
+  align-items: flex-start !important;
+  justify-content: space-between;
+  gap: 18px !important;
+  margin: 0 !important;
+  border: 1px solid var(--desk-line) !important;
+  border-left: 1px solid var(--desk-line) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(150deg, color-mix(in srgb, var(--signal) 4%, var(--desk-raised)), var(--desk-raised) 58%) !important;
+  box-shadow: none !important;
+  padding: 18px !important;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease !important;
+}
+
+.set-action.is-recommended {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  border-left: 1px solid color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 7%, var(--desk-raised)) !important;
+}
+
+.set-action > span:nth-child(2) {
+  width: 100%;
+  flex: 1;
+  padding-right: 26px;
+}
+
+.set-action .set-action-arrow {
+  position: absolute;
+  right: 18px;
+  bottom: 20px;
+}
+
+.set-action {
+  position: relative;
+}
+
+.set-action:hover {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 6%, var(--desk-raised)) !important;
+  transform: translateY(-2px);
+}
+
+.set-action::before {
+  color: var(--signal-deep) !important;
+  font-family: var(--font-mono);
+}
+
+/* Flashcard review ------------------------------------------------------- */
+
+.set-mode {
+  padding-top: 22px;
+}
+
+:is(#root, #preview-root) :is(
+  .set-screen[data-section="cards"] .set-mode > div,
+  .set-screen[data-section="quiz"] .set-mode > div
+) {
+  max-width: 800px !important;
+}
+
+.set-screen[data-section="cards"] .set-mode .surface-card {
+  position: relative;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--signal) 18%, var(--desk-line)) !important;
+  border-radius: 14px !important;
+  background:
+    linear-gradient(150deg, color-mix(in srgb, var(--signal) 5%, var(--desk-raised)), var(--desk-raised) 48%) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
+    26px 30px 0 -18px color-mix(in srgb, var(--signal) 10%, transparent),
+    0 34px 90px -58px var(--shadow-strong) !important;
+  padding: clamp(22px, 4vw, 38px) !important;
+}
+
+.set-screen[data-section="cards"] .set-mode .surface-card::before {
+  position: absolute;
+  top: -1px;
+  left: 28px;
+  border: 1px solid color-mix(in srgb, var(--signal) 35%, var(--desk-line));
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  background: var(--desk-raised);
+  padding: 4px 10px 3px;
+  color: var(--signal-deep);
+  content: "RECALL";
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.set-screen[data-section="cards"] .set-mode .surface-card > .flex:first-child {
+  padding-top: 12px;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="cards"] .set-mode .font-display {
+  color: var(--desk-ink) !important;
+  font-size: clamp(1.55rem, 2.6vw, 2.15rem) !important;
+  letter-spacing: -0.045em !important;
+  line-height: 1.16 !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="cards"] .set-mode > div > .flex:first-child p {
+  font-family: var(--font-mono);
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="cards"] .set-mode .surface-card > .flex:first-child p:first-child {
+  color: var(--desk-muted) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+  letter-spacing: 0.12em;
+}
+
+.set-screen[data-section="cards"] .set-mode [class*="bg-[#FFF3E8]"] {
+  border: 1px solid color-mix(in srgb, var(--signal) 32%, var(--desk-line));
+  background: color-mix(in srgb, var(--signal) 9%, var(--desk-raised)) !important;
+  color: var(--signal-deep) !important;
+  font-family: var(--font-mono);
+  font-size: 9px !important;
+}
+
+/* Inner recall panel / model answer: a recessed lab well. */
+.set-screen[data-section="cards"] .set-mode [class~="bg-[#FCFBF8]"] {
+  border-color: var(--desk-line) !important;
+  border-radius: 9px !important;
+  background: color-mix(in srgb, var(--desk) 66%, var(--desk-raised)) !important;
+}
+
+.set-screen[data-section="cards"] .set-mode [class~="bg-[#FCFBF8]"] > p:first-child {
+  font-family: var(--font-mono);
+  font-size: 8px !important;
+  letter-spacing: 0.14em !important;
+}
+
+/* Rating stamps: each state reads as a physical key. */
+.set-screen[data-section="cards"] button[aria-label^="Again"] {
+  border-color: color-mix(in srgb, var(--danger-ink) 42%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--danger-wash) 74%, var(--desk-raised)) !important;
+  color: var(--danger-ink) !important;
+}
+
+.set-screen[data-section="cards"] button[aria-label^="Hard"] {
+  border-color: color-mix(in srgb, var(--warning-ink) 40%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--warning-wash) 76%, var(--desk-raised)) !important;
+  color: var(--warning-ink) !important;
+}
+
+.set-screen[data-section="cards"] button[aria-label^="Good"] {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 13%, var(--desk-raised)) !important;
+  color: var(--signal-deep) !important;
+}
+
+.set-screen[data-section="cards"] button[aria-label^="Easy"] {
+  border-color: color-mix(in srgb, #68d8ff 45%, var(--desk-line)) !important;
+  background: color-mix(in srgb, #68d8ff 10%, var(--desk-raised)) !important;
+  color: color-mix(in srgb, #1f7d99 92%, var(--desk-ink)) !important;
+}
+
+.dark .set-screen[data-section="cards"] button[aria-label^="Easy"] {
+  color: #8ee7ff !important;
+}
+
+.set-screen[data-section="cards"] button[aria-label][class*="ring-2"] {
+  box-shadow:
+    0 0 0 2px var(--desk-raised),
+    0 0 0 4px var(--signal) !important;
+}
+
+/* Quiz ------------------------------------------------------------------- */
+
+.set-screen[data-section="quiz"] .surface-card {
+  position: relative;
+  border-radius: 14px !important;
+  padding: clamp(22px, 3.5vw, 34px) !important;
+}
+
+.set-screen[data-section="quiz"] .surface-card::before {
+  position: absolute;
+  top: 0;
+  left: 30px;
+  width: 54px;
+  height: 2px;
+  background: var(--signal);
+  content: "";
+  box-shadow: 0 0 16px color-mix(in srgb, var(--signal) 60%, transparent);
+}
+
+.set-screen[data-section="quiz"] [class*="bg-[#E7E7EF]"] {
+  background: var(--paper-deep) !important;
+}
+
+.set-screen[data-section="quiz"] [class*="bg-brand-pink"] {
+  background: var(--signal) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--signal) 50%, transparent);
+}
+
+.set-screen[data-section="quiz"] .surface-card > p.font-display {
+  font-size: clamp(1.35rem, 2.4vw, 1.7rem) !important;
+  line-height: 1.32 !important;
+}
+
+/* MCQ rows become numbered terminal keys. */
+.set-screen[data-section="quiz"] .surface-card button[class*="w-full"][class*="border"] {
+  border-radius: 9px !important;
+  border-color: var(--desk-line) !important;
+  background: color-mix(in srgb, var(--desk) 58%, var(--desk-raised)) !important;
+  color: var(--desk-ink) !important;
+  padding: 14px 16px !important;
+}
+
+.set-screen[data-section="quiz"] .surface-card button[class*="w-full"][class*="border"]:hover {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 6%, var(--desk-raised)) !important;
+}
+
+.set-screen[data-section="quiz"] .surface-card button[class*="w-full"][class*="border"] span:first-child {
+  border: 1px solid var(--desk-line);
+  border-radius: 5px !important;
+  background: var(--desk-raised) !important;
+  color: var(--signal-deep) !important;
+  font-family: var(--font-mono);
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[class*="bg-[#E9FBF3]"] {
+  border-color: var(--success-line) !important;
+  background: var(--success-wash) !important;
+  color: var(--success-ink) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[class*="bg-[#E9FBF3]"] span:first-child {
+  border-color: var(--success-line) !important;
+  background: color-mix(in srgb, var(--success) 18%, transparent) !important;
+  color: var(--success-ink) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[class*="bg-[#FFEEF0]"] {
+  border-color: var(--danger-line) !important;
+  background: var(--danger-wash) !important;
+  color: var(--danger-ink) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[class*="bg-[#FFEEF0]"] span:first-child {
+  border-color: var(--danger-line) !important;
+  background: color-mix(in srgb, var(--danger) 18%, transparent) !important;
+  color: var(--danger-ink) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[class*="w-full"][class*="bg-brand-panel"] {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  background: color-mix(in srgb, var(--signal) 8%, var(--desk-raised)) !important;
+  color: var(--desk-ink) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[class*="w-full"][class*="bg-brand-panel"] span:first-child {
+  border-color: var(--signal) !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+.set-screen[data-section="quiz"] .surface-card > div:last-child button {
+  min-height: 46px;
+  border-radius: 999px !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+.set-screen[data-section="quiz"] .surface-card > div:last-child button:disabled {
+  border-color: var(--desk-line) !important;
+  background: var(--paper-deep) !important;
+  color: var(--desk-muted) !important;
+}
+
+/* Exam practice ---------------------------------------------------------- */
+
+.set-screen[data-section="exam"] > .set-desk .surface-card {
+  border-radius: 12px !important;
+}
+
+.set-screen[data-section="exam"] article.surface-card {
+  position: relative;
+  border-left: 2px solid color-mix(in srgb, var(--signal) 70%, var(--desk-line)) !important;
+  padding: clamp(20px, 3.5vw, 34px) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--signal) 4%, var(--desk-raised)) 0%, var(--desk-raised) 30%) !important;
+}
+
+.set-screen[data-section="exam"] article.surface-card::before {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--signal-deep);
+  border-radius: 999px;
+  background: var(--signal);
+  content: "";
+  box-shadow: 0 0 12px color-mix(in srgb, var(--signal) 65%, transparent);
+}
+
+.set-screen[data-section="exam"] article.surface-card > .flex:first-child {
+  padding-left: 20px;
+}
+
+.set-screen[data-section="exam"] article.surface-card > p.font-display {
+  font-size: clamp(1.2rem, 2.2vw, 1.55rem) !important;
+  line-height: 1.35 !important;
+}
+
+.set-screen[data-section="exam"] article textarea {
+  min-height: 170px !important;
+  border: 1px solid var(--desk-line) !important;
+  border-radius: 8px !important;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 29px,
+      color-mix(in srgb, var(--desk-line) 55%, transparent) 30px
+    ),
+    color-mix(in srgb, var(--desk) 55%, var(--desk-raised)) !important;
+  padding: 12px 14px !important;
+  line-height: 30px !important;
+}
+
+.set-screen[data-section="exam"] article [class*="bg-[#F3FBF7]"] {
+  border: 1px solid var(--success-line);
+  border-radius: 10px !important;
+  background: var(--success-wash) !important;
+}
+
+.set-screen[data-section="exam"] article [class*="bg-[#FFEEF0]"] {
+  border: 1px solid var(--danger-line);
+  background: var(--danger-wash) !important;
+}
+
+.set-screen[data-section="exam"] article details {
+  border: 1px solid var(--desk-line);
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--desk) 46%, var(--desk-raised)) !important;
+}
+
+/* Course tabs use the same pill language as the set tabs. */
+:is(#root, #preview-root) .course-screen .course-tabs {
+  gap: 6px !important;
+  border-bottom-color: var(--desk-line) !important;
+  padding-bottom: 10px;
+}
+
+:is(#root, #preview-root) .course-screen .course-tabs a {
+  height: 36px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  padding: 0 14px !important;
+  color: var(--desk-muted) !important;
+  font-family: var(--font-mono);
+  font-size: 9px !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:is(#root, #preview-root) .course-screen .course-tabs a:hover {
+  border-color: var(--desk-line) !important;
+  background: var(--paper-deep) !important;
+  color: var(--desk-ink) !important;
+}
+
+:is(#root, #preview-root) .course-screen .course-tabs a[aria-current="page"] {
+  border-color: var(--signal) !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+:is(#root, #preview-root) .course-screen .course-tabs a span {
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--signal-ink) 12%, transparent) !important;
+  color: inherit !important;
+  font-family: var(--font-mono);
+}
+
+/* Today, timetable, library ---------------------------------------------- */
+
+:is(#root, #preview-root) .today-step > span {
+  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
+  border-radius: 5px !important;
+  background: var(--signal-wash) !important;
+  color: var(--signal-deep) !important;
+  font-family: var(--font-mono);
+}
+
+:is(#root, #preview-root) .today-queue li a > span:last-child {
+  border-color: color-mix(in srgb, var(--signal) 38%, var(--desk-line)) !important;
+  border-radius: 999px !important;
+  background: var(--signal-wash) !important;
+  color: var(--signal-deep) !important;
+  font-family: var(--font-mono);
+}
+
+:is(#root, #preview-root) .today-queue li a:hover {
+  background: color-mix(in srgb, var(--signal) 6%, transparent) !important;
+}
+
+:is(#root, #preview-root) .timetable-day {
+  border-radius: 9px !important;
+  border-color: var(--desk-line) !important;
+  background: color-mix(in srgb, var(--desk-raised) 80%, transparent) !important;
+}
+
+:is(#root, #preview-root) .timetable-day[aria-pressed="true"] {
+  border-color: var(--signal) !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+:is(#root, #preview-root) .timetable-day[aria-pressed="true"] :is(span, .font-display) {
+  color: var(--signal-ink) !important;
+}
+
+:is(#root, #preview-root) .timetable-error {
+  border: 1px solid var(--warning-line) !important;
+  border-radius: 9px !important;
+  background: var(--warning-wash) !important;
+  color: var(--warning-ink) !important;
+}
+
+:is(#root, #preview-root) .course-row {
+  border-radius: 9px;
+}
+
+:is(#root, #preview-root) .course-row:hover {
+  background: color-mix(in srgb, var(--signal) 6%, var(--desk-raised)) !important;
+}
+
+/* Auth ------------------------------------------------------------------- */
+
+.auth-page {
+  background: var(--stage) !important;
+}
+
+.auth-main {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-left: 8px solid var(--signal) !important;
+  background: var(--stage) !important;
+}
+
+/* The form side keeps the same desk-lamp drift as the landing. The card is
+   opaque, so only the margins and the space above it breathe. */
+.auth-main::before {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  z-index: -1;
+  background:
+    radial-gradient(44% 50% at 86% 12%, color-mix(in srgb, var(--signal) 8%, transparent), transparent 72%),
+    radial-gradient(50% 60% at 8% 90%, color-mix(in srgb, var(--storm) 24%, transparent), transparent 76%);
+  animation: section-ambient 58s ease-in-out infinite;
+  animation-delay: -12s;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.auth-aside {
+  position: relative;
+  isolation: isolate;
+  border-right: 0 !important;
+  background: var(--stage) !important;
+}
+
+/* The context side uses a cooler, slower haze so the two halves do not pulse
+   together. */
+.auth-aside::after {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  z-index: -1;
+  background:
+    radial-gradient(48% 46% at 24% 24%, color-mix(in srgb, var(--signal) 7%, transparent), transparent 70%),
+    radial-gradient(44% 52% at 84% 82%, color-mix(in srgb, var(--storm-raised) 46%, transparent), transparent 74%);
+  animation: section-ambient 52s ease-in-out infinite;
+  animation-delay: -16s;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.auth-card button:not(.auth-submit) {
+  color: var(--stage-ink) !important;
+}
+
+.auth-title {
+  font-size: clamp(2.5rem, 4.5vw, 4.2rem) !important;
+  letter-spacing: -0.065em !important;
+  line-height: 0.96 !important;
+}
+
+.auth-title .highlighter {
+  color: var(--signal);
+  background: none;
+}
+
+.auth-lede {
+  color: var(--stage-muted) !important;
+}
+
+.auth-card {
+  border: 1px solid var(--stage-line) !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--stage-raised) 88%, transparent) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 35px 90px -58px #000 !important;
+  color: var(--stage-ink) !important;
+}
+
+.auth-card h2,
+.auth-card label,
+.auth-card .text-brand-ink {
+  color: var(--stage-ink) !important;
+}
+
+.auth-card h2 {
+  font-family: var(--font-display) !important;
+  font-size: 1.7rem !important;
+  letter-spacing: -0.045em !important;
+}
+
+.auth-card p {
+  color: var(--stage-muted) !important;
+}
+
+.auth-input {
+  border: 1px solid var(--stage-line) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--stage) 62%, transparent) !important;
+  color: var(--stage-ink) !important;
+}
+
+.auth-input:focus-visible {
+  border-color: var(--signal) !important;
+  outline: 2px solid var(--signal) !important;
+}
+
+.auth-card [data-slot="input-otp-slot"] {
+  width: clamp(2.1rem, 10vw, 2.75rem) !important;
+  height: clamp(2.1rem, 10vw, 2.75rem) !important;
+  border: 1px solid var(--stage-line) !important;
+  border-radius: 10px !important;
+  background: color-mix(in srgb, var(--stage) 72%, transparent) !important;
+  color: var(--stage-ink) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 17px !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+}
+
+.auth-card [data-slot="input-otp-slot"][data-active="true"] {
+  border-color: var(--signal) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--signal) 30%, transparent) !important;
+}
+
+.auth-submit {
+  min-height: 50px !important;
+  border-radius: 999px !important;
+  background: var(--signal) !important;
+  color: var(--signal-ink) !important;
+}
+
+.auth-card .bg-brand-panel {
+  border: 1px solid var(--stage-line);
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--stage) 55%, transparent) !important;
+}
+
+.auth-panel > p,
+.auth-panel > nav,
+.auth-panel > nav a {
+  color: var(--stage-muted) !important;
+}
+
+.auth-stack-sheet {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--stage-raised) 90%, transparent);
+  border-color: var(--stage-line);
+}
+
+/* Responsive ------------------------------------------------------------- */
+
+@media (max-width: 1023px) {
+  .auth-main {
+    border-left: 0 !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .set-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .set-action {
+    min-height: 118px;
+  }
+}
+
+@media (max-width: 980px) {
+  .home-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 46px;
+  }
+
+  .home-paper-field {
+    width: min(100%, 610px);
+    justify-self: start;
+  }
+
+  .home-title {
+    max-width: 12ch;
+  }
+}
+
+@media (max-width: 640px) {
+  .home-wrap {
+    padding-inline: 18px;
+  }
+
+  .home-header-inner {
+    height: 62px;
+  }
+
+  .home-nav {
+    display: none;
+  }
+
+  .home-hero {
+    min-height: auto;
+    padding-block: 42px 70px;
+  }
+
+  :is(#root, #preview-root) .home-title {
+    max-width: 13ch;
+    font-size: clamp(2.65rem, 10.5vw, 3.1rem) !important;
+  }
+
+  .home-lede {
+    font-size: 15px;
+  }
+
+  .home-build {
+    margin-top: 26px;
+    padding: 12px;
+  }
+
+  .home-build-row {
+    flex-direction: column;
+  }
+
+  .stage-home .home-build .stage-button {
+    min-height: 48px;
+  }
+
+  .home-paper-spec {
+    width: 88%;
+  }
+
+  .home-paper-cover,
+  .home-paper-flash {
+    width: 100%;
+    transform: none;
+  }
+
+  .home-paper-cover-title {
+    font-size: 2rem;
+  }
+
+  .home-mark-sheet {
+    transform: none;
+  }
+
+  .home-process {
+    padding-block: 64px;
+  }
+
+  .home-section-title {
+    font-size: 2.2rem;
+  }
+
+  .home-step {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .home-close {
+    padding-block: 40px;
+  }
+
+  .home-close-inner {
+    border-radius: 12px;
+  }
+
+  .set-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .set-facts > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .set-facts > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--stage-line);
+  }
+
+  .set-screen[data-section="cards"] .set-mode .surface-card {
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 5%, transparent),
+      10px 14px 0 -8px color-mix(in srgb, var(--signal) 12%, transparent),
+      0 28px 60px -48px var(--shadow-strong) !important;
+    padding: 20px !important;
+  }
+
+  .set-screen[data-section="cards"] .set-mode .surface-card::before {
+    left: 18px;
+  }
+}
+
+@keyframes hero-ambient {
+  0% {
+    transform: translateX(-50%) translate3d(-2%, -1%, 0) scale(1.03);
+  }
+
+  50% {
+    transform: translateX(-50%) translate3d(1.5%, 1.5%, 0) scale(1.07);
+  }
+
+  100% {
+    transform: translateX(-50%) translate3d(2.5%, -2%, 0) scale(1.04);
+  }
+}
+
+@keyframes section-ambient {
+  0% {
+    transform: translate3d(-2%, 0, 0) scale(1.02);
+  }
+
+  50% {
+    transform: translate3d(2%, -1.5%, 0) scale(1.06);
+  }
+
+  100% {
+    transform: translate3d(0.5%, 1.5%, 0) scale(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero::after {
+    transform: translateX(-50%);
+  }
+
+  .home-paper,
+  .set-action,
+  .stage-button,
+  .set-start {
+    transition: none !important;
+  }
+
+  .home-hero::after,
+  .home-process::before,
+  .stage-shell .app-main::before,
+  .auth-main::before,
+  .auth-aside::after {
+    animation: none !important;
+    will-change: auto;
+  }
+}

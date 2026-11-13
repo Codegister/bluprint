@@ -798,16 +798,17 @@ body::before {
   background: color-mix(in srgb, var(--olive) 82%, var(--stage-ink));
 }
 
-/* Home's action is the bold olive signal, not the softer stage olive. */
+/* Home's one action is the vermilion signal; the navy close band below is
+   structure, not a second accent. */
 .stage-home .stage-button {
-  border-color: var(--bold-field);
-  background: var(--bold-field);
-  color: var(--bold-field-ink);
+  border-color: var(--signal-deep);
+  background: var(--signal-deep);
+  color: var(--signal-ink);
 }
 
 .stage-home .stage-button:hover {
-  border-color: color-mix(in srgb, var(--bold-field) 84%, var(--stage-ink));
-  background: color-mix(in srgb, var(--bold-field) 84%, var(--stage-ink));
+  border-color: color-mix(in srgb, var(--signal-deep) 88%, var(--desk-ink));
+  background: color-mix(in srgb, var(--signal-deep) 88%, var(--desk-ink));
 }
 
 .stage-button:disabled {
@@ -1124,8 +1125,8 @@ body::before {
   background: var(--desk);
 }
 
-/* The one bold field on the page. It is the 10% accent, not a second page
-   colour: the desk still surrounds it on every side. */
+/* The structural navy close, not a second accent: the desk still surrounds it
+   on every side and the one signal action lives in the hero. */
 .home-close-inner {
   display: flex;
   flex-direction: column;

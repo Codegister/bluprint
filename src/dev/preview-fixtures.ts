@@ -230,7 +230,7 @@ export const previewCourse = {
       cardCount: 1,
       knownCount: 1,
       quizCount: 2,
-      examCount: 0,
+      examCount: 1,
       updatedAt: now - 60 * 60 * 1000,
     },
   ],
@@ -252,7 +252,7 @@ export const previewSet = {
     subject: "Biology",
     cardCount: 1,
     quizCount: 2,
-    examCount: 0,
+    examCount: 1,
     knownCount: 1,
     dueCount: 1,
     weakCount: 0,
@@ -319,7 +319,82 @@ export const previewSet = {
       missCount: 0,
     },
   ],
-  exams: [],
+  exams: [
+    {
+      _id: "previewexam000000000001",
+      _creationTime: now - 60 * 60 * 1000,
+      setId: "previewset000000000001",
+      userId: "preview-user",
+      order: 0,
+      question:
+        "Explain how the inner membrane of a mitochondrion is adapted for ATP production.",
+      marks: 4,
+      modelAnswer:
+        "The inner membrane folds into cristae, which increases the surface area for the electron transport chain and ATP synthase. More ATP can therefore be produced by oxidative phosphorylation.",
+      markingGuide: [
+        "The inner membrane folds into cristae.",
+        "Folding increases the surface area.",
+        "More ATP synthase / electron transport chain proteins can sit in the membrane.",
+        "More ATP is produced by oxidative phosphorylation.",
+      ],
+      criteria: [
+        {
+          id: "crit-1",
+          marks: 1,
+          text: "The inner membrane folds into cristae.",
+        },
+        {
+          id: "crit-2",
+          marks: 1,
+          text: "Folding increases the surface area.",
+        },
+        {
+          id: "crit-3",
+          marks: 1,
+          text: "More ATP synthase / electron transport chain proteins can sit in the membrane.",
+        },
+        {
+          id: "crit-4",
+          marks: 1,
+          text: "More ATP is produced by oxidative phosphorylation.",
+        },
+      ],
+      specRef: "AQA 3.1.1",
+      userAnswer:
+        "The inner membrane folds into cristae. This gives more surface area for ATP synthase, so more ATP is produced.",
+      awardedMarks: 3,
+      feedback:
+        "You named cristae and the increased surface area. The link to ATP synthase is there, but the answer does not explicitly mention oxidative phosphorylation.",
+      checklist: [
+        {
+          point: "The inner membrane folds into cristae.",
+          marks: 1,
+          awarded: 1,
+          evidence: "The inner membrane folds into cristae.",
+        },
+        {
+          point: "Folding increases the surface area.",
+          marks: 1,
+          awarded: 1,
+          evidence: "This gives more surface area",
+        },
+        {
+          point:
+            "More ATP synthase / electron transport chain proteins can sit in the membrane.",
+          marks: 1,
+          awarded: 1,
+          evidence: "more surface area for ATP synthase",
+        },
+        {
+          point: "More ATP is produced by oxidative phosphorylation.",
+          marks: 1,
+          awarded: 0,
+          evidence: "so more ATP is produced",
+        },
+      ],
+      gradedAt: now - 30 * 60 * 1000,
+    },
+  ],
   sourceImages: [],
   readiness: {
     score: 72,

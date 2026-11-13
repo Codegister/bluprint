@@ -2,7 +2,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useState,
@@ -12,38 +11,31 @@ import {
 /**
  * Bluprint's theme.
  *
- * The interface is a chrome-metal system in both modes: brushed light steel in
- * `light`, gunmetal in `dark`. Colours come from the tokens in `index.css`, so
+ * Bluprint is dark-first: the night-lab stage is the default, and the daylight
+ * desk is an explicit choice. Colours come from the tokens in `neon.css`, so
  * every screen switches together and no component needs a `dark:` variant.
  *
- * The first choice follows the operating system. Once the student picks a
- * side, the choice is stored in localStorage under `bluprint.theme` and wins
- * over the system from then on. `index.html` applies the stored choice before
- * React mounts, so the first paint is already the right colour.
+ * Once the student picks a side, the choice is stored in localStorage under
+ * `bluprint.theme`. `theme-init.js` applies it before React mounts, so the
+ * first paint is already the right colour.
  */
 
 export type Theme = "light" | "dark";
 
 const STORAGE_KEY = "bluprint.theme";
-const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 function readStoredTheme(): Theme | null {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
     return stored === "light" || stored === "dark" ? stored : null;
   } catch {
-    // Storage can be unavailable in private browsing; fall back to the system.
+    // Storage can be unavailable in private browsing; fall back to dark.
     return null;
   }
 }
 
-function systemTheme(): Theme {
-  if (typeof window === "undefined") return "light";
-  return window.matchMedia(DARK_QUERY).matches ? "dark" : "light";
-}
-
 function initialTheme(): Theme {
-  return readStoredTheme() ?? systemTheme();
+  return readStoredTheme() ?? "dark";
 }
 
 function applyTheme(theme: Theme) {
@@ -81,17 +73,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const toggleTheme = useCallback(() => {
     setTheme(theme === "dark" ? "light" : "dark");
   }, [theme, setTheme]);
-
-  // Until a choice is stored, follow the OS if it changes mid-session.
-  useEffect(() => {
-    const media = window.matchMedia(DARK_QUERY);
-    const onChange = (event: MediaQueryListEvent) => {
-      if (readStoredTheme()) return;
-      setThemeState(event.matches ? "dark" : "light");
-    };
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
 
   const value = useMemo(
     () => ({ theme, setTheme, toggleTheme }),

@@ -1,10 +1,10 @@
 /* ---------------------------------------------------------------------------
    Stage 2: Course, Study set and Papers
 
-   These screens keep the same contract as Home: a near-black stage for the
-   identity of the thing, a cool desk for the work. The stage is a cover, not a
-   dashboard; a facts strip is a ledger, not a row of cards. The desk is a
-   single column of reading and one vermilion signal on every screen.
+   These screens keep the same contract as Home: a stage cover for the identity
+   of the thing, a cool desk for the work. Both follow the page's light/dark
+   mode; a facts strip is a ledger, not a row of cards. The desk is a single
+   column of reading and one vermilion signal on every screen.
    ------------------------------------------------------------------------- */
 
 :root {
@@ -176,7 +176,9 @@
   background: currentColor !important;
 }
 
-/* Stage buttons are rectangular and use the single signal. */
+/* Stage buttons are rectangular and use the single signal. Small action text
+   needs the deep signal: white on the bright signal is only 4.0:1, while this
+   pair is 6.37:1 in light and 8.58:1 in dark. */
 .course-cover button,
 .course-cover .stage-button,
 .past-paper-cover button,
@@ -186,7 +188,7 @@
   min-height: 40px;
   border: 0 !important;
   border-radius: 2px !important;
-  background: var(--olive) !important;
+  background: var(--olive-deep) !important;
   color: var(--olive-ink) !important;
   box-shadow: none !important;
   font-size: 12px !important;
@@ -198,11 +200,25 @@
   min-height: 40px;
   border: 0 !important;
   border-radius: 2px !important;
-  background: var(--paper-accent) !important;
+  background: var(--paper-accent-deep) !important;
   color: var(--paper-ink) !important;
   box-shadow: none !important;
   font-size: 12px !important;
   font-weight: 700 !important;
+}
+
+.course-cover button:hover,
+.course-cover .stage-button:hover,
+.past-paper-cover button:hover,
+.past-paper-cover .stage-button:hover,
+.course-library-cover .page-actions a:hover,
+.course-library-cover .page-actions button:hover {
+  background: color-mix(in srgb, var(--olive-deep) 88%, var(--desk-ink)) !important;
+}
+
+.papers-cover .page-actions a:hover,
+.papers-cover .page-actions button:hover {
+  background: color-mix(in srgb, var(--paper-accent-deep) 88%, var(--desk-ink)) !important;
 }
 
 .course-cover details > summary,
@@ -755,7 +771,7 @@
 }
 
 .set-guest a {
-  color: var(--olive) !important;
+  color: var(--signal-deep) !important;
   font-weight: 600;
 }
 
@@ -765,7 +781,7 @@
   padding: 0 22px !important;
   border: 0 !important;
   border-radius: 2px !important;
-  background: var(--olive) !important;
+  background: var(--olive-deep) !important;
   color: var(--olive-ink) !important;
   font-size: 16px !important;
   font-weight: 700 !important;
@@ -773,7 +789,7 @@
 }
 
 .set-start:hover {
-  background: color-mix(in srgb, var(--olive) 84%, var(--stage-ink)) !important;
+  background: color-mix(in srgb, var(--olive-deep) 88%, var(--desk-ink)) !important;
 }
 
 .set-start-count {
@@ -1360,7 +1376,7 @@
 
 .past-paper-cover button,
 .past-paper-cover .stage-button {
-  background: var(--paper-accent) !important;
+  background: var(--paper-accent-deep) !important;
   color: var(--paper-ink) !important;
 }
 
@@ -1670,4 +1686,81 @@
 
 :is(.course-library-cover, .papers-cover) .page-kicker-dot {
   background: currentColor !important;
+}
+
+/* ---------------------------------------------------------------------------
+   Identity covers
+
+   A course, a past paper and a study set keep their identity through hierarchy
+   and the signal, not through a permanently dark surface. Re-pointing the stage
+   tokens to the desk keeps every attached control on the same surface in both
+   modes; the real stage is still available to the pages that want it.
+   ------------------------------------------------------------------------- */
+
+.course-cover,
+.past-paper-cover,
+.course-facts {
+  --stage: var(--desk-raised);
+  --stage-raised: var(--desk-raised);
+  --stage-line: var(--desk-line);
+  --stage-ink: var(--desk-ink);
+  --stage-muted: var(--desk-muted);
+  --stage-danger: var(--danger-ink);
+}
+
+.course-cover > div:nth-child(2) > p:first-child,
+.past-paper-cover > div:nth-child(2) > p:first-child {
+  color: var(--signal-deep) !important;
+}
+
+/* The set is one continuous sheet: bar, cover, facts and desk follow the page
+   mode together. Remapping here also keeps its menus and inputs in step. */
+.set-screen {
+  --stage: var(--desk);
+  --stage-raised: var(--desk-raised);
+  --stage-line: var(--desk-line);
+  --stage-ink: var(--desk-ink);
+  --stage-muted: var(--desk-muted);
+  --stage-danger: var(--danger-ink);
+}
+
+.set-screen .set-eyebrow {
+  color: var(--signal-deep) !important;
+}
+
+.focus-shell .focus-main {
+  background: var(--desk) !important;
+}
+
+/* Set screens have no app rail, so the top bar is their structural navy: one
+   full-width 30% band above the light cover and desk in both modes. */
+.set-stage-bar {
+  width: 100%;
+  max-width: none;
+  padding: 14px max(clamp(16px, 4vw, 40px), calc((100% - 1040px) / 2));
+  border-bottom: 1px solid color-mix(in srgb, var(--bold-field-ink) 18%, transparent);
+  background: var(--bold-field);
+  color: var(--bold-field-ink);
+}
+
+.set-stage-bar .brand {
+  color: var(--bold-field-ink);
+}
+
+.set-stage-bar .brand-period {
+  color: var(--signal);
+}
+
+.set-stage-bar .set-back {
+  color: var(--bold-field-muted);
+}
+
+.set-stage-bar .set-back:hover {
+  color: var(--bold-field-ink);
+}
+
+.set-stage-bar .set-menu-trigger {
+  border-color: color-mix(in srgb, var(--bold-field-ink) 22%, transparent);
+  background: color-mix(in srgb, var(--bold-field-ink) 8%, transparent);
+  color: var(--bold-field-ink);
 }
