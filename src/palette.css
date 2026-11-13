@@ -65,6 +65,14 @@ html:not(.dark) [class~="accent-[#191B27]"] {
   accent-color: var(--signal);
 }
 
+html:not(.dark) [class~="bg-black/50"] {
+  background-color: color-mix(in srgb, var(--bold-field) 50%, transparent) !important;
+}
+
+html:not(.dark) [class~="bg-black/25"] {
+  background-color: color-mix(in srgb, var(--bold-field) 25%, transparent) !important;
+}
+
 /* 60% field and raised paper ------------------------------------------------ */
 
 html:not(.dark) :is(
