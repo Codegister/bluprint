@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { materialLimits, noteFacts } from "../src/convex/lib/buildCapacity";
+import { StudySetShortfallError } from "../src/convex/lib/buildFailure";
 import { shortfallFor } from "../src/convex/lib/buildDefaults";
 import {
   filterGuideToNotes,
@@ -44,6 +45,31 @@ describe("shortfall copy", () => {
     expect(shortfallFor("exam", 2, 3)).toContain(
       "Bluprint can build 2 exam questions from this note",
     );
+  });
+
+  test("a pathway quiz shortfall is a clear failed build, not a quiet partial quiz", () => {
+    const error = new StudySetShortfallError("quiz", 2, 100, {
+      cards: 43,
+      quiz: 2,
+      exams: 1,
+    });
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toContain("2 of 100 quiz questions");
+    expect(error.message).toContain("not marked ready");
+    expect(error.message).toContain("43 flashcards are saved");
+    expect(error.message).toContain("Retry");
+  });
+
+  test("a pathway exam shortfall names the exam count and keeps the other work", () => {
+    const error = new StudySetShortfallError("exam", 1, 87, {
+      cards: 43,
+      quiz: 100,
+      exams: 1,
+    });
+    expect(error.message).toContain("1 of 87 exam questions");
+    expect(error.message).toContain("not marked ready");
+    expect(error.message).toContain("43 flashcards are saved");
+    expect(error.message).toContain("Retry to complete the exam");
   });
 
   test("card shortfalls keep the established wording", () => {

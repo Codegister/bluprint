@@ -1182,6 +1182,7 @@ export const completeBuild = internalMutation({
           v.literal("cognito"),
           v.literal("bluprint"),
           v.literal("rs"),
+          v.literal("specification"),
         ),
       ),
       sourceUrl: v.optional(v.string()),

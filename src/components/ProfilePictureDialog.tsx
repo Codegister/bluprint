@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import {
   AVATAR_GROUPS,
+  defaultAvatarId,
+  isAvatarId,
   randomAvatarId,
   resolveAvatar,
   type AvatarId,
@@ -37,12 +39,14 @@ export function ProfilePictureDialog({
   saving?: boolean;
   onSave: (avatar: AvatarId) => void;
 }) {
-  const [selected, setSelected] = useState<AvatarId>(() =>
-    resolveAvatar(currentAvatar, seed).id,
-  );
+  const initialAvatar = (): AvatarId => {
+    const id = resolveAvatar(currentAvatar, seed).id;
+    return isAvatarId(id) ? id : defaultAvatarId(seed);
+  };
+  const [selected, setSelected] = useState<AvatarId>(initialAvatar);
 
   useEffect(() => {
-    if (open) setSelected(resolveAvatar(currentAvatar, seed).id);
+    if (open) setSelected(initialAvatar);
   }, [open, currentAvatar, seed]);
 
   const selectedOption = resolveAvatar(selected, seed);

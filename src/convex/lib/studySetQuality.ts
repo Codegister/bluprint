@@ -1088,7 +1088,12 @@ export function quizFactIsOnCard(item: QuizLike, cards: readonly CardLike[]): bo
   if (!answer) return true;
   const answerKey = normalizeAnswer(answer);
   return cards.some((card) => {
-    if (normalizeAnswer(card.back).includes(answerKey)) return true;
+    // Exact matches are the same fact. A substring match is not: a short
+    // vocabulary answer such as "la madre" occurs inside the much longer card
+    // answer "la abuela, la madre de mi madre", and treating that as overlap
+    // removed most of a language quiz. Near-duplicate prompts/answers below
+    // still catch cards that genuinely repeat the question.
+    if (normalizeAnswer(card.back) === answerKey) return true;
     if (
       isNearDuplicateStudyItem(
         { prompt: item.question, answer },
@@ -1098,7 +1103,10 @@ export function quizFactIsOnCard(item: QuizLike, cards: readonly CardLike[]): bo
       return true;
     }
     const wanted = contentStems(answer);
-    if (wanted.length < 2) return false;
+    // Two-word answers are too common to establish that the fact is the same:
+    // a language answer such as "la madre" occurs in many different family
+    // cards. Exact and near-duplicate checks above remain the reliable test.
+    if (wanted.length < 3) return false;
     const carried = contentStems(`${card.front} ${card.back}`);
     const matched = wanted.filter((word) => carried.includes(word)).length;
     return matched / wanted.length >= 0.8 && wordOverlap(item.question, card.front) >= 0.2;

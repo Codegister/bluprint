@@ -7,6 +7,41 @@ export type BuildCounts = {
   exams: number;
 };
 
+export class StudySetShortfallError extends Error {
+  readonly section: "quiz" | "exam";
+  readonly built: number;
+  readonly requested: number;
+  readonly saved: BuildCounts;
+
+  constructor(
+    section: "quiz" | "exam",
+    built: number,
+    requested: number,
+    saved: BuildCounts,
+  ) {
+    const noun =
+      section === "quiz"
+        ? requested === 1
+          ? "quiz question"
+          : "quiz questions"
+        : requested === 1
+          ? "exam question"
+          : "exam questions";
+    const finished =
+      saved.cards > 0
+        ? `Your ${saved.cards} flashcard${saved.cards === 1 ? " is" : "s are"} saved.`
+        : "Your notes are safe.";
+    super(
+      `Bluprint built ${built} of ${requested} ${noun}, so this section is incomplete and the set was not marked ready. ${finished} Retry to complete the ${section}.`,
+    );
+    this.name = "StudySetShortfallError";
+    this.section = section;
+    this.built = built;
+    this.requested = requested;
+    this.saved = saved;
+  }
+}
+
 export const STAGE_LABEL: Record<BuildStage, string> = {
   summary: "summary",
   cards: "flashcard",

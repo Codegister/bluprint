@@ -298,6 +298,27 @@ Coordination centres process information and send instructions to effectors.`;
     expect(result.reasons).toContain("already on a card");
   });
 
+  test("2.1b a short vocabulary answer is not rejected just because a card sentence contains it", () => {
+    const card = {
+      front: "Who is la madre de mi madre?",
+      back: "La abuela, la madre de mi madre.",
+    };
+    const question = {
+      question: "What is the English meaning of \"la madre\"?",
+      options: [],
+      correctIndex: 0,
+      type: "typed" as const,
+      answer: "la madre",
+      acceptedAnswers: ["mother"],
+      explanation:
+        "La madre means mother because it names the female parent, while el padre is the father.",
+    };
+    const outline = `${SYLLABUS_SCOPE_HEADER}\nTopic: Family`;
+    const result = prepareQuiz([question], [card], outline);
+    expect(result.reasons).not.toContain("already on a card");
+    expect(result.items).toHaveLength(1);
+  });
+
   test("2.2 the same fact is never asked in both directions", () => {
     const receptor = {
       question: "Which component detects a stimulus in a homeostatic response?",

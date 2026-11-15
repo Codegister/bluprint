@@ -369,6 +369,10 @@ export const listMine = query({
           lastStudiedAt: set.lastStudiedAt,
           lastQuizScore: set.lastQuizScore,
           lastQuizTotal: set.lastQuizTotal,
+          // Course-topic sets need these to match a timetable session without
+          // rebuilding the set or inferring its topic from the title.
+          topicId: set.topicId,
+          topicIds: set.topicIds ?? (set.topicId ? [set.topicId] : []),
           // Progress the student can see: answered as they go, not only at the
           // end of a completed quiz.
           quizAnswered: quizSoFar.answered,
@@ -1717,7 +1721,15 @@ export const completeGeneration = internalMutation({
     summary: summaryValidator,
     cards: v.array(cardInput),
     quiz: v.array(quizInput),
+    // The action may have already run the deterministic quiz preparation for
+    // large pathway saves; the mutation then only needs to write the rows.
+    preparedQuiz: v.optional(v.array(quizInput)),
     exams: v.array(examInput),
+    // Continued pathway builds save one stage at a time so a 100-question
+    // insert does not also have to delete and rewrite the deck and exams in
+    // the same one-second mutation.
+    quizOnly: v.optional(v.boolean()),
+    examsOnly: v.optional(v.boolean()),
     // A short topic name from the generator, applied only when the student has
     // not named the set themselves.
     title: v.optional(v.string()),
@@ -1744,7 +1756,10 @@ export const completeGeneration = internalMutation({
       summary,
       cards,
       quiz,
+      preparedQuiz: preparedQuizArg,
       exams,
+      quizOnly,
+      examsOnly,
       title,
       requested,
       final,
@@ -1757,6 +1772,148 @@ export const completeGeneration = internalMutation({
     if (!set) return { stored: false };
 
     const keepExisting = keepExistingArg === true;
+    const stageNow = Date.now();
+    const stageSyllabusOutline = isSyllabusOutline(set.notes);
+    const stageSpecPoints = set.specPoints ?? [];
+    const tagFor = (text: string): string | undefined =>
+      stageSpecPoints.length > 0
+        ? (matchSpecPoint(text, stageSpecPoints).id ?? undefined)
+        : undefined;
+
+    // A continued pathway quiz has already been quality-checked in the action.
+    // Replace only the old quiz rows; the deck and exam rows stay untouched.
+    if (quizOnly === true) {
+      if (!preparedQuizArg) {
+        throw new Error("A quiz-only save needs prepared quiz questions.");
+      }
+      const oldQuiz = await ctx.db
+        .query("quizQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect();
+      for (const row of oldQuiz) await ctx.db.delete(row._id);
+      // A resumed rebuild can include the old quiz rows in the action's input.
+      // Never store more than the requested total.
+      const quizToStore = preparedQuizArg.slice(0, requested.quiz);
+      for (const [index, question] of quizToStore.entries()) {
+        await ctx.db.insert("quizQuestions", {
+          setId,
+          userId: set.userId,
+          question: question.question,
+          options: question.options,
+          correctIndex: question.correctIndex,
+          explanation: question.explanation,
+          type: question.type,
+          answer: question.answer,
+          acceptedAnswers: question.acceptedAnswers,
+          beyondNotes: stageSyllabusOutline ? undefined : question.beyondNotes,
+          specRef: tagFor(
+            `${question.question} ${question.answer ?? ""} ${question.explanation}`,
+          ),
+          order: index,
+          missCount: 0,
+          correctCount: 0,
+        });
+      }
+      await ctx.db.patch(setId, {
+        quizCount: quizToStore.length,
+        status: "processing" as const,
+        progress: "Quiz saved. Continuing with exam questions…",
+        progressPercent: 82,
+        errorMessage: undefined,
+        updatedAt: stageNow,
+      });
+      return {
+        stored: true,
+        counts: {
+          cards: set.cardCount,
+          quiz: quizToStore.length,
+          exams: set.examCount,
+        },
+      };
+    }
+
+    // The final stage of a continued pathway build only adds the exams and
+    // marks the set ready. The quiz checkpoint already wrote the 100 questions.
+    if (examsOnly === true) {
+      const oldExams = await ctx.db
+        .query("examQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect();
+      for (const row of oldExams) await ctx.db.delete(row._id);
+      const quizRows = await ctx.db
+        .query("quizQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .order("asc")
+        .collect();
+      const excessQuiz = quizRows.slice(requested.quiz);
+      for (const row of excessQuiz) await ctx.db.delete(row._id);
+      const quizTotal = quizRows.length - excessQuiz.length;
+      const storedExams = exams
+        .map((question) => cleanGeneratedText(question, set.level, set.course))
+        .slice(0, requested.exams);
+      for (const [index, question] of storedExams.entries()) {
+        await ctx.db.insert("examQuestions", {
+          setId,
+          userId: set.userId,
+          question: question.question,
+          marks: question.marks,
+          modelAnswer: question.modelAnswer,
+          markingGuide: question.markingGuide,
+          beyondNotes: stageSyllabusOutline ? undefined : question.beyondNotes,
+          specRef: tagFor(`${question.question} ${question.modelAnswer}`),
+          criteria:
+            question.criteria
+              ? alignCriteria(question.criteria)
+              : alignCriteria(toCriteria(question.markingGuide)),
+          order: index,
+        });
+      }
+      const storedSummary = cleanGeneratedText(summary, set.level, set.course);
+      const generatedTitle = title ? shortTitle(title) : "";
+      const named = generatedTitle.length >= 3 && set.titleSource !== "user";
+      const examTotal = storedExams.length;
+      const finalize = final !== false;
+      const generationNote =
+        quizTotal < requested.quiz
+          ? shortfallFor("quiz", quizTotal, requested.quiz)
+          : examTotal < requested.exams
+            ? shortfallFor("exam", examTotal, requested.exams)
+            : "";
+      await ctx.db.patch(setId, {
+        summary: storedSummary,
+        ...(named ? { title: generatedTitle, titleSource: "auto" as const } : {}),
+        quizCount: quizTotal,
+        examCount: examTotal,
+        generationNote: finalize
+          ? [generationNote, failureNote].filter(Boolean).join(" ") || undefined
+          : undefined,
+        ...(finalize
+          ? {
+              status: "ready" as const,
+              progress: undefined,
+              progressPercent: undefined,
+              errorMessage: undefined,
+              processingStartedAt: undefined,
+              generationNotes: undefined,
+            }
+          : {
+              status: "processing" as const,
+              progress: `Exam checkpoint saved: ${examTotal} of ${requested.exams}.`,
+              progressPercent: 89,
+              errorMessage: undefined,
+            }),
+        updatedAt: stageNow,
+      });
+      return {
+        stored: true,
+        counts: {
+          cards: set.cardCount,
+          quiz: quizTotal,
+          exams: examTotal,
+        },
+      };
+    }
+
     const preservedCards = keepExisting
       ? byOrder(
           await ctx.db
@@ -1871,13 +2028,15 @@ export const completeGeneration = internalMutation({
     // The quiz is a second retrieval opportunity, not a reworded card. It is
     // grounded in the notes, disjoint from the deck, free of cloze, inverse
     // pairs, shared answers, leaking explanations and giveaway options.
-    const preparedQuiz = prepareQuiz(
-      storedQuiz,
-      contentCards,
-      set.notes,
-      keyPoints,
-      { level, subject },
-    );
+    const preparedQuiz = preparedQuizArg
+      ? { items: preparedQuizArg, dropped: 0, reasons: [] as string[] }
+      : prepareQuiz(
+          storedQuiz,
+          contentCards,
+          set.notes,
+          keyPoints,
+          { level, subject },
+        );
 
     const quizOffset = preservedQuiz.length;
     for (const [index, question] of preparedQuiz.items.entries()) {
@@ -2005,7 +2164,11 @@ export const completeGeneration = internalMutation({
     // A finished course-topic set can seed another student's private copy.
     // Caching is best-effort: a cache problem must not undo a set that is
     // already saved and ready.
-    if (final !== false) {
+    if (
+      final !== false &&
+      quizTotal >= requested.quiz &&
+      examTotal >= requested.exams
+    ) {
       try {
         await rememberStudySetForReuse(ctx, setId);
       } catch (error) {

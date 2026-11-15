@@ -2,6 +2,11 @@
 node_modules
 dist
 src/convex/_generated
+
+# Playwright browser-test output.
+test-results
+playwright-report
+playwright/.cache
 # Local Convex export containing account data and uploaded notes.
 .convex-backup/
 /freebuff-sites-build/

@@ -29,24 +29,34 @@ import {
 import { materialLimits } from "./lib/buildCapacity";
 import { toCardArgs } from "./lib/cardArgs";
 import { toExamArgs } from "./lib/examArgs";
-import { buildFailureCopy, partialStageNote, type BuildStage } from "./lib/buildFailure";
+import {
+  buildFailureCopy,
+  partialStageNote,
+  StudySetShortfallError,
+  type BuildStage,
+} from "./lib/buildFailure";
 import { buildAqaBiologyPathway } from "./lib/specPathways";
 import { tutorMarkingRules } from "./lib/tutorMarking";
 import { chatCompletionsUrl } from "./lib/gatewayConfig";
 import { alignDataReference, dropUnusedData } from "./lib/paperData";
 import { criteriaToGuide } from "./lib/realPaper";
 import { filterGuideToNotes } from "./lib/noteSupport";
+import { pathwayQuizScopes, pathwaySectionScopes } from "./lib/quizScopes";
+import { runPathwayBatches } from "./lib/pathwayBatches";
 import {
   gradeRecall,
   gradeVocabularyAnswer,
   gradeVocabularyRecall,
   isLanguageCourse,
+  vocabularyAnswerCandidates,
   isShortAnswer,
   normalizeAnswer,
   vocabularyAnswerCandidates,
 } from "./lib/recall";
+import { cleanGeneratedText } from "./lib/register";
 import {
   isNearDuplicateStudyItem,
+  keyPointsForCards,
   prepareCards,
   prepareQuiz,
 } from "./lib/studySetQuality";
@@ -176,6 +186,31 @@ type GeneratedQuiz = {
   /** Zero-based index of the card that contains this item's answer. */
   sourceCard?: number;
 };
+/**
+ * Runs the same deterministic preparation as completeGeneration so a 100-item
+ * pathway quiz does not exceed the one-second mutation limit while it is being
+ * saved. The mutation still writes the rows, counts and final status.
+ */
+function prepareQuizForStorage(
+  quiz: readonly GeneratedQuiz[],
+  cards: readonly GeneratedCard[],
+  notes: string,
+  level?: string,
+  subject?: string,
+) {
+  const contentCards = prepareCards(
+    cards.map((card) => cleanGeneratedText(card, level, subject)),
+    notes,
+  ).cards;
+  return prepareQuiz(
+    quiz.map((question) => cleanGeneratedText(question, level, subject)),
+    contentCards,
+    notes,
+    keyPointsForCards(contentCards),
+    { level, subject },
+  ).items;
+}
+
 type GeneratedExam = {
   question: string;
   marks: number;
@@ -1161,7 +1196,14 @@ async function summariseNotes(
 // is built from three smaller calls instead of one response that would run out
 // of tokens halfway through an array.
 const CARD_BATCH_SIZE = 20;
-const QUIZ_BATCH_SIZE = 20;
+const QUIZ_BATCH_SIZE = 10;
+// Small topic batches are generated in parallel. Three calls at once keeps a
+// long pathway inside the action's time limit without hammering one provider
+// key with the whole subject at once.
+const QUIZ_SCOPE_CONCURRENCY = 5;
+// Exam questions carry a longer marking guide, so two section calls at a time
+// is the safe balance between throughput and provider limits.
+const EXAM_SCOPE_CONCURRENCY = 3;
 const EXAM_BATCH_SIZE = 10;
 /** One deck can ask for up to this many of each item (see the builder sliders). */
 const MAX_REQUESTED_ITEMS = BUILD_MAX;
@@ -1432,19 +1474,26 @@ async function generateQuiz(
   onProgress?: BatchProgress,
   syllabus = false,
   reviewQuiz = "",
+  scopeLabel = "",
 ): Promise<GeneratedQuiz[]> {
   let questions: GeneratedQuiz[] = [];
   const seen = new Set<string>();
-  // Cards are the facts the deck already tests. The quiz must use different
-  // facts from the same notes, not reword a card.
-  const cardBlock = cards
-    .map(
-      (card, index) =>
-        `[${index}] Q: ${card.front.slice(0, 200)}\nA: ${card.back.slice(0, 300)}`,
-    )
-    .join("\n\n");
+  // A subject-wide card list is counter-productive on a pathway: it is long,
+  // it encourages the model to reword cards, and it was leading to very short
+  // batches. The final quality pass still rejects card-overlapping questions;
+  // for a syllabus the model gets the section itself and is asked for a fresh
+  // retrieval question instead.
+  const cardBlock =
+    cards.length > 0 && !syllabus
+      ? cards
+          .map(
+            (card, index) =>
+              `[${index}] Q: ${card.front.slice(0, 200)}\nA: ${card.back.slice(0, 300)}`,
+          )
+          .join("\n\n")
+      : "";
 
-  const maxAttempts = Math.min(8, Math.ceil(target / QUIZ_BATCH_SIZE) + 2);
+  const maxAttempts = Math.min(16, Math.ceil(target / QUIZ_BATCH_SIZE) + 4);
   for (
     let attempt = 0;
     attempt < maxAttempts &&
@@ -1468,7 +1517,7 @@ async function generateQuiz(
           role: "user",
           content:
             `${materialBlock(notes)}\n\n` +
-            (cards.length > 0
+            (cardBlock
               ? `<already_tested_by_cards>\n${cardBlock}\n</already_tested_by_cards>\n\n` +
                 "The cards above already test those facts. Do not ask about the same fact in any direction. " +
                 (syllabus
@@ -1485,11 +1534,11 @@ async function generateQuiz(
             "Do not ask which taught difference is absent while using the other taught differences as distractors; that is a negative-discrimination item and teaches the wrong thing. " +
             (syllabus ? "" : `${GROUNDING_RULES}\n`) +
             (syllabus
-              ? "Cover different topics. Where the qualification calls for applying a concept, ask the student to apply it to a worked example or case from the course. "
+              ? `Cover different parts of this section${scopeLabel ? ` (${scopeLabel})` : ""}. Where the qualification calls for applying a concept, ask the student to apply it to a worked example or case from the course. `
               : "Cover different parts of the material. Where the material gives data, a worked example or a case, ask the student to apply a concept to that — not to an example the material never mentions. ") +
             "A multiple-choice question needs exactly 4 plausible options and one correct index (0-3). All four options must be grammatically parallel, similar in length (within about 20%), and the same kind of phrase. The correct option must not be the longest, the only two-part option, or the only option repeating a distinctive word from the stem. Do not write an option that is obviously the only grammatical fit. " +
             "A typed question asks for a word or short phrase and must be answerable in a few words, with no options. " +
-            "Every question needs a 1-2 sentence explanation that teaches: why the correct answer is right and why at least one named distractor is wrong. Never open with 'The material states', 'The notes define' or 'explicitly in the material'. An explanation must not reveal the answer to any other question. " +
+            "Every question needs a 1-2 sentence explanation that teaches: why the correct answer is right and why at least one named distractor is wrong. State the reason explicitly and use the word 'because' at least once, in this shape: '<correct answer> is correct because <specific reason from the notes>; <one named wrong option> is wrong because <specific reason>.' For a typed question, explain why the answer is correct because of a specific fact. Never open with 'The material states', 'The notes define' or 'explicitly in the material'. An explanation must not reveal the answer to any other question. " +
             "For typed questions list every wording that should be marked correct in acceptedAnswers, including abbreviations and common synonyms. " +
             (previous
               ? `Do not repeat these existing questions. A reworded question with the same answer is still a repeat:\n${previous}\n`
@@ -1523,13 +1572,35 @@ async function generateQuiz(
     try {
       batch = parseQuiz(raw, want);
     } catch {
+      console.error("Quiz batch was not valid JSON", {
+        want,
+        scope: scopeLabel || undefined,
+      });
       continue;
+    }
+    if (batch.length < want) {
+      console.error("Quiz batch came back short", {
+        want,
+        returned: batch.length,
+        scope: scopeLabel || undefined,
+      });
     }
 
     // The batch is checked against the cards and every earlier question. This
     // is where cloze, card overlap, inverse pairs, answer leakage, option
     // giveaways and source-narrating explanations are rejected.
+    const before = questions.length;
     const prepared = prepareQuiz([...questions, ...batch], cards, notes);
+    const dropped = before + batch.length - prepared.items.length;
+    if (dropped > 0) {
+      console.error("Quiz batch lost questions in quality checks", {
+        want,
+        returned: batch.length,
+        dropped,
+        reasons: prepared.reasons.slice(0, 8),
+        scope: scopeLabel || undefined,
+      });
+    }
     questions = prepared.items;
     const added = Math.max(0, prepared.items.length - seen.size);
     for (const question of prepared.items) seen.add(question.question.toLowerCase());
@@ -1548,7 +1619,88 @@ async function generateQuiz(
       "No quiz questions could be generated. Retry the build or add more material.",
     );
   }
+  if (questions.length < target) {
+    console.error("Quiz generation ended short", {
+      target,
+      generated: questions.length,
+      scope: scopeLabel || undefined,
+    });
+  }
   return questions.slice(0, target);
+}
+
+/**
+ * Builds a long pathway quiz one section at a time.
+ *
+ * A single prompt for a whole subject is both too broad and too large: the
+ * model tends to return only a couple of questions, and every retry repeats the
+ * same context. Section batches are small enough to finish, run a few at a
+ * time, and are merged through the same quality filter used for storage. The
+ * caller turns any remaining shortfall into a clear failed build instead of
+ * quietly saving a two-question quiz.
+ */
+async function generatePathwayQuiz(
+  apiKeys: string[],
+  notes: string,
+  cards: Array<{ front: string; back: string }>,
+  target: number,
+  deadline = Number.POSITIVE_INFINITY,
+  onProgress?: BatchProgress,
+  options: { level?: string; subject?: string } = {},
+): Promise<GeneratedQuiz[]> {
+  const scopes = pathwayQuizScopes(notes, target);
+  if (scopes.length === 0) return [];
+
+  const run = await runPathwayBatches({
+    scopes,
+    concurrency: QUIZ_SCOPE_CONCURRENCY,
+    deadline,
+    progressTarget: target,
+    generate: (scope) =>
+      generateQuiz(
+        apiKeys,
+        scope.notes,
+        [],
+        scope.target,
+        deadline,
+        undefined,
+        true,
+        "",
+        scope.label,
+      ),
+    onProgress,
+  });
+
+  for (const failure of run.failures) {
+    console.error("Pathway quiz section failed", failure.label, failure.error);
+  }
+
+  if (run.items.length === 0 && run.failures.length > 0) {
+    const first = run.failures[0]!.error;
+    throw first instanceof Error ? first : new Error("The quiz could not be generated.");
+  }
+
+  // Apply the storage-time card and duplicate rules before reporting a count,
+  // so the caller never believes it has a full quiz that the save will reduce.
+  const prepared = prepareQuiz(
+    run.items,
+    cards,
+    notes,
+    keyPointsForCards(cards),
+    options,
+  );
+  if (prepared.items.length < target) {
+    console.error("Pathway quiz short after quality checks", {
+      target,
+      generated: run.items.length,
+      afterQuality: prepared.items.length,
+      dropped: prepared.dropped,
+      reasons: prepared.reasons.slice(0, 12),
+      failedSections: run.failures.length,
+      skippedSections: run.skippedSections,
+    });
+  }
+  return prepared.items.slice(0, target);
 }
 
 async function generateExams(
@@ -1560,6 +1712,7 @@ async function generateExams(
   onProgress?: BatchProgress,
   syllabus = false,
   reviewExams = "",
+  scopeLabel = "",
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText(context);
   const exams: GeneratedExam[] = [];
@@ -1597,6 +1750,9 @@ async function generateExams(
             `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
             "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
             `${examSourceRule(syllabus)} ` +
+            (syllabus && scopeLabel
+              ? `This batch covers only the section "${scopeLabel}". Stay inside it. `
+              : "") +
             "Include a full-mark model answer that hits each bullet. " +
             (previous
               ? `Do not repeat these existing questions:\n${previous}\n`
@@ -1625,7 +1781,18 @@ async function generateExams(
     try {
       batch = parseExams(raw, want);
     } catch {
+      console.error("Exam batch was not valid JSON", {
+        want,
+        scope: scopeLabel || undefined,
+      });
       continue;
+    }
+    if (batch.length < want) {
+      console.error("Exam batch came back short", {
+        want,
+        returned: batch.length,
+        scope: scopeLabel || undefined,
+      });
     }
 
     // A prompt cannot guarantee that a model stayed inside the notes. Drop any
@@ -1670,7 +1837,84 @@ async function generateExams(
       "No exam-style questions could be generated from this material. Retry or add more notes.",
     );
   }
+  if (exams.length < target) {
+    console.error("Exam generation ended short", {
+      target,
+      generated: exams.length,
+      scope: scopeLabel || undefined,
+    });
+  }
   return exams.slice(0, target);
+}
+
+/**
+ * Builds a long pathway exam section by section.
+ *
+ * Exam questions carry a model answer and a mark scheme, so asking for a whole
+ * subject's worth in one call is even more likely to be truncated than a quiz
+ * batch. The same section boundaries as the quiz keep each call focused, and
+ * the caller turns any remaining shortfall into a failed build instead of a set
+ * with one or two exam questions.
+ */
+async function generatePathwayExams(
+  apiKeys: string[],
+  notes: string,
+  context: StudyContext | undefined,
+  target: number,
+  deadline = Number.POSITIVE_INFINITY,
+  onProgress?: BatchProgress,
+): Promise<GeneratedExam[]> {
+  const scopes = pathwaySectionScopes(notes, target);
+  if (scopes.length === 0) return [];
+
+  const run = await runPathwayBatches({
+    scopes,
+    concurrency: EXAM_SCOPE_CONCURRENCY,
+    deadline,
+    progressTarget: target,
+    generate: (scope) =>
+      generateExams(
+        apiKeys,
+        scope.notes,
+        context,
+        scope.target,
+        deadline,
+        undefined,
+        true,
+        "",
+        scope.label,
+      ),
+    onProgress,
+  });
+
+  for (const failure of run.failures) {
+    console.error("Pathway exam section failed", failure.label, failure.error);
+  }
+
+  if (run.items.length === 0 && run.failures.length > 0) {
+    const first = run.failures[0]!.error;
+    throw first instanceof Error ? first : new Error("The exam could not be generated.");
+  }
+
+  // Sections can occasionally meet at the same broad question. Keep the first
+  // copy here; completeGeneration makes the final storage decision.
+  const seen = new Set<string>();
+  const unique = run.items.filter((exam) => {
+    const key = normalizeAnswer(exam.question);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  if (unique.length < target) {
+    console.error("Pathway exam short after deduplication", {
+      target,
+      generated: run.items.length,
+      afterDedupe: unique.length,
+      failedSections: run.failures.length,
+      skippedSections: run.skippedSections,
+    });
+  }
+  return unique.slice(0, target);
 }
 
 // ---------------------------------------------------------------------------
@@ -3306,10 +3550,23 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
   try {
     const apiKeys = resolveNvidiaKeys();
     let quiz = quizForWrite(snapshot.quiz);
-    if (snapshot.quiz.length === 0) {
+    // A pathway quiz that was checkpointed short must be completed, not
+    // accepted as the final answer just because some rows exist.
+    const needsQuiz =
+      snapshot.quiz.length === 0 ||
+      (plan.syllabus && snapshot.quiz.length < plan.requested.quiz);
+    // A resume must generate only the rows still missing, not a whole new batch
+    // that is later discarded by the exact-count cap.
+    const quizRemaining = plan.syllabus
+      ? Math.max(0, plan.requested.quiz - snapshot.quiz.length)
+      : plan.targetQuiz;
+    // The exam stage starts alongside the quiz stage, but its result is
+    // awaited after the quiz save. Keep the promise in the outer scope.
+    let examPromise: Promise<StageOutcome<GeneratedExam[]>> | null = null;
+    if (needsQuiz) {
       await ctx.runMutation(internal.studySets.setProgress, {
         setId: args.setId,
-        progress: `Writing ${plan.targetQuiz} quiz questions…`,
+        progress: `Writing ${quizRemaining} quiz questions…`,
         percent: 58,
       });
       const reportQuiz: BatchProgress = async (done, target) => {
@@ -3320,23 +3577,67 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
           percent: 58 + (done / Math.max(1, target)) * 20,
         });
       };
+      const cards = cardsForGeneration(snapshot.cards);
+      // Quiz and exam content are independent after the card checkpoint. Run
+      // both section sets now so the build pays one generation window instead
+      // of two sequential ones. The same quality checks and save caps apply.
+      const examRemaining = Math.max(
+        0,
+        plan.requested.exams - snapshot.exams.length,
+      );
+      if (plan.syllabus && examRemaining > 0) {
+        const reportExam: BatchProgress = async (done, target) => {
+          if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+          await ctx.runMutation(internal.studySets.setProgress, {
+            setId: args.setId,
+            progress: `Drafting exam questions… ${done} of ${target}`,
+            percent: 80 + (done / Math.max(1, target)) * 14,
+          });
+        };
+        examPromise = stage(
+          () =>
+            generatePathwayExams(
+              apiKeys,
+              plan.notes,
+              plan.context,
+              examRemaining,
+              Date.now() + 7 * 60 * 1000,
+              reportExam,
+            ),
+          [],
+        );
+      }
       const quizStage = await stage(
         () =>
-          generateQuiz(
-            apiKeys,
-            plan.notes,
-            cardsForGeneration(snapshot.cards),
-            plan.targetQuiz,
-            Date.now() + 7 * 60 * 1000,
-            reportQuiz,
-            plan.syllabus,
-          ),
+          plan.syllabus
+            ? generatePathwayQuiz(
+                apiKeys,
+                plan.notes,
+                cards,
+                quizRemaining,
+                Date.now() + 7 * 60 * 1000,
+                reportQuiz,
+                { level: plan.context.level, subject: plan.context.course },
+              )
+            : generateQuiz(
+                apiKeys,
+                plan.notes,
+                cards,
+                quizRemaining,
+                Date.now() + 7 * 60 * 1000,
+                reportQuiz,
+                false,
+              ),
         [],
       );
       if (quizStage.failure) {
+        if (plan.syllabus) throw quizStage.failure;
         failureStage ??= "quiz";
       } else if (quizStage.value.length > 0) {
-        quiz = quizStage.value;
+        quiz =
+          snapshot.quiz.length > 0
+            ? [...quiz, ...quizStage.value]
+            : quizStage.value;
       }
     } else {
       await ctx.runMutation(internal.studySets.setProgress, {
@@ -3349,22 +3650,122 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
     if (!(await setStillExists(ctx, args.setId))) {
       return { continued: false, cancelled: true };
     }
+    if (plan.syllabus && quiz.length < plan.requested.quiz) {
+      throw new StudySetShortfallError(
+        "quiz",
+        quiz.length,
+        plan.requested.quiz,
+        savedCounts,
+      );
+    }
     currentStage = "save";
     await ctx.runMutation(internal.studySets.setProgress, {
       setId: args.setId,
       progress: "Saving quiz questions…",
       percent: 78,
     });
-    await ctx.runMutation(internal.studySets.completeGeneration, {
+    const saved = await ctx.runMutation(internal.studySets.completeGeneration, {
       setId: args.setId,
       summary,
       cards: toCardArgs(snapshot.cards),
       quiz,
+      preparedQuiz: prepareQuizForStorage(
+        quiz,
+        snapshot.cards,
+        plan.notes,
+        set.level,
+        set.course,
+      ),
       exams: examsForWrite(snapshot.exams),
       title: summary.title,
       requested: plan.requested,
       final: false,
+      quizOnly: true,
     });
+    // completeGeneration can still drop a question during its final quality
+    // pass. A syllabus request must fail here rather than continue to the exam
+    // stage and report a ready set with a short quiz.
+    if (
+      plan.syllabus &&
+      saved.counts &&
+      saved.counts.quiz < plan.requested.quiz
+    ) {
+      throw new StudySetShortfallError(
+        "quiz",
+        saved.counts.quiz,
+        plan.requested.quiz,
+        {
+          cards: saved.counts.cards,
+          quiz: saved.counts.quiz,
+          exams: saved.counts.exams,
+        },
+      );
+    }
+    if (examPromise) {
+      const examStage = await examPromise;
+      const examCandidates = [
+        ...examsForWrite(snapshot.exams),
+        ...examStage.value,
+      ];
+      if (examCandidates.length < plan.requested.exams) {
+        const checkpoint = await ctx.runMutation(
+          internal.studySets.completeGeneration,
+          {
+            setId: args.setId,
+            summary,
+            cards: toCardArgs(snapshot.cards),
+            quiz: quizForWrite(snapshot.quiz),
+            exams: toExamArgs(examCandidates),
+            title: summary.title,
+            requested: plan.requested,
+            final: false,
+            examsOnly: true,
+          },
+        );
+        if (checkpoint.stored && checkpoint.counts) {
+          savedCounts.cards = checkpoint.counts.cards;
+          savedCounts.quiz = checkpoint.counts.quiz;
+          savedCounts.exams = checkpoint.counts.exams;
+        }
+        throw new StudySetShortfallError(
+          "exam",
+          savedCounts.exams,
+          plan.requested.exams,
+          savedCounts,
+        );
+      }
+      const examSaved = await ctx.runMutation(
+        internal.studySets.completeGeneration,
+        {
+          setId: args.setId,
+          summary,
+          cards: toCardArgs(snapshot.cards),
+          quiz: quizForWrite(snapshot.quiz),
+          exams: toExamArgs(examCandidates),
+          title: summary.title,
+          requested: plan.requested,
+          final: true,
+          examsOnly: true,
+        },
+      );
+      if (
+        examSaved.counts &&
+        examSaved.counts.exams < plan.requested.exams
+      ) {
+        throw new StudySetShortfallError(
+          "exam",
+          examSaved.counts.exams,
+          plan.requested.exams,
+          {
+            cards: examSaved.counts.cards,
+            quiz: examSaved.counts.quiz,
+            exams: examSaved.counts.exams,
+          },
+        );
+      }
+      return { continued: true };
+    }
+
     await ctx.runMutation(internal.studySets.setProgress, {
       setId: args.setId,
       progress: "Quiz saved. Continuing with exam questions…",
@@ -3383,12 +3784,13 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
       return { continued: false, cancelled: true };
     }
     console.error("Study set quiz continuation failed", args.setId, error);
-    await recordProviderIncident(ctx, "build", error);
-    const message = buildFailureCopy(
-      currentStage,
-      savedCounts,
-      isRateLimit(error),
-    );
+    if (!(error instanceof StudySetShortfallError)) {
+      await recordProviderIncident(ctx, "build", error);
+    }
+    const message =
+      error instanceof StudySetShortfallError
+        ? error.message
+        : buildFailureCopy(currentStage, savedCounts, isRateLimit(error));
     await ctx.runMutation(internal.studySets.failGeneration, {
       setId: args.setId,
       message,
@@ -3440,10 +3842,18 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
   try {
     const apiKeys = resolveNvidiaKeys();
     let exams = examsForWrite(snapshot.exams);
-    if (snapshot.exams.length === 0) {
+    // A pathway exam checkpoint with only a few questions must be completed,
+    // not treated as finished because some rows exist.
+    const needsExams =
+      snapshot.exams.length === 0 ||
+      (plan.syllabus && snapshot.exams.length < plan.requested.exams);
+    const examRemaining = plan.syllabus
+      ? Math.max(0, plan.requested.exams - snapshot.exams.length)
+      : plan.targetExam;
+    if (needsExams) {
       await ctx.runMutation(internal.studySets.setProgress, {
         setId: args.setId,
-        progress: `Drafting ${plan.targetExam} exam questions…`,
+        progress: `Drafting ${examRemaining} exam questions…`,
         percent: 80,
       });
       const reportExams: BatchProgress = async (done, target) => {
@@ -3456,26 +3866,68 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
       };
       const examStage = await stage(
         () =>
-          generateExams(
-            apiKeys,
-            plan.notes,
-            plan.context,
-            plan.targetExam,
-            Date.now() + 7 * 60 * 1000,
-            reportExams,
-            plan.syllabus,
-          ),
+          plan.syllabus
+            ? generatePathwayExams(
+                apiKeys,
+                plan.notes,
+                plan.context,
+                examRemaining,
+                Date.now() + 7 * 60 * 1000,
+                reportExams,
+              )
+            : generateExams(
+                apiKeys,
+                plan.notes,
+                plan.context,
+                plan.targetExam,
+                Date.now() + 7 * 60 * 1000,
+                reportExams,
+                false,
+              ),
         [],
       );
       if (examStage.failure) {
+        if (plan.syllabus) throw examStage.failure;
         failureStage ??= "exam";
       } else if (examStage.value.length > 0) {
-        exams = toExamArgs(examStage.value);
+        const generated = toExamArgs(examStage.value);
+        exams =
+          snapshot.exams.length > 0 ? [...exams, ...generated] : generated;
       }
     }
 
     if (!(await setStillExists(ctx, args.setId))) {
       return { continued: false, cancelled: true };
+    }
+    if (plan.syllabus && exams.length < plan.requested.exams) {
+      // Keep the exams that did finish. Without this checkpoint the next Retry
+      // starts again from the old one-exam placeholder, even though most of the
+      // paper was already generated.
+      const checkpoint = await ctx.runMutation(
+        internal.studySets.completeGeneration,
+        {
+          setId: args.setId,
+          summary,
+          cards: toCardArgs(snapshot.cards),
+          quiz: quizForWrite(snapshot.quiz),
+          exams: toExamArgs(exams),
+          title: summary.title,
+          requested: plan.requested,
+          final: false,
+          examsOnly: true,
+        },
+      );
+      if (checkpoint.stored && checkpoint.counts) {
+        savedCounts.cards = checkpoint.counts.cards;
+        savedCounts.quiz = checkpoint.counts.quiz;
+        savedCounts.exams = checkpoint.counts.exams;
+      }
+      throw new StudySetShortfallError(
+        "exam",
+        savedCounts.exams,
+        plan.requested.exams,
+        savedCounts,
+      );
     }
     currentStage = "save";
     await ctx.runMutation(internal.studySets.setProgress, {
@@ -3483,7 +3935,7 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
       progress: "Saving your set…",
       percent: 97,
     });
-    await ctx.runMutation(internal.studySets.completeGeneration, {
+    const saved = await ctx.runMutation(internal.studySets.completeGeneration, {
       setId: args.setId,
       summary,
       cards: toCardArgs(snapshot.cards),
@@ -3492,8 +3944,43 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
       title: summary.title,
       requested: plan.requested,
       final: true,
+      examsOnly: true,
       ...(failureStage ? { failureNote: partialStageNote(failureStage) } : {}),
     });
+    // The final storage pass can drop one more question after the quiz stage's
+    // checkpoint. Never mark a pathway ready with a short quiz.
+    if (
+      plan.syllabus &&
+      saved.counts &&
+      saved.counts.quiz < plan.requested.quiz
+    ) {
+      throw new StudySetShortfallError(
+        "quiz",
+        saved.counts.quiz,
+        plan.requested.quiz,
+        {
+          cards: saved.counts.cards,
+          quiz: saved.counts.quiz,
+          exams: saved.counts.exams,
+        },
+      );
+    }
+    if (
+      plan.syllabus &&
+      saved.counts &&
+      saved.counts.exams < plan.requested.exams
+    ) {
+      throw new StudySetShortfallError(
+        "exam",
+        saved.counts.exams,
+        plan.requested.exams,
+        {
+          cards: saved.counts.cards,
+          quiz: saved.counts.quiz,
+          exams: saved.counts.exams,
+        },
+      );
+    }
     return { continued: true };
   } catch (error) {
     if (error instanceof BuildCancelled) {
@@ -3501,12 +3988,13 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
       return { continued: false, cancelled: true };
     }
     console.error("Study set exam continuation failed", args.setId, error);
-    await recordProviderIncident(ctx, "build", error);
-    const message = buildFailureCopy(
-      currentStage,
-      savedCounts,
-      isRateLimit(error),
-    );
+    if (!(error instanceof StudySetShortfallError)) {
+      await recordProviderIncident(ctx, "build", error);
+    }
+    const message =
+      error instanceof StudySetShortfallError
+        ? error.message
+        : buildFailureCopy(currentStage, savedCounts, isRateLimit(error));
     await ctx.runMutation(internal.studySets.failGeneration, {
       setId: args.setId,
       message,
@@ -3813,15 +4301,32 @@ async function processStudySetForUser(
     // A stage interrupted after the flashcard checkpoint can resume where it
     // stopped. This is what makes the set page's Retry action continue the
     // build instead of spending a fresh rebuild credit on cards it already has.
+    // A pathway quiz can also be partially checkpointed (for example 60 of 100)
+    // after hitting the action deadline; that is still a quiz resume, not a
+    // completed section.
+    const resumeTargetQuiz = Math.min(
+      MAX_REQUESTED_ITEMS,
+      Math.max(BUILD_MIN, existing.targetQuizCount ?? BUILD_DEFAULTS.quiz),
+    );
+    const resumeTargetExam = Math.min(
+      MAX_REQUESTED_ITEMS,
+      Math.max(BUILD_MIN, existing.targetExamCount ?? BUILD_DEFAULTS.exam),
+    );
     const resumeStage: "quiz" | "exam" | null =
       existing.generationNotes === undefined &&
       (existing.status === "processing" || existing.status === "error") &&
       existing.cardCount > 0
-        ? existing.quizCount === 0
-          ? "quiz"
-          : existing.examCount === 0
-            ? "exam"
-            : null
+        ? existing.courseId !== undefined
+          ? existing.quizCount < resumeTargetQuiz
+            ? "quiz"
+            : existing.examCount < resumeTargetExam
+              ? "exam"
+              : null
+          : existing.quizCount === 0
+            ? "quiz"
+            : existing.examCount === 0
+              ? "exam"
+              : null
         : null;
 
     // A rebuild is a second, full AI run over the same notes, so it spends an
@@ -4109,22 +4614,48 @@ async function processStudySetForUser(
       currentStage = "quiz";
       const quizStage = await stage(
         () =>
-          generateQuiz(
-            apiKeys,
-            notes,
-            cards,
-            targetQuiz,
-            deadline,
-            reportQuiz,
-            syllabus,
-          ),
+          syllabus
+            ? generatePathwayQuiz(
+                apiKeys,
+                notes,
+                cards,
+                targetQuiz,
+                deadline,
+                reportQuiz,
+                { level: context.level, subject: context.course },
+              )
+            : generateQuiz(
+                apiKeys,
+                notes,
+                cards,
+                targetQuiz,
+                deadline,
+                reportQuiz,
+                false,
+              ),
         [],
       );
       const quiz = quizStage.value;
       if (quizStage.failure) {
+        if (syllabus) throw quizStage.failure;
         stageFailures.push({ stage: "quiz", error: quizStage.failure });
       } else if (quiz.length > 0) {
+        if (syllabus && reusedQuiz + quiz.length < requestedQuiz) {
+          throw new StudySetShortfallError(
+            "quiz",
+            reusedQuiz + quiz.length,
+            requestedQuiz,
+            savedCounts,
+          );
+        }
         await savePartial(summary, cards, quiz, []);
+      } else if (syllabus && reusedQuiz < requestedQuiz) {
+        throw new StudySetShortfallError(
+          "quiz",
+          reusedQuiz,
+          requestedQuiz,
+          savedCounts,
+        );
       }
 
       if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
@@ -4144,20 +4675,37 @@ async function processStudySetForUser(
       currentStage = "exam";
       const examStage = await stage(
         () =>
-          generateExams(
-            apiKeys,
-            notes,
-            context,
-            targetExam,
-            deadline,
-            reportExams,
-            syllabus,
-          ),
+          syllabus
+            ? generatePathwayExams(
+                apiKeys,
+                notes,
+                context,
+                targetExam,
+                deadline,
+                reportExams,
+              )
+            : generateExams(
+                apiKeys,
+                notes,
+                context,
+                targetExam,
+                deadline,
+                reportExams,
+                false,
+              ),
         [],
       );
       const exams = examStage.value;
       if (examStage.failure) {
+        if (syllabus) throw examStage.failure;
         stageFailures.push({ stage: "exam", error: examStage.failure });
+      } else if (syllabus && reusedExams + exams.length < requestedExam) {
+        throw new StudySetShortfallError(
+          "exam",
+          reusedExams + exams.length,
+          requestedExam,
+          savedCounts,
+        );
       }
 
       // Last chance to stop before writing rows: a set deleted while the exam
@@ -4188,7 +4736,7 @@ async function processStudySetForUser(
         percent: 97,
       });
       currentStage = "save";
-      await ctx.runMutation(internal.studySets.completeGeneration, {
+      const saved = await ctx.runMutation(internal.studySets.completeGeneration, {
         setId,
         summary,
         cards: toCardArgs(cards),
@@ -4212,6 +4760,38 @@ async function processStudySetForUser(
           ? { failureNote: partialStageNote(stageFailures[0]!.stage) }
           : {}),
       });
+      if (
+        syllabus &&
+        saved.counts &&
+        saved.counts.quiz < requestedQuiz
+      ) {
+        throw new StudySetShortfallError(
+          "quiz",
+          saved.counts.quiz,
+          requestedQuiz,
+          {
+            cards: saved.counts.cards,
+            quiz: saved.counts.quiz,
+            exams: saved.counts.exams,
+          },
+        );
+      }
+      if (
+        syllabus &&
+        saved.counts &&
+        saved.counts.exams < requestedExam
+      ) {
+        throw new StudySetShortfallError(
+          "exam",
+          saved.counts.exams,
+          requestedExam,
+          {
+            cards: saved.counts.cards,
+            quiz: saved.counts.quiz,
+            exams: saved.counts.exams,
+          },
+        );
+      }
       return { started: true };
     } catch (error) {
       // The set was deleted while the build ran: there is nothing to report and
@@ -4224,7 +4804,9 @@ async function processStudySetForUser(
       // written for a student. The provider failure is also recorded so the
       // deployment's health sweep can alert on a repeated cause.
       console.error("Study set build failed", setId, error);
-      await recordProviderIncident(ctx, "build", error);
+      if (!(error instanceof StudySetShortfallError)) {
+        await recordProviderIncident(ctx, "build", error);
+      }
       // A failed run must not spend the student's allowance. Refund only the
       // attempt that started here, so a newer build is never quietly cancelled.
       let refunded = false;
@@ -4238,11 +4820,10 @@ async function processStudySetForUser(
       } catch (refundError) {
         console.error("Could not refund the failed set allowance", refundError);
       }
-      const message = buildFailureCopy(
-        currentStage,
-        savedCounts,
-        isRateLimit(error),
-      );
+      const message =
+        error instanceof StudySetShortfallError
+          ? error.message
+          : buildFailureCopy(currentStage, savedCounts, isRateLimit(error));
       const finalMessage = refunded
         ? `${message} This attempt was not counted against your build allowance.`
         : message;
