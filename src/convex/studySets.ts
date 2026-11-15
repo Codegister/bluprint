@@ -1728,6 +1728,7 @@ export const completeGeneration = internalMutation({
     // Continued pathway builds save one stage at a time so a 100-question
     // insert does not also have to delete and rewrite the deck and exams in
     // the same one-second mutation.
+    cardsOnly: v.optional(v.boolean()),
     quizOnly: v.optional(v.boolean()),
     examsOnly: v.optional(v.boolean()),
     // A short topic name from the generator, applied only when the student has
@@ -1758,6 +1759,7 @@ export const completeGeneration = internalMutation({
       quiz,
       preparedQuiz: preparedQuizArg,
       exams,
+      cardsOnly,
       quizOnly,
       examsOnly,
       title,
@@ -1779,6 +1781,68 @@ export const completeGeneration = internalMutation({
       stageSpecPoints.length > 0
         ? (matchSpecPoint(text, stageSpecPoints).id ?? undefined)
         : undefined;
+
+    // A rebuild saves its new deck as soon as it is ready. The previous quiz
+    // and exams remain available until their replacements have been generated,
+    // so a late failure can never turn a finished deck back into a blank set.
+    if (cardsOnly === true) {
+      const storedSummary = cleanGeneratedText(summary, set.level, set.course);
+      const contentCards = prepareCards(
+        cards.map((card) => cleanGeneratedText(card, set.level, set.course)),
+        set.notes,
+      ).cards;
+      // A filtered-to-empty deck must not erase the deck the student already
+      // has. The call only arrives with generated cards, but grounding can
+      // still reject every one of them.
+      if (contentCards.length === 0) return { stored: false };
+      const oldCards = await ctx.db
+        .query("flashcards")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect();
+      for (const row of oldCards) await ctx.db.delete(row._id);
+      for (const [index, card] of contentCards.entries()) {
+        await ctx.db.insert("flashcards", {
+          setId,
+          userId: set.userId,
+          front: card.front,
+          back: card.back,
+          order: index,
+          beyondNotes: card.beyondNotes,
+          specRef: tagFor(`${card.front} ${card.back}`),
+          recallThreshold: 0.75,
+          recallUnits: deriveRecallUnits(card.back),
+          status: "new",
+          reviewCount: 0,
+          dueAt: stageNow,
+          intervalDays: 0,
+          fsrsState: "new",
+          lapses: 0,
+          reps: 0,
+        });
+      }
+
+      const generatedTitle = title ? shortTitle(title) : "";
+      const named = generatedTitle.length >= 3 && set.titleSource !== "user";
+      await ctx.db.patch(setId, {
+        summary: storedSummary,
+        ...(named ? { title: generatedTitle, titleSource: "auto" as const } : {}),
+        cardCount: contentCards.length,
+        knownCount: 0,
+        status: "processing" as const,
+        progress: "Flashcards saved. Continuing with the quiz…",
+        progressPercent: 58,
+        errorMessage: undefined,
+        updatedAt: stageNow,
+      });
+      return {
+        stored: true,
+        counts: {
+          cards: contentCards.length,
+          quiz: set.quizCount,
+          exams: set.examCount,
+        },
+      };
+    }
 
     // A continued pathway quiz has already been quality-checked in the action.
     // Replace only the old quiz rows; the deck and exam rows stay untouched.

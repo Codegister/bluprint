@@ -74,10 +74,28 @@ export function buildFailureCopy(
   const why = rateLimited
     ? `The AI was rate-limited during the ${label} stage`
     : `The ${label} stage did not finish`;
-  return `${why}. ${keptSentence(counts)} You can retry immediately; this attempt was not counted against your build allowance.`;
+  return `${why}. ${keptSentence(counts)} You can retry immediately.`;
 }
 
 /** A note attached to a set that finished, but lost one section. */
 export function partialStageNote(stage: BuildStage): string {
   return `The ${STAGE_LABEL[stage]} stage failed, so that section is missing. Everything else in this set is complete.`;
+}
+
+/**
+ * Whether another attempt could plausibly finish the missing section. A short
+ * result is worth retrying because the next batch may add the missing items; a
+ * rejected key, a missing model or a validation error is not.
+ */
+export function isRetryableBuildError(error: unknown): boolean {
+  if (error instanceof StudySetShortfallError) return true;
+  const status = (error as { status?: unknown } | null)?.status;
+  if (typeof status === "number") {
+    if (status === 0 || status === 429 || status >= 500) return true;
+    if (status === 401 || status === 402 || status === 403 || status === 404 || status === 410) {
+      return false;
+    }
+  }
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /timeout|timed out|fetch failed|network|rate.?limit|too many requests/i.test(message);
 }

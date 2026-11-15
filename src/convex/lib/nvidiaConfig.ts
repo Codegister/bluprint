@@ -47,7 +47,11 @@ export function isRetiredModel(model: string): boolean {
  */
 export const NVIDIA_TEXT_FALLBACK_MODELS = [
   "nvidia/nemotron-3.5-bolt-e4b",
-  "nvidia/nemotron-3-ultra-550b-a55b",
+  // Super VL is a 120B multimodal model; it also handles text and is a better
+  // quality fallback than the very slow Ultra endpoint, which timed out on a
+  // short probe from this deployment.
+  "nvidia/nemotron-3.5-super-vl-120b-a12b",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
 ];
 
 export const NVIDIA_VISION_FALLBACK_MODELS = [
@@ -95,6 +99,42 @@ function modelList(envName: string, fallback: string[]): string[] {
     .map((value) => value.trim())
     .filter((value) => value.length > 0 && !isRetiredModel(value));
   return [...new Set(values)];
+}
+
+/** A generation task whose model is chosen separately from the tutor. */
+export type GenerationTask = "summary" | "cards" | "quiz" | "exam";
+
+/**
+ * The primary model for each generation task, then its fallbacks.
+ *
+ * The task split is deliberately conservative: a fast model writes the
+ * summary and deck, a larger model writes the quiz and exam questions, and the
+ * same checked fallback chain protects every task. A model that is not
+ * installed (or is too slow) belongs nowhere in this table.
+ */
+export function generationModelChain(task: GenerationTask): string[] {
+  const defaults: Record<GenerationTask, string[]> = {
+    summary: [
+      "nvidia/nemotron-3.5-bolt-e4b",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+    ],
+    cards: [
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "nvidia/nemotron-3.5-bolt-e4b",
+      "nvidia/nemotron-3.5-super-vl-120b-a12b",
+    ],
+    quiz: [
+      "nvidia/nemotron-3.5-super-vl-120b-a12b",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "nvidia/nemotron-3.5-bolt-e4b",
+    ],
+    exam: [
+      "nvidia/nemotron-3.5-super-vl-120b-a12b",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "nvidia/nemotron-3.5-bolt-e4b",
+    ],
+  };
+  return [...new Set(defaults[task].filter((model) => !isRetiredModel(model)))];
 }
 
 /**

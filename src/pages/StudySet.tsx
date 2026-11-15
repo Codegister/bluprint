@@ -329,7 +329,9 @@ function BuildingPanel({
                 ) : (
                   <RotateCcw className="size-3.5" />
                 )}
-                Rebuild set
+                {set.cardCount + set.quizCount + set.examCount > 0
+                  ? "Continue build"
+                  : "Rebuild set"}
               </Button>
             </div>
           )}
@@ -350,7 +352,8 @@ function FinishedSections({ set }: { set: Doc<"studySets"> }) {
     <div className="mt-4 rounded-2xl border border-border bg-brand-panel/50 p-4">
       <p className="text-[0.8rem] font-semibold text-brand-ink">Open what finished</p>
       <p className="mt-0.5 text-[0.76rem] text-muted-foreground">
-        These sections are saved and work now; only the failed stage is missing.
+        These sections are saved and work now. The rest of the build can keep
+        going in the background.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         {set.cardCount > 0 && (
@@ -406,7 +409,9 @@ function ErrorPanel({
           ) : (
             <RotateCcw className="size-4" />
           )}
-          Rebuild set
+          {set.cardCount + set.quizCount + set.examCount > 0
+            ? "Continue build"
+            : "Rebuild set"}
         </Button>
 
         <FinishedSections set={set} />

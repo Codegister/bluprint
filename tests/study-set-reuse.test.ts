@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { internal } from "../src/convex/_generated/api";
 import type { MutationCtx } from "../src/convex/_generated/server";
-import { processStudySetScheduled } from "../src/convex/ai";
+import { continueStudySetQuiz, processStudySetScheduled } from "../src/convex/ai";
 import { refund } from "../src/convex/buildUsage";
 import {
+  claimContinuation,
   claimForProcessing,
   completeGeneration,
   failGeneration,
+  getBuildSnapshot,
   getForProcessing,
   isActive,
   setProgress,
@@ -68,10 +70,16 @@ function fakeContext(tables: Tables) {
         );
       };
       return {
-        withIndex: (_index: string, build: (query: any) => any) => ({
-          first: async () => matching(build)[0] ?? null,
-          collect: async () => matching(build),
-        }),
+        withIndex: (_index: string, build: (query: any) => any) => {
+          const rows = matching(build);
+          return {
+            first: async () => rows[0] ?? null,
+            collect: async () => rows,
+            order: (_direction: "asc" | "desc") => ({
+              collect: async () => rows,
+            }),
+          };
+        },
         collect: async () => matching(),
       };
     },
@@ -228,6 +236,8 @@ function actionContext(tables: Tables) {
   const functions: Array<[unknown, InternalHandler]> = [
     [internal.studySets.getForProcessing, getForProcessing as unknown as InternalHandler],
     [internal.studySets.claimForProcessing, claimForProcessing as unknown as InternalHandler],
+    [internal.studySets.claimContinuation, claimContinuation as unknown as InternalHandler],
+    [internal.studySets.getBuildSnapshot, getBuildSnapshot as unknown as InternalHandler],
     [internal.studySets.setProgress, setProgress as unknown as InternalHandler],
     [internal.studySets.isActive, isActive as unknown as InternalHandler],
     [internal.studySets.completeGeneration, completeGeneration as unknown as InternalHandler],
@@ -986,6 +996,184 @@ describe("study set reuse", () => {
       "Explain how chlorophyll supports photosynthesis.",
     );
     expect(tables.studySetCache[0]!.uses).toBe(1);
+  });
+
+  test("a card checkpoint saves the new deck without touching the old quiz or exams", async () => {
+    const tables = rowsForSource("set:source");
+    const { ctx } = fakeContext(tables);
+    const handler = (completeGeneration as unknown as {
+      _handler: (
+        ctx: unknown,
+        args: Record<string, unknown>,
+      ) => Promise<{
+        stored: boolean;
+        counts?: { cards: number; quiz: number; exams: number };
+      }>;
+    })._handler;
+
+    const result = await handler(ctx, {
+      setId: "set:source",
+      summary: {
+        title: "Cell structure",
+        overview: "Cells contain organelles.",
+        keyPoints: ["Cells contain organelles."],
+        examFocus: ["Cell structure"],
+      },
+      cards: [
+        {
+          front: "What do cells contain?",
+          back: "Cells contain organelles.",
+        },
+      ],
+      quiz: [],
+      exams: [],
+      title: "Cell structure",
+      requested: { cards: 3, quiz: 5, exams: 3 },
+      final: false,
+      cardsOnly: true,
+    });
+
+    expect(result.stored).toBe(true);
+    expect(result.counts).toEqual({ cards: 1, quiz: 1, exams: 1 });
+    const set = tables.studySets[0]!;
+    expect(set.status).toBe("processing");
+    expect(set.cardCount).toBe(1);
+    expect(set.quizCount).toBe(1);
+    expect(set.examCount).toBe(1);
+    expect(set.knownCount).toBe(0);
+    expect(tables.flashcards.filter((row) => row.setId === "set:source")).toHaveLength(1);
+    expect(tables.quizQuestions.filter((row) => row.setId === "set:source")).toHaveLength(1);
+    expect(tables.examQuestions.filter((row) => row.setId === "set:source")).toHaveLength(1);
+  });
+
+  test("a rebuild continuation replaces the old quiz and exams instead of reusing them", async () => {
+    const targetId = "set:rebuild";
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    tables.studySets.push(
+      sourceSet({
+        _id: targetId,
+        userId: "user:new",
+        title: "Cells rebuilt",
+        notes: `${NOTES}\nThe nucleus stores genetic material.`,
+        status: "processing",
+        processingStartedAt: 1,
+        cardCount: 2,
+        quizCount: 1,
+        examCount: 1,
+        targetCardCount: 2,
+        targetQuizCount: 1,
+        targetExamCount: 1,
+        summary: {
+          title: "Cells rebuilt",
+          overview: "Cells contain organelles.",
+          keyPoints: ["Cells contain organelles."],
+          examFocus: ["Cell structure"],
+        },
+      }),
+    );
+    for (const [index, card] of tables.flashcards.slice(0, 2).entries()) {
+      tables.flashcards.push({
+        ...card,
+        _id: `target-card:${index}`,
+        setId: targetId,
+        userId: "user:new",
+        order: index,
+      });
+    }
+    tables.quizQuestions.push({
+      ...tables.quizQuestions[0]!,
+      _id: "target-old-quiz",
+      setId: targetId,
+      userId: "user:new",
+      question: "OLD quiz question?",
+      options: ["Old A", "Old B", "Old C", "Old D"],
+      correctIndex: 0,
+      order: 0,
+    });
+    tables.examQuestions.push({
+      ...tables.examQuestions[0]!,
+      _id: "target-old-exam",
+      setId: targetId,
+      userId: "user:new",
+      question: "OLD exam question?",
+      order: 0,
+    });
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      let content: string;
+      if (prompt.includes("quiz questions")) {
+        content = JSON.stringify({
+          questions: [
+            {
+              question: "What stores genetic material?",
+              type: "typed",
+              answer: "nucleus",
+              acceptedAnswers: ["nucleus"],
+              explanation:
+                "The nucleus is correct because it stores genetic material; the membrane is wrong because it controls entry and exit.",
+            },
+          ],
+        });
+      } else if (prompt.includes("marking guide")) {
+        content = JSON.stringify({
+          questions: [
+            {
+              question: "Describe the role of the nucleus.",
+              marks: 1,
+              modelAnswer: "The nucleus stores genetic material.",
+              markingGuide: ["1 mark: stores genetic material"],
+            },
+          ],
+        });
+      } else {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables);
+      const handler = (continueStudySetQuiz as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+      })._handler;
+      await handler(action, {
+        setId: targetId,
+        userId: "user:new",
+        runStartedAt: 1,
+        retryCount: 1,
+        replaceExisting: true,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    const finished = tables.studySets.find((row) => row._id === targetId)!;
+    expect(finished.status).toBe("ready");
+    const quiz = tables.quizQuestions.filter((row) => row.setId === targetId);
+    expect(quiz).toHaveLength(1);
+    expect(quiz[0]!.question).toBe("What stores genetic material?");
+    expect(quiz.some((row) => row.question === "OLD quiz question?")).toBe(false);
+    const exams = tables.examQuestions.filter((row) => row.setId === targetId);
+    expect(exams).toHaveLength(1);
+    expect(exams[0]!.question).toBe("Describe the role of the nucleus.");
+    expect(exams.some((row) => row.question === "OLD exam question?")).toBe(false);
   });
 
   test("merges generated topics into a partially reused set", async () => {

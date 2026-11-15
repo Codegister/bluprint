@@ -31,6 +31,7 @@ import { toCardArgs } from "./lib/cardArgs";
 import { toExamArgs } from "./lib/examArgs";
 import {
   buildFailureCopy,
+  isRetryableBuildError,
   partialStageNote,
   StudySetShortfallError,
   type BuildStage,
@@ -111,6 +112,7 @@ import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
 import { buildRsPathway } from "./lib/rsPathways";
 import {
   OPENROUTER_CHAT_URL,
+  OPENROUTER_GENERATION_MODEL,
   OPENROUTER_TUTOR_MODEL,
   readOpenRouterKey,
 } from "./lib/openrouterConfig";
@@ -139,10 +141,12 @@ import {
   NVIDIA_CHAT_URL,
   NVIDIA_TEXT_MODEL,
   NVIDIA_VISION_MODEL,
+  generationModelChain,
   readNvidiaKeys,
   readTutorTier,
   textModelCandidates,
   visionModelCandidates,
+  type GenerationTask,
   type TutorTier,
 } from "./lib/nvidiaConfig";
 import { buildPaper } from "./lib/paperPipeline";
@@ -466,6 +470,8 @@ async function nvidiaChat(
     topP?: number;
     /** Vision prompts fall back across vision models, text across text ones. */
     purpose?: "text" | "vision";
+    /** Task-specific fallbacks, used by study-set generation. */
+    candidates?: string[];
     /**
      * Turn off chain-of-thought. Reasoning models otherwise spend most of
      * `maxTokens` on hidden thinking and can return an empty answer, which is
@@ -482,7 +488,8 @@ async function nvidiaChat(
   const retries = options.retries ?? 2;
   const models = modelChain(
     options.model,
-    options.purpose === "vision" ? visionModelCandidates() : textModelCandidates(),
+    options.candidates ??
+      (options.purpose === "vision" ? visionModelCandidates() : textModelCandidates()),
   );
   // Each attempt also gets a turn at the next model, so an end-of-life model
   // costs one request rather than the whole build.
@@ -629,6 +636,106 @@ async function nvidiaChat(
 
   if (lastStatus !== null) throw providerError(lastStatus, models[0]!);
   throw providerError(0, options.model);
+}
+
+/**
+ * Last-resort generation transport. NVIDIA remains the primary provider; this
+ * uses OpenRouter's free Nemotron model only after the whole NVIDIA chain has
+ * failed, so a 429 or a temporarily overloaded NVIDIA endpoint cannot discard a
+ * stage that was already generating.
+ */
+async function openRouterGenerationChat(options: {
+  messages: ChatMessage[];
+  maxTokens: number;
+  temperature?: number;
+  topP?: number;
+  timeoutMs?: number;
+  deadline?: number;
+}): Promise<string> {
+  const apiKey = readOpenRouterKey();
+  if (!apiKey) throw new Error("OpenRouter is not configured.");
+  const configuredTimeout = options.timeoutMs ?? 120_000;
+  const remaining =
+    options.deadline === undefined ? configuredTimeout : options.deadline - Date.now();
+  const requestTimeout = Math.max(5_000, Math.min(configuredTimeout, remaining));
+  let response: Response;
+  try {
+    response = await fetch(OPENROUTER_CHAT_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://bluprint.study",
+        "X-Title": "Bluprint",
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_GENERATION_MODEL,
+        messages: options.messages,
+        temperature: options.temperature ?? 0,
+        top_p: options.topP ?? 1,
+        max_tokens: options.maxTokens,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(requestTimeout),
+    });
+  } catch (error) {
+    console.error("[ai] OpenRouter generation fallback could not be reached", error);
+    throw error;
+  }
+  if (!response.ok) {
+    throw providerError(response.status, OPENROUTER_GENERATION_MODEL);
+  }
+  const payload = (await response.json()) as {
+    choices?: Array<{
+      message?: { content?: string; reasoning_content?: string; reasoning?: string };
+    }>;
+  };
+  const message = payload.choices?.[0]?.message;
+  const content = typeof message?.content === "string" ? message.content : "";
+  if (content.trim().length > 0) return content;
+  const fallback = [message?.reasoning_content, message?.reasoning].find(
+    (value): value is string =>
+      typeof value === "string" && value.trim().length > 0,
+  );
+  if (fallback) return fallback;
+  throw providerError(0, OPENROUTER_GENERATION_MODEL, "The AI sent back an empty answer. Please try again in a moment.");
+}
+
+/** Sends a generation prompt through the task model chain, then OpenRouter. */
+async function generationChat(
+  apiKeys: string[],
+  task: GenerationTask,
+  options: {
+    messages: ChatMessage[];
+    maxTokens: number;
+    temperature?: number;
+    topP?: number;
+    disableThinking?: boolean;
+    timeoutMs?: number;
+    deadline?: number;
+  },
+): Promise<string> {
+  const chain = generationModelChain(task);
+  const primary = chain[0] ?? NVIDIA_TEXT_MODEL;
+  try {
+    return await nvidiaChat(apiKeys, {
+      ...options,
+      model: primary,
+      candidates: chain.slice(1),
+      purpose: "text",
+    });
+  } catch (error) {
+    if (!readOpenRouterKey()) throw error;
+    try {
+      return await openRouterGenerationChat(options);
+    } catch (fallbackError) {
+      console.error(
+        `[ai] generation fallback failed on ${OPENROUTER_GENERATION_MODEL}`,
+        fallbackError,
+      );
+      throw error;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1159,8 +1266,7 @@ async function summariseNotes(
   syllabus = false,
 ): Promise<Summary> {
   const qualification = qualificationText(context);
-  const raw = await nvidiaChat(apiKeys, {
-    model: NVIDIA_TEXT_MODEL,
+  const raw = await generationChat(apiKeys, "summary", {
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       {
@@ -1370,8 +1476,7 @@ async function generateCards(
 
     let raw: string;
     try {
-      raw = await nvidiaChat(apiKeys, {
-        model: NVIDIA_TEXT_MODEL,
+      raw = await generationChat(apiKeys, "cards", {
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -1508,8 +1613,7 @@ async function generateQuiz(
 
     let raw: string;
     try {
-      raw = await nvidiaChat(apiKeys, {
-        model: NVIDIA_TEXT_MODEL,
+      raw = await generationChat(apiKeys, "quiz", {
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -1733,8 +1837,7 @@ async function generateExams(
 
     let raw: string;
     try {
-      raw = await nvidiaChat(apiKeys, {
-        model: NVIDIA_TEXT_MODEL,
+      raw = await generationChat(apiKeys, "exam", {
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -3419,6 +3522,84 @@ function isRateLimit(error: unknown): boolean {
   return status === 429 || /\bHTTP 429\b/.test(message);
 }
 
+/** Which saved-section stage can still make progress for this set. */
+function nextMissingBuildSection(args: {
+  syllabus: boolean;
+  counts: { cards: number; quiz: number; exams: number };
+  requested: { quiz: number; exams: number };
+}): "quiz" | "exam" | null {
+  if (args.counts.cards === 0) return null;
+  if (args.syllabus) {
+    if (args.counts.quiz < args.requested.quiz) return "quiz";
+    if (args.counts.exams < args.requested.exams) return "exam";
+    return null;
+  }
+  if (args.counts.quiz === 0) return "quiz";
+  if (args.counts.exams === 0) return "exam";
+  return null;
+}
+
+/**
+ * Keeps a partially finished set moving after a transient failure. The saved
+ * sections stay openable while one more continuation runs in the background;
+ * the run token prevents a duplicate or stale scheduler entry from writing.
+ */
+async function scheduleBackgroundRetry(
+  ctx: ActionCtx,
+  args: {
+    setId: Id<"studySets">;
+    userId: Id<"users">;
+    runStartedAt: number;
+    syllabus: boolean;
+    counts: { cards: number; quiz: number; exams: number };
+    requested: { quiz: number; exams: number };
+    attemptStartedAt?: number;
+    buildKind?: "set" | "rebuild";
+    replaceExisting?: boolean;
+  },
+): Promise<boolean> {
+  const section = nextMissingBuildSection(args);
+  if (!section) return false;
+  const label = section === "quiz" ? "quiz questions" : "exam questions";
+  try {
+    // A final-save shortfall can leave the set marked ready before the error is
+    // reported. Claim it first so the scheduled continuation can actually run;
+    // a live continuation is already within its ten-minute window and keeps its
+    // existing token.
+    const claim = await ctx.runMutation(internal.studySets.claimForProcessing, {
+      setId: args.setId,
+    });
+    if (!claim.set) return false;
+    const runStartedAt = claim.claimed ? claim.startedAt : args.runStartedAt;
+    await ctx.runMutation(internal.studySets.setProgress, {
+      setId: args.setId,
+      progress: `Saved ${args.counts.cards} flashcards${args.counts.quiz > 0 ? ` and ${args.counts.quiz} quiz questions` : ""}. Retrying the remaining ${label} in the background…`,
+      percent: section === "quiz" ? 58 : 82,
+    });
+    await ctx.scheduler.runAfter(
+      20_000,
+      section === "quiz"
+        ? internal.ai.continueStudySetQuiz
+        : internal.ai.continueStudySetExams,
+      {
+        setId: args.setId,
+        userId: args.userId,
+        runStartedAt,
+        retryCount: 1,
+        ...(args.attemptStartedAt !== undefined
+          ? { attemptStartedAt: args.attemptStartedAt }
+          : {}),
+        ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+        ...(args.replaceExisting ? { replaceExisting: true } : {}),
+      },
+    );
+    return true;
+  } catch (error) {
+    console.error("Could not schedule a background build retry", args.setId, error);
+    return false;
+  }
+}
+
 function buildFailureMessage(error: unknown): string {
   if (isRateLimit(error)) return RATE_LIMIT_MESSAGE;
   const message = error instanceof Error ? error.message : "";
@@ -3505,6 +3686,13 @@ type ContinuationArgs = {
   userId: Id<"users">;
   runStartedAt: number;
   failureStage?: BuildFailureStage;
+  retryCount?: number;
+  // The original charged attempt, carried through a background retry so a
+  // final failure can still refund it.
+  attemptStartedAt?: number;
+  buildKind?: "set" | "rebuild";
+  // A rebuild retry must replace the old quiz and exams, not fill around them.
+  replaceExisting?: boolean;
 };
 
 export const continueStudySetQuiz = internalAction({
@@ -3513,6 +3701,10 @@ export const continueStudySetQuiz = internalAction({
     userId: v.id("users"),
     runStartedAt: v.number(),
     failureStage: v.optional(buildFailureStageValidator),
+    retryCount: v.optional(v.number()),
+    attemptStartedAt: v.optional(v.number()),
+    buildKind: v.optional(v.union(v.literal("set"), v.literal("rebuild"))),
+    replaceExisting: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => await continueStudySetQuizForUser(ctx, args),
 });
@@ -3543,21 +3735,29 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
     quiz: set.quizCount,
     exams: set.examCount,
   };
+  // A rebuild's old quiz and exams are not part of this run.
+  const baseQuizRows = args.replaceExisting ? [] : snapshot.quiz;
+  const baseExamRows = args.replaceExisting ? [] : snapshot.exams;
+  if (args.replaceExisting) {
+    savedCounts.quiz = 0;
+    savedCounts.exams = 0;
+  }
   let failureStage = args.failureStage;
   let currentStage: BuildStage = "quiz";
+  let preparedQuizForSave: GeneratedQuiz[] | undefined;
 
   try {
     const apiKeys = resolveNvidiaKeys();
-    let quiz = quizForWrite(snapshot.quiz);
+    let quiz = args.replaceExisting ? [] : quizForWrite(snapshot.quiz);
     // A pathway quiz that was checkpointed short must be completed, not
     // accepted as the final answer just because some rows exist.
     const needsQuiz =
-      snapshot.quiz.length === 0 ||
-      (plan.syllabus && snapshot.quiz.length < plan.requested.quiz);
+      baseQuizRows.length === 0 ||
+      (plan.syllabus && baseQuizRows.length < plan.requested.quiz);
     // A resume must generate only the rows still missing, not a whole new batch
     // that is later discarded by the exact-count cap.
     const quizRemaining = plan.syllabus
-      ? Math.max(0, plan.requested.quiz - snapshot.quiz.length)
+      ? Math.max(0, plan.requested.quiz - baseQuizRows.length)
       : plan.targetQuiz;
     // The exam stage starts alongside the quiz stage, but its result is
     // awaited after the quiz save. Keep the promise in the outer scope.
@@ -3582,7 +3782,7 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
       // of two sequential ones. The same quality checks and save caps apply.
       const examRemaining = Math.max(
         0,
-        plan.requested.exams - snapshot.exams.length,
+        plan.requested.exams - baseExamRows.length,
       );
       if (plan.syllabus && examRemaining > 0) {
         const reportExam: BatchProgress = async (done, target) => {
@@ -3634,7 +3834,7 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
         failureStage ??= "quiz";
       } else if (quizStage.value.length > 0) {
         quiz =
-          snapshot.quiz.length > 0
+          baseQuizRows.length > 0
             ? [...quiz, ...quizStage.value]
             : quizStage.value;
       }
@@ -3649,10 +3849,42 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
     if (!(await setStillExists(ctx, args.setId))) {
       return { continued: false, cancelled: true };
     }
-    if (plan.syllabus && quiz.length < plan.requested.quiz) {
+    // Persist the quiz before the shortfall check and before the exam stage.
+    // A 99-of-100 pathway build must not discard the 99 questions the student
+    // already paid for while it reports the missing one.
+    if (quiz.length > 0) {
+      preparedQuizForSave = prepareQuizForStorage(
+        quiz,
+        cardsForGeneration(snapshot.cards),
+        plan.notes,
+        set.level,
+        set.course,
+      );
+      if (preparedQuizForSave.length > 0) {
+        const checkpoint = await ctx.runMutation(
+          internal.studySets.completeGeneration,
+          {
+            setId: args.setId,
+            summary,
+            cards: [],
+            quiz: [],
+            preparedQuiz: preparedQuizForSave,
+            exams: [],
+            title: summary.title,
+            requested: plan.requested,
+            final: false,
+            quizOnly: true,
+          },
+        );
+        if (checkpoint.stored && checkpoint.counts) {
+          savedCounts.quiz = checkpoint.counts.quiz;
+        }
+      }
+    }
+    if (plan.syllabus && savedCounts.quiz < plan.requested.quiz) {
       throw new StudySetShortfallError(
         "quiz",
-        quiz.length,
+        savedCounts.quiz,
         plan.requested.quiz,
         savedCounts,
       );
@@ -3668,14 +3900,16 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
       summary,
       cards: toCardArgs(snapshot.cards),
       quiz,
-      preparedQuiz: prepareQuizForStorage(
-        quiz,
-        snapshot.cards,
-        plan.notes,
-        set.level,
-        set.course,
-      ),
-      exams: examsForWrite(snapshot.exams),
+      preparedQuiz:
+        preparedQuizForSave ??
+        prepareQuizForStorage(
+          quiz,
+          snapshot.cards,
+          plan.notes,
+          set.level,
+          set.course,
+        ),
+      exams: examsForWrite(baseExamRows),
       title: summary.title,
       requested: plan.requested,
       final: false,
@@ -3703,7 +3937,7 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
     if (examPromise) {
       const examStage = await examPromise;
       const examCandidates = [
-        ...examsForWrite(snapshot.exams),
+        ...examsForWrite(baseExamRows),
         ...examStage.value,
       ];
       if (examCandidates.length < plan.requested.exams) {
@@ -3713,7 +3947,7 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
             setId: args.setId,
             summary,
             cards: toCardArgs(snapshot.cards),
-            quiz: quizForWrite(snapshot.quiz),
+            quiz: [],
             exams: toExamArgs(examCandidates),
             title: summary.title,
             requested: plan.requested,
@@ -3739,7 +3973,7 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
           setId: args.setId,
           summary,
           cards: toCardArgs(snapshot.cards),
-          quiz: quizForWrite(snapshot.quiz),
+          quiz: [],
           exams: toExamArgs(examCandidates),
           title: summary.title,
           requested: plan.requested,
@@ -3775,6 +4009,11 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
       userId: args.userId,
       runStartedAt: claim.startedAt,
       ...(failureStage ? { failureStage } : {}),
+      ...(args.attemptStartedAt !== undefined
+        ? { attemptStartedAt: args.attemptStartedAt }
+        : {}),
+      ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+      ...(args.replaceExisting ? { replaceExisting: true } : {}),
     });
     return { continued: true };
   } catch (error) {
@@ -3786,13 +4025,49 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
     if (!(error instanceof StudySetShortfallError)) {
       await recordProviderIncident(ctx, "build", error);
     }
+    if (
+      (args.retryCount ?? 0) < 1 &&
+      isRetryableBuildError(error) &&
+      savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0 &&
+      (await scheduleBackgroundRetry(ctx, {
+        setId: args.setId,
+        userId: args.userId,
+        runStartedAt: claim.startedAt,
+        syllabus: plan.syllabus,
+        counts: savedCounts,
+        requested: { quiz: plan.requested.quiz, exams: plan.requested.exams },
+        ...(args.attemptStartedAt !== undefined
+          ? { attemptStartedAt: args.attemptStartedAt }
+          : {}),
+        ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+        ...(args.replaceExisting ? { replaceExisting: true } : {}),
+      }))
+    ) {
+      return { continued: true, retrying: true };
+    }
+    let refunded = false;
+    if (args.attemptStartedAt !== undefined) {
+      try {
+        const refund = await ctx.runMutation(internal.buildUsage.refund, {
+          userId: args.userId,
+          kind: args.buildKind ?? "set",
+          before: args.attemptStartedAt,
+        });
+        refunded = refund.refunded;
+      } catch (refundError) {
+        console.error("Could not refund the failed set allowance", refundError);
+      }
+    }
     const message =
       error instanceof StudySetShortfallError
         ? error.message
         : buildFailureCopy(currentStage, savedCounts, isRateLimit(error));
+    const finalMessage = refunded
+      ? `${message} This attempt was not counted against your build allowance.`
+      : message;
     await ctx.runMutation(internal.studySets.failGeneration, {
       setId: args.setId,
-      message,
+      message: finalMessage,
     });
     return { continued: false, failed: true };
   }
@@ -3805,6 +4080,10 @@ export const continueStudySetExams = internalAction({
     userId: v.id("users"),
     runStartedAt: v.number(),
     failureStage: v.optional(buildFailureStageValidator),
+    retryCount: v.optional(v.number()),
+    attemptStartedAt: v.optional(v.number()),
+    buildKind: v.optional(v.union(v.literal("set"), v.literal("rebuild"))),
+    replaceExisting: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => await continueStudySetExamsForUser(ctx, args),
 });
@@ -3835,19 +4114,21 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
     quiz: set.quizCount,
     exams: set.examCount,
   };
+  const baseExamRows = args.replaceExisting ? [] : snapshot.exams;
+  if (args.replaceExisting) savedCounts.exams = 0;
   let failureStage = args.failureStage;
   let currentStage: BuildStage = "exam";
 
   try {
     const apiKeys = resolveNvidiaKeys();
-    let exams = examsForWrite(snapshot.exams);
+    let exams = args.replaceExisting ? [] : examsForWrite(snapshot.exams);
     // A pathway exam checkpoint with only a few questions must be completed,
     // not treated as finished because some rows exist.
     const needsExams =
-      snapshot.exams.length === 0 ||
-      (plan.syllabus && snapshot.exams.length < plan.requested.exams);
+      baseExamRows.length === 0 ||
+      (plan.syllabus && baseExamRows.length < plan.requested.exams);
     const examRemaining = plan.syllabus
-      ? Math.max(0, plan.requested.exams - snapshot.exams.length)
+      ? Math.max(0, plan.requested.exams - baseExamRows.length)
       : plan.targetExam;
     if (needsExams) {
       await ctx.runMutation(internal.studySets.setProgress, {
@@ -3891,7 +4172,7 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
       } else if (examStage.value.length > 0) {
         const generated = toExamArgs(examStage.value);
         exams =
-          snapshot.exams.length > 0 ? [...exams, ...generated] : generated;
+          baseExamRows.length > 0 ? [...exams, ...generated] : generated;
       }
     }
 
@@ -3990,13 +4271,49 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
     if (!(error instanceof StudySetShortfallError)) {
       await recordProviderIncident(ctx, "build", error);
     }
+    if (
+      (args.retryCount ?? 0) < 1 &&
+      isRetryableBuildError(error) &&
+      savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0 &&
+      (await scheduleBackgroundRetry(ctx, {
+        setId: args.setId,
+        userId: args.userId,
+        runStartedAt: claim.startedAt,
+        syllabus: plan.syllabus,
+        counts: savedCounts,
+        requested: { quiz: plan.requested.quiz, exams: plan.requested.exams },
+        ...(args.attemptStartedAt !== undefined
+          ? { attemptStartedAt: args.attemptStartedAt }
+          : {}),
+        ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+        ...(args.replaceExisting ? { replaceExisting: true } : {}),
+      }))
+    ) {
+      return { continued: true, retrying: true };
+    }
+    let refunded = false;
+    if (args.attemptStartedAt !== undefined) {
+      try {
+        const refund = await ctx.runMutation(internal.buildUsage.refund, {
+          userId: args.userId,
+          kind: args.buildKind ?? "set",
+          before: args.attemptStartedAt,
+        });
+        refunded = refund.refunded;
+      } catch (refundError) {
+        console.error("Could not refund the failed set allowance", refundError);
+      }
+    }
     const message =
       error instanceof StudySetShortfallError
         ? error.message
         : buildFailureCopy(currentStage, savedCounts, isRateLimit(error));
+    const finalMessage = refunded
+      ? `${message} This attempt was not counted against your build allowance.`
+      : message;
     await ctx.runMutation(internal.studySets.failGeneration, {
       setId: args.setId,
-      message,
+      message: finalMessage,
     });
     return { continued: false, failed: true };
   }
@@ -4332,6 +4649,9 @@ async function processStudySetForUser(
     // allowance like a new set does. A resume is the same paid run continuing,
     // so it must not spend another credit.
     const buildKind = existing.status === "queued" ? ("set" as const) : ("rebuild" as const);
+    // A rebuild replaces every section; a continuation of a new set fills the
+    // sections that do not exist yet.
+    const replaceExisting = buildKind === "rebuild" && existing.generationNotes === undefined;
     let attemptStartedAt = Date.now();
     if (existing.status !== "queued" && !resumeStage) {
       await ctx.runMutation(internal.buildUsage.consume, {
@@ -4400,7 +4720,23 @@ async function processStudySetForUser(
       quiz: existing.quizCount,
       exams: existing.examCount,
     };
+    // The catch block cannot see values declared inside the try, but a retry
+    // needs the same requested totals and course flag.
+    const retrySyllabus = existing.courseId !== undefined;
+    const retryRequested = {
+      quiz: Math.min(
+        MAX_REQUESTED_ITEMS,
+        Math.max(BUILD_MIN, existing.targetQuizCount ?? BUILD_DEFAULTS.quiz),
+      ),
+      exams: Math.min(
+        MAX_REQUESTED_ITEMS,
+        Math.max(BUILD_MIN, existing.targetExamCount ?? BUILD_DEFAULTS.exam),
+      ),
+    };
     let currentStage: BuildStage = "summary";
+    // Prepared once so the same questions can be checkpointed before the exam
+    // stage and used in the final write without a second, inconsistent pass.
+    let preparedQuizForSave: GeneratedQuiz[] | undefined;
 
     try {
       const apiKeys = resolveNvidiaKeys();
@@ -4590,8 +4926,43 @@ async function processStudySetForUser(
           userId,
           runStartedAt: claim.startedAt,
           ...(stageFailures[0] ? { failureStage: stageFailures[0].stage } : {}),
+          attemptStartedAt,
+          buildKind,
+          ...(replaceExisting ? { replaceExisting: true } : {}),
         });
         return { started: true, continued: true };
+      }
+
+      // A fresh course set has no old rows, and a rebuild's old rows must not be
+      // deleted until its replacement deck is ready. Checkpoint the new deck now
+      // in both cases: if the quiz or exam stage fails, the student still opens
+      // the cards that finished. A partial reuse keeps its copied rows instead.
+      if (existing.generationNotes === undefined && cards.length > 0) {
+        const checkpoint = await ctx.runMutation(
+          internal.studySets.completeGeneration,
+          {
+            setId,
+            summary,
+            cards: toCardArgs(cards),
+            quiz: [],
+            exams: [],
+            title: summary.title,
+            requested: {
+              cards: requestedCards,
+              quiz: requestedQuiz,
+              exams: requestedExam,
+            },
+            final: false,
+            cardsOnly: true,
+          },
+        );
+        if (checkpoint.stored && checkpoint.counts) {
+          savedCounts.cards = checkpoint.counts.cards;
+        }
+        // The old quiz and exams are still readable, but they are not this
+        // rebuild's output. Treat them as missing so a failure retries them.
+        savedCounts.quiz = 0;
+        savedCounts.exams = 0;
       }
 
       // A deleted set stops the run at the stage boundary, so the quiz and
@@ -4639,10 +5010,53 @@ async function processStudySetForUser(
         if (syllabus) throw quizStage.failure;
         stageFailures.push({ stage: "quiz", error: quizStage.failure });
       } else if (quiz.length > 0) {
-        if (syllabus && reusedQuiz + quiz.length < requestedQuiz) {
+        // A rebuild checkpoints the quiz before exams begin. This is the key
+        // difference from an all-or-nothing save: the 80 questions shown as
+        // finished are already in the database if the exam stage then fails.
+        if (existing.generationNotes === undefined) {
+          preparedQuizForSave = prepareQuizForStorage(
+            quiz,
+            cards,
+            notes,
+            existing.level,
+            existing.course,
+          );
+          if (preparedQuizForSave.length > 0) {
+            const checkpoint = await ctx.runMutation(
+              internal.studySets.completeGeneration,
+              {
+                setId,
+                summary,
+                cards: [],
+                quiz: [],
+                preparedQuiz: preparedQuizForSave,
+                exams: [],
+                title: summary.title,
+                requested: {
+                  cards: requestedCards,
+                  quiz: requestedQuiz,
+                  exams: requestedExam,
+                },
+                final: false,
+                quizOnly: true,
+              },
+            );
+            if (checkpoint.stored && checkpoint.counts) {
+              savedCounts.quiz = checkpoint.counts.quiz;
+            }
+          }
+        }
+        // A partial reuse has not checkpointed the generated questions yet, so
+        // its saved count alone would look one batch short. Count the questions
+        // this run built as well; a checkpointed rebuild already added them to
+        // savedCounts and must not be counted twice.
+        const quizBuilt =
+          savedCounts.quiz +
+          (existing.generationNotes !== undefined ? quiz.length : 0);
+        if (syllabus && quizBuilt < requestedQuiz) {
           throw new StudySetShortfallError(
             "quiz",
-            reusedQuiz + quiz.length,
+            quizBuilt,
             requestedQuiz,
             savedCounts,
           );
@@ -4699,9 +5113,40 @@ async function processStudySetForUser(
         if (syllabus) throw examStage.failure;
         stageFailures.push({ stage: "exam", error: examStage.failure });
       } else if (syllabus && reusedExams + exams.length < requestedExam) {
+        // Keep the exam questions that did finish before reporting the
+        // shortfall. The quiz checkpoint above is already safe.
+        if (existing.generationNotes === undefined && exams.length > 0) {
+          const checkpoint = await ctx.runMutation(
+            internal.studySets.completeGeneration,
+            {
+              setId,
+              summary,
+              cards: [],
+              quiz: [],
+              exams: toExamArgs(exams),
+              title: summary.title,
+              requested: {
+                cards: requestedCards,
+                quiz: requestedQuiz,
+                exams: requestedExam,
+              },
+              final: false,
+              examsOnly: true,
+            },
+          );
+          if (checkpoint.stored && checkpoint.counts) {
+            savedCounts.quiz = checkpoint.counts.quiz;
+            savedCounts.exams = checkpoint.counts.exams;
+          }
+        }
+        // The same rule as the quiz: partial reuse still holds its generated
+        // exams in this run until the final write.
+        const examBuilt =
+          savedCounts.exams +
+          (existing.generationNotes !== undefined ? exams.length : 0);
         throw new StudySetShortfallError(
           "exam",
-          reusedExams + exams.length,
+          examBuilt,
           requestedExam,
           savedCounts,
         );
@@ -4740,6 +5185,7 @@ async function processStudySetForUser(
         summary,
         cards: toCardArgs(cards),
         quiz,
+        ...(preparedQuizForSave ? { preparedQuiz: preparedQuizForSave } : {}),
         exams: toExamArgs(exams),
         // Keep the copied rows for overlapping topics; only the missing topics
         // were generated above.
@@ -4759,6 +5205,11 @@ async function processStudySetForUser(
           ? { failureNote: partialStageNote(stageFailures[0]!.stage) }
           : {}),
       });
+      if (saved.counts) {
+        savedCounts.cards = saved.counts.cards;
+        savedCounts.quiz = saved.counts.quiz;
+        savedCounts.exams = saved.counts.exams;
+      }
       if (
         syllabus &&
         saved.counts &&
@@ -4805,6 +5256,26 @@ async function processStudySetForUser(
       console.error("Study set build failed", setId, error);
       if (!(error instanceof StudySetShortfallError)) {
         await recordProviderIncident(ctx, "build", error);
+      }
+      // A transient failure after a checkpoint should not strand the finished
+      // sections behind an error panel. Keep the set processing and retry only
+      // the missing stage once; a permanent provider failure falls through.
+      if (
+        isRetryableBuildError(error) &&
+        savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0 &&
+        (await scheduleBackgroundRetry(ctx, {
+          setId,
+          userId,
+          runStartedAt: claim.startedAt,
+          syllabus: retrySyllabus,
+          counts: savedCounts,
+          requested: retryRequested,
+          attemptStartedAt,
+          buildKind,
+          ...(replaceExisting ? { replaceExisting: true } : {}),
+        }))
+      ) {
+        return { started: true, retrying: true };
       }
       // A failed run must not spend the student's allowance. Refund only the
       // attempt that started here, so a newer build is never quietly cancelled.

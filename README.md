@@ -618,7 +618,10 @@ endpoints:
 
 | Purpose                            | Environment variable          | Default                                                             |
 | ---------------------------------- | ----------------------------- | ------------------------------------------------------------------- |
-| Summaries, cards, quizzes, exams   | `NVIDIA_TEXT_MODEL`           | `nvidia/nemotron-3.5-lightning-30b-a3b`                             |
+| Study-set summaries                | —                             | `nvidia/nemotron-3.5-bolt-e4b`                                      |
+| Study-set flashcards               | —                             | `nvidia/nemotron-3.5-lightning-30b-a3b`                             |
+| Study-set quizzes and exams        | —                             | `nvidia/nemotron-3.5-super-vl-120b-a12b`                            |
+| Study-set fallback                 | `OPENROUTER_GENERATION_MODEL` | `nvidia/nemotron-3.5-super-vl:free`                                 |
 | Reading photos / video frames      | `NVIDIA_VISION_MODEL`         | `nvidia/nemotron-3.5-super-vl-120b-a12b`                            |
 | Tutor tier: Fast                   | `NVIDIA_TUTOR_FAST_MODEL`     | `nvidia/nemotron-3.5-bolt-e4b`                                      |
 | Tutor tier: Balanced (default)     | `NVIDIA_TUTOR_BALANCED_MODEL` | `NVIDIA_TEXT_MODEL`'s model                                         |
@@ -632,11 +635,13 @@ three above.
 
 Set overrides on the Convex deployment the same way as `NVIDIA_API_KEY`. A retired model id
 is skipped before a request is made: `/src/convex/lib/nvidiaConfig.ts` keeps a short list of
-withdrawn ids and replaces them with a checked fallback. If NVIDIA withdraws a model that
-is not on that list, the transport sees HTTP 404/410, logs the failing id, and retries the
-same prompt on `nvidia/nemotron-3.5-bolt-e4b` and then
-`nvidia/nemotron-3-ultra-550b-a55b`. The student sees a friendly "the tutor is having
-trouble" message, never the provider's text.
+withdrawn ids and replaces them with a checked fallback. Study-set generation has its own
+chain per task: summaries use Bolt then Lightning, flashcards use Lightning then Bolt then
+Super VL, and quizzes and exams use Super VL then Lightning then Bolt. If every NVIDIA
+attempt fails and `OPENROUTER_API_KEY` is set, that stage makes one last attempt on
+`OPENROUTER_GENERATION_MODEL` (free by default). The timed-out Ultra endpoint is not in the
+generation chain. The student sees a friendly "the tutor is having trouble" message, never
+the provider's text.
 
 ### Run the AI calls through Respan Gateway (optional)
 
