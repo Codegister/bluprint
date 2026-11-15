@@ -48,7 +48,6 @@ import {
   gradeVocabularyAnswer,
   gradeVocabularyRecall,
   isLanguageCourse,
-  vocabularyAnswerCandidates,
   isShortAnswer,
   normalizeAnswer,
   vocabularyAnswerCandidates,

@@ -523,6 +523,34 @@ function UploadOverview({
   );
 }
 
+const SPEC_POINTS_OPEN_KEY_PREFIX = "bluprint:set-spec-points:";
+
+/** Reads this set's last panel choice; missing or unreadable means closed. */
+function readSpecPointsOpen(setId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      window.localStorage.getItem(`${SPEC_POINTS_OPEN_KEY_PREFIX}${setId}`) ===
+      "open"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Remembers whether this set's specification panel was left open. */
+function saveSpecPointsOpen(setId: string, open: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      `${SPEC_POINTS_OPEN_KEY_PREFIX}${setId}`,
+      open ? "open" : "closed",
+    );
+  } catch {
+    // Storage is a convenience; a blocked write must not break the panel.
+  }
+}
+
 /**
  * The set's overview is the points it was built from: for a course set, the
  * specification statements, each marked with whether the set has cards or
@@ -539,6 +567,9 @@ function OverviewView({
   sourceImages: Array<{ id: Id<"_storage">; url: string }>;
 }) {
   const data = useQuery(api.coverage.forSet, { setId });
+  const [specPointsOpen, setSpecPointsOpen] = useState(() =>
+    readSpecPointsOpen(setId),
+  );
 
   if (data === undefined) {
     return (
@@ -553,7 +584,15 @@ function OverviewView({
   const coveredIds = new Set(data.coverage.covered.map((point) => point.id));
 
   return (
-    <details className="set-spec-points rounded-[2rem] border border-border bg-card">
+    <details
+      className="set-spec-points rounded-[2rem] border border-border bg-card"
+      open={specPointsOpen}
+      onToggle={(event) => {
+        const next = event.currentTarget.open;
+        setSpecPointsOpen(next);
+        saveSpecPointsOpen(setId, next);
+      }}
+    >
       <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-6 transition-colors hover:bg-brand-panel/40 [&::-webkit-details-marker]:hidden">
         <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
           <span className="font-display text-[1.05rem] font-bold text-brand-ink">
@@ -600,7 +639,8 @@ function OverviewView({
                 </span>
               </li>
             );
-          })}        </ol>
+          })}
+        </ol>
       </div>
     </details>
   );
@@ -1166,6 +1206,7 @@ export default function StudySet() {
 
             <div className="set-overview">
               <OverviewView
+                key={set._id}
                 setId={set._id}
                 set={set}
                 sourceImages={details.sourceImages}
