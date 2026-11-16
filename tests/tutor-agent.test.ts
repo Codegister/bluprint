@@ -134,6 +134,37 @@ describe("tutor build planner", () => {
     });
   });
 
+  test("explicit counts replace the default 10/5/3", () => {
+    expect(
+      countsForTutorBuild(
+        "Build me 24 flashcards, 12 quiz questions and 6 exam questions on holidays",
+      ),
+    ).toEqual({ cards: 24, quiz: 12, exam: 6 });
+    expect(countsForTutorBuild("Build me a quiz with 8 questions")).toEqual({
+      cards: 5,
+      quiz: 8,
+      exam: 3,
+    });
+  });
+
+  test("explicit counts stop at the account maximum, not 12/6/5", () => {
+    expect(countsForTutorBuild("Build 150 flashcards on cells")).toEqual({
+      cards: 100,
+      quiz: 3,
+      exam: 3,
+    });
+  });
+
+  test("a planned build carries the requested counts", () => {
+    const plan = planTutorBuild(
+      "Build me 24 flashcards, 12 quiz questions and 6 exam questions on holidays",
+      [spanish],
+    );
+    expect(plan.status).toBe("build");
+    if (plan.status !== "build") return;
+    expect(plan.counts).toEqual({ cards: 24, quiz: 12, exam: 6 });
+  });
+
   test("a title with no other match is resolved without a topic number", () => {
     const plan = planTutorBuild("Build me a quiz on holidays and travel", [spanish], {
       currentCourseId: "spanish",

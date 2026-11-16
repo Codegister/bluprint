@@ -10,6 +10,7 @@ import {
 import { Mascot } from "@/components/Mascot";
 import { SetLibrary } from "@/components/study/SetLibrary";
 import { TutorChat, type TutorScope } from "@/components/study/TutorChat";
+import { TutorMessageContent } from "@/components/study/TutorMessageContent";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -120,10 +121,6 @@ export default function TutorPage() {
   const mySets = useQuery(api.studySets.listMine);
   const study = useQuery(api.studySets.studyStats);
   const { user } = useAuth();
-  // Home asks one question, about one thing. The scope defaults to the last set
-  // the student touched, so the Ask button works on the first visit to the page
-  // without a second chooser step.
-  const [homeScope, setHomeScope] = useState("");
   const { hash } = useLocation();
 
   // `/tutor#sets` arrives from the sidebar and from a set's back link, so the
@@ -337,20 +334,6 @@ export default function TutorPage() {
       return picks;
     })();
 
-    const scopeOptions = [
-      ...librarySets.slice(0, 8).map((set) => ({
-        value: `set:${set._id}`,
-        label: `Set · ${set.title}`,
-      })),
-      ...readyCourses.map((course) => ({
-        value: `course:${course._id}`,
-        label: `Course · ${course.subject}`,
-      })),
-    ];
-    const activeScope =
-      scopeOptions.find((option) => option.value === homeScope) ??
-      scopeOptions[0] ??
-      null;
     const totalDue = (mySets ?? []).reduce(
       (sum, set) => sum + (set.dueCount ?? 0),
       0,
@@ -365,29 +348,23 @@ export default function TutorPage() {
     const primaryLabel =
       totalDue > 0 ? "Start today's session" : primarySet ? "Continue studying" : null;
 
-    // The scope chip stores "set:<id>" or "course:<id>"; the chat needs the
-    // typed scope object, and the header needs the label and qualification.
-    const [scopeKind, scopeValue] = activeScope?.value.split(":") ?? [];
+    // The home tutor reads every ready course together. It only falls back to a
+    // saved set when the student has no course yet, so there is never a scope
+    // chooser between them and their question.
+    const fallbackSet = readyCourses.length === 0 ? librarySets[0] : undefined;
     const tutorScope: TutorScope | null =
-      scopeKind === "set" && scopeValue
-        ? { kind: "set", setId: scopeValue as Id<"studySets"> }
-        : scopeKind === "course" && scopeValue
-          ? { kind: "course", courseId: scopeValue as Id<"courses"> }
+      readyCourses.length > 0
+        ? { kind: "library" }
+        : fallbackSet
+          ? { kind: "set", setId: fallbackSet._id }
           : null;
-    const tutorSet =
-      scopeKind === "set"
-        ? librarySets.find((set) => set._id === scopeValue)
-        : undefined;
-    const tutorCourse =
-      scopeKind === "course"
-        ? readyCourses.find((course) => course._id === scopeValue)
-        : undefined;
-    const tutorTitle = tutorSet?.title ?? tutorCourse?.subject ?? "your material";
-    const tutorQualification = tutorSet
-      ? [tutorSet.course, tutorSet.examBoard].filter(Boolean).join(" · ")
-      : tutorCourse
-        ? `${tutorCourse.examBoard} ${tutorCourse.level}`
-        : undefined;
+    const tutorTitle =
+      readyCourses.length > 0
+        ? "all your courses"
+        : fallbackSet?.title ?? "your material";
+    const tutorQualification = fallbackSet
+      ? [fallbackSet.course, fallbackSet.examBoard].filter(Boolean).join(" · ")
+      : undefined;
 
     // The guide's tutor step brings the composer into view instead of leaving
     // the page, so the next action is literally under the cursor.
@@ -469,24 +446,6 @@ export default function TutorPage() {
                 title={tutorTitle}
                 qualification={tutorQualification}
                 onAsk={markTutorUsed}
-                scopeControl={
-                  scopeOptions.length > 0 ? (
-                    <label className="flex min-w-0 items-center gap-1.5 text-[0.72rem] text-muted-foreground">
-                      <span className="shrink-0">About</span>
-                      <select
-                        value={activeScope?.value ?? ""}
-                        onChange={(event) => setHomeScope(event.target.value)}
-                        className="h-7 max-w-[180px] min-w-0 rounded-full border border-border bg-card px-2 text-[0.72rem] font-semibold text-brand-ink outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
-                      >
-                        {scopeOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : undefined
-                }
               />
             ) : (
               <div className="tutor-empty">
@@ -781,7 +740,7 @@ export default function TutorPage() {
                         : "rounded-bl-md border border-brand-sky/15 bg-brand-sky/10 text-brand-ink/90",
                     )}
                   >
-                    {message.content}
+                    <TutorMessageContent content={message.content} />
                     {message.streaming && (
                       <span
                         aria-hidden

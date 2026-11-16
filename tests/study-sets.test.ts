@@ -174,6 +174,37 @@ describe("study set acceptance checks", () => {
     expect(gradeShortAnswer("0.5", [], "1/2").correct).toBe(true);
   });
 
+  test("8a. an extra value does not match a closed numeric sequence", () => {
+    expect(gradeShortAnswer("2.8.1", [], "2.8.8.1").correct).toBe(false);
+    expect(gradeRecall("2.8.1", "2.8.8.1").correct).toBe(false);
+    expect(gradeShortAnswer("2.8.1", [], "2,8,1").correct).toBe(true);
+    expect(gradeRecall("2.8.1", "2,8,1 electrons").correct).toBe(true);
+  });
+
+  test("8b. a plain-word term matches when it appears inside a longer answer", () => {
+    expect(
+      gradeShortAnswer("active site", [], "the active site changes shape").correct,
+    ).toBe(true);
+    expect(gradeRecall("active site", "the active site changes shape").correct).toBe(
+      true,
+    );
+    expect(gradeShortAnswer("active site", [], "the site is active").correct).toBe(
+      false,
+    );
+  });
+
+  test("8c. formula answers stay fully exact", () => {
+    expect(gradeShortAnswer("H2O", [], "H2O").correct).toBe(true);
+    expect(gradeShortAnswer("H2O", [], "H2O.").correct).toBe(true);
+    expect(gradeShortAnswer("H2O", [], "H2O solution").correct).toBe(false);
+    expect(gradeShortAnswer("NaCl", [], "NaCl").correct).toBe(true);
+    expect(gradeShortAnswer("NaCl", [], "NaCl solution").correct).toBe(false);
+    expect(gradeShortAnswer("E = mc²", [], "E = mc²").correct).toBe(true);
+    expect(gradeShortAnswer("E = mc²", [], "E = mc² in physics").correct).toBe(
+      false,
+    );
+  });
+
   test("9. skip check: every option order scores zero when all five are skipped", () => {
     for (const correctIndex of [0, 1, 2, 3]) {
       const quiz = Array.from({ length: 5 }, (_, index) => ({

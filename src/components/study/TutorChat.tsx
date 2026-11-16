@@ -1,4 +1,5 @@
 import { Mascot } from "@/components/Mascot";
+import { TutorMessageContent } from "@/components/study/TutorMessageContent";
 import { SkeletonChat } from "@/components/Skeletons";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { EASE, TypingDots } from "@/components/motion/Motion";
@@ -18,7 +19,7 @@ import { useAiAvailability } from "@/lib/useAiAvailability";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import { ArrowRight, Check, Globe, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 const SUGGESTIONS = [
@@ -33,11 +34,13 @@ const EXPLAIN_LEVELS = ["Simple", "GCSE", "A-Level"] as const;
 
 /**
  * What a tutor conversation is grounded in. A study set uses its saved notes; a
- * course uses its scraped pathway, optionally narrowed to one unit.
+ * course uses its scraped pathway, optionally narrowed to one unit; the home
+ * tutor reads every ready course together.
  */
 export type TutorScope =
   | { kind: "set"; setId: Id<"studySets"> }
-  | { kind: "course"; courseId: Id<"courses">; unitTitle?: string };
+  | { kind: "course"; courseId: Id<"courses">; unitTitle?: string }
+  | { kind: "library" };
 
 type Source = { title: string; url: string };
 
@@ -89,19 +92,16 @@ export function TutorChat({
   scope,
   title,
   qualification,
-  scopeControl,
   onAsk,
 }: {
   scope: TutorScope;
   title: string;
   qualification?: string;
-  /** Optional control in the panel header, e.g. the home screen's scope picker. */
-  scopeControl?: ReactNode;
   /** Lets a parent react to the student asking something (the first-run guide). */
   onAsk?: () => void;
 }) {
-  // Both subscriptions are declared unconditionally; Convex skips the one that
-  // does not belong to this scope.
+  // All subscriptions are declared unconditionally; Convex skips the ones that
+  // do not belong to this scope.
   const setMessages = useQuery(
     api.tutor.listMessages,
     scope.kind === "set" ? { setId: scope.setId } : "skip",
@@ -112,9 +112,19 @@ export function TutorChat({
       ? { courseId: scope.courseId, unitTitle: scope.unitTitle }
       : "skip",
   );
-  const messages = scope.kind === "set" ? setMessages : courseMessages;
+  const libraryMessages = useQuery(
+    api.tutor.listLibraryMessages,
+    scope.kind === "library" ? {} : "skip",
+  );
+  const messages =
+    scope.kind === "set"
+      ? setMessages
+      : scope.kind === "course"
+        ? courseMessages
+        : libraryMessages;
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
+  const askLibraryTutor = useAction(api.ai.askLibraryTutor);
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
@@ -135,9 +145,11 @@ export function TutorChat({
   const groundedIn =
     scope.kind === "set"
       ? "Grounded in this set's notes"
-      : scope.unitTitle
-        ? "Grounded in this unit's specification"
-        : "Grounded in this course's specification";
+      : scope.kind === "course"
+        ? scope.unitTitle
+          ? "Grounded in this unit's specification"
+          : "Grounded in this course's specification"
+        : "Grounded in all your courses";
 
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
@@ -214,10 +226,18 @@ export function TutorChat({
           explainLevel,
           ...(imageIds.length > 0 ? { imageIds } : {}),
         });
-      } else {
+      } else if (scope.kind === "course") {
         await askCourseTutor({
           courseId: scope.courseId,
           unitTitle: scope.unitTitle,
+          question,
+          useWeb,
+          tier: chosenTier,
+          explainLevel,
+          ...(imageIds.length > 0 ? { imageIds } : {}),
+        });
+      } else {
+        await askLibraryTutor({
           question,
           useWeb,
           tier: chosenTier,
@@ -254,7 +274,6 @@ export function TutorChat({
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-            {scopeControl}
             <label className="flex items-center gap-1 text-[0.68rem] font-medium text-muted-foreground">
               <span className="sr-only">Explanation level</span>
               <select
@@ -350,7 +369,7 @@ export function TutorChat({
                         : "rounded-bl-md border border-brand-sky/15 bg-brand-sky/10 text-brand-ink/90",
                     )}
                   >
-                    {message.content}
+                    <TutorMessageContent content={message.content} />
                     {message.streaming && (
                       <span
                         aria-hidden
@@ -421,7 +440,9 @@ export function TutorChat({
             placeholder={
               scope.kind === "set"
                 ? "Ask anything about this set…"
-                : "Ask anything about this course…"
+                : scope.kind === "course"
+                  ? "Ask anything about this course…"
+                  : "Ask anything about your courses…"
             }
             className="pb-2"
             fullWidth
@@ -441,7 +462,11 @@ export function TutorChat({
             {tutorScopeCaption({
               useWeb,
               materialLabel:
-                scope.kind === "set" ? "this set's notes" : "this course's notes",
+                scope.kind === "set"
+                  ? "this set's notes"
+                  : scope.kind === "course"
+                    ? "this course's notes"
+                    : "all your courses",
               latestSourceCount,
             })}{" "}
             Simple, GCSE and A-Level set the register. Fast, Balanced and Deep set how long and deep the answer is. Anything labelled “Beyond your notes” is enrichment to check. Answers can be wrong, so compare them with your notes.

@@ -1,3 +1,5 @@
+import { structuredAnswerMatch } from "./recall";
+
 /**
  * Marking criteria.
  *
@@ -185,6 +187,20 @@ export function criterionKeywords(text: string): string[] {
 /** The criterion text without its "N marks:" prefix. */
 export function criterionText(point: string): string {
   return point.replace(MARK_PREFIX, "").trim() || point.trim();
+}
+
+/**
+ * Whether a criterion is a closed answer such as `2.8.1` or `Na`, rather than
+ * prose. A closed answer must match completely; keyword overlap must not turn
+ * `2.8.8.1` into the right electron configuration.
+ */
+export function structuredCriterionMatch(
+  point: string,
+  answer: string,
+): boolean | null {
+  return structuredAnswerMatch(criterionText(point), answer, {
+    maxExactWords: 1,
+  });
 }
 
 /**

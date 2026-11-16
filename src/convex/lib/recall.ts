@@ -318,6 +318,181 @@ export type ShortAnswerGrade = {
   method?: "exact" | "units" | "numeric" | "none";
 };
 
+function numericChunkValues(chunk: string): number[] {
+  const percent = /%$/.test(chunk.trim());
+  const cleaned = chunk.replace(/%$/, "").trim();
+  if (cleaned.length === 0) return [];
+  let values: number[] = [];
+  if (cleaned.includes("/")) {
+    const parts = cleaned.split("/").map((part) => Number(part.replace(",", ".")));
+    if (
+      parts.length === 2 &&
+      parts.every((part) => Number.isFinite(part)) &&
+      parts[1] !== 0
+    ) {
+      values = [parts[0]! / parts[1]!];
+    }
+  } else if (cleaned.includes(":")) {
+    values = cleaned.split(":").map(Number).filter(Number.isFinite);
+  } else {
+    const separators = cleaned.match(/[.,]/g) ?? [];
+    if (separators.length >= 2) {
+      values = cleaned.split(/[.,]/).map(Number).filter(Number.isFinite);
+    } else if (separators.length === 1) {
+      const [whole, fraction] = cleaned.split(/[.,]/);
+      // A comma followed by exactly three digits is a thousands separator; a
+      // single comma otherwise is a decimal comma.
+      if (
+        cleaned.includes(",") &&
+        fraction?.length === 3 &&
+        whole !== undefined &&
+        whole.length <= 3
+      ) {
+        values = [Number(`${whole}${fraction}`)];
+      } else {
+        const numeric = Number(cleaned.replace(",", "."));
+        values = Number.isFinite(numeric) ? [numeric] : [];
+      }
+    } else {
+      const numeric = Number(cleaned);
+      values = Number.isFinite(numeric) ? [numeric] : [];
+    }
+  }
+  return percent ? values.map((value) => value / 100) : values;
+}
+
+const NUMERIC_CHUNK =
+  /[+-]?\d+(?:[.,:]\d+)*(?:\s*\/\s*\d+(?:[.,]\d+)?)?%?/g;
+
+function numericChunks(value: string): number[][] {
+  const text = value.replace(/[−–]/g, "-");
+  return (text.match(NUMERIC_CHUNK) ?? [])
+    .map(numericChunkValues)
+    .filter((values) => values.length > 0);
+}
+
+/** Numbers in the order written, or null when the text is not numeric. */
+function numericValues(value: string, pure: boolean): number[] | null {
+  const text = value.replace(/[−–]/g, "-");
+  const chunks = numericChunks(value);
+  if (chunks.length === 0) return null;
+  if (pure) {
+    const leftover = text
+      .replace(NUMERIC_CHUNK, "")
+      .replace(/[\s.,:()+\-/%]/g, "");
+    if (leftover.length > 0) return null;
+  }
+  return chunks.flat();
+}
+
+function sameNumbers(left: number[], right: number[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every(
+    (value, index) =>
+      Math.abs(value - right[index]!) <= Math.max(1e-9, Math.abs(value) * 1e-6),
+  );
+}
+
+function numericAnswerMatches(expected: number[], response: string): boolean {
+  const chunks = numericChunks(response);
+  if (chunks.length === 0) return false;
+  // The expected value can be one chunk ("2.8.1") or written separated
+  // ("2 8 1"). Extra numbers elsewhere in a sentence do not change a match,
+  // but a second multi-value sequence does: answering "2.8.1 and 2.8.8.1"
+  // gives two different configurations and must not pass.
+  const sequences = chunks.filter((values) => values.length > 1);
+  if (sequences.length > 0 && !sequences.every((values) => sameNumbers(expected, values))) {
+    return false;
+  }
+  return (
+    chunks.some((values) => sameNumbers(expected, values)) ||
+    sameNumbers(expected, chunks.flat())
+  );
+}
+
+/**
+ * Whether a short answer is symbolic rather than a plain word or phrase.
+ *
+ * Formulas carry an operator or a compact letter-and-digit form (`H2O`). They
+ * keep the old whole-answer rule, so extra words cannot turn a formula into a
+ * match. A plain term such as "active site" is not symbolic and may appear
+ * inside a longer answer.
+ */
+function isFormulaAnswer(value: string): boolean {
+  const text = value.trim();
+  if (/[=<>≤≥→⇌^]/.test(text)) return true;
+  const compact = text.replace(/\s+/g, "");
+  if (/[A-Za-z]\s*\/\s*[A-Za-z]/.test(text)) return true;
+  if (/[A-Za-z]/.test(compact) && /\d/.test(compact) && !/\s/.test(text)) return true;
+  // Chemical formulas without digits, such as NaCl, use element-like groups.
+  return /^(?:[A-Z][a-z]?\d*){2,}[+-]?$/.test(compact);
+}
+
+/** The exact symbolic form, ignoring case, accents and spacing only. */
+function formulaSignature(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[−–]/g, "-")
+    .replace(/[.,;:!?]+$/g, "")
+    .replace(/\s+/g, "");
+}
+
+/** The expected content words, in order, appear as a phrase in the response. */
+function phraseAppears(words: string[], response: string): boolean {
+  const offered = contentWords(response);
+  if (words.length === 0 || offered.length < words.length) return false;
+  for (let start = 0; start <= offered.length - words.length; start += 1) {
+    if (words.every((word, index) => offered[start + index] === word)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * A closed answer is one that has a single correct form: a numeric value or
+ * sequence, a formula, or a one/two-word term. Prose returns null and keeps the
+ * existing concept-unit marking. Extra numbers in a response are significant:
+ * `2.8.8.1` is not the electron configuration `2.8.1`. A formula is compared as
+ * a whole answer, while a plain-word term may appear inside a longer answer.
+ */
+export function structuredAnswerMatch(
+  expected: string,
+  response: string,
+  options: { maxExactWords?: number } = {},
+): boolean | null {
+  const numeric = numericValues(expected, true);
+  if (numeric && numeric.length > 0) {
+    return numericAnswerMatches(numeric, response);
+  }
+
+  // A sequence embedded in a phrase ("electron configuration 2.8.1") is still
+  // closed: every value and its order matter, and an extra value is wrong.
+  // Separate numbers in prose ("pH 7 at 25°C") are not a sequence.
+  const embedded = numericChunks(expected).find((values) => values.length > 1);
+  if (embedded) {
+    return numericAnswerMatches(embedded, response);
+  }
+
+  // A formula is closed regardless of how many tokens it contains. Check it
+  // before the short-term word cap: `E = mc²` has two content words, and the
+  // marking path's one-word cap must not turn it into a fuzzy prose answer.
+  if (isFormulaAnswer(expected)) {
+    return formulaSignature(expected) === formulaSignature(response);
+  }
+
+  const words = contentWords(expected);
+  const maxWords = options.maxExactWords ?? 2;
+  if (words.length === 0) {
+    return normalizeAnswer(expected) === normalizeAnswer(response);
+  }
+  if (words.length > maxWords) return null;
+
+  return phraseAppears(words, response);
+}
+
 /**
  * Grades one typed or dictated answer against the expected answer and the
  * generator's accepted alternatives. A short answer (one or two content words)
@@ -336,10 +511,21 @@ export function gradeShortAnswer(
   );
 
   let best = 0;
+  let sawStructured = false;
   for (const option of options) {
     const optionClean = normalizeAnswer(option);
     if (cleaned === optionClean) {
       return { correct: true, score: 1, method: "exact" };
+    }
+    const structured = structuredAnswerMatch(option, response);
+    if (structured === true) {
+      return { correct: true, score: 1, method: "exact" };
+    }
+    if (structured === false) {
+      // A closed answer has one correct value or sequence. Keyword overlap
+      // cannot rescue a different number or an extra one.
+      sawStructured = true;
+      continue;
     }
     if (numericEquivalent(option, response)) {
       return { correct: true, score: 1, method: "numeric" };
@@ -367,7 +553,11 @@ export function gradeShortAnswer(
     }
   }
 
-  return { correct: false, score: best, method: "none" };
+  return {
+    correct: false,
+    score: sawStructured ? 0 : best,
+    method: "none",
+  };
 }
 
 /** True when the course is a modern or classical language. */
@@ -533,6 +723,17 @@ export function gradeRecall(
       coveredUnits: exact ? required : [],
       missedUnits: exact ? [] : required,
       method: exact ? "exact" : "none",
+    };
+  }
+
+  const structured = structuredAnswerMatch(expected, response);
+  if (structured !== null) {
+    return {
+      correct: structured,
+      score: structured ? 1 : 0,
+      coveredUnits: structured ? required : [],
+      missedUnits: structured ? [] : required,
+      method: structured ? "exact" : "none",
     };
   }
 

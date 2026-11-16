@@ -2,9 +2,15 @@ import { describe, expect, test } from "bun:test";
 
 import { internal } from "../src/convex/_generated/api";
 import type { MutationCtx } from "../src/convex/_generated/server";
-import { continueStudySetQuiz, processStudySetScheduled } from "../src/convex/ai";
+import {
+  continueStudySetCards,
+  continueStudySetQuiz,
+  processStudySetScheduled,
+  resumeStaleStudySet,
+} from "../src/convex/ai";
 import { refund } from "../src/convex/buildUsage";
 import {
+  claimBackgroundRetry,
   claimContinuation,
   claimForProcessing,
   completeGeneration,
@@ -12,6 +18,7 @@ import {
   getBuildSnapshot,
   getForProcessing,
   isActive,
+  markReady,
   setProgress,
 } from "../src/convex/studySets";
 import {
@@ -231,11 +238,21 @@ function functionNameOf(ref: unknown): string {
  * the production copy, generation and merge handlers rather than reimplementing
  * their writes.
  */
-function actionContext(tables: Tables) {
+function actionContext(
+  tables: Tables,
+  options: { captureSchedule?: boolean } = {},
+) {
   const { ctx: dbCtx } = fakeContext(tables);
+  const scheduled: Array<{
+    delay: number;
+    name: string;
+    args: Record<string, unknown>;
+  }> = [];
   const functions: Array<[unknown, InternalHandler]> = [
     [internal.studySets.getForProcessing, getForProcessing as unknown as InternalHandler],
     [internal.studySets.claimForProcessing, claimForProcessing as unknown as InternalHandler],
+    [internal.studySets.claimBackgroundRetry, claimBackgroundRetry as unknown as InternalHandler],
+    [internal.studySets.markReady, markReady as unknown as InternalHandler],
     [internal.studySets.claimContinuation, claimContinuation as unknown as InternalHandler],
     [internal.studySets.getBuildSnapshot, getBuildSnapshot as unknown as InternalHandler],
     [internal.studySets.setProgress, setProgress as unknown as InternalHandler],
@@ -257,9 +274,20 @@ function actionContext(tables: Tables) {
   return {
     runQuery: run,
     runMutation: run,
+    scheduled,
     scheduler: {
-      runAfter: async (_delay: number, ref: unknown) => {
-        throw new Error(`Unexpected scheduled function ${functionNameOf(ref)}`);
+      runAfter: async (
+        delay: number,
+        ref: unknown,
+        args: Record<string, unknown> = {},
+      ) => {
+        const name = functionNameOf(ref);
+        scheduled.push({ delay, name, args });
+        // Watchdogs are background no-ops in these tests; every stage they
+        // guard is exercised directly.
+        if (name === "ai:resumeStaleStudySet") return;
+        if (options.captureSchedule) return;
+        throw new Error(`Unexpected scheduled function ${name}`);
       },
     },
   };
@@ -1265,7 +1293,6 @@ describe("study set reuse", () => {
         setId: targetId,
         userId: "user:new",
         runStartedAt: 1,
-        retryCount: 1,
         replaceExisting: true,
       });
     } finally {
@@ -1373,5 +1400,209 @@ describe("study set reuse", () => {
     ]);
     expect(tables.quizQuestions.filter((row) => row.setId === targetId)).toHaveLength(1);
     expect(tables.examQuestions.filter((row) => row.setId === targetId)).toHaveLength(1);
+  });
+
+  test("a short card checkpoint backfills only the missing cards", async () => {
+    const tables = rowsForSource("set:backfill");
+    const set = tables.studySets[0]!;
+    set.notes = [
+      "Cells contain organelles.",
+      "The nucleus stores genetic material.",
+      "Mitochondria release energy.",
+    ].join(" ");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.cardCount = 1;
+    set.quizCount = 0;
+    set.examCount = 0;
+    set.targetCardCount = 3;
+    set.targetQuizCount = 1;
+    set.targetExamCount = 1;
+    tables.flashcards = [
+      {
+        ...tables.flashcards[0]!,
+        _id: "card:backfill",
+        setId: "set:backfill",
+        userId: "user:source",
+        front: "What do cells contain?",
+        back: "Organelles.",
+        order: 0,
+      },
+    ];
+    tables.quizQuestions = [];
+    tables.examQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    let requestedCards = 0;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      const request = /Create (\d+) revision flashcards/.exec(prompt);
+      if (!request) {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      requestedCards = Number(request[1]);
+      const content = JSON.stringify({
+        cards: [
+          {
+            front: "What does the nucleus store?",
+            back: "The nucleus stores genetic material.",
+            keyPoint: "The nucleus stores genetic material.",
+          },
+          {
+            front: "What do mitochondria release?",
+            back: "Mitochondria release energy.",
+            keyPoint: "Mitochondria release energy.",
+          },
+        ],
+      });
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    let scheduled: ReturnType<typeof actionContext>["scheduled"] = [];
+    try {
+      const action = actionContext(tables, { captureSchedule: true });
+      scheduled = action.scheduled;
+      const handler = (continueStudySetCards as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<any>;
+      })._handler;
+      const result = await handler(action, {
+        setId: "set:backfill",
+        userId: "user:source",
+        runStartedAt: 1,
+      });
+
+      expect(result.continued).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    expect(requestedCards).toBe(2);
+    const cards = tables.flashcards.filter((row) => row.setId === "set:backfill");
+    expect(cards).toHaveLength(3);
+    expect(cards.map((card) => card.front)).toEqual([
+      "What do cells contain?",
+      "What does the nucleus store?",
+      "What do mitochondria release?",
+    ]);
+    // A normal stage hand-off is not a retry, so it does not spend one of the
+    // three automatic attempts.
+    expect(set.autoRetryCount).toBeUndefined();
+    expect(set.progress).toBe("Flashcards saved. Continuing with the quiz…");
+    expect(
+      scheduled.some(({ name }) => name === "ai:continueStudySetQuiz"),
+    ).toBe(true);
+  });
+
+  test("a background retry starts a new run token and stops at the cap", async () => {
+    const tables = rowsForSource("set:retry-token");
+    const set = tables.studySets[0]!;
+    set.status = "ready";
+    set.processingStartedAt = 10;
+    const { ctx } = fakeContext(tables);
+    const handler = (claimBackgroundRetry as unknown as {
+      _handler: (
+        ctx: unknown,
+        args: { setId: string },
+      ) => Promise<{ allowed: boolean; attempt: number; runStartedAt: number }>;
+    })._handler;
+
+    let previousToken = set.processingStartedAt!;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const retry = await handler(ctx, { setId: "set:retry-token" });
+      expect(retry.allowed).toBe(true);
+      expect(retry.attempt).toBe(attempt);
+      expect(retry.runStartedAt).toBeGreaterThan(previousToken);
+      expect(set.status).toBe("processing");
+      expect(set.processingStartedAt).toBe(retry.runStartedAt);
+      previousToken = retry.runStartedAt;
+    }
+
+    expect(await handler(ctx, { setId: "set:retry-token" })).toEqual({
+      allowed: false,
+      attempt: 3,
+      runStartedAt: 0,
+    });
+  });
+
+  test("a duplicate continuation with the same run token is rejected", async () => {
+    const tables = rowsForSource("set:continuation");
+    tables.studySets[0]!.status = "processing";
+    tables.studySets[0]!.processingStartedAt = 100;
+    const { ctx } = fakeContext(tables);
+    const handler = (claimContinuation as unknown as {
+      _handler: (
+        ctx: unknown,
+        args: { setId: string; runStartedAt: number },
+      ) => Promise<{ claimed: boolean; startedAt: number }>;
+    })._handler;
+
+    const first = await handler(ctx, {
+      setId: "set:continuation",
+      runStartedAt: 100,
+    });
+    const duplicate = await handler(ctx, {
+      setId: "set:continuation",
+      runStartedAt: 100,
+    });
+
+    expect(first.claimed).toBe(true);
+    expect(duplicate).toEqual({ claimed: false, startedAt: 0 });
+    expect(tables.studySets[0]!.processingStartedAt).toBe(first.startedAt);
+  });
+
+  test("the stale-build watchdog resumes a matching run and ignores an old one", async () => {
+    const tables = rowsForSource("set:watchdog");
+    const set = tables.studySets[0]!;
+    set.status = "processing";
+    set.processingStartedAt = 777;
+    set.cardCount = 1;
+
+    const action = actionContext(tables, { captureSchedule: true });
+    const handler = (resumeStaleStudySet as unknown as {
+      _handler: (
+        ctx: unknown,
+        args: { setId: string; userId: string; runStartedAt: number },
+      ) => Promise<{ resumed: boolean; stopped?: boolean; attempt?: number }>;
+    })._handler;
+
+    expect(
+      await handler(action, {
+        setId: "set:watchdog",
+        userId: "user:source",
+        runStartedAt: 776,
+      }),
+    ).toEqual({ resumed: false });
+    expect(action.scheduled).toHaveLength(0);
+    expect(set.autoRetryCount).toBeUndefined();
+
+    expect(
+      await handler(action, {
+        setId: "set:watchdog",
+        userId: "user:source",
+        runStartedAt: 777,
+      }),
+    ).toEqual({ resumed: true, attempt: 1 });
+    expect(set.autoRetryCount).toBe(1);
+    expect(action.scheduled).toHaveLength(1);
+    expect(action.scheduled[0]).toMatchObject({
+      delay: 0,
+      name: "ai:continueStudySetCards",
+      args: { setId: "set:watchdog", userId: "user:source" },
+    });
+    expect(action.scheduled[0]!.args.runStartedAt).toBeGreaterThan(777);
   });
 });

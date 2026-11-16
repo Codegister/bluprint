@@ -11,6 +11,7 @@ import {
   meaningAward,
   reconcilePasses,
   splitCriteria,
+  structuredCriterionMatch,
   toCriteria,
   validateMarkingGuide,
 } from "../src/convex/lib/markingCriteria";
@@ -188,6 +189,33 @@ describe("partial marks", () => {
       credit(criteria, TEMPERATURE_ONLY),
     );
     expect(credit(criteria, FULL_ANSWER)).toEqual(credit(criteria, FULL_ANSWER));
+  });
+
+  test("a closed numeric criterion rejects an extra value", () => {
+    expect(structuredCriterionMatch("1 mark: 2.8.1", "2.8.8.1")).toBe(false);
+    expect(structuredCriterionMatch("1 mark: 2.8.1", "2.8.1")).toBe(true);
+    expect(structuredCriterionMatch("1 mark: 2.8.1", "2,8,1")).toBe(true);
+    // A prose criterion still goes through the normal marking guard.
+    expect(structuredCriterionMatch("1 mark: active site", "the active site changes shape")).toBeNull();
+  });
+
+  test("a plain-word criterion is present inside a longer answer", () => {
+    expect(
+      structuredCriterionMatch("1 mark: denatures", "the enzyme denatures above 40°C"),
+    ).toBe(true);
+    expect(structuredCriterionMatch("1 mark: active site", "the active site changes shape")).toBeNull();
+  });
+
+  test("a formula criterion still needs the exact formula", () => {
+    expect(structuredCriterionMatch("1 mark: H2O", "H2O")).toBe(true);
+    expect(structuredCriterionMatch("1 mark: H2O", "water is H2O")).toBe(false);
+  });
+
+  test("a multi-token formula stays exact despite the marking word cap", () => {
+    expect(structuredCriterionMatch("1 mark: E = mc²", "E = mc²")).toBe(true);
+    expect(
+      structuredCriterionMatch("1 mark: E = mc²", "E = mc² in physics"),
+    ).toBe(false);
   });
 
   test("a ratio written in a different notation earns its mark", () => {

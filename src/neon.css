@@ -1355,14 +1355,18 @@ body {
   position: relative;
   isolation: isolate;
   background:
+    linear-gradient(color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px),
     radial-gradient(52% 42% at 100% 0%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 70%),
     radial-gradient(40% 48% at 0% 100%, color-mix(in srgb, var(--storm) 54%, transparent), transparent 76%),
     var(--desk) !important;
+  background-size: 64px 64px, 64px 64px, auto, auto, auto;
 }
 
 /* The working desk breathes behind the cards, not through them. The two
    coloured fields are deliberately much stronger than a watermark: on a
-   large light page the previous wash disappeared into the paper. */
+   large light page the previous wash disappeared into the paper. The grid
+   lives on the static surface above, so only the orange wash flows. */
 .stage-shell .app-main::before {
   content: "";
   position: absolute;
@@ -1370,10 +1374,8 @@ body {
   z-index: -1;
   background:
     radial-gradient(38% 44% at 14% 16%, color-mix(in srgb, var(--signal) 44%, transparent), transparent 66%),
-    radial-gradient(44% 54% at 84% 76%, color-mix(in srgb, var(--storm) 88%, transparent), transparent 70%),
-    linear-gradient(color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px);
-  background-size: auto, auto, 64px 64px, 64px 64px;
+    radial-gradient(44% 54% at 84% 76%, color-mix(in srgb, var(--storm) 88%, transparent), transparent 70%);
+  background-size: auto, auto;
   animation: desk-ambient 14s ease-in-out infinite;
   animation-delay: -7s;
   pointer-events: none;

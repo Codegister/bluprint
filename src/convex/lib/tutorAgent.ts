@@ -9,7 +9,7 @@
  * and the browser can never smuggle in a course or topic of its choosing.
  */
 
-import { BUILD_DEFAULTS } from "./buildDefaults";
+import { BUILD_DEFAULTS, BUILD_MAX, BUILD_MIN } from "./buildDefaults";
 
 /** A course topic as the agent sees it, already in course reading order. */
 export type TutorAgentTopic = {
@@ -324,10 +324,83 @@ function labelForTopics(topics: TutorAgentTopic[]): string {
   return `Topics ${first.number}–${last.number}`;
 }
 
-/** The size of a tutor-started build, shaped by what the student asked for. */
+/** One explicit item count, kept inside the account-wide build range. */
+function explicitCount(question: string, material: string): number | null {
+  const match = question.match(
+    new RegExp(`\\b(\\d{1,3})\\s*(?:${material})\\b`, "i"),
+  );
+  if (!match?.[1]) return null;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return null;
+  return Math.min(BUILD_MAX, Math.max(BUILD_MIN, Math.round(value)));
+}
+
+/** "a quiz with 8 questions" puts the count after the material noun. */
+function explicitCountAfter(question: string, material: string): number | null {
+  const match = question.match(
+    new RegExp(
+      `\\b(?:${material})\\b[^.!?]{0,18}\\b(\\d{1,3})\\s*(?:questions?|qs?)\\b`,
+      "i",
+    ),
+  );
+  if (!match?.[1]) return null;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return null;
+  return Math.min(BUILD_MAX, Math.max(BUILD_MIN, Math.round(value)));
+}
+
+/** A bare "12 questions" belongs to the one material type named nearby. */
+function genericQuestions(question: string): number | null {
+  const match = question.match(/\b(\d{1,3})\s*(?:questions?|qs?)\b/i);
+  if (!match?.[1]) return null;
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return null;
+  return Math.min(BUILD_MAX, Math.max(BUILD_MIN, Math.round(value)));
+}
+
+/**
+ * The size of a tutor-started build, shaped by what the student asked for.
+ *
+ * Explicit numbers win for every kind the student named ("24 flashcards, 12
+ * quiz questions and 6 exam questions"), up to the same account maximum as the
+ * sliders. Without a number, the material named still changes the balance:
+ * a flashcard request builds a fuller deck and a quiz request a fuller quiz.
+ */
 export function countsForTutorBuild(question: string): TutorBuildCounts {
   const asksForQuiz = /\b(?:quiz|test)\b/i.test(question);
   const asksForCards = /\b(?:flashcard|flashcards|cards)\b/i.test(question);
+  const asksForExam = /\b(?:exam(?:-style)?|written)\s+questions?\b/i.test(question);
+
+  const requestedCards = explicitCount(question, "flashcards?|cards?");
+  const requestedQuiz =
+    explicitCount(question, "(?:quiz|test)\\s*(?:questions?)?") ??
+    explicitCountAfter(question, "quiz|test") ??
+    (asksForQuiz && !asksForExam ? genericQuestions(question) : null);
+  const requestedExam =
+    explicitCount(question, "exam(?:-style)?\\s*(?:questions?)?") ??
+    explicitCountAfter(question, "exam(?:-style)?|written") ??
+    (asksForExam && !asksForQuiz ? genericQuestions(question) : null);
+
+  if (requestedCards !== null || requestedQuiz !== null || requestedExam !== null) {
+    const cardsFallback =
+      asksForQuiz && !asksForCards
+        ? 5
+        : asksForCards
+          ? 20
+          : BUILD_DEFAULTS.cards;
+    const quizFallback =
+      asksForCards && !asksForQuiz
+        ? 3
+        : asksForQuiz
+          ? 10
+          : BUILD_DEFAULTS.quiz;
+    return {
+      cards: requestedCards ?? cardsFallback,
+      quiz: requestedQuiz ?? quizFallback,
+      exam: requestedExam ?? BUILD_DEFAULTS.exam,
+    };
+  }
+
   if (asksForCards && !asksForQuiz) {
     return { cards: 20, quiz: 3, exam: 3 };
   }

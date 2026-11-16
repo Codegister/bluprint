@@ -53,6 +53,10 @@ import {
   sourceCoverage,
 } from "./lib/studySetQuality";
 import { shortfallFor, shortfallSentence } from "./lib/buildDefaults";
+import {
+  hasSavedBuildWork,
+  MAX_AUTOMATIC_REBUILDS,
+} from "./lib/buildFailure";
 import { cleanGeneratedText } from "./lib/register";
 import { isSyllabusOutline } from "./lib/syllabusOutline";
 import {
@@ -1427,6 +1431,11 @@ export const getBuildSnapshot = internalQuery({
   },
 });
 
+/** A processing timestamp doubles as the run token, so it must keep moving. */
+function nextProcessingToken(previous?: number): number {
+  return Math.max(Date.now(), (previous ?? 0) + 1);
+}
+
 /**
  * Atomically takes ownership of a generation run. StrictMode in development
  * can fire the page effect twice, and two NVIDIA runs would waste quota.
@@ -1436,7 +1445,7 @@ export const claimForProcessing = internalMutation({
   handler: async (ctx, { setId }) => {
     const set = await ctx.db.get(setId);
     if (!set) return { claimed: false, set: null, startedAt: 0 };
-    const now = Date.now();
+    const now = nextProcessingToken(set.processingStartedAt);
     const stillRunning =
       set.status === "processing" &&
       set.processingStartedAt !== undefined &&
@@ -1460,6 +1469,33 @@ export const claimForProcessing = internalMutation({
 });
 
 /**
+ * Claims a background retry and starts a new run token. Refreshing the token is
+ * what makes a duplicate scheduler entry harmless: only the latest queued
+ * continuation still matches the set.
+ */
+export const claimBackgroundRetry = internalMutation({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const set = await ctx.db.get(setId);
+    if (!set) return { allowed: false, attempt: 0, runStartedAt: 0 };
+    const attempt = set.autoRetryCount ?? 0;
+    if (attempt >= MAX_AUTOMATIC_REBUILDS) {
+      return { allowed: false, attempt, runStartedAt: 0 };
+    }
+    const now = nextProcessingToken(set.processingStartedAt);
+    await ctx.db.patch(setId, {
+      status: "processing",
+      autoRetryCount: attempt + 1,
+      processingStartedAt: now,
+      errorMessage: undefined,
+      generationNote: undefined,
+      updatedAt: now,
+    });
+    return { allowed: true, attempt: attempt + 1, runStartedAt: now };
+  },
+});
+
+/**
  * Takes ownership of the next checkpointed stage without spending another
  * build allowance. The timestamp is the run token: an old or duplicate
  * continuation can only proceed if it still matches the current run.
@@ -1475,7 +1511,7 @@ export const claimContinuation = internalMutation({
     ) {
       return { claimed: false as const, startedAt: 0 };
     }
-    const now = Date.now();
+    const now = nextProcessingToken(set.processingStartedAt);
     // Refresh the stale timer for this stage. A build that takes twenty minutes
     // across three actions is making progress; it is not a stuck ten-minute run.
     await ctx.db.patch(setId, {
@@ -2235,6 +2271,8 @@ export const completeGeneration = internalMutation({
             progress: undefined,
             errorMessage: undefined,
             processingStartedAt: undefined,
+            // A successful build starts a fresh automatic-retry budget.
+            autoRetryCount: undefined,
             // The missing topics are now generated; a later rebuild must use the
             // complete brief rather than treating this as a partial reuse.
             generationNotes: undefined,
@@ -2341,6 +2379,23 @@ export const repairLegacyCards = internalMutation({
   },
 });
 
+/** Marks a run ready when every requested section is already checkpointed. */
+export const markReady = internalMutation({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const set = await ctx.db.get(setId);
+    if (!set) return { written: false };
+    await ctx.db.patch(setId, {
+      status: "ready",
+      progress: undefined,
+      errorMessage: undefined,
+      processingStartedAt: undefined,
+      updatedAt: Date.now(),
+    });
+    return { written: true };
+  },
+});
+
 export const failGeneration = internalMutation({
   args: { setId: v.id("studySets"), message: v.string() },
   handler: async (ctx, { setId, message }) => {
@@ -2351,12 +2406,18 @@ export const failGeneration = internalMutation({
     // with identical "Study set" rows.
     const fallbackTitle =
       set.title === "Study set" ? cleanTopicTitle("", set.notes) : "";
+    const hasSomethingToOpen = hasSavedBuildWork(set);
+    const note = message.slice(0, 600);
     await ctx.db.patch(setId, {
       ...(fallbackTitle && fallbackTitle !== "Study topic"
         ? { title: fallbackTitle, titleSource: "auto" as const }
         : {}),
-      status: "error",
-      errorMessage: message.slice(0, 600),
+      // Once automatic attempts are exhausted, a set with saved work is still
+      // a usable set. Hiding it behind an error panel is what made students
+      // manually rebuild work they already had.
+      status: hasSomethingToOpen ? "ready" : "error",
+      errorMessage: hasSomethingToOpen ? undefined : note,
+      generationNote: hasSomethingToOpen ? note : set.generationNote,
       progress: undefined,
       processingStartedAt: undefined,
       updatedAt: Date.now(),

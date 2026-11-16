@@ -9,6 +9,10 @@ import {
   courseScopeMatches,
   type CourseOptionScope,
 } from "./lib/courseScope";
+import {
+  LIBRARY_MATERIAL_LIMIT,
+  libraryTutorMaterial,
+} from "./lib/tutorLibrary";
 
 /**
  * Saved AI tutor threads, one per study set.
@@ -274,6 +278,89 @@ export const getCourseTutorContext = internalQuery({
   },
 });
 
+/** The home tutor's saved thread, newest last. */
+export const listLibraryMessages = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const rows = await ctx.db
+      .query("libraryTutorMessages")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    return inConversationOrder(rows).map((row) => ({
+      _id: row._id,
+      role: row.role,
+      content: row.content,
+      createdAt: row.createdAt,
+      streaming: row.streaming ?? false,
+      sources: row.sources ?? [],
+      builtSetId: row.builtSetId,
+    }));
+  },
+});
+
+/**
+ * Everything the home tutor reads: every ready course, plus its own recent
+ * conversation. Courses are ordered newest first, matching the library, and
+ * each gets a share of the material budget so a second or third subject is
+ * never silently dropped from the prompt.
+ */
+export const getLibraryTutorContext = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const courses = (await ctx.db
+      .query("courses")
+      .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+      .collect())
+      .filter((course) => course.status === "ready" && course.pathway)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+
+    if (courses.length === 0) return null;
+
+    const material = libraryTutorMaterial(
+      courses.map((course) => ({
+        subject: course.subject,
+        level: course.level,
+        examBoard: course.examBoard,
+        tier: course.tier,
+        options: courseOptionsLine(course),
+        pathway: {
+          overview: course.pathway!.overview,
+          examFormat: course.pathway!.examFormat,
+          units: course.pathway!.units.map((unit) => ({
+            title: unit.title,
+            summary: unit.summary,
+            topics: unit.topics.map((topic) => ({
+              title: topic.title,
+              specReference: topic.specReference,
+              summary: topic.summary,
+              keyPoints: topic.keyPoints,
+              examSkill: topic.examSkill,
+            })),
+          })),
+        },
+      })),
+      LIBRARY_MATERIAL_LIMIT,
+    );
+
+    const rows = await ctx.db
+      .query("libraryTutorMessages")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+
+    return {
+      title: "All your courses",
+      material,
+      messages: inConversationOrder(
+        rows.filter((row) => !row.streaming),
+      )
+        .slice(-HISTORY_LIMIT)
+        .map((row) => ({ role: row.role, content: row.content })),
+    };
+  },
+});
+
 /* -------------------------------------------------------------------------- */
 /* Streaming replies                                                          */
 /* -------------------------------------------------------------------------- */
@@ -491,6 +578,70 @@ export const finishCourseTutorExchange = internalMutation({
 
 export const discardCourseTutorAnswer = internalMutation({
   args: { messageId: v.id("courseTutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    await ctx.db.delete(messageId);
+  },
+});
+
+/** Opens a saved home-tutor exchange across every course. */
+export const beginLibraryTutorExchange = internalMutation({
+  args: {
+    userId: v.id("users"),
+    question: v.string(),
+  },
+  handler: async (ctx, { userId, question }) => {
+    const existing = await ctx.db
+      .query("libraryTutorMessages")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const row of existing) {
+      if (row.streaming) await ctx.db.delete(row._id);
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("libraryTutorMessages", {
+      userId,
+      role: "user",
+      content: normalizeTutorText(question, MAX_QUESTION_CHARS),
+      createdAt: now,
+    });
+    return await ctx.db.insert("libraryTutorMessages", {
+      userId,
+      role: "assistant",
+      content: "",
+      createdAt: now + 1,
+      streaming: true,
+    });
+  },
+});
+
+export const appendLibraryTutorAnswer = internalMutation({
+  args: {
+    messageId: v.id("libraryTutorMessages"),
+    content: v.string(),
+    sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
+    builtSetId: v.optional(v.id("studySets")),
+  },
+  handler: async (ctx, { messageId, content, sources, builtSetId }) => {
+    const row = await ctx.db.get(messageId);
+    if (!row) return;
+    await ctx.db.patch(messageId, {
+      content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
+      ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
+      ...(builtSetId === undefined ? {} : { builtSetId }),
+    });
+  },
+});
+
+export const finishLibraryTutorExchange = internalMutation({
+  args: { messageId: v.id("libraryTutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    await ctx.db.patch(messageId, { streaming: false });
+  },
+});
+
+export const discardLibraryTutorAnswer = internalMutation({
+  args: { messageId: v.id("libraryTutorMessages") },
   handler: async (ctx, { messageId }) => {
     await ctx.db.delete(messageId);
   },

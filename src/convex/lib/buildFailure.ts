@@ -1,6 +1,22 @@
 /** Student-facing wording for a build that stopped part-way. */
 export type BuildStage = "summary" | "cards" | "quiz" | "exam" | "save";
 
+/** Automatic background attempts after the initial build, then stop. */
+export const MAX_AUTOMATIC_REBUILDS = 3;
+
+/** Whether a stopped build left something the student can open. */
+export function hasSavedBuildWork(set: {
+  summary?: unknown;
+  cardCount: number;
+  quizCount: number;
+  examCount: number;
+}): boolean {
+  return (
+    set.summary !== undefined ||
+    set.cardCount + set.quizCount + set.examCount > 0
+  );
+}
+
 export type BuildCounts = {
   cards: number;
   quiz: number;

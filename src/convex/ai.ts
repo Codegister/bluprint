@@ -31,7 +31,9 @@ import { toCardArgs } from "./lib/cardArgs";
 import { toExamArgs } from "./lib/examArgs";
 import {
   buildFailureCopy,
+  hasSavedBuildWork,
   isRetryableBuildError,
+  MAX_AUTOMATIC_REBUILDS,
   partialStageNote,
   StudySetShortfallError,
   type BuildStage,
@@ -86,6 +88,7 @@ import {
   guideFromCriteria,
   meaningAward,
   reconcilePasses,
+  structuredCriterionMatch,
   type AlternativeCredit,
   type MarkCheck,
 } from "./lib/markingCriteria";
@@ -2726,15 +2729,18 @@ async function runTutorBuild(
     }
   }
 
+  const targetCounts = `${plan.counts.cards} flashcards, ${plan.counts.quiz} quiz questions and ${plan.counts.exam} exam questions`;
   return {
     builtSetId: result.setId,
     note: result.cached
       ? `A study set for ${plan.subject}: ${plan.label} has been created and is ready to study now. ` +
+        `It was built for ${targetCounts}. ` +
         "It reused a finished build, so no generation is running. In your first sentence, say it is ready, not building. " +
         "Do not ask for confirmation or claim anything is still generating. Then answer any remaining part of their request."
       : result.created
         ? started
           ? `A study set has already been created and its background build has started for ${plan.subject}: ${plan.label}. ` +
+            `Its target is ${targetCounts}. ` +
             "In your first sentence, say you have built it and started it. Do not ask for confirmation. " +
             "Say it is building now, not ready, and do not claim the cards or questions are finished. " +
             "Then answer any remaining part of their request with a short explanation or one practice question."
@@ -3556,8 +3562,12 @@ function isRateLimit(error: unknown): boolean {
 function nextMissingBuildSection(args: {
   syllabus: boolean;
   counts: { cards: number; quiz: number; exams: number };
-  requested: { quiz: number; exams: number };
-}): "quiz" | "exam" | null {
+  requested: { cards: number; quiz: number; exams: number };
+  allowCardRetry: boolean;
+}): "cards" | "quiz" | "exam" | null {
+  if (args.allowCardRetry && args.counts.cards < args.requested.cards) {
+    return "cards";
+  }
   if (args.counts.cards === 0) return null;
   if (args.syllabus) {
     if (args.counts.quiz < args.requested.quiz) return "quiz";
@@ -3569,20 +3579,65 @@ function nextMissingBuildSection(args: {
   return null;
 }
 
+function buildSectionTarget(section: "cards" | "quiz" | "exam") {
+  return {
+    cards: {
+      label: "flashcards",
+      percent: 24,
+      next: internal.ai.continueStudySetCards,
+    },
+    quiz: {
+      label: "quiz questions",
+      percent: 58,
+      next: internal.ai.continueStudySetQuiz,
+    },
+    exam: {
+      label: "exam questions",
+      percent: 82,
+      next: internal.ai.continueStudySetExams,
+    },
+  }[section];
+}
+
+/** Returns the build credit for the attempt that failed, if this run spent one. */
+async function refundFailedAttempt(
+  ctx: ActionCtx,
+  args: {
+    userId: Id<"users">;
+    attemptStartedAt?: number;
+    buildKind?: "set" | "rebuild";
+  },
+): Promise<boolean> {
+  if (args.attemptStartedAt === undefined) return false;
+  try {
+    const refund = await ctx.runMutation(internal.buildUsage.refund, {
+      userId: args.userId,
+      kind: args.buildKind ?? "set",
+      before: args.attemptStartedAt,
+    });
+    return refund.refunded;
+  } catch (error) {
+    console.error("Could not refund the failed build allowance", error);
+    return false;
+  }
+}
+
 /**
  * Keeps a partially finished set moving after a transient failure. The saved
  * sections stay openable while one more continuation runs in the background;
  * the run token prevents a duplicate or stale scheduler entry from writing.
+ * The persisted attempt counter caps automatic recovery so a broken provider
+ * cannot retry forever.
  */
 async function scheduleBackgroundRetry(
   ctx: ActionCtx,
   args: {
     setId: Id<"studySets">;
     userId: Id<"users">;
-    runStartedAt: number;
     syllabus: boolean;
     counts: { cards: number; quiz: number; exams: number };
-    requested: { quiz: number; exams: number };
+    requested: { cards: number; quiz: number; exams: number };
+    allowCardRetry: boolean;
     attemptStartedAt?: number;
     buildKind?: "set" | "rebuild";
     replaceExisting?: boolean;
@@ -3590,32 +3645,32 @@ async function scheduleBackgroundRetry(
 ): Promise<boolean> {
   const section = nextMissingBuildSection(args);
   if (!section) return false;
-  const label = section === "quiz" ? "quiz questions" : "exam questions";
+  const target = buildSectionTarget(section);
   try {
-    // A final-save shortfall can leave the set marked ready before the error is
-    // reported. Claim it first so the scheduled continuation can actually run;
-    // a live continuation is already within its ten-minute window and keeps its
-    // existing token.
-    const claim = await ctx.runMutation(internal.studySets.claimForProcessing, {
+    // Claiming the retry also starts a new run token. A duplicate scheduler
+    // entry then fails `claimContinuation` instead of generating twice.
+    const retry: {
+      allowed: boolean;
+      attempt: number;
+      runStartedAt: number;
+    } = await ctx.runMutation(internal.studySets.claimBackgroundRetry, {
       setId: args.setId,
     });
-    if (!claim.set) return false;
-    const runStartedAt = claim.claimed ? claim.startedAt : args.runStartedAt;
+    if (!retry.allowed) return false;
+    const saved = [
+      `${args.counts.cards} flashcards`,
+      ...(args.counts.quiz > 0 ? [`${args.counts.quiz} quiz questions`] : []),
+      ...(args.counts.exams > 0 ? [`${args.counts.exams} exam questions`] : []),
+    ].join(", ");
     await ctx.runMutation(internal.studySets.setProgress, {
       setId: args.setId,
-      progress: `Saved ${args.counts.cards} flashcards${args.counts.quiz > 0 ? ` and ${args.counts.quiz} quiz questions` : ""}. Retrying the remaining ${label} in the background…`,
-      percent: section === "quiz" ? 58 : 82,
+      progress: `Saved ${saved}. Continuing the remaining ${target.label} automatically (attempt ${retry.attempt} of ${MAX_AUTOMATIC_REBUILDS})…`,
+      percent: target.percent,
     });
-    await ctx.scheduler.runAfter(
-      20_000,
-      section === "quiz"
-        ? internal.ai.continueStudySetQuiz
-        : internal.ai.continueStudySetExams,
-      {
+    await ctx.scheduler.runAfter(20_000, target.next, {
         setId: args.setId,
         userId: args.userId,
-        runStartedAt,
-        retryCount: 1,
+        runStartedAt: retry.runStartedAt,
         ...(args.attemptStartedAt !== undefined
           ? { attemptStartedAt: args.attemptStartedAt }
           : {}),
@@ -3707,6 +3762,137 @@ export const processStudySetScheduled = internalAction({
 });
 
 /**
+ * Resumes a run that died without reaching its catch block. The watchdog only
+ * acts if the exact run token is still current and processing, so a completed
+ * run, a newer stage or a deleted set makes it a no-op.
+ */
+export const resumeStaleStudySet = internalAction({
+  args: {
+    setId: v.id("studySets"),
+    userId: v.id("users"),
+    runStartedAt: v.number(),
+    attemptStartedAt: v.optional(v.number()),
+    buildKind: v.optional(v.union(v.literal("set"), v.literal("rebuild"))),
+    replaceExisting: v.optional(v.boolean()),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ resumed: boolean; stopped?: boolean; attempt?: number }> => {
+    const set = await ctx.runQuery(internal.studySets.getForProcessing, {
+      setId: args.setId,
+    });
+    if (
+      !set ||
+      set.userId !== args.userId ||
+      set.status !== "processing" ||
+      set.processingStartedAt !== args.runStartedAt
+    ) {
+      return { resumed: false };
+    }
+    const hasSavedWork = hasSavedBuildWork(set);
+    if (!hasSavedWork) {
+      const message =
+        "The build stopped before it could save any work. Your notes are safe; start the build again when you are ready.";
+      const refunded = await refundFailedAttempt(ctx, args);
+      await ctx.runMutation(internal.studySets.failGeneration, {
+        setId: args.setId,
+        message: refunded
+          ? `${message} This attempt was not counted against your build allowance.`
+          : message,
+      });
+      return { resumed: false, stopped: true };
+    }
+
+    const plan = planForSet(set);
+    const section = nextMissingBuildSection({
+      syllabus: plan.syllabus,
+      counts: {
+        cards: set.cardCount,
+        quiz: set.quizCount,
+        exams: set.examCount,
+      },
+      requested: {
+        cards: plan.targetCards,
+        quiz: plan.requested.quiz,
+        exams: plan.requested.exams,
+      },
+      allowCardRetry: true,
+    });
+    if (!section) {
+      await ctx.runMutation(internal.studySets.markReady, { setId: args.setId });
+      return { resumed: true };
+    }
+
+    const retry: {
+      allowed: boolean;
+      attempt: number;
+      runStartedAt: number;
+    } = await ctx.runMutation(internal.studySets.claimBackgroundRetry, {
+      setId: args.setId,
+    });
+    if (!retry.allowed) {
+      const message =
+        "The build stopped again before it could finish. The sections that were saved are still open, and automatic attempts are complete.";
+      const refunded = await refundFailedAttempt(ctx, args);
+      await ctx.runMutation(internal.studySets.failGeneration, {
+        setId: args.setId,
+        message: refunded
+          ? `${message} This attempt was not counted against your build allowance.`
+          : message,
+      });
+      return { resumed: false, stopped: true };
+    }
+
+    const target = buildSectionTarget(section);
+    await ctx.runMutation(internal.studySets.setProgress, {
+      setId: args.setId,
+      progress: `Resuming the interrupted build automatically (attempt ${retry.attempt} of ${MAX_AUTOMATIC_REBUILDS})…`,
+      percent: target.percent,
+    });
+    await ctx.scheduler.runAfter(0, target.next, {
+      setId: args.setId,
+      userId: args.userId,
+      runStartedAt: retry.runStartedAt,
+      ...(args.attemptStartedAt !== undefined
+        ? { attemptStartedAt: args.attemptStartedAt }
+        : {}),
+      ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+      ...(args.replaceExisting ? { replaceExisting: true } : {}),
+    });
+    return { resumed: true, attempt: retry.attempt };
+  },
+});
+
+/** Leaves a no-op watchdog after every stage, so a hard action timeout resumes. */
+async function scheduleBuildWatchdog(
+  ctx: ActionCtx,
+  setId: Id<"studySets">,
+  userId: Id<"users">,
+  runStartedAt: number,
+  attemptStartedAt?: number,
+  buildKind?: "set" | "rebuild",
+  replaceExisting?: boolean,
+) {
+  try {
+    await ctx.scheduler.runAfter(
+      11 * 60 * 1000,
+      internal.ai.resumeStaleStudySet,
+      {
+        setId,
+        userId,
+        runStartedAt,
+        ...(attemptStartedAt !== undefined ? { attemptStartedAt } : {}),
+        ...(buildKind ? { buildKind } : {}),
+        ...(replaceExisting ? { replaceExisting: true } : {}),
+      },
+    );
+  } catch (error) {
+    console.error("Could not schedule the build watchdog", setId, error);
+  }
+}
+
+/**
  * The second checkpointed stage. It re-reads the cards committed by the first
  * action, generates the quiz and schedules the exam stage. A run token blocks
  * an old or duplicate scheduler entry from writing into a newer run.
@@ -3716,7 +3902,6 @@ type ContinuationArgs = {
   userId: Id<"users">;
   runStartedAt: number;
   failureStage?: BuildFailureStage;
-  retryCount?: number;
   // The original charged attempt, carried through a background retry so a
   // final failure can still refund it.
   attemptStartedAt?: number;
@@ -3725,13 +3910,263 @@ type ContinuationArgs = {
   replaceExisting?: boolean;
 };
 
+/** Fills a short flashcard deck, then hands the set on to the quiz stage. */
+export const continueStudySetCards = internalAction({
+  args: {
+    setId: v.id("studySets"),
+    userId: v.id("users"),
+    runStartedAt: v.number(),
+    failureStage: v.optional(buildFailureStageValidator),
+    attemptStartedAt: v.optional(v.number()),
+    buildKind: v.optional(v.union(v.literal("set"), v.literal("rebuild"))),
+    replaceExisting: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => await continueStudySetCardsForUser(ctx, args),
+});
+
+async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationArgs) {
+  const claim = await ctx.runMutation(internal.studySets.claimContinuation, {
+    setId: args.setId,
+    runStartedAt: args.runStartedAt,
+  });
+  if (!claim.claimed) return { continued: false };
+  await scheduleBuildWatchdog(
+    ctx,
+    args.setId,
+    args.userId,
+    claim.startedAt,
+    args.attemptStartedAt,
+    args.buildKind,
+    args.replaceExisting,
+  );
+
+  const snapshot = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
+    setId: args.setId,
+  });
+  if (
+    !snapshot ||
+    snapshot.set.userId !== args.userId ||
+    snapshot.set.status !== "processing"
+  ) {
+    return { continued: false };
+  }
+
+  const set = snapshot.set;
+  const plan = planForSet(set);
+  const summary = summaryForSet(set);
+  const savedCounts = {
+    cards: set.cardCount,
+    quiz: set.quizCount,
+    exams: set.examCount,
+  };
+  // A continuation only fills what is still missing. The fresh-build target is
+  // the material-capped request, so a thin note does not trigger endless
+  // attempts to reach a number it cannot support.
+  const remaining = Math.max(0, plan.targetCards - snapshot.cards.length);
+  let currentStage: BuildStage = "cards";
+
+  try {
+    const apiKeys = resolveNvidiaKeys();
+    if (remaining > 0) {
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId: args.setId,
+        progress: `Building the remaining ${remaining} flashcards…`,
+        percent: 24,
+      });
+      const reportCards: BatchProgress = async (done, target) => {
+        if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId: args.setId,
+          progress: `Building flashcards… ${done} of ${target}`,
+          percent: 24 + (done / Math.max(1, target)) * 32,
+        });
+      };
+      const generated = await generateCards(
+        apiKeys,
+        plan.notes,
+        remaining,
+        Date.now() + 7 * 60 * 1000,
+        reportCards,
+        plan.syllabus,
+        reuseCardDigest(snapshot.cards),
+      );
+      if (generated.length > 0) {
+        const checkpoint = await ctx.runMutation(
+          internal.studySets.completeGeneration,
+          {
+            setId: args.setId,
+            summary,
+            cards: toCardArgs(generated),
+            quiz: [],
+            exams: [],
+            keepExisting: true,
+            title: summary.title,
+            requested: plan.requested,
+            final: false,
+          },
+        );
+        if (checkpoint.stored && checkpoint.counts) {
+          savedCounts.cards = checkpoint.counts.cards;
+          savedCounts.quiz = checkpoint.counts.quiz;
+          savedCounts.exams = checkpoint.counts.exams;
+        }
+      }
+    }
+
+    if (!(await setStillExists(ctx, args.setId))) {
+      return { continued: false, cancelled: true };
+    }
+
+    const requested = {
+      cards: plan.targetCards,
+      quiz: plan.requested.quiz,
+      exams: plan.requested.exams,
+    };
+    const next = nextMissingBuildSection({
+      syllabus: plan.syllabus,
+      counts: savedCounts,
+      requested,
+      allowCardRetry: true,
+    });
+
+    if (next === "cards") {
+      if (
+        (await scheduleBackgroundRetry(ctx, {
+          setId: args.setId,
+          userId: args.userId,
+          syllabus: plan.syllabus,
+          counts: savedCounts,
+          requested,
+          allowCardRetry: true,
+          ...(args.attemptStartedAt !== undefined
+            ? { attemptStartedAt: args.attemptStartedAt }
+            : {}),
+          ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+          ...(args.replaceExisting ? { replaceExisting: true } : {}),
+        }))
+      ) {
+        return { continued: true, retrying: true };
+      }
+      // Automatic attempts are exhausted. Keep the cards that exist, make the
+      // set usable, and use the same refund/stop path as every other stage.
+      const message =
+        "The build stopped before all the cards were written. The cards that finished are saved, and automatic attempts are complete.";
+      const refunded = await refundFailedAttempt(ctx, args);
+      await ctx.runMutation(internal.studySets.failGeneration, {
+        setId: args.setId,
+        message: refunded
+          ? `${message} This attempt was not counted against your build allowance.`
+          : message,
+      });
+      return { continued: true, stopped: true };
+    }
+
+    if (next === "quiz") {
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId: args.setId,
+        progress: "Flashcards saved. Continuing with the quiz…",
+        percent: 58,
+      });
+      await ctx.scheduler.runAfter(0, internal.ai.continueStudySetQuiz, {
+        setId: args.setId,
+        userId: args.userId,
+        runStartedAt: claim.startedAt,
+        ...(args.attemptStartedAt !== undefined
+          ? { attemptStartedAt: args.attemptStartedAt }
+          : {}),
+        ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+        ...(args.replaceExisting ? { replaceExisting: true } : {}),
+      });
+      return { continued: true };
+    }
+
+    if (next === "exam") {
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId: args.setId,
+        progress: "Quiz saved. Continuing with exam questions…",
+        percent: 82,
+      });
+      await ctx.scheduler.runAfter(0, internal.ai.continueStudySetExams, {
+        setId: args.setId,
+        userId: args.userId,
+        runStartedAt: claim.startedAt,
+        ...(args.attemptStartedAt !== undefined
+          ? { attemptStartedAt: args.attemptStartedAt }
+          : {}),
+        ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+        ...(args.replaceExisting ? { replaceExisting: true } : {}),
+      });
+      return { continued: true };
+    }
+
+    await ctx.runMutation(internal.studySets.setProgress, {
+      setId: args.setId,
+      progress: "Saving your set…",
+      percent: 97,
+    });
+    currentStage = "save";
+    await ctx.runMutation(internal.studySets.completeGeneration, {
+      setId: args.setId,
+      summary,
+      cards: [],
+      quiz: [],
+      exams: [],
+      keepExisting: true,
+      title: summary.title,
+      requested: plan.requested,
+      final: true,
+    });
+    return { continued: true };
+  } catch (error) {
+    if (error instanceof BuildCancelled) {
+      console.error("Study set card continuation cancelled (set deleted)", args.setId);
+      return { continued: false, cancelled: true };
+    }
+    console.error("Study set card continuation failed", args.setId, error);
+    if (!(error instanceof StudySetShortfallError)) {
+      await recordProviderIncident(ctx, "build", error);
+    }
+    if (
+      isRetryableBuildError(error) &&
+      savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0 &&
+      (await scheduleBackgroundRetry(ctx, {
+        setId: args.setId,
+        userId: args.userId,
+        syllabus: plan.syllabus,
+        counts: savedCounts,
+        requested: {
+          cards: plan.targetCards,
+          quiz: plan.requested.quiz,
+          exams: plan.requested.exams,
+        },
+        allowCardRetry: true,
+        ...(args.attemptStartedAt !== undefined
+          ? { attemptStartedAt: args.attemptStartedAt }
+          : {}),
+        ...(args.buildKind ? { buildKind: args.buildKind } : {}),
+        ...(args.replaceExisting ? { replaceExisting: true } : {}),
+      }))
+    ) {
+      return { continued: true, retrying: true };
+    }
+    const refunded = await refundFailedAttempt(ctx, args);
+    const message = buildFailureCopy(currentStage, savedCounts, isRateLimit(error));
+    await ctx.runMutation(internal.studySets.failGeneration, {
+      setId: args.setId,
+      message: refunded
+        ? `${message} This attempt was not counted against your build allowance.`
+        : message,
+    });
+    return { continued: false, failed: true };
+  }
+}
+
 export const continueStudySetQuiz = internalAction({
   args: {
     setId: v.id("studySets"),
     userId: v.id("users"),
     runStartedAt: v.number(),
     failureStage: v.optional(buildFailureStageValidator),
-    retryCount: v.optional(v.number()),
     attemptStartedAt: v.optional(v.number()),
     buildKind: v.optional(v.union(v.literal("set"), v.literal("rebuild"))),
     replaceExisting: v.optional(v.boolean()),
@@ -3745,6 +4180,15 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
     runStartedAt: args.runStartedAt,
   });
   if (!claim.claimed) return { continued: false };
+  await scheduleBuildWatchdog(
+    ctx,
+    args.setId,
+    args.userId,
+    claim.startedAt,
+    args.attemptStartedAt,
+    args.buildKind,
+    args.replaceExisting,
+  );
 
   const snapshot = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
     setId: args.setId,
@@ -4056,16 +4500,19 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
       await recordProviderIncident(ctx, "build", error);
     }
     if (
-      (args.retryCount ?? 0) < 1 &&
       isRetryableBuildError(error) &&
       savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0 &&
       (await scheduleBackgroundRetry(ctx, {
         setId: args.setId,
         userId: args.userId,
-        runStartedAt: claim.startedAt,
         syllabus: plan.syllabus,
         counts: savedCounts,
-        requested: { quiz: plan.requested.quiz, exams: plan.requested.exams },
+        requested: {
+          cards: plan.targetCards,
+          quiz: plan.requested.quiz,
+          exams: plan.requested.exams,
+        },
+        allowCardRetry: set.generationNotes === undefined,
         ...(args.attemptStartedAt !== undefined
           ? { attemptStartedAt: args.attemptStartedAt }
           : {}),
@@ -4075,19 +4522,7 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
     ) {
       return { continued: true, retrying: true };
     }
-    let refunded = false;
-    if (args.attemptStartedAt !== undefined) {
-      try {
-        const refund = await ctx.runMutation(internal.buildUsage.refund, {
-          userId: args.userId,
-          kind: args.buildKind ?? "set",
-          before: args.attemptStartedAt,
-        });
-        refunded = refund.refunded;
-      } catch (refundError) {
-        console.error("Could not refund the failed set allowance", refundError);
-      }
-    }
+    const refunded = await refundFailedAttempt(ctx, args);
     const message =
       error instanceof StudySetShortfallError
         ? error.message
@@ -4110,7 +4545,6 @@ export const continueStudySetExams = internalAction({
     userId: v.id("users"),
     runStartedAt: v.number(),
     failureStage: v.optional(buildFailureStageValidator),
-    retryCount: v.optional(v.number()),
     attemptStartedAt: v.optional(v.number()),
     buildKind: v.optional(v.union(v.literal("set"), v.literal("rebuild"))),
     replaceExisting: v.optional(v.boolean()),
@@ -4124,6 +4558,15 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
     runStartedAt: args.runStartedAt,
   });
   if (!claim.claimed) return { continued: false };
+  await scheduleBuildWatchdog(
+    ctx,
+    args.setId,
+    args.userId,
+    claim.startedAt,
+    args.attemptStartedAt,
+    args.buildKind,
+    args.replaceExisting,
+  );
 
   const snapshot = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
     setId: args.setId,
@@ -4302,16 +4745,19 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
       await recordProviderIncident(ctx, "build", error);
     }
     if (
-      (args.retryCount ?? 0) < 1 &&
       isRetryableBuildError(error) &&
       savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0 &&
       (await scheduleBackgroundRetry(ctx, {
         setId: args.setId,
         userId: args.userId,
-        runStartedAt: claim.startedAt,
         syllabus: plan.syllabus,
         counts: savedCounts,
-        requested: { quiz: plan.requested.quiz, exams: plan.requested.exams },
+        requested: {
+          cards: plan.targetCards,
+          quiz: plan.requested.quiz,
+          exams: plan.requested.exams,
+        },
+        allowCardRetry: set.generationNotes === undefined,
         ...(args.attemptStartedAt !== undefined
           ? { attemptStartedAt: args.attemptStartedAt }
           : {}),
@@ -4321,19 +4767,7 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
     ) {
       return { continued: true, retrying: true };
     }
-    let refunded = false;
-    if (args.attemptStartedAt !== undefined) {
-      try {
-        const refund = await ctx.runMutation(internal.buildUsage.refund, {
-          userId: args.userId,
-          kind: args.buildKind ?? "set",
-          before: args.attemptStartedAt,
-        });
-        refunded = refund.refunded;
-      } catch (refundError) {
-        console.error("Could not refund the failed set allowance", refundError);
-      }
-    }
+    const refunded = await refundFailedAttempt(ctx, args);
     const message =
       error instanceof StudySetShortfallError
         ? error.message
@@ -4650,40 +5084,40 @@ async function processStudySetForUser(
     // A pathway quiz can also be partially checkpointed (for example 60 of 100)
     // after hitting the action deadline; that is still a quiz resume, not a
     // completed section.
-    const resumeTargetQuiz = Math.min(
-      MAX_REQUESTED_ITEMS,
-      Math.max(BUILD_MIN, existing.targetQuizCount ?? BUILD_DEFAULTS.quiz),
-    );
-    const resumeTargetExam = Math.min(
-      MAX_REQUESTED_ITEMS,
-      Math.max(BUILD_MIN, existing.targetExamCount ?? BUILD_DEFAULTS.exam),
-    );
-    const resumeStage: "quiz" | "exam" | null =
+    const resumePlan = planForSet(existing);
+    const resumeStage: "cards" | "quiz" | "exam" | null =
       existing.generationNotes === undefined &&
       (existing.status === "processing" || existing.status === "error") &&
-      existing.cardCount > 0
-        ? existing.courseId !== undefined
-          ? existing.quizCount < resumeTargetQuiz
-            ? "quiz"
-            : existing.examCount < resumeTargetExam
-              ? "exam"
-              : null
-          : existing.quizCount === 0
-            ? "quiz"
-            : existing.examCount === 0
-              ? "exam"
-              : null
+      hasSavedBuildWork(existing)
+        ? existing.cardCount < resumePlan.targetCards
+          ? "cards"
+          : existing.courseId !== undefined
+            ? existing.quizCount < resumePlan.targetQuiz
+              ? "quiz"
+              : existing.examCount < resumePlan.targetExam
+                ? "exam"
+                : null
+            : existing.quizCount === 0
+              ? "quiz"
+              : existing.examCount === 0
+                ? "exam"
+                : null
         : null;
 
     // A rebuild is a second, full AI run over the same notes, so it spends an
     // allowance like a new set does. A resume is the same paid run continuing,
     // so it must not spend another credit.
+    const savedWork = hasSavedBuildWork(existing);
+    const continuingSavedRun =
+      savedWork && (existing.status === "processing" || existing.status === "error");
     const buildKind = existing.status === "queued" ? ("set" as const) : ("rebuild" as const);
-    // A rebuild replaces every section; a continuation of a new set fills the
-    // sections that do not exist yet.
-    const replaceExisting = buildKind === "rebuild" && existing.generationNotes === undefined;
+    // Only a deliberate rebuild of a ready set replaces every section. A
+    // partial or stale run keeps the sections it already checkpointed.
+    const replaceExisting =
+      existing.status === "ready" &&
+      existing.generationNotes === undefined;
     let attemptStartedAt = Date.now();
-    if (existing.status !== "queued" && !resumeStage) {
+    if (existing.status !== "queued" && !continuingSavedRun) {
       await ctx.runMutation(internal.buildUsage.consume, {
         userId,
         kind: "rebuild",
@@ -4692,12 +5126,15 @@ async function processStudySetForUser(
       // find the credit it is returning.
       attemptStartedAt = Date.now();
     }
+    // The initial set was charged by `create`; a rebuild is charged here. A
+    // resumed run is already paid for and must never refund an unrelated credit.
+    const chargedAttempt = existing.status === "queued" || !continuingSavedRun;
 
     const claim = await ctx.runMutation(internal.studySets.claimForProcessing, { setId });
     if (!claim.claimed || !claim.set) {
       // Another run already owns this set. A rebuild credit was consumed just
       // above, so hand it back rather than charging for a run that never began.
-      if (existing.status !== "queued" && !resumeStage) {
+      if (existing.status !== "queued" && !continuingSavedRun) {
         try {
           await ctx.runMutation(internal.buildUsage.refund, {
             userId,
@@ -4711,25 +5148,45 @@ async function processStudySetForUser(
       return { started: false };
     }
 
+    if (continuingSavedRun && !resumeStage) {
+      await ctx.runMutation(internal.studySets.markReady, { setId });
+      return { started: true, resumed: true };
+    }
+
+    await scheduleBuildWatchdog(
+      ctx,
+      setId,
+      userId,
+      claim.startedAt,
+      chargedAttempt ? attemptStartedAt : undefined,
+      chargedAttempt ? buildKind : undefined,
+      replaceExisting,
+    );
+
     if (resumeStage) {
       try {
         await ctx.runMutation(internal.studySets.setProgress, {
           setId,
           progress:
-            resumeStage === "quiz"
-              ? "Continuing with the quiz…"
-              : "Continuing with exam questions…",
-          percent: resumeStage === "quiz" ? 58 : 80,
+            resumeStage === "cards"
+              ? "Continuing with the remaining flashcards…"
+              : resumeStage === "quiz"
+                ? "Continuing with the quiz…"
+                : "Continuing with exam questions…",
+          percent: resumeStage === "cards" ? 24 : resumeStage === "quiz" ? 58 : 80,
         });
         await ctx.scheduler.runAfter(
           0,
-          resumeStage === "quiz"
-            ? internal.ai.continueStudySetQuiz
-            : internal.ai.continueStudySetExams,
+          resumeStage === "cards"
+            ? internal.ai.continueStudySetCards
+            : resumeStage === "quiz"
+              ? internal.ai.continueStudySetQuiz
+              : internal.ai.continueStudySetExams,
           {
             setId,
             userId,
             runStartedAt: claim.startedAt,
+            ...(replaceExisting ? { replaceExisting: true } : {}),
           },
         );
         return { started: true, resumed: true };
@@ -4754,6 +5211,7 @@ async function processStudySetForUser(
     // needs the same requested totals and course flag.
     const retrySyllabus = existing.courseId !== undefined;
     const retryRequested = {
+      cards: 0,
       quiz: Math.min(
         MAX_REQUESTED_ITEMS,
         Math.max(BUILD_MIN, existing.targetQuizCount ?? BUILD_DEFAULTS.quiz),
@@ -4838,6 +5296,7 @@ async function processStudySetForUser(
       const reusedQuiz = existing.generationNotes !== undefined ? existing.quizCount : 0;
       const reusedExams = existing.generationNotes !== undefined ? existing.examCount : 0;
       const targetCards = Math.max(0, Math.min(requestedCards, limits.cards) - reusedCards);
+      retryRequested.cards = targetCards;
       const targetQuiz = Math.max(0, Math.min(requestedQuiz, limits.quiz) - reusedQuiz);
       const targetExam = Math.max(0, Math.min(requestedExam, limits.exam) - reusedExams);
       // Leave room inside Convex's action limit for the final writes.
@@ -4946,20 +5405,29 @@ async function processStudySetForUser(
           );
         }
         if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
+        const needsMoreCards = savedCounts.cards < targetCards;
         await ctx.runMutation(internal.studySets.setProgress, {
           setId,
-          progress: "Flashcards saved. Continuing with the quiz…",
-          percent: 58,
+          progress: needsMoreCards
+            ? "Flashcards saved. Continuing with the remaining cards…"
+            : "Flashcards saved. Continuing with the quiz…",
+          percent: needsMoreCards ? 24 : 58,
         });
-        await ctx.scheduler.runAfter(0, internal.ai.continueStudySetQuiz, {
-          setId,
-          userId,
-          runStartedAt: claim.startedAt,
-          ...(stageFailures[0] ? { failureStage: stageFailures[0].stage } : {}),
-          attemptStartedAt,
-          buildKind,
-          ...(replaceExisting ? { replaceExisting: true } : {}),
-        });
+        await ctx.scheduler.runAfter(
+          0,
+          needsMoreCards
+            ? internal.ai.continueStudySetCards
+            : internal.ai.continueStudySetQuiz,
+          {
+            setId,
+            userId,
+            runStartedAt: claim.startedAt,
+            ...(stageFailures[0] ? { failureStage: stageFailures[0].stage } : {}),
+            attemptStartedAt,
+            buildKind,
+            ...(replaceExisting ? { replaceExisting: true } : {}),
+          },
+        );
         return { started: true, continued: true };
       }
 
@@ -5296,30 +5764,25 @@ async function processStudySetForUser(
         (await scheduleBackgroundRetry(ctx, {
           setId,
           userId,
-          runStartedAt: claim.startedAt,
           syllabus: retrySyllabus,
           counts: savedCounts,
           requested: retryRequested,
-          attemptStartedAt,
-          buildKind,
+          allowCardRetry: existing.generationNotes === undefined,
+          ...(chargedAttempt ? { attemptStartedAt, buildKind } : {}),
           ...(replaceExisting ? { replaceExisting: true } : {}),
         }))
       ) {
         return { started: true, retrying: true };
       }
-      // A failed run must not spend the student's allowance. Refund only the
-      // attempt that started here, so a newer build is never quietly cancelled.
-      let refunded = false;
-      try {
-        const refund = await ctx.runMutation(internal.buildUsage.refund, {
-          userId,
-          kind: buildKind,
-          before: attemptStartedAt,
-        });
-        refunded = refund.refunded;
-      } catch (refundError) {
-        console.error("Could not refund the failed set allowance", refundError);
-      }
+      // A resumed run was already charged by its first action, so only a run
+      // that spent a credit here may hand one back.
+      const refunded = chargedAttempt
+        ? await refundFailedAttempt(ctx, {
+            userId,
+            attemptStartedAt,
+            buildKind,
+          })
+        : false;
       const message =
         error instanceof StudySetShortfallError
           ? error.message
@@ -5837,7 +6300,13 @@ function buildChecks(
       // "temperature and pH".
       const referenceIndex = referencePoints.indexOf(point);
       const terms = distinctive[referenceIndex] ?? distinctive[index] ?? [];
-      const awarded = awardCriterion(marks, claimed, terms, answer);
+      const structured = structuredCriterionMatch(point, answer);
+      const awarded =
+        structured === false
+          ? 0
+          : structured === true
+            ? claimed
+            : awardCriterion(marks, claimed, terms, answer);
       return { point, marks, awarded, evidence: verifiable };
     }
     // Uncredited. When the answer does refer to the bullet's idea, the sentence
@@ -6268,6 +6737,14 @@ async function markExamAnswer(
     }
   }
 
+  // Closed answers are re-checked after the meaning and alternative passes:
+  // a criterion such as `2.8.1` must match completely, not merely share its
+  // numbers with `2.8.8.1`.
+  checks = checks.map((check) => {
+    if (structuredCriterionMatch(check.point, response) !== false) return check;
+    return { ...check, awarded: 0 };
+  });
+
   // The score is counted from the checklist, so the same verdicts always
   // produce the same mark.
   const awardedMarks = awardedFromChecks(checks, exam.marks);
@@ -6650,7 +7127,9 @@ const TUTOR_SYSTEM_PROMPT =
   "Any fact, example or explanation that is not in the supplied material must begin with the exact label \"Beyond your notes:\" so the student knows what to check. " +
   "Only test or quiz the student when they ask to be quizzed or tested. " +
   "This thread begins where the student's first message begins: never greet them as returning, never say \"welcome back\", and never refer to a previous session or a continuing conversation. " +
-  "Plain text with short paragraphs and hyphen bullets. No markdown headings, tables, or code fences. " +
+  "Plain text with short paragraphs and hyphen bullets. No markdown headings or tables. " +
+  "When a diagram genuinely helps, include at most one fenced diagram: ```svg followed by a self-contained SVG, or ```mermaid followed by simple Mermaid syntax. " +
+  "Inside that fence use no scripts, external links, images, styles or event handlers. Do not use any other code fences. " +
   "Be direct and warm, not effusive. Keep answers under 250 words unless the student asks for a model answer or a step-by-step walkthrough.";
 
 /**
@@ -7575,6 +8054,113 @@ export const askCourseTutor = action({
       };
     } catch (error) {
       await ctx.runMutation(internal.tutor.discardCourseTutorAnswer, { messageId });
+      await recordProviderIncident(ctx, "tutor", error);
+      if (!(error instanceof ProviderError)) console.error("Tutor answer failed", error);
+      throw new Error(
+        error instanceof ProviderError && error.status === 429
+          ? AI_RATE_LIMIT_MESSAGE
+          : TUTOR_UNAVAILABLE_MESSAGE,
+      );
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// All-course tutor
+// ---------------------------------------------------------------------------
+
+/**
+ * The home tutor: one conversation grounded in every ready course the student
+ * has, so a question can move between subjects without choosing a scope first.
+ * Set and course threads stay separate, and a build still resolves a concrete
+ * course and topic through the same deterministic planner.
+ */
+export const askLibraryTutor = action({
+  args: {
+    question: v.string(),
+    useWeb: v.optional(v.boolean()),
+    tier: v.optional(v.string()),
+    explainLevel: v.optional(v.string()),
+    imageIds: v.optional(v.array(v.id("_storage"))),
+  },
+  handler: async (
+    ctx,
+    { question, useWeb, tier, explainLevel, imageIds },
+  ): Promise<{ reply: string; builtSetId?: Id<"studySets"> }> => {
+    const userId = await requireUserId(ctx);
+    const text = readQuestion(question);
+    const chosenTier = readTutorTier(tier);
+
+    const context = await ctx.runQuery(internal.tutor.getLibraryTutorContext, {
+      userId,
+    });
+    if (!context) throw new Error("Add a course before asking the tutor.");
+
+    await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
+    const apiKeys = resolveNvidiaKeys();
+
+    const attachmentIds = (imageIds ?? []).slice(0, MAX_TUTOR_IMAGES);
+    let imageContext = "";
+    if (attachmentIds.length > 0) {
+      await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "vision" });
+      imageContext = await readTutorImages(ctx, apiKeys, attachmentIds);
+      if (!imageContext) {
+        throw new Error(
+          "That image could not be read. Try a JPG or PNG under 10MB, then send it again.",
+        );
+      }
+    }
+    const modelQuestion = imageContext
+      ? `${text}\n\n<attached_image_context>\n${imageContext}\n</attached_image_context>`
+      : text;
+
+    const messageId = await ctx.runMutation(
+      internal.tutor.beginLibraryTutorExchange,
+      { userId, question: text },
+    );
+
+    try {
+      // The planner reads every course too, so "build a Spanish quiz" works from
+      // a home question without a selected course.
+      const build = await runTutorBuild(ctx, userId, text, {});
+      const result = await streamTutorAnswer(
+        apiKeys,
+        {
+          title: context.title,
+          material: context.material,
+          explainLevel,
+          messages: context.messages,
+        },
+        modelQuestion,
+        useWeb === true,
+        chosenTier,
+        async (content, sources) => {
+          await ctx.runMutation(internal.tutor.appendLibraryTutorAnswer, {
+            messageId,
+            content,
+            ...(sources.length > 0 ? { sources } : {}),
+          });
+        },
+        build?.note,
+      );
+
+      await ctx.runMutation(internal.tutor.appendLibraryTutorAnswer, {
+        messageId,
+        content: result.text,
+        ...(result.sources.length > 0 ? { sources: result.sources } : {}),
+        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
+      });
+      await ctx.runMutation(internal.tutor.finishLibraryTutorExchange, {
+        messageId,
+      });
+      return {
+        reply: result.text,
+        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
+      };
+    } catch (error) {
+      await ctx.runMutation(internal.tutor.discardLibraryTutorAnswer, {
+        messageId,
+      });
       await recordProviderIncident(ctx, "tutor", error);
       if (!(error instanceof ProviderError)) console.error("Tutor answer failed", error);
       throw new Error(

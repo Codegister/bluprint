@@ -15,6 +15,10 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { normaliseCapacityNote } from "@/convex/lib/buildDefaults";
+import {
+  hasSavedBuildWork,
+  MAX_AUTOMATIC_REBUILDS,
+} from "@/convex/lib/buildFailure";
 import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { guestKeepWorkHref } from "@/lib/authRedirect";
 import { buildErrorMessage, notifyError } from "@/lib/errors";
@@ -187,13 +191,9 @@ function stageFor(percent: number) {
 function BuildingPanel({
   set,
   stale,
-  onRetry,
-  retrying,
 }: {
   set: Doc<"studySets">;
   stale: boolean;
-  onRetry: () => void;
-  retrying: boolean;
 }) {
   // Queued runs have not written a percentage yet. Never show 100 here: the
   // completed panel takes over as soon as the set is ready.
@@ -313,26 +313,11 @@ function BuildingPanel({
           </div>
 
           {stale && (
-            <div className="mt-4 flex flex-col items-start gap-2 rounded-2xl bg-brand-panel p-4">
+            <div className="mt-4 rounded-2xl bg-brand-panel p-4">
               <p className="text-[0.85rem] leading-relaxed text-brand-ink/80">
-                This run is taking longer than expected. The AI may be slow, or the
-                run was interrupted.
+                This run is taking longer than expected. Bluprint keeps retrying in
+                the background automatically; the sections saved so far stay open.
               </p>
-              <Button
-                onClick={onRetry}
-                disabled={retrying}
-                variant="outline"
-                className="h-9 rounded-full border-border bg-card text-[0.82rem] font-semibold text-brand-ink hover:bg-brand-panel"
-              >
-                {retrying ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <RotateCcw className="size-3.5" />
-                )}
-                {set.cardCount + set.quizCount + set.examCount > 0
-                  ? "Continue build"
-                  : "Rebuild set"}
-              </Button>
             </div>
           )}
 
@@ -376,15 +361,7 @@ function FinishedSections({ set }: { set: Doc<"studySets"> }) {
   );
 }
 
-function ErrorPanel({
-  set,
-  onRetry,
-  retrying,
-}: {
-  set: Doc<"studySets">;
-  onRetry: () => void;
-  retrying: boolean;
-}) {
+function ErrorPanel({ set }: { set: Doc<"studySets"> }) {
   const failure = buildErrorMessage(set.errorMessage);
   return (
     <div className="mt-6 rounded-[2rem] border border-border bg-card p-6 sm:p-7">
@@ -399,26 +376,12 @@ function ErrorPanel({
           {failure.message}
         </p>
 
-        <Button
-          onClick={onRetry}
-          disabled={retrying}
-          className="mt-4 h-10 rounded-full bg-[#191B27] px-5 font-semibold text-white hover:bg-[#2A2D3E]"
-        >
-          {retrying ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <RotateCcw className="size-4" />
-          )}
-          {set.cardCount + set.quizCount + set.examCount > 0
-            ? "Continue build"
-            : "Rebuild set"}
-        </Button>
-
         <FinishedSections set={set} />
 
         <p className="mt-3 text-[0.78rem] text-muted-foreground">
           Your upload is saved. A failed run is not charged, and any cards or
-          questions it did finish are kept. You can rebuild now.
+          questions it did finish are kept. Bluprint tried the missing sections
+          automatically and has now stopped.
         </p>
       </div>
     </div>
@@ -760,7 +723,6 @@ export default function StudySet() {
       : legacyTab === "cards" || legacyTab === "quiz" || legacyTab === "exam"
         ? legacyTab
         : "summary";
-  const [retrying, setRetrying] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Kept by set id, so opening another set never inherits "review ahead".
@@ -768,36 +730,39 @@ export default function StudySet() {
   const triggered = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!details || details.set.status !== "queued") return;
-    const id = details.set._id;
-    if (triggered.current === id) return;
-    triggered.current = id;
-    retryTransient(() => processSet({ setId: id }), {
+    if (!details) return;
+    const set = details.set;
+    const hasSavedWork = hasSavedBuildWork(set);
+    // A queued set starts once. A set left in an old error state with saved
+    // work resumes once too: its finished cards are usable and the server can
+    // fill the rest without a rebuild button.
+    const canResume = (set.autoRetryCount ?? 0) < MAX_AUTOMATIC_REBUILDS;
+    const autoResume =
+      set.status === "queued" ||
+      (set.status === "error" && hasSavedWork && canResume) ||
+      (set.status === "processing" &&
+        details.processingStale &&
+        hasSavedWork &&
+        canResume);
+    if (!autoResume) return;
+    const key =
+      set.status === "queued"
+        ? set._id
+        : set.status === "error"
+          ? `${set._id}:error`
+          : `${set._id}:stale`;
+    if (triggered.current === key) return;
+    triggered.current = key;
+    retryTransient(() => processSet({ setId: set._id }), {
       attempts: 2,
       delayMs: 900,
     }).catch((error) => {
-      notifyError(error, "The build stopped. Open the set to retry.");
+      notifyError(
+        error,
+        "The build paused. Your finished sections are saved, and the server keeps trying in the background.",
+      );
     });
   }, [details, processSet]);
-
-  const retry = async () => {
-    if (!details) return;
-    if (aiUnavailable) {
-      toast.error(AI_NOT_CONFIGURED_MESSAGE);
-      return;
-    }
-    setRetrying(true);
-    try {
-      await retryTransient(() => processSet({ setId: details.set._id }), {
-        attempts: 2,
-        delayMs: 900,
-      });
-    } catch (error) {
-      notifyError(error, "The build could not be restarted.");
-    } finally {
-      setRetrying(false);
-    }
-  };
 
   const openTutor = () => {
     if (!validId) return;
@@ -1035,14 +1000,9 @@ export default function StudySet() {
         )}
 
         {set.status === "error" && !showSection ? (
-          <ErrorPanel set={set} onRetry={retry} retrying={retrying} />
+          <ErrorPanel set={set} />
         ) : set.status !== "ready" && !showSection ? (
-          <BuildingPanel
-            set={set}
-            stale={details.processingStale}
-            onRetry={retry}
-            retrying={retrying}
-          />
+          <BuildingPanel set={set} stale={details.processingStale} />
         ) : isMode ? (
           <div className="set-mode">
             {activeSection === "cards" &&

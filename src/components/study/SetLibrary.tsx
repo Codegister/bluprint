@@ -72,7 +72,7 @@ function SetRow({ set }: { set: SetSummary }) {
           </p>
         ) : set.status === "error" ? (
           <p className="mt-1.5 text-[0.72rem] text-muted-foreground">
-            Open to rebuild this set.
+            Open to continue this set.
           </p>
         ) : (
           <div className="mt-2 flex items-center gap-2.5">
@@ -110,7 +110,7 @@ function SetRow({ set }: { set: SetSummary }) {
             </p>
           </>
         ) : (
-          <p>{processing ? "In progress" : "Open to rebuild"}</p>
+          <p>{processing ? "In progress" : "Open to continue"}</p>
         )}
       </div>
 

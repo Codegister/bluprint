@@ -176,6 +176,9 @@ const schema = defineSchema(
       knownCount: v.number(),
       updatedAt: v.number(),
       processingStartedAt: v.optional(v.number()),
+      // How many automatic background rebuilds this run has used. The server
+      // stops scheduling after the limit instead of showing a manual retry.
+      autoRetryCount: v.optional(v.number()),
       // Set while a reused cached set is being reviewed in the background, so
       // duplicate scheduler entries cannot append the same review twice.
       reuseReviewStartedAt: v.optional(v.number()),
@@ -960,6 +963,21 @@ const schema = defineSchema(
       // A set the tutor built while answering, linked from the reply.
       builtSetId: v.optional(v.id("studySets")),
     }).index("by_course", ["courseId"]),
+
+    // Tutor conversation grounded in every ready course in the student's
+    // library. It is separate from the set and course threads so the home tutor
+    // can answer across subjects without the student choosing one first.
+    libraryTutorMessages: defineTable({
+      userId: v.id("users"),
+      role: v.union(v.literal("user"), v.literal("assistant")),
+      content: v.string(),
+      createdAt: v.number(),
+      streaming: v.optional(v.boolean()),
+      sources: v.optional(
+        v.array(v.object({ title: v.string(), url: v.string() })),
+      ),
+      builtSetId: v.optional(v.id("studySets")),
+    }).index("by_user", ["userId"]),
 
     // One row per AI build a person starts, so the rate limit is enforced from
     // the database rather than from the browser. Pruned as it is read: at most
