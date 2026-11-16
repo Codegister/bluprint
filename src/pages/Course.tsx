@@ -346,7 +346,12 @@ export default function Course() {
   // points at it. The newest set wins, which is why the query is newest first.
   const setsByTopic = useMemo(() => {
     const map = new Map<string, NonNullable<typeof details>["sets"][number]>();
-    for (const set of details?.sets ?? []) {
+    if (!details) return map;
+    for (const set of details.sets) {
+      // Old English Literature and RS sets have no option scope. Treat them as
+      // stale on the course page so the topic builds fresh content instead of
+      // opening Romeo & Juliet or another religion.
+      if (!set.scopeCurrent) continue;
       for (const topicId of set.topicIds) {
         if (!map.has(topicId)) map.set(topicId, set);
       }
@@ -424,6 +429,7 @@ export default function Course() {
     // Check that first, so the AI guard cannot block saved work.
     const selected = new Set(topicIds);
     const existing = details?.sets.find((set) => {
+      if (!set.scopeCurrent) return false;
       const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
       return (
         covered.length === topicIds.length &&

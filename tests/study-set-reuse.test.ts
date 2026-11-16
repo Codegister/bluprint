@@ -503,6 +503,118 @@ describe("study set reuse", () => {
     expect(tables.studySetCache[0]!.uses).toBe(1);
   });
 
+  test("never reuses a different Shakespeare play that shares a topic slot", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    source.course = "English Literature";
+    source.examBoard = "AQA";
+    source.level = "GCSE";
+    source.topicId = "a1t2";
+    source.topicIds = ["a1t2"];
+    source.notes = [
+      "Course: GCSE English Literature",
+      "Exam board: AQA",
+      "Course options: Shakespeare: Romeo & Juliet",
+      "",
+      "Syllabus scope for this set:",
+      "",
+      "Topic: Shakespeare",
+      "Unit: Shakespeare",
+      "Romeo and Juliet fall in love despite their families' feud.",
+      "Covers:",
+      "- The prologue frames the play as a tragedy.",
+    ].join("\n");
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: "romeo-key",
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+    const { ctx } = fakeContext(tables);
+
+    const match = await findSimilarCachedStudySet(ctx, {
+      course: "English Literature",
+      examBoard: "AQA",
+      level: "GCSE",
+      topicIds: ["a1t2"],
+      notes: [
+        "Course: GCSE English Literature",
+        "Exam board: AQA",
+        "Course options: Shakespeare: Macbeth",
+        "",
+        "Syllabus scope for this set:",
+        "",
+        "Topic: Shakespeare",
+        "Unit: Shakespeare",
+        "Macbeth's ambition drives him to murder and tyranny.",
+        "Covers:",
+        "- The witches' prophecy sets the tragedy in motion.",
+      ].join("\n"),
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+    });
+
+    expect(match).toBeNull();
+  });
+
+  test("never reuses a different RS religion that shares a topic slot", async () => {
+    const tables = rowsForSource("set:source");
+    const source = tables.studySets[0]!;
+    source.course = "Religious Studies";
+    source.examBoard = "Edexcel";
+    source.level = "GCSE";
+    source.topicId = "u1t1";
+    source.topicIds = ["u1t1"];
+    source.notes = [
+      "Course: GCSE Religious Studies",
+      "Exam board: Edexcel",
+      "",
+      "Syllabus scope for this set:",
+      "",
+      "Topic: Beliefs and practices — Islam",
+      "Unit: Beliefs and practices — Islam",
+      "The core beliefs and practices of Islam.",
+      "Covers:",
+      "- The Five Pillars shape Muslim practice.",
+    ].join("\n");
+    tables.studySetCache.push({
+      _id: "cache:1",
+      cacheKey: "islam-key",
+      sourceSetId: source._id,
+      createdAt: 1,
+      lastUsedAt: 1,
+      uses: 0,
+    });
+    const { ctx } = fakeContext(tables);
+
+    const match = await findSimilarCachedStudySet(ctx, {
+      course: "Religious Studies",
+      examBoard: "Edexcel",
+      level: "GCSE",
+      topicIds: ["u1t1"],
+      notes: [
+        "Course: GCSE Religious Studies",
+        "Exam board: Edexcel",
+        "",
+        "Syllabus scope for this set:",
+        "",
+        "Topic: Beliefs and practices — Christianity",
+        "Unit: Beliefs and practices — Christianity",
+        "The core beliefs and practices of Christianity.",
+        "Covers:",
+        "- The Trinity shapes Christian belief.",
+      ].join("\n"),
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+    });
+
+    expect(match).toBeNull();
+  });
+
   test("matches a topic by title when a pathway version renumbers it", async () => {
     const tables = rowsForSource("set:source");
     const source = tables.studySets[0]!;

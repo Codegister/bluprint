@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { BUILD_DEFAULTS } from "./buildDefaults";
+import { courseOptionsFromNotes } from "./courseScope";
 
 /**
  * Reuse is deliberately limited to complete sets built from a course pathway.
@@ -453,7 +454,20 @@ function topicOverlap(
     : [];
 
   for (const requestedId of wanted) {
-    if (sourceSet.has(requestedId)) {
+    const profile = wantedProfiles.find((entry) => entry.id === requestedId);
+    const sourceProfile = sourceProfiles.find(
+      (entry) => entry.id === requestedId,
+    );
+    // A pathway id is a position in the map, not the identity of its content.
+    // Two English Literature courses put their Shakespeare play in the same
+    // slot, and two RS courses put their chosen religion in the same slot. If
+    // both briefs name the topic, the titles must agree before the id counts as
+    // a match; otherwise a Macbeth set could copy Romeo & Juliet's questions.
+    const sameNamedTopic =
+      profile !== undefined &&
+      sourceProfile !== undefined &&
+      normalizedTitle(profile.title) === normalizedTitle(sourceProfile.title);
+    if (sourceSet.has(requestedId) && (!profile || sameNamedTopic)) {
       matched.push(requestedId);
       sourceTopicIds.push(requestedId);
       topicIdMap[requestedId] = requestedId;
@@ -461,7 +475,6 @@ function topicOverlap(
       continue;
     }
 
-    const profile = wantedProfiles.find((entry) => entry.id === requestedId);
     if (!profile) {
       missing.push(requestedId);
       continue;
@@ -499,6 +512,14 @@ export function similarCourseSetScore(
     !sameLabel(source.examBoard, query.examBoard) ||
     !sameLabel(source.level, query.level)
   ) {
+    return null;
+  }
+
+  // Older sets have no scope line. Only reuse one when the new brief has no
+  // scope either; guessing across a different set text or religion is exactly
+  // how Romeo & Juliet questions reached a Macbeth set.
+  const wantedOptions = courseOptionsFromNotes(query.notes);
+  if (wantedOptions && courseOptionsFromNotes(source.notes) !== wantedOptions) {
     return null;
   }
 

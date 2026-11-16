@@ -19,6 +19,7 @@ import {
   validateStudySelection,
 } from "./lib/catalogue";
 import { literatureChoicesFor } from "./lib/literatureChoices";
+import { courseOptionsLine, courseScopeMatches } from "./lib/courseScope";
 import { consumeBuildAllowance } from "./buildUsage";
 import {
   copyCachedReuse,
@@ -184,6 +185,9 @@ export const getDetails = query({
           status: set.status,
           sourceType: set.sourceType,
           sourceLabel: set.sourceLabel,
+          // Old English Literature and RS sets predate the course-options
+          // line. The course page treats them as stale and builds fresh.
+          scopeCurrent: courseScopeMatches(course, set.notes),
           cardCount: set.cardCount,
           knownCount: set.knownCount,
           quizCount: set.quizCount,
@@ -764,6 +768,10 @@ async function createTopicSetForUser(
     const wanted = chosenIds.join("|");
     const match = existing.find((set) => {
       if (set.userId !== userId) return false;
+      // A set written before the course recorded its options is stale. Ignoring
+      // it here makes the next tap rebuild the topic around the chosen texts or
+      // religions instead of opening the old whole-course copy.
+      if (!courseScopeMatches(course, set.notes)) return false;
       const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
       if (covered.join("|") === wanted) return true;
       // A caller that did not ask for a length (the timetable opening a session)
@@ -1036,9 +1044,11 @@ function buildTopicNotes(
   course: Doc<"courses">,
   sections: PathwaySection[],
 ): string {
+  const options = courseOptionsLine(course);
   const parts = [
     `Course: ${course.level} ${course.subject}`,
     `Exam board: ${course.examBoard}${course.variant ? ` · ${course.variant}` : ""}${course.tier ? ` · ${course.tier}` : ""}`,
+    options ? `Course options: ${options}` : "",
     course.poetryTheme ? `Poetry theme: ${course.poetryTheme}` : "",
     "",
     SYLLABUS_SCOPE_HEADER,
