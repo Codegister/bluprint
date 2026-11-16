@@ -1,7 +1,10 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { BUILD_DEFAULTS } from "./buildDefaults";
-import { courseOptionsFromNotes } from "./courseScope";
+import {
+  courseOptionsFromNotes,
+  type CourseOptionScope,
+} from "./courseScope";
 
 /**
  * Reuse is deliberately limited to complete sets built from a course pathway.
@@ -34,6 +37,7 @@ export type StudySetReuseKeyInput = {
   level?: string;
   topicIds: string[];
   specPoints?: SpecPoint[];
+  optionScopeKey?: string;
   targetCardCount: number;
   targetQuizCount: number;
   targetExamCount: number;
@@ -63,6 +67,7 @@ export function studySetReuseKey(input: StudySetReuseKeyInput): string {
     level: input.level ?? "",
     topicIds: input.topicIds,
     specPoints: (input.specPoints ?? []).map((point) => [point.id, point.text]),
+    optionScopeKey: input.optionScopeKey ?? "",
     targetCardCount: input.targetCardCount,
     targetQuizCount: input.targetQuizCount,
     targetExamCount: input.targetExamCount,
@@ -83,6 +88,7 @@ export function studySetReuseKeyForSet(set: Doc<"studySets">): string {
     level: set.level,
     topicIds: set.topicIds ?? (set.topicId ? [set.topicId] : []),
     specPoints: set.specPoints,
+    optionScopeKey: set.optionScope?.key,
     targetCardCount: set.targetCardCount ?? BUILD_DEFAULTS.cards,
     targetQuizCount: set.targetQuizCount ?? BUILD_DEFAULTS.quiz,
     targetExamCount: set.targetExamCount ?? BUILD_DEFAULTS.exam,
@@ -122,6 +128,15 @@ export async function rememberStudySetForReuse(
 ): Promise<void> {
   const set = await ctx.db.get(setId);
   if (!set || !isReusableStudySet(set)) return;
+  // Old option-based sets have no structured scope. Never let one seed a new
+  // course build; it is stale content, not reusable material.
+  if (
+    !set.optionScope &&
+    /english literature|religious studies/i.test(set.course ?? "") &&
+    /gcse/i.test(set.level ?? "")
+  ) {
+    return;
+  }
 
   const key = studySetReuseKeyForSet(set);
   const existing = await ctx.db
@@ -162,6 +177,7 @@ export type StudySetCopyArgs = {
   topicId?: string;
   topicIds?: string[];
   specPoints?: SpecPoint[];
+  optionScope?: CourseOptionScope;
   targetCardCount: number;
   targetQuizCount: number;
   targetExamCount: number;
@@ -313,6 +329,7 @@ export type CourseReuseQuery = {
   examBoard?: string;
   level?: string;
   topicIds: string[];
+  optionScopeKey?: string;
   /**
    * The new selection's brief. It is optional so callers that only have ids
    * still work, but when present it lets a topic match by title or specification
@@ -522,6 +539,13 @@ export function similarCourseSetScore(
   if (wantedOptions && courseOptionsFromNotes(source.notes) !== wantedOptions) {
     return null;
   }
+  if (
+    query.optionScopeKey &&
+    source.optionScope &&
+    source.optionScope.key !== query.optionScopeKey
+  ) {
+    return null;
+  }
 
   const wanted = [...new Set(query.topicIds.filter(Boolean))];
   if (wanted.length === 0) return null;
@@ -690,6 +714,7 @@ export async function copyStudySetContent(
     ...(args.examBoard !== undefined ? { examBoard: args.examBoard } : {}),
     ...(args.level !== undefined ? { level: args.level } : {}),
     ...(args.courseId !== undefined ? { courseId: args.courseId } : {}),
+    ...(args.optionScope !== undefined ? { optionScope: args.optionScope } : {}),
     ...(args.topicId !== undefined ? { topicId: args.topicId } : {}),
     ...(args.topicIds !== undefined ? { topicIds: args.topicIds } : {}),
     ...(args.specPoints !== undefined ? { specPoints: args.specPoints } : {}),

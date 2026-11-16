@@ -4,6 +4,11 @@ import { internalMutation, internalQuery, query } from "./_generated/server";
 import { safeExternalUrl } from "../lib/safeExternalUrl";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner } from "./lib/authorization";
+import {
+  courseOptionsLine,
+  courseScopeMatches,
+  type CourseOptionScope,
+} from "./lib/courseScope";
 
 /**
  * Saved AI tutor threads, one per study set.
@@ -111,8 +116,16 @@ export const getTutorContext = internalQuery({
       examBoard?: string | null;
       level?: string | null;
       courseId?: Id<"courses">;
+      optionScope?: CourseOptionScope;
     };
     if (!set) return null;
+    // A stale option set is being deleted; never tutor from the old texts.
+    if (set.courseId) {
+      const course = await ctx.db.get(set.courseId);
+      if (!course || !courseScopeMatches(course, set.notes, set.optionScope)) {
+        return null;
+      }
+    }
 
     const rows = await ctx.db
       .query("tutorMessages")
@@ -197,10 +210,14 @@ export const getCourseTutorContext = internalQuery({
       : undefined;
     if (unitTitle && !unit) return null;
 
+    const options = courseOptionsLine(course);
     const header = [
       `Course: ${course.level} ${course.subject} (${course.examBoard})`,
       course.tier ? `Tier: ${course.tier}` : "",
       `How it is assessed: ${pathway.examFormat}`,
+      options
+        ? `Chosen options (discuss only these texts/religions): ${options}`
+        : "",
       unit ? `Unit: ${unit.title}` : `Course overview: ${pathway.overview}`,
     ]
       .filter(Boolean)

@@ -255,6 +255,7 @@ export default function Course() {
   const removeCourse = useMutation(api.courses.remove);
   const recoverCourses = useMutation(api.courses.recoverMine);
   const repairPathways = useMutation(api.courses.repairPathways);
+  const cleanupStaleSets = useMutation(api.courses.cleanupStaleSets);
   const rebuild = useAction(api.ai.rebuildCoursePathway);
   const syncCognitoLinks = useAction(api.ai.syncCognitoLinks);
   const { unavailable: aiUnavailable } = useAiAvailability();
@@ -293,6 +294,16 @@ export default function Course() {
       recoveryRequested.current = false;
     });
   }, [details, recoverCourses]);
+
+  // Delete, rather than merely hide, old option sets.
+  const cleanupRequested = useRef(false);
+  useEffect(() => {
+    if (!details || cleanupRequested.current) return;
+    cleanupRequested.current = true;
+    void cleanupStaleSets({}).catch(() => {
+      cleanupRequested.current = false;
+    });
+  }, [cleanupStaleSets, details]);
 
   // Older English Literature builds could show two copies of the anthology.
   // The saved pathway is repaired once per visit; the mutation only writes if
@@ -348,10 +359,6 @@ export default function Course() {
     const map = new Map<string, NonNullable<typeof details>["sets"][number]>();
     if (!details) return map;
     for (const set of details.sets) {
-      // Old English Literature and RS sets have no option scope. Treat them as
-      // stale on the course page so the topic builds fresh content instead of
-      // opening Romeo & Juliet or another religion.
-      if (!set.scopeCurrent) continue;
       for (const topicId of set.topicIds) {
         if (!map.has(topicId)) map.set(topicId, set);
       }
@@ -429,7 +436,6 @@ export default function Course() {
     // Check that first, so the AI guard cannot block saved work.
     const selected = new Set(topicIds);
     const existing = details?.sets.find((set) => {
-      if (!set.scopeCurrent) return false;
       const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
       return (
         covered.length === topicIds.length &&

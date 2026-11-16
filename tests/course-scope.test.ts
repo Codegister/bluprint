@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  COURSE_SCOPE_VERSION,
   courseOptionsLine,
+  courseScopeFor,
   courseScopeMatches,
 } from "../src/convex/lib/courseScope";
 
@@ -67,6 +69,20 @@ describe("course option scope", () => {
         brief(
           "Route: Edexcel Religious Studies A · Religion: Christianity · Second religion: Judaism",
         ),
+      ),
+    ).toBe(false);
+  });
+
+  test("a structured scope matches only the same choices", () => {
+    const scope = courseScopeFor(literature);
+    expect(scope?.version).toBe(COURSE_SCOPE_VERSION);
+    expect(scope?.choices).toContain("Shakespeare: Macbeth");
+    expect(courseScopeMatches(literature, undefined, scope)).toBe(true);
+    expect(
+      courseScopeMatches(
+        { ...literature, litShakespeare: "Romeo & Juliet" },
+        undefined,
+        scope,
       ),
     ).toBe(false);
   });

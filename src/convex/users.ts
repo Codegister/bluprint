@@ -2,8 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { isAvatarId } from "../lib/avatars";
-import { deleteStudySetContent } from "./studySets";
-import { forgetStudySetReuse } from "./lib/studySetReuse";
+import { deleteStudySetCascade } from "./lib/deleteStudySet";
 
 /**
  * Get the current signed in user. Returns null if the user is not signed in.
@@ -90,15 +89,7 @@ export const deleteAccount = mutation({
       .withIndex("by_user_updated", (q) => q.eq("userId", userId))
       .collect();
     for (const set of sets) {
-      await deleteStudySetContent(ctx, set._id);
-      const tutorRows = await ctx.db
-        .query("tutorMessages")
-        .withIndex("by_set", (q) => q.eq("setId", set._id))
-        .collect();
-      for (const row of tutorRows) await ctx.db.delete(row._id);
-      for (const imageId of set.sourceImageIds) await deleteImage(imageId);
-      await forgetStudySetReuse(ctx, set._id);
-      await ctx.db.delete(set._id);
+      await deleteStudySetCascade(ctx, set._id);
     }
 
     // Real questions can carry a photographed mark scheme.

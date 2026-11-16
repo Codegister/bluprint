@@ -19,7 +19,12 @@ import {
   validateStudySelection,
 } from "./lib/catalogue";
 import { literatureChoicesFor } from "./lib/literatureChoices";
-import { courseOptionsLine, courseScopeMatches } from "./lib/courseScope";
+import {
+  courseOptionsLine,
+  courseScopeFor,
+  courseScopeMatches,
+} from "./lib/courseScope";
+import { deleteStudySetCascade } from "./lib/deleteStudySet";
 import { consumeBuildAllowance } from "./buildUsage";
 import {
   copyCachedReuse,
@@ -154,6 +159,90 @@ export const listMine = query({
   },
 });
 
+// One transaction can only touch a bounded number of documents. A stale set
+// can own dozens of cards, questions and attempts, so cleanup continues in
+// scheduled batches instead of trying to delete an entire library at once.
+const STALE_CLEANUP_BATCH = 2;
+
+/** Deletes option sets that no longer belong to this course's choices. */
+async function deleteStaleCourseSets(
+  ctx: MutationCtx,
+  course: Doc<"courses">,
+  limit = STALE_CLEANUP_BATCH,
+): Promise<number> {
+  const sets = await ctx.db
+    .query("studySets")
+    .withIndex("by_course", (q) => q.eq("courseId", course._id))
+    .collect();
+  let deleted = 0;
+  for (const set of sets) {
+    if (deleted >= limit) break;
+    if (set.userId !== course.userId) continue;
+    if (courseScopeMatches(course, set.notes, set.optionScope)) continue;
+    if (await deleteStudySetCascade(ctx, set._id)) deleted += 1;
+  }
+  // A full batch means more may remain. Queue a user-wide sweep so every
+  // course is revisited, not just the one that filled this transaction.
+  if (deleted >= limit) {
+    try {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.courses.cleanupStaleSetsForUser,
+        { userId: course.userId },
+      );
+    } catch (error) {
+      // A failed cleanup queue must not block the build or option change that
+      // triggered it; the next page visit queues the sweep again.
+      console.error("Could not queue the rest of the stale-set cleanup", error);
+    }
+  }
+  return deleted;
+}
+
+/** Deletes a bounded batch of stale sets, then queues the rest. */
+export const cleanupStaleSetsForUser = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+      .collect();
+
+    let deleted = 0;
+    for (const course of courses) {
+      if (deleted >= STALE_CLEANUP_BATCH) break;
+      deleted += await deleteStaleCourseSets(
+        ctx,
+        course,
+        STALE_CLEANUP_BATCH - deleted,
+      );
+    }
+    return { deleted };
+  },
+});
+
+/**
+ * Removes stale course sets instead of showing them.
+ *
+ * Old English Literature and RS sets predate option scope. They are deleted
+ * with their cards, attempts, tutor turns and cache entries so the next topic
+ * open builds fresh material.
+ */
+export const cleanupStaleSets = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    // The query already hides stale sets. Remove their rows in the scheduler,
+    // where the work is not limited to the caller's request transaction.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.courses.cleanupStaleSetsForUser,
+      { userId },
+    );
+    return { queued: true };
+  },
+});
+
 /** A course workspace: the pathway, tick-off progress and linked study sets. */
 export const getDetails = query({
   args: { courseId: v.id("courses") },
@@ -174,8 +263,14 @@ export const getDetails = query({
       completedCount: course.completedTopics.filter((id) => ids.has(id)).length,
       topicCount: countTopics(course.pathway),
       pathwayVersion: course.pathway?.version ?? 1,
+      // Stale sets are deleted by `cleanupStaleSets`; filtering here keeps one
+      // from flashing onto the course page before that mutation runs.
       sets: sets
-        .filter((set) => set.userId === userId)
+        .filter(
+          (set) =>
+            set.userId === userId &&
+            courseScopeMatches(course, set.notes, set.optionScope),
+        )
         .map((set) => ({
           _id: set._id,
           title: set.title,
@@ -185,9 +280,6 @@ export const getDetails = query({
           status: set.status,
           sourceType: set.sourceType,
           sourceLabel: set.sourceLabel,
-          // Old English Literature and RS sets predate the course-options
-          // line. The course page treats them as stale and builds fresh.
-          scopeCurrent: courseScopeMatches(course, set.notes),
           cardCount: set.cardCount,
           knownCount: set.knownCount,
           quizCount: set.quizCount,
@@ -473,6 +565,15 @@ export const setLiteratureChoices = mutation({
       processingStartedAt: undefined,
       updatedAt: Date.now(),
     });
+    // Sets built for the old texts are stale immediately; remove them rather
+    // than leaving old Romeo or poetry-cluster material in the library.
+    await deleteStaleCourseSets(ctx, {
+      ...course,
+      litShakespeare,
+      litNovel,
+      litModern,
+      poetryTheme,
+    });
     await ctx.scheduler.runAfter(0, internal.ai.buildCoursePathway, {
       courseId: args.courseId,
     });
@@ -719,6 +820,11 @@ async function createTopicSetForUser(
     ) as Doc<"courses">;
     if (!course.pathway) throw new Error("This pathway is still being built.");
 
+    // Delete old option sets before looking one up, so the next tap cannot
+    // return content generated for a different text or religion.
+    await deleteStaleCourseSets(ctx, course);
+    const optionScope = courseScopeFor(course);
+
     // Flatten the pathway into reading order so a run always means the next
     // topics on the student's route, even across a unit boundary. Duplicate ids
     // are removed so the count matches the pathway the student can see.
@@ -771,7 +877,7 @@ async function createTopicSetForUser(
       // A set written before the course recorded its options is stale. Ignoring
       // it here makes the next tap rebuild the topic around the chosen texts or
       // religions instead of opening the old whole-course copy.
-      if (!courseScopeMatches(course, set.notes)) return false;
+      if (!courseScopeMatches(course, set.notes, set.optionScope)) return false;
       const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
       if (covered.join("|") === wanted) return true;
       // A caller that did not ask for a length (the timetable opening a session)
@@ -848,6 +954,7 @@ async function createTopicSetForUser(
       level: levelLabel,
       topicIds: chosenIds,
       specPoints,
+      optionScopeKey: optionScope?.key,
       targetCardCount: targetCards,
       targetQuizCount: targetQuiz,
       targetExamCount: targetExam,
@@ -873,6 +980,7 @@ async function createTopicSetForUser(
       topicId: first.id,
       topicIds: chosenIds,
       specPoints,
+      optionScope: optionScope ?? undefined,
       targetCardCount: targetCards,
       targetQuizCount: targetQuiz,
       targetExamCount: targetExam,
@@ -918,6 +1026,7 @@ async function createTopicSetForUser(
       // Titles and specification text let a source survive a pathway version
       // that renumbered its topic ids.
       notes,
+      optionScopeKey: optionScope?.key,
       targetCardCount: targetCards,
       targetQuizCount: targetQuiz,
       targetExamCount: targetExam,
@@ -988,6 +1097,7 @@ async function createTopicSetForUser(
       examBoard: boardLabel,
       level: levelLabel,
       courseId,
+      ...(optionScope ? { optionScope } : {}),
       topicId: first.id,
       topicIds: chosenIds,
       specPoints,

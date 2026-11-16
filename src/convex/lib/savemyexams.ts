@@ -738,18 +738,21 @@ function isChosenText(title: string, choice: string): boolean {
 }
 
 /**
- * Narrows an English Literature outline to the set texts a student chose.
+ * Narrows any sectioned English Literature outline to the chosen set texts.
  *
  * Save My Exams publishes every text a board offers under one section. The
  * pathway should only show the Shakespeare play, novel, modern text and poetry
  * cluster studied in class, while keeping the "How to Answer" guidance that
  * applies to the whole section. When a chosen title cannot be matched the
  * section is left intact rather than silently discarding the course content.
+ *
+ * The outline only has to expose sections and topics, so the Cognito and
+ * starter builders use the same filter as Save My Exams without pretending to
+ * have its page count or source URL.
  */
-export function filterSaveMyExamsLiteratureOutline(
-  outline: SaveMyExamsOutline,
-  choices: SaveMyExamsLiteratureChoices,
-): SaveMyExamsOutline {
+export function filterLiteratureSections<
+  T extends { sections: SaveMyExamsOutlineSection[] },
+>(outline: T, choices: SaveMyExamsLiteratureChoices): T {
   const sections = outline.sections.map((section) => {
     const group = literatureSection(section.title);
     const choice = group ? choices[group]?.trim() : undefined;
@@ -770,12 +773,17 @@ export function filterSaveMyExamsLiteratureOutline(
   });
 
   const kept = sections.filter((section) => section.topics.length > 0);
-  if (kept.length === 0) return outline;
+  return kept.length === 0 ? outline : { ...outline, sections: kept };
+}
 
+export function filterSaveMyExamsLiteratureOutline(
+  outline: SaveMyExamsOutline,
+  choices: SaveMyExamsLiteratureChoices,
+): SaveMyExamsOutline {
+  const filtered = filterLiteratureSections(outline, choices);
   return {
-    ...outline,
-    sections: kept,
-    pageCount: kept.reduce(
+    ...filtered,
+    pageCount: filtered.sections.reduce(
       (sum, section) =>
         sum +
         section.topics.reduce(

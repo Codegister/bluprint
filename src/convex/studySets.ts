@@ -23,6 +23,8 @@ import {
 import { cleanTopicTitle, shortTitle } from "./lib/titles";
 import { matchSpecPoint } from "./lib/specMapping";
 import { requireUserId } from "./lib/requireUser";
+import { courseScopeMatches } from "./lib/courseScope";
+import { deleteStudySetCascade } from "./lib/deleteStudySet";
 import {
   requireVerifiedUser,
   requireOwner,
@@ -56,9 +58,20 @@ import { isSyllabusOutline } from "./lib/syllabusOutline";
 import {
   copyStudySetContent,
   findSimilarOwnedStudySet,
-  forgetStudySetReuse,
   rememberStudySetForReuse,
 } from "./lib/studySetReuse";
+
+/** True for a set built from pasted notes, or one matching its course's options. */
+function currentCourseSet(
+  set: Doc<"studySets">,
+  courseById: Map<Id<"courses">, Doc<"courses">>,
+): boolean {
+  if (!set.courseId) return true;
+  const course = courseById.get(set.courseId);
+  return Boolean(
+    course && courseScopeMatches(course, set.notes, set.optionScope),
+  );
+}
 
 const sourceType = v.union(
   v.literal("text"),
@@ -304,13 +317,22 @@ export const listMine = query({
       .order("desc")
       .collect();
 
+    // A stale course set must not appear in the library while the cleanup
+    // mutation removes it. Sets from pasted notes have no course and stay.
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+      .collect();
+    const courseById = new Map(courses.map((course) => [course._id, course]));
+    const visibleSets = sets.filter((set) => currentCourseSet(set, courseById));
+
     const now = Date.now();
 
     // Leave the (potentially long) notes on the server for the list view. Due
     // counts, exam readiness and the pace plan are computed here so the
     // dashboard can show them without downloading every card.
     return await Promise.all(
-      sets.map(async (set) => {
+      visibleSets.map(async (set) => {
         const [cards, quizRows, exams] = await Promise.all([
           ctx.db
             .query("flashcards")
@@ -408,7 +430,7 @@ export const studyStats = query({
   args: {},
   handler: async (ctx) => {
     const userId = await requireUserId(ctx);
-    const [sets, days] = await Promise.all([
+    const [allSets, days, courses] = await Promise.all([
       ctx.db
         .query("studySets")
         .withIndex("by_user_updated", (q) => q.eq("userId", userId))
@@ -417,7 +439,13 @@ export const studyStats = query({
         .query("studyDays")
         .withIndex("by_user_day", (q) => q.eq("userId", userId))
         .collect(),
+      ctx.db
+        .query("courses")
+        .withIndex("by_user_updated", (q) => q.eq("userId", userId))
+        .collect(),
     ]);
+    const courseById = new Map(courses.map((course) => [course._id, course]));
+    const sets = allSets.filter((set) => currentCourseSet(set, courseById));
 
     const now = Date.now();
     const reviewed = new Map(days.map((day) => [day.day, questionsOn(day)]));
@@ -530,6 +558,12 @@ export const getDetails = query({
     const userId = await requireUserId(ctx);
     const set = await ctx.db.get(setId);
     if (!set || set.userId !== userId) return null;
+    if (set.courseId) {
+      const course = await ctx.db.get(set.courseId);
+      if (!course || !courseScopeMatches(course, set.notes, set.optionScope)) {
+        return null;
+      }
+    }
 
     const [cards, quiz, exams] = await Promise.all([
       ctx.db
@@ -1017,26 +1051,8 @@ export const remove = mutation({
   args: { setId: v.id("studySets") },
   handler: async (ctx, { setId }) => {
     const userId = await requireUserId(ctx);
-    const set = await requireOwner(
-      await ctx.db.get(setId),
-      userId,
-    );
-
-    await deleteStudySetContent(ctx, setId);
-
-    // Tutor conversations are owned by the set, so they go with it. A rebuild
-    // keeps them; only deleting the set removes the thread.
-    const tutorRows = await ctx.db
-      .query("tutorMessages")
-      .withIndex("by_set", (q) => q.eq("setId", setId))
-      .collect();
-    for (const row of tutorRows) await ctx.db.delete(row._id);
-
-    for (const imageId of set.sourceImageIds) {
-      await ctx.storage.delete(imageId);
-    }
-    await forgetStudySetReuse(ctx, setId);
-    await ctx.db.delete(setId);
+    await requireOwner(await ctx.db.get(setId), userId);
+    await deleteStudySetCascade(ctx, setId);
   },
 });
 

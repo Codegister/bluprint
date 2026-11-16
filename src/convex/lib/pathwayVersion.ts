@@ -1,7 +1,9 @@
 /**
- * Bumped whenever the pathway source or its unit/topic shape changes.
+ * Bumped whenever stored pathways must be rebuilt for a content or filtering
+ * change. Course recovery compares this value with the saved pathway, so a bump
+ * is enough to rebuild every old map on the next visit.
  *
- * A saved pathway at an older version is rebuilt once, so existing courses pick
- * up the new source without the student having to delete and recreate them.
+ * 4: option-scoped Literature filtering now applies to every outline source,
+ *    including Cognito and the starter map.
  */
-export const CURRENT_PATHWAY_VERSION = 3;
+export const CURRENT_PATHWAY_VERSION = 4;

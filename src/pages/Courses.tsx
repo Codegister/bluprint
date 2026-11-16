@@ -96,7 +96,19 @@ function CourseRow({ course }: { course: CourseSummary }) {
 export default function Courses() {
   const courseRows = useQuery(api.courses.listMine);
   const recoverCourses = useMutation(api.courses.recoverMine);
+  const cleanupStaleSets = useMutation(api.courses.cleanupStaleSets);
   const recoveryRequested = useRef(false);
+  const cleanupRequested = useRef(false);
+
+  // Remove sets built for choices the course no longer uses. The query already
+  // hides them; this deletes their content instead of leaving it in storage.
+  useEffect(() => {
+    if (!courseRows || courseRows.length === 0 || cleanupRequested.current) return;
+    cleanupRequested.current = true;
+    void cleanupStaleSets({}).catch(() => {
+      cleanupRequested.current = false;
+    });
+  }, [cleanupStaleSets, courseRows]);
 
   // Recover courses left failed by an older build. This runs once per page
   // load and means the student never has to press a retry button.

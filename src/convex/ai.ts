@@ -103,12 +103,14 @@ import {
 import {
   fetchSaveMyExamsPage,
   filterSaveMyExamsLiteratureOutline,
+  filterLiteratureSections,
   outlineFromSaveMyExams,
   parseSaveMyExamsNotesIndex,
   resolveSaveMyExamsCourse,
   type SaveMyExamsNotesIndex,
 } from "./lib/savemyexams";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
+import { courseOptionsLine } from "./lib/courseScope";
 import { buildRsPathway } from "./lib/rsPathways";
 import {
   OPENROUTER_CHAT_URL,
@@ -2060,6 +2062,12 @@ function specificationDigest(
   variationSeed?: number,
 ): string {
   const lines: string[] = [];
+  // The paper must stay inside the student's chosen texts or religions, even
+  // when the pathway itself still contains topics for the other options.
+  const options = courseOptionsLine(course);
+  if (options) {
+    lines.push(`Chosen options (use only these): ${options}`, "");
+  }
   // A stable per-build order stops every paper opening on the first topic in
   // the specification. The same saved paper keeps its order on reload.
   for (const [unitIndex, unit] of (course.pathway?.units ?? []).entries()) {
@@ -2886,6 +2894,27 @@ function fallbackDetail(topic: OutlineTopic): TopicDetail {
 }
 
 /**
+ * Keeps English Literature options on the student's four set texts.
+ *
+ * Save My Exams already filtered its own outline; applying the same filter at
+ * the shared builder covers Cognito and any future outline source too.
+ */
+function filterLiteratureOutline(
+  course: PathwayCourse,
+  outline: CourseOutline,
+): CourseOutline {
+  if (!/english literature/i.test(course.subject) || !/gcse/i.test(course.level)) {
+    return outline;
+  }
+  return filterLiteratureSections(outline, {
+    shakespeare: course.litShakespeare,
+    novel: course.litNovel,
+    modern: course.litModern,
+    poetry: course.poetryTheme,
+  });
+}
+
+/**
  * Turns the scraped outline into the pathway the course page renders. Every
  * topic, summary and key point here comes from Cognito's published headings —
  * no model is consulted, so a pathway cannot contain an invented topic or miss
@@ -2893,8 +2922,9 @@ function fallbackDetail(topic: OutlineTopic): TopicDetail {
  */
 function buildPathwayFromOutline(
   course: PathwayCourse,
-  outline: CourseOutline,
+  rawOutline: CourseOutline,
 ): CoursePathway {
+  const outline = filterLiteratureOutline(course, rawOutline);
   const units: PathwayUnit[] = outline.sections.map((section) => {
     const topics: PathwayTopic[] = section.topics.map((topic, index) => {
       const detail = fallbackDetail(topic);

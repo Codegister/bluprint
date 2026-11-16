@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  filterLiteratureSections,
   filterSaveMyExamsLiteratureOutline,
   findSaveMyExamsNotesPages,
   outlineFromSaveMyExams,
@@ -710,6 +711,26 @@ describe("Save My Exams English Literature filtering", () => {
     });
     expect(filtered.sections[0]?.topics).toHaveLength(4);
     expect(filtered.sections[1]?.topics).toHaveLength(2);
+  });
+
+  test("filters a Cognito-style outline without page metadata", () => {
+    const filtered = filterLiteratureSections(
+      { sections: outline.sections },
+      {
+        shakespeare: "Macbeth",
+        novel: "A Christmas Carol",
+        modern: "An Inspector Calls",
+        poetry: "Power & Conflict",
+      },
+    );
+    expect(filtered).not.toHaveProperty("pageCount");
+    expect(filtered.sections[0]?.topics.map((topic) => topic.title)).toEqual([
+      "How to Answer the Shakespeare Essay Question",
+      "Macbeth",
+    ]);
+    expect(filtered.sections[1]?.topics.map((topic) => topic.title)).toEqual([
+      "A Christmas Carol",
+    ]);
   });
 });
 

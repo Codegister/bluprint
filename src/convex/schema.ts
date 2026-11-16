@@ -99,6 +99,20 @@ const schema = defineSchema(
       // Set when material was built from a topic on a course pathway. The
       // original course is kept so progress can be shown on the course page.
       courseId: v.optional(v.id("courses")),
+      // The exact set texts / RS route, religions and papers this set was built
+      // around. Captured structurally so a later option change can identify it
+      // without parsing the generated brief. Old sets have no value here and
+      // are deleted as stale.
+      optionScope: v.optional(
+        v.object({
+          version: v.number(),
+          key: v.string(),
+          subject: v.string(),
+          level: v.string(),
+          examBoard: v.string(),
+          choices: v.array(v.string()),
+        }),
+      ),
       topicId: v.optional(v.string()),
       // Every pathway section the set covers, first one included. A set built
       // from one topic keeps a single entry; a set built across several
