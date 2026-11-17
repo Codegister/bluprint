@@ -401,8 +401,10 @@ function genericQuestions(question: string): number | null {
  *
  * Explicit numbers win for every kind the student named ("24 flashcards, 12
  * quiz questions and 6 exam questions"), up to the same account maximum as the
- * sliders. Without a number, the material named still changes the balance:
- * a flashcard request builds a fuller deck and a quiz request a fuller quiz.
+ * sliders. A request that names no number gets the account maximum of each: a
+ * tutor build is a whole pathway set drawn from specification scope, not a thin
+ * page of notes, and the student asked for the sets rather than for the
+ * smallest deck Bluprint can make.
  */
 export function countsForTutorBuild(question: string): TutorBuildCounts {
   const asksForQuiz = /\b(?:quiz|test)\b/i.test(question);
@@ -439,17 +441,7 @@ export function countsForTutorBuild(question: string): TutorBuildCounts {
     };
   }
 
-  if (asksForCards && !asksForQuiz) {
-    return { cards: 20, quiz: 3, exam: 3 };
-  }
-  if (asksForQuiz && !asksForCards) {
-    return { cards: 5, quiz: 10, exam: 3 };
-  }
-  return {
-    cards: BUILD_DEFAULTS.cards,
-    quiz: BUILD_DEFAULTS.quiz,
-    exam: BUILD_DEFAULTS.exam,
-  };
+  return { cards: BUILD_MAX, quiz: BUILD_MAX, exam: BUILD_MAX };
 }
 
 /**

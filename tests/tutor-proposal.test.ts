@@ -120,6 +120,14 @@ describe("resolving an offer into real builds", () => {
     expect(unresolved[0]).toContain("Physics");
   });
 
+  test("builds agreed sets at the account maximum when the reply names no size", () => {
+    const { plans } = resolveProposedBuilds(PROPOSAL, courses);
+    expect(plans.length).toBeGreaterThan(0);
+    for (const plan of plans) {
+      expect(plan.counts).toEqual({ cards: 100, quiz: 100, exam: 100 });
+    }
+  });
+
   test("an offer that mentions no sets is not an offer", () => {
     const numbered = "1. GCSE Spanish - Identity and Culture";
     expect(resolveProposedBuilds(numbered, courses).plans).toEqual([]);

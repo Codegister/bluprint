@@ -121,20 +121,20 @@ describe("tutor build planner", () => {
     });
   });
 
-  test("a quiz request asks for more quiz questions than a normal set", () => {
+  test("a tutor build with no size named builds the account maximum", () => {
     expect(countsForTutorBuild("Build me a quiz on topic 1")).toEqual({
-      cards: 5,
-      quiz: 10,
-      exam: 3,
+      cards: 100,
+      quiz: 100,
+      exam: 100,
     });
     expect(countsForTutorBuild("Make a study set on topic 1")).toEqual({
-      cards: 10,
-      quiz: 5,
-      exam: 3,
+      cards: 100,
+      quiz: 100,
+      exam: 100,
     });
   });
 
-  test("explicit counts replace the default 10/5/3", () => {
+  test("explicit counts replace the account maximum", () => {
     expect(
       countsForTutorBuild(
         "Build me 24 flashcards, 12 quiz questions and 6 exam questions on holidays",
@@ -207,7 +207,7 @@ describe("tutor build planner", () => {
       "Topic 3 · Holidays and travel",
       "Topic 1 · Cell division",
     ]);
-    expect(plan.plans[0]?.counts).toEqual({ cards: 10, quiz: 5, exam: 3 });
+    expect(plan.plans[0]?.counts).toEqual({ cards: 100, quiz: 100, exam: 100 });
   });
 
   test("recognises the other ways students ask for every course", () => {

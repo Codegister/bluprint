@@ -29,6 +29,7 @@ import { consumeBuildAllowance } from "./buildUsage";
 import {
   copyCachedReuse,
   copyCachedStudySet,
+  copyMeetsRequest,
   findSimilarCachedStudySet,
   studySetReuseKey,
 } from "./lib/studySetReuse";
@@ -863,6 +864,23 @@ async function createTopicSetForUser(
       chosen = outline.slice(startIndex, startIndex + count);
     }
 
+    // The dialog's totals win when supplied. Otherwise a combined set uses the
+    // normal one-topic build size for each topic, capped at the shared account
+    // maximum, instead of spreading one topic's ten cards across a whole unit.
+    const targetCards = clampBuildCount(
+      targetCardCount,
+      BUILD_DEFAULTS.cards * chosen.length,
+    );
+    const targetQuiz = clampBuildCount(
+      targetQuizCount,
+      BUILD_DEFAULTS.quiz * chosen.length,
+    );
+    const targetExam = clampBuildCount(
+      targetExamCount,
+      BUILD_DEFAULTS.exam * chosen.length,
+    );
+    const requested = { cards: targetCards, quiz: targetQuiz, exam: targetExam };
+
     // Reuse an existing set that covers exactly these sections, so repeated
     // taps never create duplicate decks. Sets built before sections existed
     // only have `topicId`, which is treated as a one-section set.
@@ -879,7 +897,20 @@ async function createTopicSetForUser(
       // religions instead of opening the old whole-course copy.
       if (!courseScopeMatches(course, set.notes, set.optionScope)) return false;
       const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
-      if (covered.join("|") === wanted) return true;
+      if (covered.join("|") === wanted) {
+        // Opening an existing set on a repeated tap is right only when it is
+        // the size this build asked for. Returning an older ten-card set for a
+        // hundred-card request made every tutor build look unchanged: the
+        // tutor "created" the set and the student opened the same small deck.
+        if (set.status === "ready") return copyMeetsRequest(set, requested);
+        // A set already building at least this size is this build; opening it
+        // avoids starting a duplicate run.
+        return (
+          (set.targetCardCount ?? BUILD_DEFAULTS.cards) >= requested.cards &&
+          (set.targetQuizCount ?? BUILD_DEFAULTS.quiz) >= requested.quiz &&
+          (set.targetExamCount ?? BUILD_DEFAULTS.exam) >= requested.exam
+        );
+      }
       // A caller that did not ask for a length (the timetable opening a session)
       // just wants the set for this topic, whichever build produced it.
       return (
@@ -912,22 +943,6 @@ async function createTopicSetForUser(
       chosen.length === 1
         ? safeCourseLabel(first.title)
         : safeCourseLabel(`${first.title} + ${chosen.length - 1} more`);
-
-    // The dialog's totals win when supplied. Otherwise a combined set uses the
-    // normal one-topic build size for each topic, capped at the shared account
-    // maximum, instead of spreading one topic's ten cards across a whole unit.
-    const targetCards = clampBuildCount(
-      targetCardCount,
-      BUILD_DEFAULTS.cards * chosen.length,
-    );
-    const targetQuiz = clampBuildCount(
-      targetQuizCount,
-      BUILD_DEFAULTS.quiz * chosen.length,
-    );
-    const targetExam = clampBuildCount(
-      targetExamCount,
-      BUILD_DEFAULTS.exam * chosen.length,
-    );
 
     const courseLabel = safeCourseLabel(course.subject);
     const boardLabel = safeCourseLabel(course.examBoard);
@@ -1033,12 +1048,18 @@ async function createTopicSetForUser(
     });
     if (similar) {
       if (similar.missingTopicIds.length === 0) {
-        const reusedSimilarId = await copyCachedReuse(ctx, similar, {
-          ...copyArgs,
-          sourceTopicIdMap: similar.topicIdMap,
-          copyWarnings: false,
-        });
-        if (reusedSimilarId) return await finishReuse(reusedSimilarId);
+        // A full copy is the whole answer, so it has to hold the totals the
+        // student asked for. The review that follows adds a few items, not
+        // ninety, so a ten-card copy cannot become a hundred-card set; when it
+        // falls short the normal build below generates the full one.
+        if (copyMeetsRequest(similar.source, requested)) {
+          const reusedSimilarId = await copyCachedReuse(ctx, similar, {
+            ...copyArgs,
+            sourceTopicIdMap: similar.topicIdMap,
+            copyWarnings: false,
+          });
+          if (reusedSimilarId) return await finishReuse(reusedSimilarId);
+        }
       } else {
         // Only some topics overlap. Copy the finished rows for those topics and
         // let generation fill the rest into the same set. This is deliberately

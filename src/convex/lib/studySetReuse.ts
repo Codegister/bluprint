@@ -13,10 +13,10 @@ import {
  * another student's private copy without carrying any personal source material
  * or study history across.
  *
- * A set does not have to match the same requested counts to be useful. A
- * finished set that covers the requested topics can seed a copy even when the
- * student asked for a different number of cards or questions; the copy keeps
- * what exists and the review can add more later.
+ * A copy has to be at least as large as the request. The background review
+ * adds a few items, so a smaller finished set cannot grow into a larger build;
+ * `copyMeetsRequest` tells the caller whether a source can answer the request it
+ * has, and a source that cannot is generated instead.
  *
  * It also does not have to cover every requested topic. When only some topics
  * overlap, the reusable rows for those topics are copied into a queued set and
@@ -114,6 +114,26 @@ export function isReusableStudySet(set: Doc<"studySets">): boolean {
     isCopyableStudySet(set) &&
     set.courseId !== undefined &&
     (set.topicIds?.length ?? 0) > 0
+  );
+}
+
+/**
+ * Whether a finished set can answer a build for these totals as it stands.
+ *
+ * The background review appends three cards, two quiz questions and one exam
+ * question, so a smaller source cannot grow into a larger request: reusing a
+ * ten-card set for a hundred-card build marked the copy ready at ten and the set
+ * stayed there. A copy is only used as the whole answer when it already holds at
+ * least what was asked for; otherwise the caller generates the set instead.
+ */
+export function copyMeetsRequest(
+  source: { cardCount: number; quizCount: number; examCount: number },
+  requested: { cards: number; quiz: number; exam: number },
+): boolean {
+  return (
+    source.cardCount >= requested.cards &&
+    source.quizCount >= requested.quiz &&
+    source.examCount >= requested.exam
   );
 }
 

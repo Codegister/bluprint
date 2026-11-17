@@ -25,6 +25,7 @@ import {
 import {
   copyCachedReuse,
   copyCachedStudySet,
+  copyMeetsRequest,
   copyStudySetContent,
   findSimilarCachedStudySet,
   findSimilarOwnedStudySet,
@@ -295,6 +296,23 @@ function actionContext(
 }
 
 describe("study set reuse", () => {
+  test("a finished copy only answers a build of the same size", () => {
+    expect(
+      copyMeetsRequest(
+        { cardCount: 13, quizCount: 7, examCount: 4 },
+        { cards: 10, quiz: 5, exam: 3 },
+      ),
+    ).toBe(true);
+    // The reported tutor build: an old ten-card set cannot answer 100 of each,
+    // and the review that follows adds three cards, not ninety.
+    expect(
+      copyMeetsRequest(
+        { cardCount: 10, quizCount: 3, examCount: 1 },
+        { cards: 100, quiz: 100, exam: 100 },
+      ),
+    ).toBe(false);
+  });
+
   test("clones a finished course set into a clean private copy", async () => {
     const tables = rowsForSource("set:source");
     const source = tables.studySets[0]!;
