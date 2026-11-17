@@ -1,9 +1,15 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { safeExternalUrl } from "../lib/safeExternalUrl";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner } from "./lib/authorization";
+import {
+  builtSetsFields,
+  isReplayableReply,
+  replySetIds,
+  stopReplyFields,
+} from "./lib/tutorStop";
 import {
   courseOptionsLine,
   courseScopeMatches,
@@ -99,8 +105,10 @@ export const listMessages = query({
       content: row.content,
       createdAt: row.createdAt,
       streaming: row.streaming ?? false,
+      stopped: row.stopped ?? false,
       sources: row.sources ?? [],
       builtSetId: row.builtSetId,
+      builtSetIds: replySetIds(row),
     }));
   },
 });
@@ -146,7 +154,7 @@ export const getTutorContext = internalQuery({
         level: set.level ?? undefined,
         courseId: set.courseId,
       },
-      messages: inConversationOrder(rows.filter((row) => !row.streaming))
+      messages: inConversationOrder(rows.filter(isReplayableReply))
         .slice(-HISTORY_LIMIT)
         .map((row) => ({ role: row.role, content: row.content })),
     };
@@ -185,8 +193,10 @@ export const listCourseMessages = query({
         content: row.content,
         createdAt: row.createdAt,
         streaming: row.streaming ?? false,
+        stopped: row.stopped ?? false,
         sources: row.sources ?? [],
         builtSetId: row.builtSetId,
+        builtSetIds: replySetIds(row),
       }),
     );
   },
@@ -270,7 +280,7 @@ export const getCourseTutorContext = internalQuery({
       examBoard: course.examBoard,
       level: course.level,
       messages: inConversationOrder(
-        rows.filter((row) => sameScope(row, unitTitle) && !row.streaming),
+        rows.filter((row) => sameScope(row, unitTitle) && isReplayableReply(row)),
       )
         .slice(-HISTORY_LIMIT)
         .map((row) => ({ role: row.role, content: row.content })),
@@ -294,8 +304,10 @@ export const listLibraryMessages = query({
       content: row.content,
       createdAt: row.createdAt,
       streaming: row.streaming ?? false,
+      stopped: row.stopped ?? false,
       sources: row.sources ?? [],
       builtSetId: row.builtSetId,
+      builtSetIds: replySetIds(row),
     }));
   },
 });
@@ -352,9 +364,7 @@ export const getLibraryTutorContext = internalQuery({
     return {
       title: "All your courses",
       material,
-      messages: inConversationOrder(
-        rows.filter((row) => !row.streaming),
-      )
+      messages: inConversationOrder(rows.filter(isReplayableReply))
         .slice(-HISTORY_LIMIT)
         .map((row) => ({ role: row.role, content: row.content })),
     };
@@ -381,19 +391,28 @@ export const getTutorBuildCourses = internalQuery({
     return courses
       .filter((course) => course.status === "ready" && course.pathway)
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .map((course) => ({
-        id: course._id as string,
-        subject: course.subject,
-        level: course.level,
-        examBoard: course.examBoard,
-        units: (course.pathway?.units ?? []).map((unit) => ({
-          title: unit.title,
-          topics: unit.topics.map((topic) => ({
-            id: topic.id,
-            title: topic.title,
+      .map((course) => {
+        const completed = new Set(course.completedTopics);
+        // The same "next up" rule as the course page: the first topic the
+        // student has not marked as revised.
+        const nextTopic = (course.pathway?.units ?? [])
+          .flatMap((unit) => unit.topics)
+          .find((topic) => !completed.has(topic.id));
+        return {
+          id: course._id as string,
+          subject: course.subject,
+          level: course.level,
+          examBoard: course.examBoard,
+          ...(nextTopic ? { nextTopicId: nextTopic.id } : {}),
+          units: (course.pathway?.units ?? []).map((unit) => ({
+            title: unit.title,
+            topics: unit.topics.map((topic) => ({
+              id: topic.id,
+              title: topic.title,
+            })),
           })),
-        })),
-      }));
+        };
+      });
   },
 });
 
@@ -446,22 +465,27 @@ export const beginTutorExchange = internalMutation({
   },
 });
 
-/** Replaces the streaming reply's text (and sources, once the search is done). */
+/**
+ * Replaces the streaming reply's text (and sources, once the search is done).
+ *
+ * A row that is no longer streaming has been stopped by the student (or has
+ * already finished). Reporting that back lets the streaming action abandon the
+ * request instead of writing the rest of an answer nobody is waiting for.
+ */
 export const appendTutorAnswer = internalMutation({
   args: {
     messageId: v.id("tutorMessages"),
     content: v.string(),
     sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
-    builtSetId: v.optional(v.id("studySets")),
   },
-  handler: async (ctx, { messageId, content, sources, builtSetId }) => {
+  handler: async (ctx, { messageId, content, sources }) => {
     const row = await ctx.db.get(messageId);
-    if (!row) return;
+    if (!row || !row.streaming) return { stopped: true };
     await ctx.db.patch(messageId, {
       content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
-      ...(builtSetId === undefined ? {} : { builtSetId }),
     });
+    return { stopped: false };
   },
 });
 
@@ -497,6 +521,9 @@ export const finishTutorExchange = internalMutation({
 export const discardTutorAnswer = internalMutation({
   args: { messageId: v.id("tutorMessages") },
   handler: async (ctx, { messageId }) => {
+    const row = await ctx.db.get(messageId);
+    // A reply the student stopped is kept: it may link the sets it built.
+    if (!row || !row.streaming) return;
     await ctx.db.delete(messageId);
   },
 });
@@ -552,16 +579,15 @@ export const appendCourseTutorAnswer = internalMutation({
     messageId: v.id("courseTutorMessages"),
     content: v.string(),
     sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
-    builtSetId: v.optional(v.id("studySets")),
   },
-  handler: async (ctx, { messageId, content, sources, builtSetId }) => {
+  handler: async (ctx, { messageId, content, sources }) => {
     const row = await ctx.db.get(messageId);
-    if (!row) return;
+    if (!row || !row.streaming) return { stopped: true };
     await ctx.db.patch(messageId, {
       content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
-      ...(builtSetId === undefined ? {} : { builtSetId }),
     });
+    return { stopped: false };
   },
 });
 
@@ -579,6 +605,9 @@ export const finishCourseTutorExchange = internalMutation({
 export const discardCourseTutorAnswer = internalMutation({
   args: { messageId: v.id("courseTutorMessages") },
   handler: async (ctx, { messageId }) => {
+    const row = await ctx.db.get(messageId);
+    // A reply the student stopped is kept: it may link the sets it built.
+    if (!row || !row.streaming) return;
     await ctx.db.delete(messageId);
   },
 });
@@ -620,16 +649,15 @@ export const appendLibraryTutorAnswer = internalMutation({
     messageId: v.id("libraryTutorMessages"),
     content: v.string(),
     sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
-    builtSetId: v.optional(v.id("studySets")),
   },
-  handler: async (ctx, { messageId, content, sources, builtSetId }) => {
+  handler: async (ctx, { messageId, content, sources }) => {
     const row = await ctx.db.get(messageId);
-    if (!row) return;
+    if (!row || !row.streaming) return { stopped: true };
     await ctx.db.patch(messageId, {
       content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
-      ...(builtSetId === undefined ? {} : { builtSetId }),
     });
+    return { stopped: false };
   },
 });
 
@@ -643,7 +671,103 @@ export const finishLibraryTutorExchange = internalMutation({
 export const discardLibraryTutorAnswer = internalMutation({
   args: { messageId: v.id("libraryTutorMessages") },
   handler: async (ctx, { messageId }) => {
+    const row = await ctx.db.get(messageId);
+    // A reply the student stopped is kept: it may link the sets it built.
+    if (!row || !row.streaming) return;
     await ctx.db.delete(messageId);
   },
 });
 
+/* -------------------------------------------------------------------------- */
+/* Stop                                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Stops a reply that is still being written.
+ *
+ * The student sees exactly the text already streamed: the append mutation
+ * refuses to touch a row that is no longer streaming, so the rest of the answer
+ * can never appear after the click. The row is kept even while it is still
+ * empty: the set it is building may finish later and link itself there, and the
+ * chat explains a stopped reply. A reply that already finished is left alone.
+ * Every variant checks ownership, so a guessed id cannot stop somebody else's
+ * conversation.
+ */
+export const stopTutorReply = mutation({
+  args: { messageId: v.id("tutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    const userId = await requireUserId(ctx);
+    const row = await ctx.db.get(messageId);
+    if (!row || row.userId !== userId) return;
+    const fields = stopReplyFields(row);
+    if (!fields) return;
+    await ctx.db.patch(messageId, fields);
+  },
+});
+
+export const stopCourseTutorReply = mutation({
+  args: { messageId: v.id("courseTutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    const userId = await requireUserId(ctx);
+    const row = await ctx.db.get(messageId);
+    if (!row || row.userId !== userId) return;
+    const fields = stopReplyFields(row);
+    if (!fields) return;
+    await ctx.db.patch(messageId, fields);
+  },
+});
+
+export const stopLibraryTutorReply = mutation({
+  args: { messageId: v.id("libraryTutorMessages") },
+  handler: async (ctx, { messageId }) => {
+    const userId = await requireUserId(ctx);
+    const row = await ctx.db.get(messageId);
+    if (!row || row.userId !== userId) return;
+    const fields = stopReplyFields(row);
+    if (!fields) return;
+    await ctx.db.patch(messageId, fields);
+  },
+});
+
+/**
+ * Saves the sets a reply created. This runs as soon as the build returns, so a
+ * student who stops the answer still gets the links to what was built.
+ */
+export const attachTutorBuiltSets = internalMutation({
+  args: {
+    messageId: v.id("tutorMessages"),
+    builtSetIds: v.array(v.id("studySets")),
+  },
+  handler: async (ctx, { messageId, builtSetIds }) => {
+    const row = await ctx.db.get(messageId);
+    if (!row) return { stopped: true };
+    await ctx.db.patch(messageId, builtSetsFields(builtSetIds));
+    return { stopped: row.streaming !== true };
+  },
+});
+
+export const attachCourseTutorBuiltSets = internalMutation({
+  args: {
+    messageId: v.id("courseTutorMessages"),
+    builtSetIds: v.array(v.id("studySets")),
+  },
+  handler: async (ctx, { messageId, builtSetIds }) => {
+    const row = await ctx.db.get(messageId);
+    if (!row) return { stopped: true };
+    await ctx.db.patch(messageId, builtSetsFields(builtSetIds));
+    return { stopped: row.streaming !== true };
+  },
+});
+
+export const attachLibraryTutorBuiltSets = internalMutation({
+  args: {
+    messageId: v.id("libraryTutorMessages"),
+    builtSetIds: v.array(v.id("studySets")),
+  },
+  handler: async (ctx, { messageId, builtSetIds }) => {
+    const row = await ctx.db.get(messageId);
+    if (!row) return { stopped: true };
+    await ctx.db.patch(messageId, builtSetsFields(builtSetIds));
+    return { stopped: row.streaming !== true };
+  },
+});

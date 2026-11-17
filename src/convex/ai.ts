@@ -26,6 +26,12 @@ import {
   planTutorBuild,
   type TutorBuildPlan,
 } from "./lib/tutorAgent";
+import {
+  NO_MATERIAL_IN_CHAT,
+  multiBuildNote,
+  tutorBuildNote,
+  type TutorBuildOutcome,
+} from "./lib/tutorBuildNotes";
 import { materialLimits } from "./lib/buildCapacity";
 import { toCardArgs } from "./lib/cardArgs";
 import { toExamArgs } from "./lib/examArgs";
@@ -2679,6 +2685,7 @@ async function readTutorImages(
 type TutorBuildAction = {
   note: string;
   builtSetId?: Id<"studySets">;
+  builtSetIds?: Id<"studySets">[];
 };
 
 function safeTutorBuildError(error: unknown): string {
@@ -2702,6 +2709,75 @@ function safeTutorBuildError(error: unknown): string {
     return "Some of those topics are no longer in the pathway.";
   }
   return "I couldn't start that build. Nothing was charged.";
+}
+
+/** Raised when the student pressed Stop while a reply was still streaming. */
+class TutorStopped extends Error {
+  constructor() {
+    super("Tutor reply stopped");
+    this.name = "TutorStopped";
+  }
+}
+
+/** Creates and queues one course's set through the guarded course path. */
+async function startTutorBuild(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+  plan: TutorBuildPlan,
+): Promise<TutorBuildOutcome<Id<"studySets">>> {
+  let result: {
+    setId: Id<"studySets">;
+    created: boolean;
+    sections: number;
+    cached: boolean;
+    scheduled: boolean;
+  };
+  try {
+    result = await ctx.runMutation(internal.courses.createTopicSetForTutor, {
+      userId,
+      courseId: plan.courseId as Id<"courses">,
+      topicId: plan.firstTopicId,
+      topicIds: plan.topicIds,
+      targetCardCount: plan.counts.cards,
+      targetQuizCount: plan.counts.quiz,
+      targetExamCount: plan.counts.exam,
+    });
+  } catch (error) {
+    console.error("Tutor build could not start", error);
+    return {
+      plan,
+      created: false,
+      cached: false,
+      started: false,
+      failure: safeTutorBuildError(error),
+    };
+  }
+
+  // The course mutation now starts generation itself. Only retry here when that
+  // first scheduler write failed; a second enqueue would run the same claim
+  // twice for no benefit.
+  let started = result.created && !result.cached && result.scheduled;
+  if (result.created && !result.cached && !result.scheduled) {
+    try {
+      await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
+        setId: result.setId,
+        userId,
+      });
+      started = true;
+    } catch (error) {
+      // The set is already committed. Keep its link in the answer so the
+      // student can open it, which starts a queued build from the set page.
+      console.error("Tutor build was created but could not be scheduled", error);
+    }
+  }
+
+  return {
+    plan,
+    setId: result.setId,
+    created: result.created,
+    cached: result.cached,
+    started,
+  };
 }
 
 /**
@@ -2729,7 +2805,7 @@ async function runTutorBuild(
     return {
       note:
         "The student asked you to build material, but no course matched the request. " +
-        "Do not claim anything was built. Ask them which course or subject to use. " +
+        "Do not claim anything was built. " + NO_MATERIAL_IN_CHAT + " Ask them which course or subject to use. " +
         (decision.subjects.length > 0
           ? `Their ready courses are: ${decision.subjects.join(", ")}.`
           : "They do not have a ready course yet."),
@@ -2740,78 +2816,29 @@ async function runTutorBuild(
     return {
       note:
         `The student asked you to build material for ${decision.subject}, but did not name one topic unambiguously. ` +
-        "Do not claim anything was built and do not ask for a topic number unless it helps. " +
+        "Do not claim anything was built. " + NO_MATERIAL_IN_CHAT + " Ask for the topic number or title if it helps. " +
         "Ask which topic they want, and mention that they can say the topic number or title.",
     };
   }
 
-  const plan: TutorBuildPlan = decision;
-
-  let result: {
-    setId: Id<"studySets">;
-    created: boolean;
-    sections: number;
-    cached: boolean;
-    scheduled: boolean;
-  };
-  try {
-    result = await ctx.runMutation(internal.courses.createTopicSetForTutor, {
-      userId,
-      courseId: plan.courseId as Id<"courses">,
-      topicId: plan.firstTopicId,
-      topicIds: plan.topicIds,
-      targetCardCount: plan.counts.cards,
-      targetQuizCount: plan.counts.quiz,
-      targetExamCount: plan.counts.exam,
-    });
-  } catch (error) {
-    console.error("Tutor build could not start", error);
+  if (decision.status === "build-many") {
+    const outcomes: TutorBuildOutcome<Id<"studySets">>[] = [];
+    for (const plan of decision.plans) {
+      outcomes.push(await startTutorBuild(ctx, userId, plan));
+    }
+    const { note, builtSetIds } = multiBuildNote(outcomes);
     return {
-      note:
-        `The student asked you to build ${plan.subject}: ${plan.label}, but the build did not start. ` +
-        `The reason is: ${safeTutorBuildError(error)} ` +
-        "Do not claim anything was built. Tell them what happened and what to do next.",
+      note,
+      ...(builtSetIds.length > 0
+        ? { builtSetIds, builtSetId: builtSetIds[0]! }
+        : {}),
     };
   }
 
-  // The course mutation now starts generation itself. Only retry here when that
-  // first scheduler write failed; a second enqueue would run the same claim
-  // twice for no benefit.
-  let started = result.created && !result.cached && result.scheduled;
-  if (result.created && !result.cached && !result.scheduled) {
-    try {
-      await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
-        setId: result.setId,
-        userId,
-      });
-      started = true;
-    } catch (error) {
-      // The set is already committed. Keep its link in the answer so the
-      // student can open it, which starts a queued build from the set page.
-      console.error("Tutor build was created but could not be scheduled", error);
-    }
-  }
-
-  const targetCounts = `${plan.counts.cards} flashcards, ${plan.counts.quiz} quiz questions and ${plan.counts.exam} exam questions`;
+  const outcome = await startTutorBuild(ctx, userId, decision);
   return {
-    builtSetId: result.setId,
-    note: result.cached
-      ? `A study set for ${plan.subject}: ${plan.label} has been created and is ready to study now. ` +
-        `It was built for ${targetCounts}. ` +
-        "It reused a finished build, so no generation is running. In your first sentence, say it is ready, not building. " +
-        "Do not ask for confirmation or claim anything is still generating. Then answer any remaining part of their request."
-      : result.created
-        ? started
-          ? `A study set has already been created and its background build has started for ${plan.subject}: ${plan.label}. ` +
-            `Its target is ${targetCounts}. ` +
-            "In your first sentence, say you have built it and started it. Do not ask for confirmation. " +
-            "Say it is building now, not ready, and do not claim the cards or questions are finished. " +
-            "Then answer any remaining part of their request with a short explanation or one practice question."
-          : `A study set has been created for ${plan.subject}: ${plan.label}, but its background build could not be queued. ` +
-            "Tell them the set is saved and they can open it to start the build. Do not claim it is already building."
-        : `A study set covering ${plan.subject}: ${plan.label} already exists. ` +
-          "In your first sentence, tell them it is already in their library. Do not claim a new build was started. " +
-          "Then answer any remaining part of their request.",
+    ...(outcome.setId ? { builtSetId: outcome.setId } : {}),
+    note: tutorBuildNote(outcome),
   };
 }
 
@@ -7820,7 +7847,10 @@ function tutorPrompt(
     explainLevelRules(context.explainLevel, question),
     webRules(webState),
     web.length > 0 ? webResultsBlock(web) : "",
-    agentNote ? `<agent_action>${agentNote}</agent_action>` : "",
+    agentNote
+      ? `<agent_action>${agentNote}</agent_action>\n` +
+        "You can build study sets from the student's own courses. When the action above created a set, its link sits under this reply: never say you cannot build sets."
+      : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -8160,7 +8190,9 @@ async function streamTutorAnswer(
       tier,
       onSnapshot,
     );
-  } catch {
+  } catch (error) {
+    // A stopped reply is not a web failure: never retry it on another provider.
+    if (error instanceof TutorStopped) throw error;
     // The browsing provider is optional, so a web failure never costs the
     // answer: the tutor falls back to the student's own material and says it
     // found nothing outside it.
@@ -8452,6 +8484,24 @@ export const askTutor = action({
       const build = await runTutorBuild(ctx, userId, text, {
         currentCourseId: context.set.courseId,
       });
+      // The sets exist before the answer is written. Save their links now, so a
+      // stopped or failed reply still leaves something to open, and learn
+      // whether the student stopped while the build was running.
+      const builtSets = build?.builtSetIds?.length
+        ? build.builtSetIds
+        : build?.builtSetId
+          ? [build.builtSetId]
+          : [];
+      if (builtSets.length > 0) {
+        const savedReply = await ctx.runMutation(internal.tutor.attachTutorBuiltSets, {
+          messageId,
+          builtSetIds: builtSets,
+        });
+        if (savedReply?.stopped) {
+          // No answer was asked for: keep the sets and spend nothing more.
+          return { reply: "" };
+        }
+      }
 
       const tutorContext: TutorContext = {
         title: context.set.title,
@@ -8470,11 +8520,12 @@ export const askTutor = action({
         useWeb === true,
         chosenTier,
         async (content, sources) => {
-          await ctx.runMutation(internal.tutor.appendTutorAnswer, {
+          const saved = await ctx.runMutation(internal.tutor.appendTutorAnswer, {
             messageId,
             content,
             ...(sources.length > 0 ? { sources } : {}),
           });
+          if (saved.stopped) throw new TutorStopped();
         },
         build?.note,
       );
@@ -8485,14 +8536,13 @@ export const askTutor = action({
         messageId,
         content: result.text,
         ...(result.sources.length > 0 ? { sources: result.sources } : {}),
-        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
       });
       await ctx.runMutation(internal.tutor.finishTutorExchange, { messageId });
       return {
         reply: result.text,
-        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
       };
     } catch (error) {
+      if (error instanceof TutorStopped) return { reply: "" };
       await ctx.runMutation(internal.tutor.discardTutorAnswer, { messageId });
       await recordProviderIncident(ctx, "tutor", error);
       // The question was validated before this block, so anything caught here
@@ -8570,6 +8620,25 @@ export const askCourseTutor = action({
         currentCourseId: courseId,
         unitTitle,
       });
+      // The sets exist before the answer is written. Save their links now, so a
+      // stopped or failed reply still leaves something to open, and learn
+      // whether the student stopped while the build was running.
+      const builtSets = build?.builtSetIds?.length
+        ? build.builtSetIds
+        : build?.builtSetId
+          ? [build.builtSetId]
+          : [];
+      if (builtSets.length > 0) {
+        const savedReply = await ctx.runMutation(internal.tutor.attachCourseTutorBuiltSets, {
+          messageId,
+          builtSetIds: builtSets,
+        });
+        if (savedReply?.stopped) {
+          // No answer was asked for: keep the sets and spend nothing more.
+          return { reply: "" };
+        }
+      }
+
       const result = await streamTutorAnswer(
         apiKeys,
         { ...context, explainLevel },
@@ -8578,11 +8647,12 @@ export const askCourseTutor = action({
         useWeb === true,
         chosenTier,
         async (content, sources) => {
-          await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
+          const saved = await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
             messageId,
             content,
             ...(sources.length > 0 ? { sources } : {}),
           });
+          if (saved.stopped) throw new TutorStopped();
         },
         build?.note,
       );
@@ -8591,16 +8661,15 @@ export const askCourseTutor = action({
         messageId,
         content: result.text,
         ...(result.sources.length > 0 ? { sources: result.sources } : {}),
-        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
       });
       await ctx.runMutation(internal.tutor.finishCourseTutorExchange, {
         messageId,
       });
       return {
         reply: result.text,
-        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
       };
     } catch (error) {
+      if (error instanceof TutorStopped) return { reply: "" };
       await ctx.runMutation(internal.tutor.discardCourseTutorAnswer, { messageId });
       await recordProviderIncident(ctx, "tutor", error);
       if (!(error instanceof ProviderError)) console.error("Tutor answer failed", error);
@@ -8671,6 +8740,25 @@ export const askLibraryTutor = action({
       // The planner reads every course too, so "build a Spanish quiz" works from
       // a home question without a selected course.
       const build = await runTutorBuild(ctx, userId, text, {});
+      // The sets exist before the answer is written. Save their links now, so a
+      // stopped or failed reply still leaves something to open, and learn
+      // whether the student stopped while the build was running.
+      const builtSets = build?.builtSetIds?.length
+        ? build.builtSetIds
+        : build?.builtSetId
+          ? [build.builtSetId]
+          : [];
+      if (builtSets.length > 0) {
+        const savedReply = await ctx.runMutation(internal.tutor.attachLibraryTutorBuiltSets, {
+          messageId,
+          builtSetIds: builtSets,
+        });
+        if (savedReply?.stopped) {
+          // No answer was asked for: keep the sets and spend nothing more.
+          return { reply: "" };
+        }
+      }
+
       const result = await streamTutorAnswer(
         apiKeys,
         {
@@ -8683,11 +8771,12 @@ export const askLibraryTutor = action({
         useWeb === true,
         chosenTier,
         async (content, sources) => {
-          await ctx.runMutation(internal.tutor.appendLibraryTutorAnswer, {
+          const saved = await ctx.runMutation(internal.tutor.appendLibraryTutorAnswer, {
             messageId,
             content,
             ...(sources.length > 0 ? { sources } : {}),
           });
+          if (saved.stopped) throw new TutorStopped();
         },
         build?.note,
       );
@@ -8696,16 +8785,15 @@ export const askLibraryTutor = action({
         messageId,
         content: result.text,
         ...(result.sources.length > 0 ? { sources: result.sources } : {}),
-        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
       });
       await ctx.runMutation(internal.tutor.finishLibraryTutorExchange, {
         messageId,
       });
       return {
         reply: result.text,
-        ...(build?.builtSetId ? { builtSetId: build.builtSetId } : {}),
       };
     } catch (error) {
+      if (error instanceof TutorStopped) return { reply: "" };
       await ctx.runMutation(internal.tutor.discardLibraryTutorAnswer, {
         messageId,
       });

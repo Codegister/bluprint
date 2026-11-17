@@ -26,6 +26,12 @@ export type TutorAgentCourse = {
   subject: string;
   level: string;
   examBoard: string;
+  /**
+   * The course's next unfinished topic, when the caller knows it. A build for
+   * "each of my courses" has no topic in the message, so this is the topic the
+   * course page would offer next instead of always starting at topic 1.
+   */
+  nextTopicId?: string;
   units: Array<{
     title: string;
     topics: Array<{ id: string; title: string }>;
@@ -48,8 +54,15 @@ export type TutorBuildPlan = {
   counts: TutorBuildCounts;
 };
 
+/** One build per ready course, for "build me a set for each of my courses". */
+export type TutorBuildBatch = {
+  status: "build-many";
+  plans: TutorBuildPlan[];
+};
+
 export type TutorBuildDecision =
   | TutorBuildPlan
+  | TutorBuildBatch
   | { status: "needs-topic"; courseId: string; subject: string }
   | { status: "needs-course"; subjects: string[] }
   | { status: "not-a-build" };
@@ -57,14 +70,23 @@ export type TutorBuildDecision =
 const BUILD_REQUEST = [
   // The verb and its object may be separated by a short description
   // ("build me a Spanish quiz"), but not by a whole sentence.
-  /\b(?:build|make|create|generate|prepare|put together)\b[^.!?]{0,55}\b(?:quiz|study set|set|flashcards?|cards?|questions?|deck)\b/i,
+  /\b(?:build|make|create|generate|prepare|put together)\b[^.!?]{0,55}\b(?:quiz|study sets?|sets?|flashcards?|cards?|questions?|deck)\b/i,
   // "I want a Spanish quiz", but not "I need help with my quiz".
-  /\b(?:want|need|would like|i'?d like)\s+(?:a|an|another|some|the)\b[^.!?]{0,40}\b(?:quiz|study set|set|flashcards?|cards?|deck)\b/i,
-  /\b(?:give me|create me|make me|build me)\b[^.!?]{0,40}\b(?:quiz|study set|set|flashcards?|cards?|questions?|deck)\b/i,
+  /\b(?:want|need|would like|i'?d like)\s+(?:a|an|another|some|the)\b[^.!?]{0,40}\b(?:quiz|study sets?|sets?|flashcards?|cards?|deck)\b/i,
+  /\b(?:give me|create me|make me|build me)\b[^.!?]{0,40}\b(?:quiz|study sets?|sets?|flashcards?|cards?|questions?|deck)\b/i,
 ];
 
 const NON_BUILD_OPENING = /^\s*(?:how|what|why|where|when|which|who)\b/i;
 const NEGATED_BUILD = /^\s*(?:no|don'?t|do not|stop|not)\b/i;
+
+/**
+ * "A set for each of my courses", "one per course", "sets for all my courses".
+ * Without this the planner treats the request as a single unnamed course and
+ * asks which one, while the model, told to ask, starts writing material into
+ * the chat instead of creating anything.
+ */
+const EVERY_COURSE =
+  /\b(?:each|every|all)\s+(?:of\s+)?(?:my\s+|the\s+)?courses?\b|\bper\s+course\b|\bfor\s+my\s+courses?\b/i;
 
 /**
  * True only for an imperative request to create material.
@@ -104,6 +126,22 @@ const TOPIC_WORDS: Record<string, number> = {
 };
 
 const STOP_WORDS = new Set([
+  "all",
+  "another",
+  "both",
+  "courses",
+  "each",
+  "every",
+  "five",
+  "four",
+  "full",
+  "one",
+  "per",
+  "sets",
+  "single",
+  "three",
+  "two",
+  "whole",
   "about",
   "and",
   "are",
@@ -278,7 +316,7 @@ function subjectMatch(question: string, subject: string): boolean {
 
 function namedSubject(question: string): string | null {
   const match = question.match(
-    /\b(?:build|make|create|generate|prepare|put together|want|need|give me)\b[\s\S]{0,45}?\b(?:a|an|the)?\s*([A-Za-z]{3,}(?:\s+[A-Za-z]{3,})?)\s+(?:quiz|study set|set|flashcards?|cards?|questions?|deck)\b/i,
+    /\b(?:build|make|create|generate|prepare|put together|want|need|give me)\b[\s\S]{0,45}?\b(?:a|an|the)?\s*([A-Za-z]{3,}(?:\s+[A-Za-z]{3,})?)\s+(?:quiz|study sets?|sets?|flashcards?|cards?|questions?|deck)\b/i,
   );
   const name = match?.[1]?.trim();
   if (!name) return null;
@@ -427,6 +465,49 @@ export function planTutorBuild(
   options: { currentCourseId?: string; unitTitle?: string } = {},
 ): TutorBuildDecision {
   if (!isTutorBuildRequest(question)) return { status: "not-a-build" };
+
+  // A request for one set from every course has no topic in it. Build each
+  // course's next unfinished topic, which is the same topic its own page puts
+  // first, rather than asking a question the student already answered.
+  if (EVERY_COURSE.test(question)) {
+    // "one set per course" starts with a quantity, not a subject: only a name
+    // that matches a real course narrows the batch.
+    const named = namedSubject(question);
+    const namedCourses = named
+      ? courses.filter((entry) => subjectMatch(question, entry.subject))
+      : [];
+    if (named && namedCourses.length === 0) {
+      return {
+        status: "needs-course",
+        subjects: [...new Set(courses.map((entry) => entry.subject))].slice(0, 6),
+      };
+    }
+    const batchCourses = namedCourses.length > 0 ? namedCourses : courses;
+    const plans: TutorBuildPlan[] = batchCourses.flatMap((entry) => {
+      const topics = numberTopics(entry);
+      if (topics.length === 0) return [];
+      const next =
+        (entry.nextTopicId
+          ? topics.find((topic) => topic.id === entry.nextTopicId)
+          : undefined) ?? topics[0]!;
+      return [
+        {
+          status: "build" as const,
+          courseId: entry.id,
+          subject: entry.subject,
+          topicIds: [next.id],
+          firstTopicId: next.id,
+          label: labelForTopics([next]),
+          counts: countsForTutorBuild(question),
+        },
+      ];
+    });
+    if (plans.length > 0) return { status: "build-many", plans };
+    return {
+      status: "needs-course",
+      subjects: [...new Set(courses.map((entry) => entry.subject))].slice(0, 6),
+    };
+  }
 
   const course = chooseCourse(question, courses, options.currentCourseId);
   if (!course) {

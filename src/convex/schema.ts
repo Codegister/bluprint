@@ -938,12 +938,17 @@ const schema = defineSchema(
       // True while the reply is still being written token by token. The chat
       // renders the growing content live and shows a caret.
       streaming: v.optional(v.boolean()),
+      // The student pressed Stop. The row is kept: it may hold partial text or
+      // the links to sets the tutor had already built.
+      stopped: v.optional(v.boolean()),
       // Pages the answer was allowed to cite, saved with the reply.
       sources: v.optional(
         v.array(v.object({ title: v.string(), url: v.string() })),
       ),
       // A set the tutor built while answering, linked from the reply.
       builtSetId: v.optional(v.id("studySets")),
+      // Every set one reply created, for "a set for each of my courses".
+      builtSetIds: v.optional(v.array(v.id("studySets"))),
     }).index("by_set", ["setId"]),
 
     // Tutor conversation pointed at a whole course, or at one unit of it. The
@@ -957,11 +962,13 @@ const schema = defineSchema(
       content: v.string(),
       createdAt: v.number(),
       streaming: v.optional(v.boolean()),
+      stopped: v.optional(v.boolean()),
       sources: v.optional(
         v.array(v.object({ title: v.string(), url: v.string() })),
       ),
       // A set the tutor built while answering, linked from the reply.
       builtSetId: v.optional(v.id("studySets")),
+      builtSetIds: v.optional(v.array(v.id("studySets"))),
     }).index("by_course", ["courseId"]),
 
     // Tutor conversation grounded in every ready course in the student's
@@ -973,10 +980,12 @@ const schema = defineSchema(
       content: v.string(),
       createdAt: v.number(),
       streaming: v.optional(v.boolean()),
+      stopped: v.optional(v.boolean()),
       sources: v.optional(
         v.array(v.object({ title: v.string(), url: v.string() })),
       ),
       builtSetId: v.optional(v.id("studySets")),
+      builtSetIds: v.optional(v.array(v.id("studySets"))),
     }).index("by_user", ["userId"]),
 
     // One row per AI build a person starts, so the rate limit is enforced from

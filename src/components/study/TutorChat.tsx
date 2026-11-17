@@ -14,11 +14,17 @@ import {
 } from "@/lib/tutorScope";
 import { safeExternalUrl } from "@/lib/safeExternalUrl";
 import { uploadTutorImages } from "@/lib/tutorImages";
+import {
+  beginTutorRequest,
+  isActiveTutorRequest,
+  stopTutorRequest,
+} from "@/lib/tutorRequest";
+import { stoppedReplyCaption, stoppedReplyIsEmpty } from "@/convex/lib/tutorStop";
 import { cn } from "@/lib/utils";
 import { useAiAvailability } from "@/lib/useAiAvailability";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Globe, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Globe, Sparkles, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
@@ -125,6 +131,9 @@ export function TutorChat({
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
   const askLibraryTutor = useAction(api.ai.askLibraryTutor);
+  const stopTutorReply = useMutation(api.tutor.stopTutorReply);
+  const stopCourseTutorReply = useMutation(api.tutor.stopCourseTutorReply);
+  const stopLibraryTutorReply = useMutation(api.tutor.stopLibraryTutorReply);
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
@@ -165,6 +174,9 @@ export function TutorChat({
   // The last tier the student used, so a suggested question uses the same one.
   const [tier, setTier] = useState(defaultTier);
   const [explainLevel, setExplainLevel] = useState("GCSE");
+  // The send that owns the composer. Stop and a newer send both take the next
+  // id, so a request that settles late cannot clear the new one's state.
+  const activeRequestRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // The reply being written right now, if any.
@@ -209,6 +221,8 @@ export function TutorChat({
     // back to the default on the server.
     const chosenTier = meta.model || tier;
     setTier(chosenTier);
+    const requestId = beginTutorRequest(activeRequestRef.current);
+    activeRequestRef.current = requestId;
     setError(null);
     setSending(true);
     setPending(question);
@@ -246,14 +260,43 @@ export function TutorChat({
         });
       }
     } catch (sendError) {
+      // A stopped or superseded request must not report anything.
+      if (!isActiveTutorRequest(activeRequestRef.current, requestId)) return;
       setError(
         readableError(sendError, "The tutor could not answer that. Please try again."),
       );
       // The question is already saved, so restore it for a retry.
       setDraft(typed);
     } finally {
-      setSending(false);
-      setPending(null);
+      // Only the send that still owns the composer may clear it.
+      if (isActiveTutorRequest(activeRequestRef.current, requestId)) {
+        setSending(false);
+        setPending(null);
+      }
+    }
+  };
+
+  // Stops the reply being written. The server marks the row finished, so the
+  // text already on screen stays and the rest of the answer never arrives.
+  const stop = async () => {
+    // Take the composer from the running request before anything else, so its
+    // pending state can never come back.
+    activeRequestRef.current = stopTutorRequest(activeRequestRef.current);
+    setPending(null);
+    setSending(false);
+    try {
+      if (scope.kind === "set") {
+        const id = setMessages?.find((message) => message.streaming)?._id;
+        if (id) await stopTutorReply({ messageId: id });
+      } else if (scope.kind === "course") {
+        const id = courseMessages?.find((message) => message.streaming)?._id;
+        if (id) await stopCourseTutorReply({ messageId: id });
+      } else {
+        const id = libraryMessages?.find((message) => message.streaming)?._id;
+        if (id) await stopLibraryTutorReply({ messageId: id });
+      }
+    } catch {
+      // The answer finished before the click landed; nothing to stop.
     }
   };
 
@@ -369,7 +412,16 @@ export function TutorChat({
                         : "rounded-bl-md border border-brand-sky/15 bg-brand-sky/10 text-brand-ink/90",
                     )}
                   >
-                    <TutorMessageContent content={message.content} />
+                    {stoppedReplyIsEmpty(message) ? (
+                      <span className="text-muted-foreground">Stopped.</span>
+                    ) : (
+                      <TutorMessageContent content={message.content} />
+                    )}
+                    {stoppedReplyCaption(message) !== null && (
+                      <span className="mt-1 block text-[0.7rem] text-muted-foreground">
+                        {stoppedReplyCaption(message)}
+                      </span>
+                    )}
                     {message.streaming && (
                       <span
                         aria-hidden
@@ -390,15 +442,28 @@ export function TutorChat({
                   {message.role === "assistant" && !message.streaming && (
                     <div className="max-w-[86%]">
                       <SourceList sources={message.sources} />
-                      {message.builtSetId && (
-                        <Link
-                          to={`/sets/${message.builtSetId}`}
-                          className="mt-2 inline-flex items-center gap-1 rounded-full border border-brand-sky/30 bg-white px-3 py-1.5 text-[0.74rem] font-semibold text-brand-ink transition-colors hover:bg-brand-sky/10"
-                        >
-                          Open study set
-                          <ArrowRight className="size-3.5" aria-hidden />
-                        </Link>
-                      )}
+                      {(() => {
+                        const built = message.builtSetIds?.length
+                          ? message.builtSetIds
+                          : message.builtSetId
+                            ? [message.builtSetId]
+                            : [];
+                        if (built.length === 0) return null;
+                        return (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {built.map((setId, setIndex) => (
+                              <Link
+                                key={setId}
+                                to={`/sets/${setId}`}
+                                className="inline-flex items-center gap-1 rounded-full border border-brand-sky/30 bg-white px-3 py-1.5 text-[0.74rem] font-semibold text-brand-ink transition-colors hover:bg-brand-sky/10"
+                              >
+                                {built.length > 1 ? `Open set ${setIndex + 1}` : "Open study set"}
+                                <ArrowRight className="size-3.5" aria-hidden />
+                              </Link>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </motion.div>
@@ -431,6 +496,19 @@ export function TutorChat({
             >
               {error}
             </motion.p>
+          )}
+
+          {sending && (
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => void stop()}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-[0.72rem] font-semibold text-brand-ink transition-colors hover:bg-brand-panel"
+              >
+                <Square className="size-3 fill-current" aria-hidden />
+                Stop
+              </button>
+            </div>
           )}
 
           <PromptInput

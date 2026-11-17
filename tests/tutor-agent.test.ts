@@ -192,4 +192,42 @@ describe("tutor build planner", () => {
     if (plan.status !== "build") return;
     expect(plan.topicIds).toEqual(["family"]);
   });
+
+  test("builds one set for each ready course, not one chat answer", () => {
+    const plan = planTutorBuild("Build me a set for each of my courses", [
+      { ...spanish, nextTopicId: "holidays" },
+      biology,
+    ]);
+    expect(plan.status).toBe("build-many");
+    if (plan.status !== "build-many") return;
+    expect(plan.plans.map((entry) => entry.courseId)).toEqual(["spanish", "biology"]);
+    // Each course starts at its next unfinished topic, falling back to topic 1.
+    expect(plan.plans.map((entry) => entry.topicIds)).toEqual([["holidays"], ["cells"]]);
+    expect(plan.plans.map((entry) => entry.label)).toEqual([
+      "Topic 3 · Holidays and travel",
+      "Topic 1 · Cell division",
+    ]);
+    expect(plan.plans[0]?.counts).toEqual({ cards: 10, quiz: 5, exam: 3 });
+  });
+
+  test("recognises the other ways students ask for every course", () => {
+    for (const question of [
+      "Make a study set for every course",
+      "Build one set per course",
+      "Build sets for all of my courses",
+    ]) {
+      expect(isTutorBuildRequest(question)).toBe(true);
+      expect(planTutorBuild(question, [spanish, biology]).status).toBe("build-many");
+    }
+  });
+
+  test("a named subject keeps an every-course request to that subject", () => {
+    const plan = planTutorBuild("Build me a Spanish set for each of my courses", [
+      spanish,
+      biology,
+    ]);
+    expect(plan.status).toBe("build-many");
+    if (plan.status !== "build-many") return;
+    expect(plan.plans.map((entry) => entry.courseId)).toEqual(["spanish"]);
+  });
 });
