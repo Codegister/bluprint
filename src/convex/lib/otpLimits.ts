@@ -30,7 +30,51 @@ export const MAX_VERIFIES_PER_IP_WINDOW = 60;
 /** The wait before the next try, indexed by the failures already made. */
 const RETRY_DELAYS_MS = [0, 0, 3_000, 8_000, 20_000];
 
-const HOUR_MS = 60 * 60 * 1000;
+export type SendGateRow = {
+  lastCodeSentAt: number;
+  sendWindowStart?: number;
+  sendWindowCount?: number;
+};
+
+/**
+ * Whether one more code may be sent to this address, as arithmetic.
+ *
+ * Two callers need the same answer: the provider records the send (and counts
+ * the IP bucket) in `beginSend`, and the sign-in wrapper asks before Convex
+ * Auth is allowed to create a code at all. The second call is what keeps a
+ * refused re-send from replacing the code already sitting in the inbox.
+ */
+export function describeSendGate(
+  row: SendGateRow | null,
+  now: number,
+): { allowed: boolean; retryAt: number } {
+  if (!row) return { allowed: true, retryAt: 0 };
+
+  const resendAt = row.lastCodeSentAt + RESEND_COOLDOWN_MS;
+  if (resendAt > now) return { allowed: false, retryAt: resendAt };
+
+  const windowStart = row.sendWindowStart ?? 0;
+  const windowOpen = now - windowStart < HOUR_MS;
+  const sent = windowOpen ? (row.sendWindowCount ?? 0) : 0;
+  if (sent >= MAX_SENDS_PER_HOUR) {
+    return { allowed: false, retryAt: windowStart + HOUR_MS };
+  }
+
+  return { allowed: true, retryAt: 0 };
+}
+
+/**
+ * The sentence a refused send shows. The wait is part of the sentence, so the
+ * sign-in page can say how long to wait rather than "couldn't send".
+ */
+export function sendRefusalMessage(retryAt: number, now: number): string {
+  const wait = retryAt > now ? Math.ceil((retryAt - now) / 1000) : 0;
+  return wait > 0
+    ? `A code was requested recently. Try again in ${wait}s.`
+    : "Too many codes have been requested for this address. Try again later.";
+}
+
+export const HOUR_MS = 60 * 60 * 1000;
 
 export type OtpGuardRow = {
   codeFailures: number;

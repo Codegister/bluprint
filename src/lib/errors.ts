@@ -49,6 +49,12 @@ const STUDENT_MESSAGES = [
   "We couldn't finish this paper",
   "Please sign in to continue",
   "Please verify your email",
+  // The email-code guard's own sentences. The wait is part of the message, so
+  // the sign-in page can show the real number of seconds left rather than the
+  // generic "couldn't send the code" fallback.
+  "A code was requested recently",
+  "Too many codes have been requested for this address",
+  "Too many codes were tried from this network",
   "That item was not found",
   "That item does not belong to you",
   "Account not found",

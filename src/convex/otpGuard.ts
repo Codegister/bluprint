@@ -4,10 +4,10 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import {
+  describeSendGate,
   IP_WINDOW_MS,
   MAX_CODE_ATTEMPTS,
   MAX_HOURLY_ATTEMPTS,
-  MAX_SENDS_PER_HOUR,
   MAX_SENDS_PER_IP_WINDOW,
   MAX_VERIFIES_PER_IP_WINDOW,
   RESEND_COOLDOWN_MS,
@@ -247,19 +247,28 @@ export const beginSend = internalMutation({
 
     const now = Date.now();
     const row = await rowFor(ctx, address);
-    if (!row) return { allowed: true, retryAt: 0 };
+    return describeSendGate(row, now);
+  },
+});
 
-    const resendAt = row.lastCodeSentAt + RESEND_COOLDOWN_MS;
-    if (resendAt > now) return { allowed: false, retryAt: resendAt };
-
-    const windowStart = row.sendWindowStart ?? 0;
-    const windowOpen = now - windowStart < HOUR_MS;
-    const sent = windowOpen ? (row.sendWindowCount ?? 0) : 0;
-    if (sent >= MAX_SENDS_PER_HOUR) {
-      return { allowed: false, retryAt: windowStart + HOUR_MS };
-    }
-
-    return { allowed: true, retryAt: 0 };
+/**
+ * Read-only pre-check of the same limits, asked by the exported `signIn`
+ * action before Convex Auth runs.
+ *
+ * The library stores a new verification code *before* it calls the provider,
+ * and that write deletes the previous code. A refusal inside the provider
+ * therefore used to leave the student holding a code that no longer existed;
+ * checking here first means a refused re-send changes nothing.
+ *
+ * It reads only the address's own guard row: no IP bucket is consumed, and the
+ * provider still records the send (and its IP cost) once the library calls it.
+ */
+export const sendGate = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    const address = normaliseEmail(email);
+    if (!address) return { allowed: true, retryAt: 0 };
+    return describeSendGate(await rowFor(ctx, address), Date.now());
   },
 });
 

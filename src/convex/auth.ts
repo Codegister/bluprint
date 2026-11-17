@@ -9,6 +9,7 @@ import {
 } from "./_generated/server";
 import { emailOtp } from "./auth/emailOtp";
 import { randomAvatarId } from "../lib/avatars";
+import { sendRefusalMessage } from "./lib/otpLimits";
 
 /**
  * The auth configuration also owns the two server-side protections that cannot
@@ -214,6 +215,28 @@ export const signIn = action({
     calledBy: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<AuthSignInResult> => {
+    // A send is refused here, before Convex Auth runs, because the library
+    // writes the new verification code *before* it calls the provider — and
+    // that write deletes the previous code. Refusing inside the provider would
+    // therefore invalidate the code the student already has while also failing
+    // to email a replacement. Checked first, a refused re-send leaves the
+    // current code working; the provider still records the send (and its IP
+    // cost) once this check has passed.
+    const sendEmail =
+      typeof args.params?.email === "string" ? args.params.email : "";
+    const sendingEmailCode =
+      sendEmail.length > 0 &&
+      args.params?.code === undefined &&
+      (args.provider === undefined || args.provider === "email-otp");
+    if (sendingEmailCode) {
+      const gate = await ctx.runQuery(internal.otpGuard.sendGate, {
+        email: sendEmail,
+      });
+      if (!gate.allowed) {
+        throw new Error(sendRefusalMessage(gate.retryAt, Date.now()));
+      }
+    }
+
     const verifyingEmailCode =
       args.params?.code !== undefined &&
       (args.provider === undefined || args.provider === "email-otp");

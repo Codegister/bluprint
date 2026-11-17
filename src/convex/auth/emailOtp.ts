@@ -4,6 +4,7 @@ import { RandomReader, generateRandomString } from "@oslojs/crypto/random";
 import axios from "axios";
 import type { GenericDataModel } from "convex/server";
 import { internal } from "../_generated/api";
+import { sendRefusalMessage } from "../lib/otpLimits";
 import { signInEmail } from "../lib/signInEmail";
 
 /**
@@ -36,17 +37,10 @@ export const emailOtp = Email({
     // The cooldown and hourly cap are checked here, server-side, before the
     // gateway is asked to send anything. The browser can neither skip nor
     // reset them.
-    const now = Date.now();
     const gate = await ctx.runMutation(internal.otpGuard.beginSend, { email });
-    if (!gate.allowed) {
-      const wait =
-        gate.retryAt > now ? Math.ceil((gate.retryAt - now) / 1000) : 0;
-      throw new Error(
-        wait > 0
-          ? `A code was requested recently. Try again in ${wait}s.`
-          : "Too many codes have been requested for this address. Try again later.",
-      );
-    }
+    // The same sentence the sign-in wrapper uses, so a send refused here and a
+    // send refused before the code was written read identically.
+    if (!gate.allowed) throw new Error(sendRefusalMessage(gate.retryAt, Date.now()));
 
     try {
       const message = signInEmail({ code: token });
