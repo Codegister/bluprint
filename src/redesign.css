@@ -560,8 +560,8 @@ select {
   font-family: var(--font-mono);
   font-size: 0.64rem;
   font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
   color: var(--ink-muted);
 }
 
@@ -643,8 +643,8 @@ select {
   font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
   color: var(--accent);
 }
 
@@ -813,8 +813,8 @@ select {
   font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 500;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
   color: var(--ink-muted);
 }
 
@@ -919,7 +919,7 @@ select {
   font-family: var(--font-mono);
   font-size: 0.64rem;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--ink-muted);
 }
 
@@ -1427,8 +1427,8 @@ select {
 .moment-label {
   font-family: var(--font-mono);
   font-size: 0.58rem;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
   color: var(--accent-deep);
 }
 
@@ -2140,8 +2140,8 @@ select {
   font-family: var(--font-mono);
   font-size: 0.63rem;
   font-weight: 500;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
   color: var(--ink);
 }
 
@@ -2179,8 +2179,8 @@ select {
 .setup-label {
   color: var(--ink);
   font-size: 0.6rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .setup-count {
@@ -2496,8 +2496,8 @@ select {
   font-family: var(--font-mono);
   font-size: 0.55rem;
   font-weight: 500;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .auth-stack p {

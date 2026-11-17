@@ -255,12 +255,6 @@ html {
 
 body {
   background-color: var(--desk);
-  background-image:
-    radial-gradient(58% 34% at 100% 0%, color-mix(in srgb, var(--signal) 5%, transparent), transparent 72%),
-    radial-gradient(46% 40% at 0% 100%, color-mix(in srgb, var(--storm) 28%, transparent), transparent 76%),
-    linear-gradient(color-mix(in srgb, var(--desk-line) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--desk-line) 16%, transparent) 1px, transparent 1px);
-  background-size: auto, auto, 56px 56px, 56px 56px;
   color: var(--desk-ink);
   font-family: var(--font-sans);
 }
@@ -272,7 +266,7 @@ body {
 
 :is(h1, h2, h3, h4, .font-display, .page-title, .home-title, .set-section-title, .set-title-text) {
   font-family: var(--font-display) !important;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.04em;
 }
 
@@ -284,7 +278,7 @@ body {
   font-family: var(--font-mono) !important;
   font-weight: 600 !important;
   letter-spacing: 0.12em !important;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 /* Focus is an instrument light, not a soft halo. */
@@ -365,13 +359,11 @@ body {
   .auth-submit
 ):not(:disabled) {
   border: 1px solid var(--signal) !important;
-  border-radius: 999px !important;
+  border-radius: 10px !important;
   background: var(--signal) !important;
   color: var(--signal-ink) !important;
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--signal) 18%, transparent),
-    0 12px 32px -18px color-mix(in srgb, var(--signal) 65%, transparent) !important;
-  font-weight: 700 !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent) !important;
+  font-weight: 500 !important;
 }
 
 :is(#root, #preview-root) :is(
@@ -384,7 +376,6 @@ body {
   border-color: var(--signal) !important;
   background: color-mix(in srgb, var(--signal) 86%, white) !important;
   color: var(--signal-ink) !important;
-  transform: translateY(-1px);
 }
 
 /* Dialogs and popovers are portaled to <body>, outside the app root. The dark
@@ -408,13 +399,11 @@ body {
   .auth-submit
 ):not(:disabled) {
   border: 1px solid var(--signal) !important;
-  border-radius: 999px !important;
+  border-radius: 10px !important;
   background: var(--signal) !important;
   color: var(--signal-ink) !important;
-  box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--signal) 18%, transparent),
-    0 12px 32px -18px color-mix(in srgb, var(--signal) 65%, transparent) !important;
-  font-weight: 700 !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent) !important;
+  font-weight: 500 !important;
 }
 
 :is(
@@ -434,7 +423,6 @@ body {
   border-color: var(--signal) !important;
   background: color-mix(in srgb, var(--signal) 86%, white) !important;
   color: var(--signal-ink) !important;
-  transform: translateY(-1px);
 }
 
 /* Disabled primary actions in a portal cannot inherit the dark palette's
@@ -462,7 +450,7 @@ body {
 }
 
 :is(#root, #preview-root) :is(.stage-button, .set-start, .auth-submit) {
-  border-radius: 999px !important;
+  border-radius: 10px !important;
 }
 
 /* Secondary controls are glass, not white paper. */
@@ -605,26 +593,7 @@ body {
 }
 
 .stage-home {
-  background:
-    radial-gradient(70% 48% at 86% 2%, color-mix(in srgb, var(--signal) 26%, transparent), transparent 62%),
-    radial-gradient(48% 40% at 6% 65%, color-mix(in srgb, #44e5b0 12%, transparent), transparent 70%),
-    var(--stage);
-  color: var(--stage-ink);
-  font-size: 17px;
-}
-
-.stage-home::before {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  display: block !important;
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--signal) 9%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--signal) 9%, transparent) 1px, transparent 1px);
-  background-size: 72px 72px;
-  content: "";
-  mask-image: radial-gradient(80% 70% at 52% 28%, #000 0%, transparent 85%);
-  pointer-events: none;
+  background: var(--stage);
 }
 
 .stage-home > * {
@@ -641,9 +610,8 @@ body {
   position: sticky;
   top: 0;
   z-index: 20;
-  border-bottom: 1px solid color-mix(in srgb, var(--signal) 16%, var(--stage-line));
-  background: color-mix(in srgb, var(--stage) 78%, transparent);
-  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--stage-line);
+  background: color-mix(in srgb, var(--stage) 92%, transparent);
 }
 
 .home-header-inner {
@@ -669,11 +637,10 @@ body {
 .home-nav a,
 .home-signin {
   color: var(--stage-muted);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
   text-decoration: none;
-  text-transform: uppercase;
 }
 
 .home-nav a:hover,
@@ -685,21 +652,17 @@ body {
   display: inline-flex;
   min-height: 38px;
   align-items: center;
-  border: 1px solid var(--stage-line);
-  border-radius: 999px;
-  padding-inline: 16px;
-  background: color-mix(in srgb, var(--stage-raised) 64%, transparent);
+  padding-inline: 2px;
   color: var(--stage-ink);
   text-decoration: none;
 }
 
 .home-signin:hover {
-  border-color: color-mix(in srgb, var(--signal) 55%, var(--stage-line));
   color: var(--signal);
 }
 
 .home-hero {
-  min-height: min(800px, calc(100svh - 69px));
+  min-height: min(680px, calc(100svh - 69px));
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: clamp(38px, 6vw, 92px);
   padding-block: clamp(52px, 8vh, 96px) clamp(64px, 9vh, 112px);
@@ -707,26 +670,6 @@ body {
 
 .home-hero::before {
   background: var(--stage);
-}
-
-/* A slow desk-lamp glow and storm haze. The layer only moves on the
-   compositor; the text sits above it and never moves. */
-.home-hero::after {
-  content: "";
-  position: absolute;
-  inset-block: -12%;
-  left: 50%;
-  z-index: -1;
-  width: 100vw;
-  transform: translateX(-50%);
-  background:
-    radial-gradient(36% 44% at 22% 30%, color-mix(in srgb, var(--signal) 30%, transparent), transparent 68%),
-    radial-gradient(46% 54% at 82% 68%, color-mix(in srgb, var(--storm) 86%, transparent), transparent 74%),
-    linear-gradient(112deg, transparent 34%, color-mix(in srgb, var(--signal) 20%, transparent) 49%, transparent 64%);
-  animation: hero-ambient 16s ease-in-out infinite;
-  animation-delay: -6s;
-  pointer-events: none;
-  will-change: transform;
 }
 
 .home-hero-copy {
@@ -741,25 +684,24 @@ body {
 }
 
 .home-kicker::before {
-  width: 26px;
+  width: 24px;
   background: var(--signal);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--signal) 60%, transparent);
 }
 
 .home-title {
   max-width: 12.5ch;
-  margin-top: 22px;
+  margin-top: 24px;
   color: var(--stage-ink);
   font-size: clamp(3rem, 5.1vw, 4.9rem);
-  font-weight: 700;
-  letter-spacing: -0.065em;
-  line-height: 0.95;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
   text-wrap: balance;
 }
 
 .home-lede {
   max-width: 44ch;
-  margin-top: 22px;
+  margin-top: 24px;
   color: color-mix(in srgb, var(--stage-muted) 92%, white);
   font-size: 17px;
   line-height: 1.65;
@@ -767,8 +709,8 @@ body {
 
 .home-build {
   max-width: 34rem;
-  margin-top: 34px;
-  border: 1px solid color-mix(in srgb, var(--signal) 14%, var(--stage-line));
+  margin-top: 32px;
+  border: 1px solid var(--stage-line);
   border-radius: 12px;
   background: color-mix(in srgb, var(--stage-raised) 62%, transparent);
   box-shadow:
@@ -779,14 +721,13 @@ body {
 }
 
 .home-build-label {
-  margin-bottom: 9px;
+  margin-bottom: 8px;
   color: var(--stage-muted);
   font-family: var(--font-mono);
-  font-size: 10px !important;
+  font-size: 12px !important;
   font-weight: 500 !important;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.01em;
   line-height: 1.4;
-  text-transform: uppercase;
 }
 
 .home-build-row {
@@ -825,7 +766,7 @@ body {
 }
 
 .home-build-hint {
-  margin-top: 9px !important;
+  margin-top: 8px !important;
   color: color-mix(in srgb, var(--stage-muted) 76%, transparent) !important;
 }
 
@@ -854,30 +795,13 @@ body {
   padding: 8px 0 0;
 }
 
-.home-paper-field::before {
-  position: absolute;
-  inset: -14% -10% -8%;
-  z-index: -1;
-  border-radius: 50%;
-  background:
-    radial-gradient(closest-side, color-mix(in srgb, var(--storm) 58%, transparent), transparent 76%),
-    radial-gradient(closest-side, color-mix(in srgb, var(--signal) 11%, transparent), transparent 78%);
-  content: "";
-  filter: blur(10px);
-  pointer-events: none;
-}
-
 .home-paper {
   position: relative;
-  border: 1px solid color-mix(in srgb, var(--signal) 12%, var(--stage-line));
+  border: 1px solid var(--stage-line);
   border-radius: 10px;
-  background:
-    linear-gradient(150deg, color-mix(in srgb, var(--signal) 5%, var(--stage-raised)), var(--stage-raised) 58%);
+  background: var(--stage-raised);
   color: var(--stage-ink);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    0 30px 70px -48px #000;
-  backdrop-filter: blur(16px);
+  box-shadow: 0 24px 60px -48px #000;
 }
 
 .home-paper-spec {
@@ -933,14 +857,13 @@ body {
   gap: 12px;
   color: var(--stage-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  letter-spacing: 0.01em;
   line-height: 1.4;
-  text-transform: uppercase;
 }
 
 .home-paper-spec-copy {
-  margin-top: 18px;
+  margin-top: 16px;
   color: color-mix(in srgb, var(--stage-ink) 80%, var(--stage-muted));
   font-size: 14px;
   line-height: 1.55;
@@ -951,9 +874,9 @@ body {
   margin-top: 24px;
   color: var(--stage-ink);
   font-size: clamp(1.9rem, 3.4vw, 2.8rem);
-  font-weight: 700;
-  letter-spacing: -0.055em;
-  line-height: 0.98;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
 }
 
 .home-paper-facts {
@@ -970,9 +893,8 @@ body {
   border-top: 1px solid var(--stage-line);
   color: var(--stage-muted);
   font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.01em;
 }
 
 .home-paper-cover-foot strong {
@@ -992,7 +914,7 @@ body {
 }
 
 .home-flash-answer {
-  margin-top: 14px;
+  margin-top: 16px;
   border-left: 2px solid var(--signal);
   padding-left: 12px;
   color: var(--stage-muted);
@@ -1015,16 +937,15 @@ body {
   align-items: center;
   gap: 8px;
   margin-top: 12px;
-  border: 1px solid color-mix(in srgb, var(--signal) 35%, var(--stage-line));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--signal) 8%, transparent);
-  padding-inline: 12px;
-  color: var(--signal);
+  border: 1px solid var(--stage-line);
+  border-radius: 6px;
+  background: var(--stage-raised);
+  padding-inline: 10px;
+  color: var(--stage-ink);
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .home-flash-reveal:hover {
@@ -1033,14 +954,13 @@ body {
 }
 
 .home-paper-flash-foot {
-  margin-top: 18px;
-  padding-top: 10px;
+  margin-top: 16px;
+  padding-top: 12px;
   border-top: 1px solid var(--stage-line);
   color: var(--stage-muted);
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.01em;
 }
 
 .home-paper-flash-foot strong {
@@ -1062,20 +982,6 @@ body {
   padding-block: clamp(80px, 12vh, 150px);
 }
 
-.home-process::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(42% 58% at 86% 8%, color-mix(in srgb, var(--signal) 22%, transparent), transparent 72%),
-    radial-gradient(50% 70% at 12% 88%, color-mix(in srgb, var(--storm-raised) 78%, transparent), transparent 76%);
-  animation: section-ambient 18s ease-in-out infinite;
-  animation-delay: -9s;
-  pointer-events: none;
-  will-change: transform;
-}
-
 .home-process .home-kicker {
   color: var(--signal-deep);
 }
@@ -1086,24 +992,24 @@ body {
 
 .home-section-title {
   max-width: 13ch;
-  margin-top: 18px;
+  margin-top: 16px;
   color: var(--storm-ink);
   font-size: clamp(2.2rem, 4.3vw, 3.65rem);
-  font-weight: 700;
-  letter-spacing: -0.06em;
-  line-height: 0.98;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
 }
 
 .home-steps {
   max-width: 36rem;
-  margin-top: 42px;
+  margin-top: 40px;
   border-top: 1px solid var(--storm-line);
 }
 
 .home-step {
   grid-template-columns: 56px minmax(0, 1fr);
-  gap: 18px;
-  padding-block: 22px;
+  gap: 16px;
+  padding-block: 24px;
   border-bottom: 1px solid var(--storm-line);
 }
 
@@ -1135,8 +1041,7 @@ body {
   transform: rotate(-1.1deg);
   border: 1px solid color-mix(in srgb, var(--mark-ink) 16%, var(--mark-paper));
   border-radius: 3px;
-  background:
-    linear-gradient(150deg, #fbfcfc, var(--mark-paper) 54%);
+  background: var(--mark-paper);
   color: var(--mark-ink);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.7),
@@ -1158,12 +1063,12 @@ body {
   color: var(--mark-muted);
   font-family: var(--font-mono);
   font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .home-mark-score {
-  margin-top: 34px;
+  margin-top: 32px;
   color: var(--mark-ink);
   font-family: var(--font-serif) !important;
   font-size: clamp(3.2rem, 7vw, 5.2rem);
@@ -1197,15 +1102,14 @@ body {
   gap: 8px;
   margin-top: 24px;
   border: 1px solid color-mix(in srgb, var(--mark-ink) 22%, transparent);
-  border-radius: 3px;
+  border-radius: 4px;
   background: color-mix(in srgb, var(--signal) 46%, var(--mark-paper));
-  padding: 6px 10px;
+  padding: 8px 12px;
   color: var(--mark-ink);
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .home-mark-note::before {
@@ -1226,11 +1130,9 @@ body {
 .home-close-inner {
   border: 1px solid var(--signal);
   border-radius: 16px;
-  background:
-    radial-gradient(60% 120% at 100% 0%, color-mix(in srgb, white 22%, transparent), transparent 70%),
-    var(--signal);
+  background: var(--signal);
   color: var(--signal-ink);
-  box-shadow: 0 40px 100px -60px color-mix(in srgb, var(--signal) 60%, transparent);
+  box-shadow: 0 32px 80px -60px rgba(0, 0, 0, 0.7);
   padding: clamp(26px, 5vw, 56px);
 }
 
@@ -1247,15 +1149,15 @@ body {
   margin-top: 16px;
   color: var(--signal-ink);
   font-size: clamp(2.3rem, 5vw, 4.4rem);
-  font-weight: 700;
-  letter-spacing: -0.065em;
-  line-height: 0.93;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.0;
 }
 
 .home-close .stage-button {
   margin-top: 30px;
   border: 1px solid var(--signal-ink) !important;
-  border-radius: 999px !important;
+  border-radius: 10px !important;
   background: var(--signal-ink) !important;
   color: var(--signal) !important;
   box-shadow: none !important;
@@ -1292,15 +1194,13 @@ body {
 .stage-shell > aside,
 .stage-shell .app-rail {
   border-color: var(--stage-line) !important;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--signal) 4%, var(--stage)) 0%, var(--stage) 28%),
-    var(--stage) !important;
+  background: var(--stage) !important;
 }
 
 .stage-shell .app-rail-link {
-  min-height: 43px;
+  min-height: 40px;
   border: 1px solid transparent !important;
-  border-radius: 999px !important;
+  border-radius: 8px !important;
   color: var(--stage-muted) !important;
   font-size: 13px !important;
   font-weight: 500 !important;
@@ -1363,46 +1263,6 @@ body {
   background-size: 64px 64px, 64px 64px, auto, auto, auto;
 }
 
-/* The working desk breathes behind the cards, not through them. The two
-   coloured fields are deliberately much stronger than a watermark: on a
-   large light page the previous wash disappeared into the paper. The grid
-   lives on the static surface above, so only the orange wash flows. */
-.stage-shell .app-main::before {
-  content: "";
-  position: absolute;
-  inset: -14%;
-  z-index: -1;
-  background:
-    radial-gradient(38% 44% at 14% 16%, color-mix(in srgb, var(--signal) 44%, transparent), transparent 66%),
-    radial-gradient(44% 54% at 84% 76%, color-mix(in srgb, var(--storm) 88%, transparent), transparent 70%);
-  background-size: auto, auto;
-  animation: desk-ambient 14s ease-in-out infinite;
-  animation-delay: -7s;
-  pointer-events: none;
-  will-change: transform;
-}
-
-/* A single slow light sweep crosses the desk. It is one more cue that the page
-   is alive, and it reads at a glance even when the base wash is behind a card. */
-.stage-shell .app-main::after {
-  content: "";
-  position: absolute;
-  inset: -30% -35%;
-  z-index: -1;
-  background: linear-gradient(
-    110deg,
-    transparent 38%,
-    color-mix(in srgb, var(--signal) 22%, transparent) 49%,
-    transparent 60%
-  );
-  animation: ambient-sweep 12s ease-in-out infinite;
-  animation-delay: -5s;
-  pointer-events: none;
-  will-change: transform;
-}
-
-/* The wrapper repeats the desk colour; clear it so the ambient wash above
-   the main surface can read through. The main element still owns the fill. */
 .stage-shell .app-content {
   background: transparent !important;
 }
@@ -1712,8 +1572,8 @@ body {
 .set-back {
   font-family: var(--font-mono);
   font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .set-menu-trigger {
@@ -1826,7 +1686,7 @@ body {
   font-family: var(--font-mono);
   font-size: 10px !important;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .set-sticky-start {
@@ -1975,7 +1835,7 @@ body {
   font-size: 10px !important;
   font-weight: 600 !important;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 :is(#root, #preview-root) .set-screen[data-section="cards"] .set-mode .surface-card > .flex:first-child p:first-child {
@@ -2230,7 +2090,7 @@ body {
   font-family: var(--font-mono);
   font-size: 9px !important;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 :is(#root, #preview-root) .course-screen .course-tabs a:hover {
@@ -2618,33 +2478,8 @@ body {
   }
 }
 
-@keyframes desk-ambient {
-  0%,
-  100% {
-    transform: translate3d(-4%, -2%, 0) scale(1.08);
-  }
-
-  50% {
-    transform: translate3d(6%, 4%, 0) scale(1.18);
-  }
-}
-
-@keyframes ambient-sweep {
-  0%,
-  100% {
-    transform: translate3d(-18%, -1%, 0) rotate(-1deg);
-  }
-
-  50% {
-    transform: translate3d(18%, 1%, 0) rotate(1deg);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .home-hero::after {
-    transform: translateX(-50%);
-  }
-
+  
   .home-paper,
   .set-action,
   .stage-button,
@@ -3196,15 +3031,11 @@ html:not(.dark) body {
   .set-start,
   .auth-submit
 ) {
-  border-color: color-mix(in srgb, var(--signal) 72%, var(--glass-highlight)) !important;
-  border-radius: var(--radius-soft-sm) !important;
-  background: var(--glass-signal-bg) !important;
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
-    0 16px 34px -24px color-mix(in srgb, var(--signal) 64%, transparent) !important;
+  border-color: var(--signal) !important;
+  border-radius: 10px !important;
+  background: var(--signal) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent) !important;
   color: var(--signal-ink) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  backdrop-filter: blur(14px) saturate(1.2);
 }
 
 /* Set screens are outside the app shell, so they get their own glass scope. */
@@ -3465,11 +3296,9 @@ html:not(.dark) body {
 }
 
 :root :is(#root, #preview-root) :is(.today-screen, .timetable-screen) .page-actions > [data-slot="button"][data-variant="default"] {
-  border-color: color-mix(in srgb, var(--signal) 72%, var(--glass-highlight)) !important;
-  background: var(--glass-signal-bg) !important;
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 30%, transparent),
-    0 16px 34px -24px color-mix(in srgb, var(--signal) 64%, transparent) !important;
+  border-color: var(--signal) !important;
+  background: var(--signal) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent) !important;
   color: var(--signal-ink) !important;
 }
 
@@ -3484,12 +3313,10 @@ html:not(.dark) body {
 
 :root :is(#root, #preview-root) .stage-home .home-close .stage-button {
   border-color: var(--signal-ink) !important;
-  border-radius: var(--radius-soft-sm) !important;
+  border-radius: 10px !important;
   background: var(--signal-ink) !important;
   box-shadow: none !important;
   color: var(--signal) !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 /* Menus, sheets and dialogs --------------------------------------------- */
@@ -3545,14 +3372,10 @@ html:not(.dark) body {
 }
 
 :is(#root, #preview-root) .stage-home :is(.home-build, .home-paper) {
-  border-color: var(--glass-line) !important;
-  border-radius: var(--radius-soft-lg) !important;
-  background: var(--glass-card-bg) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(1.16);
-  backdrop-filter: blur(22px) saturate(1.16);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    var(--glass-shadow) !important;
+  border-color: var(--stage-line) !important;
+  border-radius: 12px !important;
+  background: var(--stage-raised) !important;
+  box-shadow: 0 24px 60px -52px #000 !important;
 }
 
 :is(#root, #preview-root) .stage-home .home-paper-spec {
@@ -3573,20 +3396,14 @@ html:not(.dark) body {
 }
 
 :is(#root, #preview-root) .stage-home .home-process {
-  background: var(--glass-sheen), color-mix(in srgb, var(--storm) 78%, transparent) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.12);
-  backdrop-filter: blur(24px) saturate(1.12);
+  background: var(--storm) !important;
 }
 
 :is(#root, #preview-root) .stage-home .home-close-inner {
-  border-color: color-mix(in srgb, var(--signal) 62%, var(--glass-highlight)) !important;
-  border-radius: var(--radius-soft-xl) !important;
-  background: var(--glass-signal-bg) !important;
-  -webkit-backdrop-filter: blur(26px) saturate(1.2);
-  backdrop-filter: blur(26px) saturate(1.2);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, white 26%, transparent),
-    0 36px 90px -58px color-mix(in srgb, var(--signal) 66%, transparent) !important;
+  border-color: var(--signal) !important;
+  border-radius: 16px !important;
+  background: var(--signal) !important;
+  box-shadow: 0 32px 80px -60px rgba(0, 0, 0, 0.7) !important;
 }
 
 :is(#root, #preview-root) .auth-page :is(.auth-card, .auth-stack-sheet) {
@@ -3636,53 +3453,11 @@ html:not(.dark) body {
 }
 
 /* Standalone set stage ----------------------------------------------------
-   A set opens outside the app rail, but its cover and desk should still sit
-   on the same living surface as the rest of the workspace. The identity bar
-   remains opaque; the cover and desk let the ambient fields read through.
+   A set opens outside the app rail on the same flat desk as the workspace.
    ------------------------------------------------------------------------- */
 
 :is(#root, #preview-root) .set-screen {
-  position: relative;
-  isolation: isolate;
-  overflow: clip;
-  background:
-    radial-gradient(52% 42% at 100% 0%, color-mix(in srgb, var(--signal) 18%, transparent), transparent 70%),
-    radial-gradient(40% 48% at 0% 100%, color-mix(in srgb, var(--storm) 54%, transparent), transparent 76%),
-    var(--desk) !important;
-}
-
-:is(#root, #preview-root) .set-screen::before {
-  content: "";
-  position: absolute;
-  inset: -14%;
-  z-index: -1;
-  background:
-    radial-gradient(38% 44% at 14% 16%, color-mix(in srgb, var(--signal) 44%, transparent), transparent 66%),
-    radial-gradient(44% 54% at 84% 76%, color-mix(in srgb, var(--storm) 88%, transparent), transparent 70%),
-    linear-gradient(color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--desk-line) 46%, transparent) 1px, transparent 1px);
-  background-size: auto, auto, 64px 64px, 64px 64px;
-  animation: desk-ambient 14s ease-in-out infinite;
-  animation-delay: -7s;
-  pointer-events: none;
-  will-change: transform;
-}
-
-:is(#root, #preview-root) .set-screen::after {
-  content: "";
-  position: absolute;
-  inset: -30% -35%;
-  z-index: -1;
-  background: linear-gradient(
-    110deg,
-    transparent 38%,
-    color-mix(in srgb, var(--signal) 22%, transparent) 49%,
-    transparent 60%
-  );
-  animation: ambient-sweep 12s ease-in-out infinite;
-  animation-delay: -5s;
-  pointer-events: none;
-  will-change: transform;
+  background: var(--desk) !important;
 }
 
 /* The stage and desk carry the set's layout, not a second opaque fill. */
@@ -3690,83 +3465,24 @@ html:not(.dark) body {
   background: transparent !important;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  :is(#root, #preview-root) .set-screen::before,
-  :is(#root, #preview-root) .set-screen::after {
-    animation: none !important;
-    will-change: auto;
-  }
-}
-
 /* Course and past-paper detail screens are rendered inside the app shell, so
-   they already sit on the shared ambient surface. Keep their roots
-   transparent so no page-level fill can mask the grid or the sweep. */
+   their roots stay transparent and let the shell supply the ground. */
 :is(#root, #preview-root) :is(.course-screen, .past-paper-screen) {
   background: transparent !important;
 }
 
-/* Identity covers are the first large panel on these pages. A lighter peach
-   tint lets the desk grid pass through instead of turning the cover back into
-   an opaque card; the low blur keeps the lines readable while softening the
-   moving wash directly behind the title. */
+/* Identity covers are the first large panel on these pages, so they get the
+   raised paper surface rather than a translucent card. */
 :is(#root, #preview-root) :is(.app-main, .focus-main) :is(.course-screen, .past-paper-screen) :is(.course-cover, .past-paper-cover) {
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, white 14%, transparent) 0%,
-      color-mix(in srgb, white 4%, transparent) 26%,
-      transparent 48%
-    ),
-    linear-gradient(
-      152deg,
-      color-mix(in srgb, var(--signal) 6%, color-mix(in srgb, var(--desk-raised) 50%, transparent)) 0%,
-      color-mix(in srgb, var(--desk-raised) 42%, transparent) 58%,
-      color-mix(in srgb, var(--desk-raised) 36%, transparent) 100%
-    ) !important;
-  -webkit-backdrop-filter: blur(1px) saturate(1.08);
-  backdrop-filter: blur(1px) saturate(1.08);
+  background: var(--desk-raised) !important;
 }
 
 /* The facts strip continues the cover's glass band rather than switching back
    to opaque paper immediately below it. */
 :is(#root, #preview-root) .stage-shell .app-main .course-screen .course-facts {
-  border-color: var(--glass-line) !important;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, white 12%, transparent) 0%,
-      color-mix(in srgb, white 3%, transparent) 30%,
-      transparent 52%
-    ),
-    linear-gradient(
-      152deg,
-      color-mix(in srgb, var(--signal) 5%, color-mix(in srgb, var(--desk-raised) 50%, transparent)) 0%,
-      color-mix(in srgb, var(--desk-raised) 42%, transparent) 60%,
-      color-mix(in srgb, var(--desk-raised) 36%, transparent) 100%
-    ) !important;
-  -webkit-backdrop-filter: blur(1px) saturate(1.08);
-  backdrop-filter: blur(1px) saturate(1.08);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    var(--glass-shadow) !important;
-}
-
-/* Landing lava ------------------------------------------------------------
-   The public stage gets a slow molten field rather than a static glow. Four
-   blurred colour blooms drift, rotate and change position at different rates
-   behind the page grid; the hero keeps a translucent veil so the copy stays
-   readable while the heat moves underneath it.
-   ------------------------------------------------------------------------- */
-
-.stage-home {
-  --lava-hot: #ff5a1f;
-  --lava-mid: #c92a00;
-  --lava-deep: #701407;
-  --lava-amber: #ffb347;
-  background:
-    radial-gradient(52% 48% at 78% 8%, color-mix(in srgb, var(--lava-mid) 18%, transparent), transparent 68%),
-    radial-gradient(42% 38% at 14% 76%, color-mix(in srgb, var(--lava-hot) 10%, transparent), transparent 72%),
-    var(--stage);
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  box-shadow: none !important;
 }
 
 .stage-home::before {
@@ -3777,102 +3493,9 @@ html:not(.dark) body {
   z-index: 2;
 }
 
-.stage-home::after {
-  content: "";
-  position: fixed;
-  inset: -18%;
-  z-index: 0;
-  background:
-    radial-gradient(38% 44% at 18% 30%, color-mix(in srgb, var(--lava-hot) 76%, transparent), transparent 68%),
-    radial-gradient(34% 50% at 78% 58%, color-mix(in srgb, var(--lava-mid) 84%, transparent), transparent 70%),
-    radial-gradient(52% 46% at 54% 102%, color-mix(in srgb, var(--lava-deep) 92%, transparent), transparent 72%),
-    radial-gradient(26% 30% at 86% 16%, color-mix(in srgb, var(--lava-amber) 68%, transparent), transparent 70%);
-  background-size: 120% 125%, 115% 130%, 140% 130%, 100% 115%;
-  background-position: 0% 0%, 100% 100%, 50% 120%, 80% 0%;
-  filter: blur(22px) saturate(1.35);
-  animation: lava-flow 22s ease-in-out infinite;
-  animation-delay: -8s;
-  opacity: 0.88;
-  pointer-events: none;
-  will-change: transform, background-position;
-}
 
 .home-hero::before {
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--stage) 90%, transparent) 0%,
-      color-mix(in srgb, var(--stage) 72%, transparent) 42%,
-      color-mix(in srgb, var(--stage) 34%, transparent) 78%,
-      transparent 100%
-    ),
-    linear-gradient(180deg, color-mix(in srgb, var(--stage) 48%, transparent), transparent 30%);
-}
-
-.home-hero::after {
-  z-index: -2;
-  background:
-    radial-gradient(32% 28% at 28% 64%, color-mix(in srgb, var(--lava-hot) 76%, transparent), transparent 70%),
-    radial-gradient(24% 24% at 70% 28%, color-mix(in srgb, var(--lava-amber) 58%, transparent), transparent 72%),
-    radial-gradient(48% 38% at 56% 112%, color-mix(in srgb, var(--lava-mid) 75%, transparent), transparent 72%);
-  filter: blur(16px) saturate(1.3);
-  animation: lava-hero 16s ease-in-out infinite;
-  animation-delay: -5s;
-  opacity: 0.9;
-}
-
-@keyframes lava-flow {
-  0%,
-  100% {
-    transform: translate3d(-4%, -2%, 0) rotate(-2deg) scale(1.08);
-    background-position: 0% 0%, 100% 100%, 50% 120%, 80% 0%;
-  }
-
-  33% {
-    transform: translate3d(3%, 4%, 0) rotate(2deg) scale(1.15);
-    background-position: 16% 12%, 84% 80%, 40% 92%, 64% 18%;
-  }
-
-  66% {
-    transform: translate3d(5%, -3%, 0) rotate(-1deg) scale(1.1);
-    background-position: 28% 6%, 70% 92%, 62% 108%, 92% 12%;
-  }
-}
-
-@keyframes lava-hero {
-  0%,
-  100% {
-    transform: translateX(-50%) translate3d(-3%, 2%, 0) scale(1.06) rotate(-2deg);
-  }
-
-  50% {
-    transform: translateX(-50%) translate3d(3%, -4%, 0) scale(1.16) rotate(2deg);
-  }
-}
-
-:root:not(.dark) .stage-home {
-  --lava-hot: #df6a3f;
-  --lava-mid: #bf4b2c;
-  --lava-deep: #963a26;
-  --lava-amber: #e8aa5f;
-}
-
-:root:not(.dark) .stage-home::after {
-  filter: blur(26px) saturate(1.2);
-  opacity: 0.46;
-}
-
-:root:not(.dark) .home-hero::after {
-  filter: blur(18px) saturate(1.15);
-  opacity: 0.52;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .stage-home::after,
-  .home-hero::after {
-    animation: none !important;
-    will-change: auto;
-  }
+  background: var(--stage);
 }
 
 /* Selection and pressed states ------------------------------------------- */
@@ -3892,49 +3515,37 @@ html:not(.dark) body {
    white surface as an untouched row. Give the whole row the signal tint so
    the check mark is not the only cue. */
 :is(#root, #preview-root) .app-main .setup-subject-row[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--signal) 10%, var(--desk-raised)) 0%,
-      color-mix(in srgb, var(--signal) 5%, var(--desk-raised)) 100%
-    ) !important;
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--signal) 15%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 26%, transparent) !important;
+  border-color: var(--signal) !important;
+  background: color-mix(in srgb, var(--signal) 10%, var(--desk-raised)) !important;
+  box-shadow: none !important;
 }
 
 :is(#root, #preview-root) .app-main .setup-subject-row[aria-pressed="true"]:hover {
-  border-color: color-mix(in srgb, var(--signal) 68%, var(--desk-line)) !important;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--signal) 14%, var(--desk-raised)) 0%,
-      color-mix(in srgb, var(--signal) 8%, var(--desk-raised)) 100%
-    ) !important;
+  border-color: var(--signal-deep) !important;
+  background: color-mix(in srgb, var(--signal) 14%, var(--desk-raised)) !important;
 }
 
 /* The past-paper summary bar uses the same tint as the course facts strip, so
    both detail pages keep the grid visible through their stats. */
 :is(#root, #preview-root) .stage-shell .app-main .past-paper-screen .past-paper-facts {
-  border-color: var(--glass-line) !important;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, white 12%, transparent) 0%,
-      color-mix(in srgb, white 3%, transparent) 30%,
-      transparent 52%
-    ),
-    linear-gradient(
-      152deg,
-      color-mix(in srgb, var(--signal) 5%, color-mix(in srgb, var(--desk-raised) 50%, transparent)) 0%,
-      color-mix(in srgb, var(--desk-raised) 42%, transparent) 60%,
-      color-mix(in srgb, var(--desk-raised) 36%, transparent) 100%
-    ) !important;
-  -webkit-backdrop-filter: blur(1px) saturate(1.08);
-  backdrop-filter: blur(1px) saturate(1.08);
-  box-shadow:
-    inset 0 1px 0 var(--glass-highlight),
-    var(--glass-shadow) !important;
+  border-color: var(--desk-line) !important;
+  background: var(--desk-raised) !important;
+  box-shadow: none !important;
 }
 
+:is(#root, #preview-root) .stage-shell .app-main h2.setup-next {
+  font-size: 0.94rem;
+  letter-spacing: -0.01em;
+}.stage-shell .guest-notice {
+  border-left-width: 1px !important;
+  border-left-color: var(--desk-line) !important;
+}
+
+/* The setup strip keeps one readable line on a phone: meta row, then the
+   next step across the full width instead of one word per line. */
+@media (max-width: 640px) {
+  .stage-shell .app-main .setup-strip > .min-w-0 {
+    flex: 1 0 100%;
+    order: 1;
+  }
+}

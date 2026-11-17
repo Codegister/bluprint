@@ -2,9 +2,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { savePendingNotes } from "@/lib/pendingNotes";
-import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 
 const MIN_NOTES = 40;
@@ -39,14 +38,6 @@ export default function Landing() {
   const [guestBusy, setGuestBusy] = useState(false);
   const [guestError, setGuestError] = useState("");
   const [demoRevealed, setDemoRevealed] = useState(false);
-
-  const heroRef = useRef<HTMLElement | null>(null);
-  const reducedMotion = useReducedMotion();
-  const { scrollYProgress } = useScroll({
-    target: heroRef,
-    offset: ["start start", "end start"],
-  });
-  const paperY = useTransform(scrollYProgress, [0, 1], [0, -26]);
 
   const trimmed = notes.trim();
   const tooShort = trimmed.length > 0 && trimmed.length < MIN_NOTES;
@@ -114,7 +105,7 @@ export default function Landing() {
       </header>
 
       <main>
-        <section ref={heroRef} className="home-wrap home-hero" aria-labelledby="home-title">
+        <section className="home-wrap home-hero" aria-labelledby="home-title">
           <div className="home-hero-copy">
             <p className="home-kicker">Revision from your notes</p>
             <h1 id="home-title" className="home-title">
@@ -144,7 +135,7 @@ export default function Landing() {
                   aria-describedby="home-notes-hint"
                 />
                 <button type="submit" className="stage-button" disabled={tooShort}>
-                  Log in
+                  Continue
                   <ArrowRight size={18} strokeWidth={1.8} aria-hidden />
                 </button>
               </div>
@@ -171,9 +162,8 @@ export default function Landing() {
             </form>
           </div>
 
-          <motion.div
+          <div
             className="home-paper-field"
-            style={reducedMotion ? undefined : { y: paperY }}
             role="group"
             aria-label="A preview of a study set"
           >
@@ -228,7 +218,7 @@ export default function Landing() {
                 <strong>2 / 2</strong>
               </div>
             </div>
-          </motion.div>
+          </div>
         </section>
 
         <section id="how" className="home-process" aria-labelledby="how-title">

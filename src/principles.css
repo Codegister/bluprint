@@ -237,7 +237,7 @@ h4 {
 }
 
 /* The desk keeps four steps: title, section, body, meta. */
-:is(#root, #preview-root) .app-main h2,
+:is(#root, #preview-root) .app-main h2:not(.setup-next),
 :is(#root, #preview-root) .auth-page h2 {
   font-family: var(--font-display) !important;
   font-size: var(--type-title) !important;
