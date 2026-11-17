@@ -4,6 +4,7 @@ import { RandomReader, generateRandomString } from "@oslojs/crypto/random";
 import axios from "axios";
 import type { GenericDataModel } from "convex/server";
 import { internal } from "../_generated/api";
+import { signInEmail } from "../lib/signInEmail";
 
 /**
  * The action context Convex Auth hands to `sendVerificationRequest` as a second
@@ -48,13 +49,20 @@ export const emailOtp = Email({
     }
 
     try {
+      const message = signInEmail({ code: token });
       await axios.post(
-        freebuffEmailOtpUrl(),
-        { to: email, otp: token },
-        { headers: freebuffEmailOtpHeaders() },
+        freebuffEmailSendUrl(),
+        {
+          to: email,
+          from: message.from,
+          subject: message.subject,
+          html: message.html,
+          text: message.text,
+        },
+        { headers: freebuffEmailHeaders() },
       );
     } catch (error) {
-      throw freebuffEmailOtpError(error);
+      throw freebuffEmailError(error);
     }
 
     // Only after the gateway accepted the mail: a failed send must not start a
@@ -65,15 +73,19 @@ export const emailOtp = Email({
 
 // Sign-in codes are sent by the Freebuff integrations gateway, which knows
 // this project by its own key: VLY_INTEGRATION_KEY, a Convex environment
-// variable set when the project was created. The email's wording is fixed by
-// the gateway.
-function freebuffEmailOtpUrl(): string {
+// variable set when the project was created.
+//
+// The gateway's `/v1/email/otp` template is deliberately not used: it names the
+// sender after the integration project's slug, so codes arrived from
+// "fancy-eggs-return" with fixed wording. Sending the app's own template through
+// `/v1/email/send` keeps the sender BluPrint.
+function freebuffEmailSendUrl(): string {
   const base =
     process.env.VLY_INTEGRATION_BASE_URL || "https://integrations.vly.ai";
-  return `${base.replace(/\/+$/, "")}/v1/email/otp`;
+  return `${base.replace(/\/+$/, "")}/v1/email/send`;
 }
 
-function freebuffEmailOtpHeaders(): Record<string, string> {
+function freebuffEmailHeaders(): Record<string, string> {
   const key = process.env.VLY_INTEGRATION_KEY;
   if (!key) {
     throw new Error(
@@ -84,7 +96,7 @@ function freebuffEmailOtpHeaders(): Record<string, string> {
 }
 
 // Never stringify the whole request error: it carries the request headers.
-function freebuffEmailOtpError(error: unknown): Error {
+function freebuffEmailError(error: unknown): Error {
   const response = (
     error as { response?: { status?: number; data?: { error?: unknown } } }
   )?.response;
