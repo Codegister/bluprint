@@ -4,6 +4,7 @@ import { internal } from "../src/convex/_generated/api";
 import type { MutationCtx } from "../src/convex/_generated/server";
 import {
   continueStudySetCards,
+  continueStudySetExams,
   continueStudySetQuiz,
   processStudySetScheduled,
   resumeStaleStudySet,
@@ -1505,6 +1506,618 @@ describe("study set reuse", () => {
     expect(
       scheduled.some(({ name }) => name === "ai:continueStudySetQuiz"),
     ).toBe(true);
+  });
+
+  test("saves each card batch before asking for the next one", async () => {
+    const tables = rowsForSource("set:incremental");
+    const set = tables.studySets[0]!;
+    set.notes = [
+      "Cells contain organelles.",
+      "The nucleus stores genetic material.",
+      "Mitochondria release energy.",
+    ].join(" ");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.cardCount = 1;
+    set.quizCount = 0;
+    set.examCount = 0;
+    set.targetCardCount = 3;
+    set.targetQuizCount = 1;
+    set.targetExamCount = 1;
+    tables.flashcards = [
+      {
+        ...tables.flashcards[0]!,
+        _id: "card:incremental",
+        setId: "set:incremental",
+        userId: "user:source",
+        front: "What do cells contain?",
+        back: "Organelles.",
+        order: 0,
+      },
+    ];
+    tables.quizQuestions = [];
+    tables.examQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    let calls = 0;
+    let cardsVisibleOnSecondRequest = -1;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      if (!/Create \d+ revision flashcards/.test(prompt)) {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      calls += 1;
+      if (calls > 1) {
+        // The first batch has been shown as built. It must already be in the
+        // database before this second request is allowed to start.
+        cardsVisibleOnSecondRequest = tables.flashcards.filter(
+          (row) => row.setId === "set:incremental",
+        ).length;
+        throw new Error("gateway stopped mid-build");
+      }
+      const content = JSON.stringify({
+        cards: [
+          {
+            front: "What does the nucleus store?",
+            back: "The nucleus stores genetic material.",
+            keyPoint: "The nucleus stores genetic material.",
+          },
+        ],
+      });
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables, { captureSchedule: true });
+      const handler = (continueStudySetCards as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<any>;
+      })._handler;
+      const result = await handler(action, {
+        setId: "set:incremental",
+        userId: "user:source",
+        runStartedAt: 1,
+      });
+
+      expect(result.continued).toBe(true);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    expect(calls).toBeGreaterThan(1);
+    expect(cardsVisibleOnSecondRequest).toBe(2);
+    const cards = tables.flashcards.filter((row) => row.setId === "set:incremental");
+    expect(cards.map((card) => card.front)).toEqual([
+      "What do cells contain?",
+      "What does the nucleus store?",
+    ]);
+    expect(set.cardCount).toBe(2);
+  });
+
+  test("a long continuation builds cards, quiz and exams in parallel", async () => {
+    const tables = rowsForSource("set:parallel");
+    const set = tables.studySets[0]!;
+    const relays = [
+      ["alpha", "cobalt", "blue sensor"],
+      ["beta", "nickel", "red valve"],
+      ["gamma", "copper", "green pump"],
+      ["delta", "zinc", "amber gauge"],
+      ["epsilon", "silver", "violet filter"],
+      ["zeta", "tin", "orange coil"],
+      ["eta", "iron", "white rotor"],
+      ["theta", "lead", "black shield"],
+      ["iota", "gold", "yellow wire"],
+      ["kappa", "argon", "grey tank"],
+      ["lambda", "neon", "pink lens"],
+      ["mu", "helium", "brown seal"],
+      ["nu", "xenon", "purple probe"],
+      ["xi", "radon", "silver spring"],
+      ["omicron", "krypton", "teal clamp"],
+      ["pi", "boron", "olive belt"],
+      ["rho", "carbon", "navy plate"],
+      ["sigma", "sulfur", "lime fuse"],
+      ["tau", "chlorine", "coral switch"],
+      ["upsilon", "fluorine", "indigo dial"],
+      ["phi", "bromine", "maroon cap"],
+    ] as const;
+    set.notes = [
+      ...relays.map(
+        ([relay, metal, context]) =>
+          `The ${relay} relay uses ${metal} while calibrating the ${context}.`,
+      ),
+      "The nucleus stores genetic material and controls entry to the cell.",
+      "Mitochondria release energy during aerobic respiration.",
+    ].join(" ");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.cardCount = 1;
+    set.quizCount = 0;
+    set.examCount = 0;
+    set.targetCardCount = relays.length + 1;
+    set.targetQuizCount = 1;
+    set.targetExamCount = 1;
+    // Exercise the non-pathway generators in this test; pathway generation has
+    // its own section batching and is covered separately.
+    set.courseId = undefined;
+    set.topicId = undefined;
+    set.topicIds = undefined;
+    tables.flashcards = [
+      {
+        ...tables.flashcards[0]!,
+        _id: "card:parallel",
+        setId: "set:parallel",
+        userId: "user:source",
+        front: "What do cells contain?",
+        back: "Organelles.",
+        order: 0,
+      },
+    ];
+    tables.quizQuestions = [];
+    tables.examQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const prompts: string[] = [];
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      try {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          messages?: Array<{ content?: string }>;
+        };
+        const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+        prompts.push(prompt);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        let content: string;
+        if (prompt.includes("Create ") && prompt.includes("revision flashcards")) {
+          const cards = relays.map(([relay, metal, context]) => ({
+            front: `Which metal does the ${relay} relay use while calibrating the ${context}?`,
+            back: `${metal[0]!.toUpperCase()}${metal.slice(1)} while calibrating the ${context}.`,
+            keyPoint: `The ${relay} relay uses ${metal} while calibrating the ${context}.`,
+          }));
+          content = JSON.stringify({ cards });
+        } else if (prompt.includes("quiz questions")) {
+          content = JSON.stringify({
+            questions: [
+              {
+                question: "What stores genetic material?",
+                type: "typed",
+                answer: "nucleus",
+                acceptedAnswers: ["nucleus"],
+                explanation:
+                  "The nucleus is correct because it stores genetic material; the membrane is wrong because it controls entry and exit.",
+              },
+              {
+                question: "Which organelle releases energy?",
+                type: "typed",
+                answer: "mitochondria",
+                acceptedAnswers: ["mitochondrion", "the mitochondria"],
+                explanation:
+                  "Mitochondria are correct because they release energy; the cytoplasm is wrong because it is the site of glycolysis.",
+              },
+            ],
+          });
+        } else if (prompt.includes("marking guide")) {
+          content = JSON.stringify({
+            questions: [
+              {
+                question: "Describe the role of the nucleus.",
+                marks: 1,
+                modelAnswer: "The nucleus stores genetic material.",
+                markingGuide: ["1 mark: stores genetic material"],
+              },
+            ],
+          });
+        } else {
+          throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+        }
+        return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      } finally {
+        inFlight -= 1;
+      }
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables, { captureSchedule: true });
+      const handler = (continueStudySetCards as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<any>;
+      })._handler;
+      await handler(action, {
+        setId: "set:parallel",
+        userId: "user:source",
+        runStartedAt: 1,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(prompts.some((prompt) => prompt.includes("revision flashcards"))).toBe(true);
+    expect(prompts.some((prompt) => prompt.includes("quiz questions"))).toBe(true);
+    expect(prompts.some((prompt) => prompt.includes("marking guide"))).toBe(true);
+    expect(tables.quizQuestions.filter((row) => row.setId === "set:parallel")).toHaveLength(1);
+    expect(tables.examQuestions.filter((row) => row.setId === "set:parallel")).toHaveLength(1);
+    expect(set.cardCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test("saves each quiz batch before asking for the next one", async () => {
+    const tables = rowsForSource("set:quiz-checkpoint");
+    const set = tables.studySets[0]!;
+    set.notes = [
+      "Cells contain organelles.",
+      "The nucleus stores genetic material.",
+      "Mitochondria release energy.",
+      "Ribosomes build proteins.",
+      "The cell membrane controls entry and exit.",
+      "Chloroplasts absorb light energy during photosynthesis.",
+    ].join(" ");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.cardCount = tables.flashcards.length;
+    set.quizCount = 0;
+    set.examCount = 0;
+    set.targetCardCount = set.cardCount;
+    set.targetQuizCount = 3;
+    set.targetExamCount = 1;
+    set.courseId = undefined;
+    set.topicId = undefined;
+    set.topicIds = undefined;
+    tables.quizQuestions = [];
+    tables.examQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    let quizCalls = 0;
+    let quizRowsSeenOnSecondRequest = -1;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      let content: string;
+      if (prompt.includes("quiz questions")) {
+        quizCalls += 1;
+        const questions = [
+          {
+            question: "What stores genetic material?",
+            type: "typed",
+            answer: "nucleus",
+            acceptedAnswers: ["the nucleus"],
+            explanation:
+              "The nucleus is correct because it stores genetic material; the membrane is wrong because it controls entry.",
+          },
+          {
+            question: "Which organelle releases energy?",
+            type: "typed",
+            answer: "mitochondria",
+            acceptedAnswers: ["mitochondrion", "the mitochondria"],
+            explanation:
+              "Mitochondria are correct because they release energy; the cytoplasm is wrong because it is the site of glycolysis.",
+          },
+          {
+            question: "What do ribosomes build?",
+            type: "typed",
+            answer: "proteins",
+            acceptedAnswers: ["protein"],
+            explanation:
+              "Ribosomes are correct because they build proteins; the membrane is wrong because it controls entry.",
+          },
+        ];
+        if (quizCalls > 1) {
+          // The first two questions were reported as built. They must already
+          // be in the database before this request is allowed to start.
+          quizRowsSeenOnSecondRequest = tables.quizQuestions.filter(
+            (row) => row.setId === "set:quiz-checkpoint",
+          ).length;
+          content = JSON.stringify({ questions: [questions[2]] });
+        } else {
+          content = JSON.stringify({ questions: questions.slice(0, 2) });
+        }
+      } else if (prompt.includes("marking guide")) {
+        content = JSON.stringify({
+          questions: [
+            {
+              question: "Describe the role of the nucleus.",
+              marks: 1,
+              modelAnswer: "The nucleus stores genetic material.",
+              markingGuide: ["1 mark: stores genetic material"],
+            },
+          ],
+        });
+      } else {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables);
+      const handler = (continueStudySetQuiz as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+      })._handler;
+      await handler(action, {
+        setId: "set:quiz-checkpoint",
+        userId: "user:source",
+        runStartedAt: 1,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    expect(quizCalls).toBeGreaterThan(1);
+    expect(quizRowsSeenOnSecondRequest).toBe(2);
+    const quiz = tables.quizQuestions.filter((row) => row.setId === "set:quiz-checkpoint");
+    expect(quiz).toHaveLength(3);
+  });
+
+  test("saves each exam batch before asking for the next one", async () => {
+    const tables = rowsForSource("set:exam-checkpoint");
+    const set = tables.studySets[0]!;
+    set.notes = [
+      "Cells contain organelles that carry out specific jobs inside the cell.",
+      "The nucleus stores genetic material and controls the activities of the cell.",
+      "Mitochondria release energy during aerobic respiration in the cytoplasm.",
+      "Ribosomes build proteins by joining amino acids in the correct order.",
+      "The cell membrane controls which substances enter and leave the cell.",
+      "Chloroplasts absorb light energy for photosynthesis in plant cells.",
+    ].join(" ");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.cardCount = tables.flashcards.length;
+    set.quizCount = 0;
+    set.examCount = 0;
+    set.targetCardCount = set.cardCount;
+    set.targetQuizCount = 1;
+    set.targetExamCount = 3;
+    set.courseId = undefined;
+    set.topicId = undefined;
+    set.topicIds = undefined;
+    tables.quizQuestions = [];
+    tables.examQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    let examCalls = 0;
+    let examRowsSeenOnSecondRequest = -1;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      if (!prompt.includes("marking guide")) {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      examCalls += 1;
+      const questions = [
+        {
+          question: "Describe the role of the nucleus.",
+          marks: 1,
+          modelAnswer: "The nucleus stores genetic material.",
+          markingGuide: ["1 mark: stores genetic material"],
+        },
+        {
+          question: "What do mitochondria release?",
+          marks: 1,
+          modelAnswer: "Mitochondria release energy.",
+          markingGuide: ["1 mark: release energy"],
+        },
+        {
+          question: "What do ribosomes build?",
+          marks: 1,
+          modelAnswer: "Ribosomes build proteins.",
+          markingGuide: ["1 mark: build proteins"],
+        },
+      ];
+      if (examCalls > 1) {
+        // The first two questions were reported as built. They must already be
+        // in the database before this request is allowed to start.
+        examRowsSeenOnSecondRequest = tables.examQuestions.filter(
+          (row) => row.setId === "set:exam-checkpoint",
+        ).length;
+      }
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  questions: examCalls > 1 ? [questions[2]] : questions.slice(0, 2),
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables);
+      const handler = (continueStudySetExams as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+      })._handler;
+      await handler(action, {
+        setId: "set:exam-checkpoint",
+        userId: "user:source",
+        runStartedAt: 1,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    expect(examCalls).toBeGreaterThan(1);
+    expect(examRowsSeenOnSecondRequest).toBe(2);
+    const exams = tables.examQuestions.filter((row) => row.setId === "set:exam-checkpoint");
+    expect(exams).toHaveLength(3);
+  });
+
+  test("keeps a checkpointed quiz batch when a later generation step fails", async () => {
+    const tables = rowsForSource("set:quiz-checkpoint-failure");
+    const set = tables.studySets[0]!;
+    set.notes = [
+      "Cells contain organelles.",
+      "The nucleus stores genetic material.",
+      "Mitochondria release energy.",
+      "Ribosomes build proteins.",
+      "The cell membrane controls entry and exit.",
+      "Chloroplasts absorb light energy during photosynthesis.",
+    ].join(" ");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.cardCount = tables.flashcards.length;
+    set.quizCount = 0;
+    set.examCount = 1;
+    set.targetCardCount = set.cardCount;
+    set.targetQuizCount = 3;
+    set.targetExamCount = 1;
+    set.courseId = undefined;
+    set.topicId = undefined;
+    set.topicIds = undefined;
+    tables.quizQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    let quizCalls = 0;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      if (!prompt.includes("quiz questions")) {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      quizCalls += 1;
+      const questions = [
+        {
+          question: "What stores genetic material?",
+          type: "typed",
+          answer: "nucleus",
+          acceptedAnswers: ["the nucleus"],
+          explanation:
+            "The nucleus is correct because it stores genetic material; the membrane is wrong because it controls entry.",
+        },
+        {
+          question: "Which organelle releases energy?",
+          type: "typed",
+          answer: "mitochondria",
+          acceptedAnswers: ["mitochondrion", "the mitochondria"],
+          explanation:
+            "Mitochondria are correct because they release energy; the cytoplasm is wrong because it is the site of glycolysis.",
+        },
+        {
+          question: "What do ribosomes build?",
+          type: "typed",
+          answer: "proteins",
+          acceptedAnswers: ["protein"],
+          explanation:
+            "Ribosomes are correct because they build proteins; the membrane is wrong because it controls entry.",
+        },
+      ];
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  questions: quizCalls > 1 ? [questions[2]] : questions.slice(0, 2),
+                }),
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    let quizCheckpoints = 0;
+    try {
+      const action = actionContext(tables, { captureSchedule: true });
+      const runMutation = action.runMutation;
+      action.runMutation = async (ref, args) => {
+        if (
+          functionNameOf(ref) === "studySets:completeGeneration" &&
+          args.quizOnly === true &&
+          args.final === false
+        ) {
+          quizCheckpoints += 1;
+          // The first batch is already durable. Fail the next checkpoint to
+          // simulate the generation stage stopping before the final save.
+          if (quizCheckpoints === 2) {
+            throw new Error("simulated later generation failure");
+          }
+        }
+        return runMutation(ref, args);
+      };
+      const handler = (continueStudySetQuiz as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+      })._handler;
+      await handler(action, {
+        setId: "set:quiz-checkpoint-failure",
+        userId: "user:source",
+        runStartedAt: 1,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    expect(quizCalls).toBeGreaterThan(1);
+    expect(quizCheckpoints).toBeGreaterThanOrEqual(3);
+    const quiz = tables.quizQuestions.filter(
+      (row) => row.setId === "set:quiz-checkpoint-failure",
+    );
+    expect(quiz.map((row) => row.question)).toEqual([
+      "What stores genetic material?",
+      "Which organelle releases energy?",
+    ]);
   });
 
   test("a background retry starts a new run token and stops at the cap", async () => {

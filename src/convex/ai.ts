@@ -1321,6 +1321,23 @@ const MAX_REQUESTED_ITEMS = BUILD_MAX;
 /** Reports batch completion to the build screen. Cosmetic; failures are ignored. */
 type BatchProgress = (completed: number, target: number) => Promise<void> | void;
 
+/**
+ * Serializes checkpoint writes inside one action. Quiz and exam batches can
+ * finish out of order, and Convex mutations for the same set must not race on
+ * the section counts they return.
+ */
+function checkpointQueue() {
+  let tail: Promise<void> = Promise.resolve();
+  return function run<T>(task: () => Promise<T>): Promise<T> {
+    const result = tail.then(task);
+    tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  };
+}
+
 type BuildFailureStage = Exclude<BuildStage, "save">;
 const buildFailureStageValidator = v.union(
   v.literal("summary"),
@@ -1461,6 +1478,9 @@ async function generateCards(
   onProgress?: BatchProgress,
   syllabus = false,
   reviewCards = "",
+  // Called with only the cards accepted from this batch. A caller that can save
+  // partial builds uses it to make each batch durable before asking for another.
+  onCardsAccepted?: (cards: GeneratedCard[]) => Promise<void> | void,
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
   const seen = new Set<string>();
@@ -1532,6 +1552,7 @@ async function generateCards(
     }
 
     let added = 0;
+    const accepted: GeneratedCard[] = [];
     // A prompt is not a guarantee. Ground and shorten the batch here, then
     // drop paraphrased repeats across batches, so a card cannot assert a fact
     // the notes never gave or fill the deck with the same answer twice.
@@ -1551,10 +1572,14 @@ async function generateCards(
       }
       seen.add(key);
       cards.push(card);
+      accepted.push(card);
       added += 1;
       if (cards.length >= target) break;
     }
-    if (added > 0) {
+    if (accepted.length > 0) {
+      // Persist first, then report progress. A bar that says a batch exists
+      // must never run ahead of the rows a failed action can lose.
+      await onCardsAccepted?.(accepted);
       try {
         await onProgress?.(cards.length, target);
       } catch {
@@ -1584,6 +1609,7 @@ async function generateQuiz(
   syllabus = false,
   reviewQuiz = "",
   scopeLabel = "",
+  onQuestionsAccepted?: (questions: GeneratedQuiz[]) => Promise<void> | void,
 ): Promise<GeneratedQuiz[]> {
   let questions: GeneratedQuiz[] = [];
   const seen = new Set<string>();
@@ -1713,6 +1739,9 @@ async function generateQuiz(
     const added = Math.max(0, prepared.items.length - seen.size);
     for (const question of prepared.items) seen.add(question.question.toLowerCase());
     if (added > 0) {
+      // Persist before reporting. The batch is quality-checked above, so the
+      // saved rows and the progress count describe the same questions.
+      await onQuestionsAccepted?.(questions.slice());
       try {
         await onProgress?.(questions.length, target);
       } catch {
@@ -1755,6 +1784,7 @@ async function generatePathwayQuiz(
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
   options: { level?: string; subject?: string } = {},
+  onQuestionsAccepted?: (questions: GeneratedQuiz[]) => Promise<void> | void,
 ): Promise<GeneratedQuiz[]> {
   const scopes = pathwayQuizScopes(notes, target);
   if (scopes.length === 0) return [];
@@ -1776,6 +1806,19 @@ async function generatePathwayQuiz(
         "",
         scope.label,
       ),
+    onBatch:
+      onQuestionsAccepted === undefined
+        ? undefined
+        : async (items) => {
+            const prepared = prepareQuiz(
+              items,
+              cards,
+              notes,
+              keyPointsForCards(cards),
+              options,
+            );
+            await onQuestionsAccepted(prepared.items.slice(0, target));
+          },
     onProgress,
   });
 
@@ -1821,6 +1864,7 @@ async function generateExams(
   syllabus = false,
   reviewExams = "",
   scopeLabel = "",
+  onExamsAccepted?: (exams: GeneratedExam[]) => Promise<void> | void,
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText(context);
   const exams: GeneratedExam[] = [];
@@ -1930,6 +1974,8 @@ async function generateExams(
       if (exams.length >= target) break;
     }
     if (added > 0) {
+      // Persist before reporting, exactly like the card batches.
+      await onExamsAccepted?.(exams.slice());
       try {
         await onProgress?.(exams.length, target);
       } catch {
@@ -1970,9 +2016,20 @@ async function generatePathwayExams(
   target: number,
   deadline = Number.POSITIVE_INFINITY,
   onProgress?: BatchProgress,
+  onExamsAccepted?: (exams: GeneratedExam[]) => Promise<void> | void,
 ): Promise<GeneratedExam[]> {
   const scopes = pathwaySectionScopes(notes, target);
   if (scopes.length === 0) return [];
+
+  const uniqueExams = (items: readonly GeneratedExam[]) => {
+    const seen = new Set<string>();
+    return items.filter((exam) => {
+      const key = normalizeAnswer(exam.question);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
 
   const run = await runPathwayBatches({
     scopes,
@@ -1991,6 +2048,12 @@ async function generatePathwayExams(
         "",
         scope.label,
       ),
+    onBatch:
+      onExamsAccepted === undefined
+        ? undefined
+        : async (items) => {
+            await onExamsAccepted(uniqueExams(items).slice(0, target));
+          },
     onProgress,
   });
 
@@ -3967,48 +4030,342 @@ async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationAr
 
   try {
     const apiKeys = resolveNvidiaKeys();
-    if (remaining > 0) {
-      await ctx.runMutation(internal.studySets.setProgress, {
-        setId: args.setId,
-        progress: `Building the remaining ${remaining} flashcards…`,
-        percent: 24,
-      });
-      const reportCards: BatchProgress = async (done, target) => {
+    // The quiz normally waits for the deck so it can avoid testing the same
+    // facts. On a long continuation the three sections are independent enough
+    // to overlap: quiz generation starts against the cards already saved, then
+    // the finished deck filters any overlaps and tops up the shortfall. This
+    // keeps the no-repeat rule while removing the two sequential generation
+    // windows. Small decks stay sequential because one batch already finishes.
+    const parallelStages =
+      remaining >= CARD_BATCH_SIZE &&
+      set.generationNotes === undefined &&
+      !args.replaceExisting &&
+      snapshot.quiz.length === 0 &&
+      snapshot.exams.length === 0 &&
+      plan.targetQuiz > 0 &&
+      plan.targetExam > 0;
+    const parallelDeadline = Date.now() + 7 * 60 * 1000;
+    // Ask for a few extra questions so overlaps discovered after the deck is
+    // complete do not force a second full request. The final save still caps at
+    // the number the student requested.
+    const parallelQuizTarget = parallelStages
+      ? Math.min(
+          plan.targetQuiz + Math.ceil(plan.targetQuiz * 0.25),
+          MAX_REQUESTED_ITEMS + 20,
+        )
+      : 0;
+    const runCheckpoint = checkpointQueue();
+    // These sections start before the last cards exist. Save their completed
+    // batches now; the final pass below replaces the quiz with the version
+    // filtered against the finished deck.
+    const checkpointParallelQuiz = async (questions: GeneratedQuiz[]) =>
+      runCheckpoint(async () => {
         if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
-        await ctx.runMutation(internal.studySets.setProgress, {
-          setId: args.setId,
-          progress: `Building flashcards… ${done} of ${target}`,
-          percent: 24 + (done / Math.max(1, target)) * 32,
-        });
-      };
-      const generated = await generateCards(
-        apiKeys,
-        plan.notes,
-        remaining,
-        Date.now() + 7 * 60 * 1000,
-        reportCards,
-        plan.syllabus,
-        reuseCardDigest(snapshot.cards),
-      );
-      if (generated.length > 0) {
+        const prepared = prepareQuizForStorage(
+          questions,
+          cardsForGeneration(snapshot.cards),
+          plan.notes,
+          set.level,
+          set.course,
+        );
+        if (prepared.length === 0) return;
         const checkpoint = await ctx.runMutation(
           internal.studySets.completeGeneration,
           {
             setId: args.setId,
             summary,
-            cards: toCardArgs(generated),
+            cards: [],
             quiz: [],
+            preparedQuiz: prepared.slice(0, plan.targetQuiz),
             exams: [],
-            keepExisting: true,
             title: summary.title,
             requested: plan.requested,
             final: false,
+            quizOnly: true,
+            keepProgress: true,
           },
         );
         if (checkpoint.stored && checkpoint.counts) {
           savedCounts.cards = checkpoint.counts.cards;
           savedCounts.quiz = checkpoint.counts.quiz;
           savedCounts.exams = checkpoint.counts.exams;
+        }
+      });
+    const checkpointParallelExams = async (batch: GeneratedExam[]) =>
+      runCheckpoint(async () => {
+        if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+        const checkpoint = await ctx.runMutation(
+          internal.studySets.completeGeneration,
+          {
+            setId: args.setId,
+            summary,
+            cards: [],
+            quiz: [],
+            exams: toExamArgs(batch.slice(0, plan.targetExam)),
+            title: summary.title,
+            requested: plan.requested,
+            final: false,
+            examsOnly: true,
+            keepProgress: true,
+          },
+        );
+        if (checkpoint.stored && checkpoint.counts) {
+          savedCounts.cards = checkpoint.counts.cards;
+          savedCounts.quiz = checkpoint.counts.quiz;
+          savedCounts.exams = checkpoint.counts.exams;
+        }
+      });
+    const quizInParallel = parallelStages
+      ? stage(
+          () =>
+            plan.syllabus
+              ? generatePathwayQuiz(
+                  apiKeys,
+                  plan.notes,
+                  cardsForGeneration(snapshot.cards),
+                  parallelQuizTarget,
+                  parallelDeadline,
+                  undefined,
+                  { level: plan.context.level, subject: plan.context.course },
+                  checkpointParallelQuiz,
+                )
+              : generateQuiz(
+                  apiKeys,
+                  plan.notes,
+                  cardsForGeneration(snapshot.cards),
+                  parallelQuizTarget,
+                  parallelDeadline,
+                  undefined,
+                  false,
+                  "",
+                  "",
+                  checkpointParallelQuiz,
+                ),
+          [],
+        )
+      : null;
+    const examsInParallel = parallelStages
+      ? stage(
+          () =>
+            plan.syllabus
+              ? generatePathwayExams(
+                  apiKeys,
+                  plan.notes,
+                  plan.context,
+                  plan.targetExam,
+                  parallelDeadline,
+                  undefined,
+                  checkpointParallelExams,
+                )
+              : generateExams(
+                  apiKeys,
+                  plan.notes,
+                  plan.context,
+                  plan.targetExam,
+                  parallelDeadline,
+                  undefined,
+                  false,
+                  "",
+                  "",
+                  checkpointParallelExams,
+                ),
+          [],
+        )
+      : null;
+
+    if (remaining > 0) {
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId: args.setId,
+        progress: parallelStages
+          ? `Building ${remaining} flashcards, quiz and exam questions in parallel…`
+          : `Building the remaining ${remaining} flashcards…`,
+        percent: 24,
+      });
+      const baseCards = savedCounts.cards;
+      // Save each accepted batch before the next request. The action can be
+      // stopped at any point, so a card shown as built must already be stored:
+      // the final cross-stage checkpoint is optional, not the only save.
+      const checkpointCards = async (batch: GeneratedCard[]) =>
+        runCheckpoint(async () => {
+          if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+          const checkpoint = await ctx.runMutation(
+            internal.studySets.completeGeneration,
+            {
+              setId: args.setId,
+              summary,
+              cards: toCardArgs(batch),
+              quiz: [],
+              exams: [],
+              keepExisting: true,
+              title: summary.title,
+              requested: plan.requested,
+              final: false,
+            },
+          );
+          if (checkpoint.stored && checkpoint.counts) {
+            savedCounts.cards = checkpoint.counts.cards;
+            savedCounts.quiz = checkpoint.counts.quiz;
+            savedCounts.exams = checkpoint.counts.exams;
+          }
+          const built = Math.max(0, savedCounts.cards - baseCards);
+          await ctx.runMutation(internal.studySets.setProgress, {
+            setId: args.setId,
+            progress: `Building flashcards… ${built} of ${remaining}`,
+            percent: 24 + (built / Math.max(1, remaining)) * 32,
+          });
+        });
+      const cardStage = await stage(
+        () =>
+          generateCards(
+            apiKeys,
+            plan.notes,
+            remaining,
+            parallelDeadline,
+            undefined,
+            plan.syllabus,
+            reuseCardDigest(snapshot.cards),
+            checkpointCards,
+          ),
+        [],
+      );
+      // A card failure must not discard a quiz or exam that finished in the
+      // same window. The per-batch checkpoints already saved the cards that did
+      // finish; the retry logic below decides whether to continue them.
+      if (cardStage.failure && !parallelStages) throw cardStage.failure;
+      if (cardStage.failure) {
+        console.error(
+          "Parallel card generation stopped early; keeping the other sections",
+          cardStage.failure,
+        );
+      }
+    }
+
+    if (parallelStages && quizInParallel && examsInParallel) {
+      await ctx.runMutation(internal.studySets.setProgress, {
+        setId: args.setId,
+        progress: "Checking the quiz against the finished flashcards…",
+        percent: 70,
+      });
+      const [quizStage, examStage] = await Promise.all([
+        quizInParallel,
+        examsInParallel,
+      ]);
+      const finished = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
+        setId: args.setId,
+      });
+      if (finished) {
+        const allCards = cardsForGeneration(finished.cards);
+        // The quiz was written before the last cards existed. Apply the same
+        // storage-time card-overlap filter now that the whole deck is known.
+        let quiz =
+          quizStage.value.length > 0
+            ? prepareQuizForStorage(
+                quizStage.value,
+                allCards,
+                plan.notes,
+                set.level,
+                set.course,
+              )
+            : [];
+        if (quiz.length < plan.targetQuiz) {
+          const missing = plan.targetQuiz - quiz.length;
+          const topUp = await stage(
+            () =>
+              plan.syllabus
+                ? generatePathwayQuiz(
+                    apiKeys,
+                    plan.notes,
+                    allCards,
+                    missing,
+                    Date.now() + 3 * 60 * 1000,
+                    undefined,
+                    {
+                      level: plan.context.level,
+                      subject: plan.context.course,
+                    },
+                  )
+                : generateQuiz(
+                    apiKeys,
+                    plan.notes,
+                    allCards,
+                    missing,
+                    Date.now() + 3 * 60 * 1000,
+                    undefined,
+                    false,
+                  ),
+            [],
+          );
+          if (topUp.failure) {
+            console.error(
+              "Parallel quiz top-up failed; keeping the questions already written",
+              topUp.failure,
+            );
+          }
+          if (topUp.value.length > 0) {
+            quiz = prepareQuizForStorage(
+              [...quiz, ...topUp.value],
+              allCards,
+              plan.notes,
+              set.level,
+              set.course,
+            );
+          }
+        }
+        if (quizStage.failure) {
+          console.error(
+            "Parallel quiz generation failed; keeping any questions written",
+            quizStage.failure,
+          );
+        }
+        if (examStage.failure) {
+          console.error(
+            "Parallel exam generation failed; keeping any questions written",
+            examStage.failure,
+          );
+        }
+        if (quiz.length > 0) {
+          const checkpoint = await ctx.runMutation(
+            internal.studySets.completeGeneration,
+            {
+              setId: args.setId,
+              summary,
+              cards: [],
+              quiz: [],
+              preparedQuiz: quiz.slice(0, plan.targetQuiz),
+              exams: [],
+              title: summary.title,
+              requested: plan.requested,
+              final: false,
+              quizOnly: true,
+            },
+          );
+          if (checkpoint.stored && checkpoint.counts) {
+            savedCounts.cards = checkpoint.counts.cards;
+            savedCounts.quiz = checkpoint.counts.quiz;
+            savedCounts.exams = checkpoint.counts.exams;
+          }
+        }
+        const parallelExams = examStage.value.slice(0, plan.targetExam);
+        if (parallelExams.length > 0) {
+          const checkpoint = await ctx.runMutation(
+            internal.studySets.completeGeneration,
+            {
+              setId: args.setId,
+              summary,
+              cards: [],
+              quiz: [],
+              exams: toExamArgs(parallelExams),
+              title: summary.title,
+              requested: plan.requested,
+              final: false,
+              examsOnly: true,
+            },
+          );
+          if (checkpoint.stored && checkpoint.counts) {
+            savedCounts.cards = checkpoint.counts.cards;
+            savedCounts.quiz = checkpoint.counts.quiz;
+            savedCounts.exams = checkpoint.counts.exams;
+          }
         }
       }
     }
@@ -4242,6 +4599,8 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
         progress: `Writing ${quizRemaining} quiz questions…`,
         percent: 58,
       });
+      const cards = cardsForGeneration(snapshot.cards);
+      const runCheckpoint = checkpointQueue();
       const reportQuiz: BatchProgress = async (done, target) => {
         if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
         await ctx.runMutation(internal.studySets.setProgress, {
@@ -4250,7 +4609,50 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
           percent: 58 + (done / Math.max(1, target)) * 20,
         });
       };
-      const cards = cardsForGeneration(snapshot.cards);
+      const reportExams: BatchProgress = async (done, target) => {
+        if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+        await ctx.runMutation(internal.studySets.setProgress, {
+          setId: args.setId,
+          progress: `Drafting exam questions… ${done} of ${target}`,
+          percent: 80 + (done / Math.max(1, target)) * 14,
+        });
+      };
+      const baseQuizForCheckpoint = quizForWrite(baseQuizRows);
+      // Save each completed quiz batch before the next progress message. The
+      // checkpoint includes any rows this resume started with, so the write
+      // never replaces earlier questions with only the new batch.
+      const checkpointQuiz = async (questions: GeneratedQuiz[]) =>
+        runCheckpoint(async () => {
+          if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+          const prepared = prepareQuizForStorage(
+            [...baseQuizForCheckpoint, ...questions],
+            cards,
+            plan.notes,
+            set.level,
+            set.course,
+          );
+          if (prepared.length === 0) return;
+          const checkpoint = await ctx.runMutation(
+            internal.studySets.completeGeneration,
+            {
+              setId: args.setId,
+              summary,
+              cards: [],
+              quiz: [],
+              preparedQuiz: prepared.slice(0, plan.requested.quiz),
+              exams: [],
+              title: summary.title,
+              requested: plan.requested,
+              final: false,
+              quizOnly: true,
+            },
+          );
+          if (checkpoint.stored && checkpoint.counts) {
+            savedCounts.cards = checkpoint.counts.cards;
+            savedCounts.quiz = checkpoint.counts.quiz;
+            savedCounts.exams = checkpoint.counts.exams;
+          }
+        });
       // Quiz and exam content are independent after the card checkpoint. Run
       // both section sets now so the build pays one generation window instead
       // of two sequential ones. The same quality checks and save caps apply.
@@ -4258,25 +4660,55 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
         0,
         plan.requested.exams - baseExamRows.length,
       );
-      if (plan.syllabus && examRemaining > 0) {
-        const reportExam: BatchProgress = async (done, target) => {
+      const baseExamsForCheckpoint = examsForWrite(baseExamRows);
+      const checkpointExams = async (exams: GeneratedExam[]) =>
+        runCheckpoint(async () => {
           if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
-          await ctx.runMutation(internal.studySets.setProgress, {
-            setId: args.setId,
-            progress: `Drafting exam questions… ${done} of ${target}`,
-            percent: 80 + (done / Math.max(1, target)) * 14,
-          });
-        };
+          const checkpoint = await ctx.runMutation(
+            internal.studySets.completeGeneration,
+            {
+              setId: args.setId,
+              summary,
+              cards: [],
+              quiz: [],
+              exams: toExamArgs([...baseExamsForCheckpoint, ...exams]),
+              title: summary.title,
+              requested: plan.requested,
+              final: false,
+              examsOnly: true,
+            },
+          );
+          if (checkpoint.stored && checkpoint.counts) {
+            savedCounts.cards = checkpoint.counts.cards;
+            savedCounts.quiz = checkpoint.counts.quiz;
+            savedCounts.exams = checkpoint.counts.exams;
+          }
+        });
+      if (examRemaining > 0) {
         examPromise = stage(
           () =>
-            generatePathwayExams(
-              apiKeys,
-              plan.notes,
-              plan.context,
-              examRemaining,
-              Date.now() + 7 * 60 * 1000,
-              reportExam,
-            ),
+            plan.syllabus
+              ? generatePathwayExams(
+                  apiKeys,
+                  plan.notes,
+                  plan.context,
+                  examRemaining,
+                  Date.now() + 7 * 60 * 1000,
+                  reportExams,
+                  checkpointExams,
+                )
+              : generateExams(
+                  apiKeys,
+                  plan.notes,
+                  plan.context,
+                  examRemaining,
+                  Date.now() + 7 * 60 * 1000,
+                  reportExams,
+                  false,
+                  "",
+                  "",
+                  checkpointExams,
+                ),
           [],
         );
       }
@@ -4291,6 +4723,7 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
                 Date.now() + 7 * 60 * 1000,
                 reportQuiz,
                 { level: plan.context.level, subject: plan.context.course },
+                checkpointQuiz,
               )
             : generateQuiz(
                 apiKeys,
@@ -4300,12 +4733,24 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
                 Date.now() + 7 * 60 * 1000,
                 reportQuiz,
                 false,
+                "",
+                "",
+                checkpointQuiz,
               ),
         [],
       );
       if (quizStage.failure) {
         if (plan.syllabus) throw quizStage.failure;
         failureStage ??= "quiz";
+        // The generator can fail after a batch was already checkpointed. Read
+        // the saved rows back so the final quiz write keeps them instead of
+        // replacing them with the pre-run base quiz.
+        if (savedCounts.quiz > baseQuizRows.length) {
+          const latest = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
+            setId: args.setId,
+          });
+          if (latest) quiz = quizForWrite(latest.quiz);
+        }
       } else if (quizStage.value.length > 0) {
         quiz =
           baseQuizRows.length > 0
@@ -4410,10 +4855,19 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
     }
     if (examPromise) {
       const examStage = await examPromise;
-      const examCandidates = [
+      let examCandidates = [
         ...examsForWrite(baseExamRows),
         ...examStage.value,
       ];
+      // Exam batches saved before a later failure are already durable. Use
+      // those rows for the final shortfall/finish write rather than dropping
+      // them back to the base exam questions.
+      if (examStage.failure && savedCounts.exams > baseExamRows.length) {
+        const latest = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
+          setId: args.setId,
+        });
+        if (latest) examCandidates = examsForWrite(latest.exams);
+      }
       if (examCandidates.length < plan.requested.exams) {
         const checkpoint = await ctx.runMutation(
           internal.studySets.completeGeneration,
@@ -4617,6 +5071,32 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
           percent: 80 + (done / Math.max(1, target)) * 14,
         });
       };
+      const baseExamsForCheckpoint = examsForWrite(baseExamRows);
+      // Persist each completed exam batch before moving the progress bar. The
+      // checkpoint includes the base rows this resume started with, so a retry
+      // never replaces earlier questions with only the newest batch.
+      const checkpointExams = async (batch: GeneratedExam[]) => {
+        if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
+        const checkpoint = await ctx.runMutation(
+          internal.studySets.completeGeneration,
+          {
+            setId: args.setId,
+            summary,
+            cards: [],
+            quiz: [],
+            exams: toExamArgs([...baseExamsForCheckpoint, ...batch]),
+            title: summary.title,
+            requested: plan.requested,
+            final: false,
+            examsOnly: true,
+          },
+        );
+        if (checkpoint.stored && checkpoint.counts) {
+          savedCounts.cards = checkpoint.counts.cards;
+          savedCounts.quiz = checkpoint.counts.quiz;
+          savedCounts.exams = checkpoint.counts.exams;
+        }
+      };
       const examStage = await stage(
         () =>
           plan.syllabus
@@ -4627,6 +5107,7 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
                 examRemaining,
                 Date.now() + 7 * 60 * 1000,
                 reportExams,
+                checkpointExams,
               )
             : generateExams(
                 apiKeys,
@@ -4636,12 +5117,23 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
                 Date.now() + 7 * 60 * 1000,
                 reportExams,
                 false,
+                "",
+                "",
+                checkpointExams,
               ),
         [],
       );
       if (examStage.failure) {
         if (plan.syllabus) throw examStage.failure;
         failureStage ??= "exam";
+        // Keep batches that were checkpointed before the failure. The final
+        // save below must not replace them with the pre-run base exams.
+        if (savedCounts.exams > baseExamRows.length) {
+          const latest = await ctx.runQuery(internal.studySets.getBuildSnapshot, {
+            setId: args.setId,
+          });
+          if (latest) exams = examsForWrite(latest.exams);
+        }
       } else if (examStage.value.length > 0) {
         const generated = toExamArgs(examStage.value);
         exams =
@@ -5364,9 +5856,15 @@ async function processStudySetForUser(
         await savePartial(summary, [], [], []);
       }
 
+      // Start the continuation early enough that the remaining cards, the quiz
+      // and the exam questions can be generated in one parallel window. A small
+      // deck still generates in a single stage.
+      const initialCardTarget = canKeepPartial
+        ? Math.min(targetCards, CARD_BATCH_SIZE)
+        : targetCards;
       await ctx.runMutation(internal.studySets.setProgress, {
         setId,
-        progress: `Building ${targetCards} detail-heavy flashcards…`,
+        progress: `Building ${initialCardTarget} detail-heavy flashcards…`,
         percent: 24,
       });
       const reportCards: BatchProgress = async (done, target) => {
@@ -5377,16 +5875,63 @@ async function processStudySetForUser(
           percent: 24 + (done / Math.max(1, target)) * 32,
         });
       };
+      const baseCards = savedCounts.cards;
+      // A fresh build already allows partial saves, so each accepted batch is
+      // written before the next request. A rebuild must keep its old deck until
+      // the replacement is complete, so it only checkpoints at the stage end.
+      const checkpointCards = canKeepPartial
+        ? async (batch: GeneratedCard[]) => {
+            if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
+            const saved = await ctx.runMutation(
+              internal.studySets.completeGeneration,
+              {
+                setId,
+                summary,
+                cards: toCardArgs(batch),
+                quiz: [],
+                exams: [],
+                keepExisting: true,
+                title: summary.title,
+                requested: {
+                  cards: requestedCards,
+                  quiz: requestedQuiz,
+                  exams: requestedExam,
+                },
+                final: false,
+              },
+            );
+            if (saved.stored && saved.counts) {
+              savedCounts.cards = saved.counts.cards;
+              savedCounts.quiz = saved.counts.quiz;
+              savedCounts.exams = saved.counts.exams;
+            }
+            const built = Math.max(0, savedCounts.cards - baseCards);
+            await ctx.runMutation(internal.studySets.setProgress, {
+              setId,
+              progress: `Building flashcards… ${built} of ${targetCards}`,
+              percent: 24 + (built / Math.max(1, targetCards)) * 32,
+            });
+          }
+        : undefined;
       currentStage = "cards";
       const cardStage = await stage(
         () =>
-          generateCards(apiKeys, notes, targetCards, deadline, reportCards, syllabus),
+          generateCards(
+            apiKeys,
+            notes,
+            initialCardTarget,
+            deadline,
+            canKeepPartial ? undefined : reportCards,
+            syllabus,
+            "",
+            checkpointCards,
+          ),
         [],
       );
       const cards = cardStage.value;
       if (cardStage.failure) {
         stageFailures.push({ stage: "cards", error: cardStage.failure });
-      } else if (cards.length > 0) {
+      } else if (cards.length > 0 && !canKeepPartial) {
         await savePartial(summary, cards, [], []);
       }
 

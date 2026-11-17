@@ -1783,6 +1783,9 @@ export const completeGeneration = internalMutation({
     cardsOnly: v.optional(v.boolean()),
     quizOnly: v.optional(v.boolean()),
     examsOnly: v.optional(v.boolean()),
+    // A section checkpoint during a parallel build keeps the visible progress
+    // message owned by the stage that is still generating.
+    keepProgress: v.optional(v.boolean()),
     // A short topic name from the generator, applied only when the student has
     // not named the set themselves.
     title: v.optional(v.string()),
@@ -1814,6 +1817,7 @@ export const completeGeneration = internalMutation({
       cardsOnly,
       quizOnly,
       examsOnly,
+      keepProgress,
       title,
       requested,
       final,
@@ -1933,8 +1937,12 @@ export const completeGeneration = internalMutation({
       await ctx.db.patch(setId, {
         quizCount: quizToStore.length,
         status: "processing" as const,
-        progress: "Quiz saved. Continuing with exam questions…",
-        progressPercent: 82,
+        ...(keepProgress === true
+          ? {}
+          : {
+              progress: "Quiz saved. Continuing with exam questions…",
+              progressPercent: 82,
+            }),
         errorMessage: undefined,
         updatedAt: stageNow,
       });
@@ -2014,8 +2022,12 @@ export const completeGeneration = internalMutation({
             }
           : {
               status: "processing" as const,
-              progress: `Exam checkpoint saved: ${examTotal} of ${requested.exams}.`,
-              progressPercent: 89,
+              ...(keepProgress === true
+                ? {}
+                : {
+                    progress: `Exam checkpoint saved: ${examTotal} of ${requested.exams}.`,
+                    progressPercent: 89,
+                  }),
               errorMessage: undefined,
             }),
         updatedAt: stageNow,

@@ -760,9 +760,12 @@ seconds in the browser and rejected above 8 MB. `NVIDIA_ASR_MODEL` and
 - Creating a set saves it immediately and starts one server action, so leaving the page does not stop the build. Opening a queued set also triggers the action as a fallback. An atomic claim prevents duplicate runs.
 - A finished course-topic set can seed a copy for a later request that covers the same topics, even when the requested card, quiz and exam counts differ. A student's own pasted notes can similarly reuse one of their earlier sets when enough text overlaps; personal material is never added to the shared course cache.
 - The action reads stored images (one vision request per image), writes the extracted
-  notes to the set, then asks NVIDIA in sequence for the summary, flashcards, quiz (a mix
-  of multiple choice, cloze and typed answers), and exam questions. Progress messages are
-  written to the set so the page updates live.
+  notes to the set, then asks NVIDIA for the summary, flashcards, quiz (a mix of multiple
+  choice and typed answers), and exam questions. A long build starts the remaining
+  flashcards, quiz and exam questions together; the quiz is generated against the cards
+  already saved, then rechecked against the finished deck and topped up if any question
+  overlapped. Each completed flashcard, quiz and exam batch is saved before the next
+  request, and progress messages are written to the set so the page updates live.
 - If anything fails, the set gets an **error** status, a readable message, and a retry
   button. Extracted notes and uploads are kept.
 - Rate limits (HTTP 429) rotate to the next key in the pool. If the whole pool is

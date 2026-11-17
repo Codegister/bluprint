@@ -181,6 +181,14 @@ describe("study set acceptance checks", () => {
     expect(gradeRecall("2.8.1", "2,8,1 electrons").correct).toBe(true);
   });
 
+  test("8aa. a quantity answer accepts the number without its unit", () => {
+    expect(gradeRecall("2 electrons.", "2").correct).toBe(true);
+    expect(gradeShortAnswer("2 electrons.", [], "2").correct).toBe(true);
+    expect(gradeRecall("2 electrons.", "two").correct).toBe(true);
+    expect(gradeRecall("2 electrons.", "3").correct).toBe(false);
+    expect(gradeRecall("2.8.1 electrons.", "2").correct).toBe(false);
+  });
+
   test("8b. a plain-word term matches when it appears inside a longer answer", () => {
     expect(
       gradeShortAnswer("active site", [], "the active site changes shape").correct,

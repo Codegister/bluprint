@@ -388,6 +388,46 @@ function ErrorPanel({ set }: { set: Doc<"studySets"> }) {
   );
 }
 
+/** The prose summary the build wrote, shown for both course and upload sets. */
+function SummaryOverview({ set }: { set: Doc<"studySets"> }) {
+  const summary = set.summary;
+  if (!summary?.overview) return null;
+  return (
+    <section className="rounded-[2rem] border border-border bg-card p-6">
+      <p className="text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        Summary
+      </p>
+      <p className="mt-2 text-[0.92rem] leading-relaxed text-brand-ink/80">
+        {summary.overview}
+      </p>
+      {set.status === "processing" && (
+        <p className="mt-4 rounded-xl bg-brand-panel px-3 py-2 text-[0.76rem] leading-relaxed text-muted-foreground">
+          Your summary is ready. Bluprint is still building the flashcards, quiz
+          and exam practice.
+        </p>
+      )}
+      {summary.examFocus.length > 0 && (
+        <div className="mt-5 border-t border-border pt-4">
+          <h3 className="font-display text-[0.95rem] font-bold text-brand-ink">
+            Exam focus
+          </h3>
+          <ul className="mt-2 space-y-1.5">
+            {summary.examFocus.map((point, index) => (
+              <li
+                key={`${point}-${index}`}
+                className="flex items-start gap-2 text-[0.88rem] leading-relaxed text-brand-ink/75"
+              >
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand-ink/35" />
+                {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /**
  * A set built from the student's own uploads has no specification to list, so
  * its overview is the points the build wrote — one per card — and the material
@@ -817,6 +857,13 @@ export default function StudySet() {
         (activeSection === "quiz" && set.quizCount > 0) ||
         (activeSection === "exam" && set.examCount > 0));
     const showSection = completedSection && set.status !== "queued";
+    // The summary is saved before the cards and questions finish. It is usable
+    // on its own, so the Overview tab opens it while the rest of the build runs
+    // instead of dropping the student back onto the build bar.
+    const summaryAvailable =
+      set.summary !== undefined && set.status !== "queued";
+    const showOverview = !isMode && summaryAvailable;
+    const showTabs = set.status === "ready" || showSection || summaryAvailable;
     // The one sentence for a build that came in under the request, in the same
     // words the generator wrote it with.
     const shortfall = set.generationNote
@@ -968,7 +1015,7 @@ export default function StudySet() {
           </div>
         )}
 
-        {(set.status === "ready" || showSection) && (
+        {showTabs && (
           <nav
             aria-label="Set sections"
             className="set-tabs no-scrollbar"
@@ -1001,7 +1048,7 @@ export default function StudySet() {
 
         {set.status === "error" && !showSection ? (
           <ErrorPanel set={set} />
-        ) : set.status !== "ready" && !showSection ? (
+        ) : set.status !== "ready" && !showSection && !showOverview ? (
           <BuildingPanel set={set} stale={details.processingStale} />
         ) : isMode ? (
           <div className="set-mode">
@@ -1170,12 +1217,15 @@ export default function StudySet() {
             </div>
 
             <div className="set-overview">
-              <OverviewView
-                key={set._id}
-                setId={set._id}
-                set={set}
-                sourceImages={details.sourceImages}
-              />
+              <SummaryOverview set={set} />
+              <div className="mt-3">
+                <OverviewView
+                  key={set._id}
+                  setId={set._id}
+                  set={set}
+                  sourceImages={details.sourceImages}
+                />
+              </div>
             </div>
 
             {/* Specification coverage, export and the timed mock: the three

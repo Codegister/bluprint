@@ -32,6 +32,7 @@ export async function runPathwayBatches<T>({
   deadline = Number.POSITIVE_INFINITY,
   progressTarget,
   generate,
+  onBatch,
   onProgress,
 }: {
   scopes: readonly PathwayBatchScope[];
@@ -40,6 +41,8 @@ export async function runPathwayBatches<T>({
   /** The requested total, so progress never jumps past the student's target. */
   progressTarget?: number;
   generate: (scope: PathwayBatchScope) => Promise<readonly T[]>;
+  /** Persists the merged result after each section, before progress moves. */
+  onBatch?: (items: readonly T[]) => Promise<void> | void;
   onProgress?: (completed: number, target: number) => Promise<void> | void;
 }): Promise<PathwayBatchRun<T>> {
   if (scopes.length === 0) {
@@ -58,6 +61,9 @@ export async function runPathwayBatches<T>({
   let nextScope = 0;
   let completed = 0;
   let skippedSections = 0;
+  // Section workers finish out of order. Checkpointing is serialized so each
+  // write sees the sections already saved by the previous one.
+  let batchQueue: Promise<void> = Promise.resolve();
 
   const worker = async () => {
     while (true) {
@@ -75,6 +81,15 @@ export async function runPathwayBatches<T>({
         const batch = await generate(scope);
         results[index] = [...batch];
         completed += batch.length;
+        if (onBatch) {
+          const merged = results.flat();
+          const write = batchQueue.then(() => onBatch(merged));
+          batchQueue = write.then(
+            () => undefined,
+            () => undefined,
+          );
+          await write;
+        }
         try {
           await onProgress?.(Math.min(completed, target), target);
         } catch {

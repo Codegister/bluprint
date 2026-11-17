@@ -452,6 +452,20 @@ function phraseAppears(words: string[], response: string): boolean {
 }
 
 /**
+ * A number-only response answers a quantity whose unit is only context:
+ * "2" is complete for "2 electrons". Keep this narrow: the expected answer
+ * must contain exactly one number, and a formula or a multi-value sequence
+ * keeps its whole-answer rule.
+ */
+function numericAnswerWithoutUnitMatches(expected: string, response: string): boolean {
+  if (isFormulaAnswer(expected)) return false;
+  const wanted = numericChunks(normalizeAnswer(expected));
+  if (wanted.length !== 1 || wanted[0]?.length !== 1) return false;
+  const offered = numericValues(normalizeAnswer(response), true);
+  return offered !== null && sameNumbers(wanted[0]!, offered);
+}
+
+/**
  * A closed answer is one that has a single correct form: a numeric value or
  * sequence, a formula, or a one/two-word term. Prose returns null and keeps the
  * existing concept-unit marking. Extra numbers in a response are significant:
@@ -467,6 +481,7 @@ export function structuredAnswerMatch(
   if (numeric && numeric.length > 0) {
     return numericAnswerMatches(numeric, response);
   }
+  if (numericAnswerWithoutUnitMatches(expected, response)) return true;
 
   // A sequence embedded in a phrase ("electron configuration 2.8.1") is still
   // closed: every value and its order matter, and an extra value is wrong.
