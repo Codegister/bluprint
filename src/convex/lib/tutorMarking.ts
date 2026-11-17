@@ -25,9 +25,46 @@ export function looksLikeStudentAnswer(message: string): boolean {
   if (/^(?:what|why|how|when|where|which|who|explain|describe|give|show|tell)\b/i.test(text)) {
     return false;
   }
+  // A question back to the tutor is not an answer, whatever its length: this is
+  // what stopped "Are you sure those are all the topics?" being marked 0/1.
+  if (/^(?:are|were|is|was|do|did|does|can|could|will|would|should|have|has)\s+you\b/i.test(text)) {
+    return false;
+  }
   return (
     /\b(?:because|so|therefore|it is|they are|the .+ (?:is|are|has|have)|this .+ (?:is|are))\b/i.test(
       text,
     ) || text.split(/\s+/).length >= 4
+  );
+}
+
+/**
+ * Whether this turn is marking an answer the tutor asked for.
+ *
+ * The marking contract used to be part of every tutor prompt, so an ordinary
+ * question such as "Are you sure those are all the topics?" was answered as a
+ * marked script: "Mark: 0/1. Not credited: ...". Marking now needs a question
+ * from the tutor's own last reply and a message that reads as an answer, or a
+ * direct request to be marked.
+ */
+export function shouldMarkAnswer(
+  previousAssistant: string | undefined,
+  message: string,
+): boolean {
+  const text = message.trim();
+  // "Mark my answer", "grade this" - the student asked for it outright.
+  if (/\b(?:mark|grade)\s+(?:my|this|it|that|these|them)\b/i.test(text)) return true;
+  if (!previousAssistant) return false;
+  if (!askedForAnAnswer(previousAssistant)) return false;
+  return looksLikeStudentAnswer(text);
+}
+
+/** True when the reply left the student something to answer. */
+function askedForAnAnswer(reply: string): boolean {
+  const text = reply.trim();
+  if (!text.includes("?")) return false;
+  // Either a numbered question list or a question that closes the reply.
+  return (
+    /\?\s*$/.test(text) ||
+    /(?:^|\n)\s*\d{1,2}[.)]\s+[^\n]*\?/.test(text)
   );
 }

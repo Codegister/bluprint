@@ -22,8 +22,10 @@ import {
   BUILD_MIN,
 } from "./lib/buildDefaults";
 import {
+  isBuildConfirmation,
   isTutorBuildRequest,
   planTutorBuild,
+  resolveProposedBuilds,
   type TutorBuildPlan,
 } from "./lib/tutorAgent";
 import {
@@ -45,7 +47,7 @@ import {
   type BuildStage,
 } from "./lib/buildFailure";
 import { buildAqaBiologyPathway } from "./lib/specPathways";
-import { tutorMarkingRules } from "./lib/tutorMarking";
+import { shouldMarkAnswer, tutorMarkingRules } from "./lib/tutorMarking";
 import { chatCompletionsUrl } from "./lib/gatewayConfig";
 import { alignDataReference, dropUnusedData } from "./lib/paperData";
 import { criteriaToGuide } from "./lib/realPaper";
@@ -137,7 +139,12 @@ import {
   OPENROUTER_STT_URL,
   dictationMimeType,
 } from "./lib/speechConfig";
-import { searchWeb, webResultsBlock, type WebResult } from "./lib/webSearch";
+import {
+  searchQueryFor,
+  searchWeb,
+  webResultsBlock,
+  type WebResult,
+} from "./lib/webSearch";
 import {
   AI_RATE_LIMIT_MESSAGE,
   AI_UNAVAILABLE_MESSAGE,
@@ -2789,12 +2796,79 @@ async function startTutorBuild(
  * turned into a note for the tutor rather than an exception, so the student
  * still gets an answer explaining what happened.
  */
+/** The tutor's last reply: what a "proceed" is agreeing with. */
+function lastAssistantReply(
+  messages: Array<{ role: string; content: string }>,
+): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]!;
+    if (message.role === "assistant" && message.content.trim()) {
+      return message.content;
+    }
+  }
+  return undefined;
+}
+
+/** Sets the tutor offered but could not map to a real topic. */
+function unresolvedProposalsNote(unresolved: string[]): string {
+  if (unresolved.length === 0) return "";
+  return (
+    ` These offered sets were not built because they did not match a topic in the student's courses: ${unresolved.join(
+      "; ",
+    )}. Say plainly that those were not built, and ask which topic was meant.`
+  );
+}
+
+/**
+ * Builds the sets the tutor offered when the student agrees to them.
+ *
+ * The offer only exists in the previous reply ("Here are the 10 sets…"), so
+ * the plans are resolved from that text against the student's real courses.
+ * Every plan still goes through `startTutorBuild`, which repeats ownership,
+ * verification and allowance checks, and a line that does not resolve is
+ * reported instead of guessed.
+ */
+async function buildProposedSets(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+  previousReply: string,
+): Promise<TutorBuildAction | null> {
+  const courses = await ctx.runQuery(internal.tutor.getTutorBuildCourses, {
+    userId,
+  });
+  const proposed = resolveProposedBuilds(previousReply, courses);
+  if (proposed.plans.length === 0) return null;
+
+  const outcomes: TutorBuildOutcome<Id<"studySets">>[] = [];
+  for (const plan of proposed.plans) {
+    outcomes.push(await startTutorBuild(ctx, userId, { status: "build", ...plan }));
+  }
+  const { note, builtSetIds } = multiBuildNote(outcomes);
+  return {
+    note: note + unresolvedProposalsNote(proposed.unresolved),
+    ...(builtSetIds.length > 0
+      ? { builtSetIds, builtSetId: builtSetIds[0]! }
+      : {}),
+  };
+}
+
 async function runTutorBuild(
   ctx: ActionCtx,
   userId: Id<"users">,
   question: string,
-  options: { currentCourseId?: Id<"courses">; unitTitle?: string },
+  options: {
+    currentCourseId?: Id<"courses">;
+    unitTitle?: string;
+    /** The tutor's previous reply, which a confirmation agrees with. */
+    previousReply?: string;
+  },
 ): Promise<TutorBuildAction | null> {
+  // "Ok, then, proceed to set generation" names no verb or material of its
+  // own: it can only be acted on against the reply it is agreeing with.
+  if (isBuildConfirmation(question) && options.previousReply) {
+    const proposed = await buildProposedSets(ctx, userId, options.previousReply);
+    if (proposed) return proposed;
+  }
   // Avoid a database read on every ordinary tutor question.
   if (!isTutorBuildRequest(question)) return null;
   const courses = await ctx.runQuery(internal.tutor.getTutorBuildCourses, { userId });
@@ -7749,7 +7823,7 @@ function webRules(state: TutorWebState): string {
   }
   if (state === "empty") {
     return (
-      "WEB SEARCH: a search ran for this question and found nothing usable. Say plainly that no outside source was found, then answer from the study material. Do not imply you checked the web, and do not invent a source."
+      "WEB SEARCH: no usable outside source was found for this message. Say plainly that none was found, then answer from the study material. Do not imply you checked the web, and do not invent a source."
     );
   }
   if (state === "browsing") {
@@ -7774,6 +7848,8 @@ type TutorContext = {
   level?: string;
   /** The student's explicit explanation register: Simple, GCSE or A-Level. */
   explainLevel?: string;
+  /** True only when this reply is marking an answer the tutor asked for. */
+  marking?: boolean;
   messages: Array<{ role: string; content: string }>;
 };
 
@@ -7817,6 +7893,14 @@ function explainLevelRules(level: string | undefined, question: string): string 
   );
 }
 
+/**
+ * The counter-instruction for a reply that is not marking anything. The marking
+ * contract used to be in every prompt, and the model answered an ordinary
+ * question with "Mark: 0/1" and "Not credited:" copied from it.
+ */
+const NO_MARKING_RULES =
+  "NO MARKING IN THIS REPLY: the student is not answering a question you asked, so do not give a mark out of N, do not say 'Not credited:', and do not grade their message. Answer what they actually asked.";
+
 /** The question as the tutor's prompt, with the material and any web results. */
 function tutorPrompt(
   context: TutorContext,
@@ -7833,7 +7917,7 @@ function tutorPrompt(
   const system = [
     TUTOR_SYSTEM_PROMPT,
     TUTOR_THREAD_RULES,
-    tutorMarkingRules(),
+    context.marking ? tutorMarkingRules() : NO_MARKING_RULES,
     "Begin every reply with a complete sentence. Never start with a partial word, a hyphen, or a continuation of the study material.",
     materialBlock(context.material),
     `<material_title>${context.title}</material_title>`,
@@ -8171,7 +8255,20 @@ async function streamTutorAnswer(
     );
   }
 
-  const search = await searchWeb(question, context.course).catch(() => null);
+  // A question about the conversation, or an agreement with an offer, has
+  // nothing to look up. Searching the sentence itself is what cited Wikipedia's
+  // "Sure" and "Are You Sure?" for a question about GCSE mock topics.
+  const query = searchQueryFor(question);
+  if (!query) {
+    return await streamNvidiaAnswer(
+      apiKeys,
+      tutorPrompt(context, question, [], "empty", agentNote),
+      tier,
+      onSnapshot,
+    );
+  }
+
+  const search = await searchWeb(query, context.course).catch(() => null);
   const results = search?.results ?? [];
 
   if (results.length > 0) {
@@ -8450,6 +8547,11 @@ export const askTutor = action({
     });
     if (!context) throw new Error("Study set not found.");
 
+    // The previous reply is what a "proceed" agrees with, and it decides
+    // whether this turn is marking an answer or answering a question.
+    const previousReply = lastAssistantReply(context.messages);
+    const marking = shouldMarkAnswer(previousReply, text);
+
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
     const apiKeys = resolveNvidiaKeys();
 
@@ -8483,6 +8585,7 @@ export const askTutor = action({
       // background generation; the answer then tells the student what happened.
       const build = await runTutorBuild(ctx, userId, text, {
         currentCourseId: context.set.courseId,
+        previousReply,
       });
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
@@ -8510,6 +8613,7 @@ export const askTutor = action({
         examBoard: context.set.examBoard,
         level: context.set.level,
         explainLevel,
+        marking,
         messages: context.messages,
       };
       const result = await streamTutorAnswer(
@@ -8592,6 +8696,9 @@ export const askCourseTutor = action({
     });
     if (!context) throw new Error("Course not found.");
 
+    const previousReply = lastAssistantReply(context.messages);
+    const marking = shouldMarkAnswer(previousReply, text);
+
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
     const apiKeys = resolveNvidiaKeys();
 
@@ -8619,6 +8726,7 @@ export const askCourseTutor = action({
       const build = await runTutorBuild(ctx, userId, text, {
         currentCourseId: courseId,
         unitTitle,
+        previousReply,
       });
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
@@ -8641,7 +8749,7 @@ export const askCourseTutor = action({
 
       const result = await streamTutorAnswer(
         apiKeys,
-        { ...context, explainLevel },
+        { ...context, explainLevel, marking },
         modelQuestion,
         // Off unless the browser explicitly asks for it.
         useWeb === true,
@@ -8713,6 +8821,9 @@ export const askLibraryTutor = action({
     });
     if (!context) throw new Error("Add a course before asking the tutor.");
 
+    const previousReply = lastAssistantReply(context.messages);
+    const marking = shouldMarkAnswer(previousReply, text);
+
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
     const apiKeys = resolveNvidiaKeys();
 
@@ -8739,7 +8850,7 @@ export const askLibraryTutor = action({
     try {
       // The planner reads every course too, so "build a Spanish quiz" works from
       // a home question without a selected course.
-      const build = await runTutorBuild(ctx, userId, text, {});
+      const build = await runTutorBuild(ctx, userId, text, { previousReply });
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
       // whether the student stopped while the build was running.
@@ -8765,6 +8876,7 @@ export const askLibraryTutor = action({
           title: context.title,
           material: context.material,
           explainLevel,
+          marking,
           messages: context.messages,
         },
         modelQuestion,

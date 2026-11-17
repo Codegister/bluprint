@@ -598,3 +598,187 @@ export function planTutorBuild(
 
   return { status: "needs-topic", courseId: course.id, subject: course.subject };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Agreeing to a set the tutor proposed                                        */
+/* -------------------------------------------------------------------------- */
+
+/** A build the tutor offered in a reply, ready to run once the student agrees. */
+export type TutorProposedBuild = Omit<TutorBuildPlan, "status">;
+
+/**
+ * What the student says to accept it: "Ok, then, proceed to set generation".
+ *
+ * That sentence names no verb or material of its own, so a planner that reads
+ * only the newest message treats the agreement as ordinary chat and the tutor
+ * answers with prose instead of building the sets it had just offered.
+ */
+const BARE_CONFIRMATION =
+  /^\s*(?:yes|yeah|yep|ok(?:ay)?|sure|go ahead|proceed|do it|please do|go on|carry on|continue)\b[\s.!,]*(?:please\s+)?(?:proceed|do it|go ahead|continue)?[\s.!,]*$/i;
+
+/**
+ * "proceed to set generation" agrees with an offer; "make a study set" asks for
+ * a new one. Only a demonstrative ("those sets", "them") or the word
+ * "generation" counts, so a fresh build request is never mistaken for consent.
+ */
+const CONFIRMATION_WITH_OBJECT =
+  /\b(?:proceed|go ahead|go on|carry on|continue)\b[^.!?]{0,50}\b(?:sets?|generation|them|those|these|the list|that list|it)\b|\b(?:create|build|generate|make|start)\s+(?:the|those|these|all|them)\b/i;
+
+export function isBuildConfirmation(question: string): boolean {
+  const text = question.trim();
+  if (!text) return false;
+  return BARE_CONFIRMATION.test(text) || CONFIRMATION_WITH_OBJECT.test(text);
+}
+
+/** A reply offers at most this many sets; one build per course is the usual 10. */
+const MAX_PROPOSED_BUILDS = 12;
+
+/** "1. GCSE Spanish - Identity and Culture" is a proposal; prose is not. */
+const PROPOSAL_LINE = /^\s*(?:\d{1,2}[.)])\s+(.{3,220})$/;
+const PROPOSAL_SPLIT = /^(.{2,90}?)\s*(?:[\u2014\u2013]|-(?=\s)|:)\s*(.{2,180})$/;
+
+/** A labelled level at the start of a course name ("GCSE Spanish"). */
+const PROPOSAL_LEVEL =
+  /^(?:gcse|igcse|a[- ]?level|as[- ]?level|ib|ks3|national 5|higher|foundation)\b[\s:\u00b7-]*/i;
+
+/**
+ * The numbered "<course> - <topic>" lines a reply offered as sets.
+ *
+ * Only numbered lines count: a hyphen bullet is how the tutor lists questions
+ * and key points, and treating those as courses would build the wrong set.
+ */
+export function proposedBuildLines(
+  reply: string,
+): Array<{ course: string; topic: string }> {
+  const lines: Array<{ course: string; topic: string }> = [];
+  for (const raw of reply.split(/\r?\n/)) {
+    const numbered = raw.match(PROPOSAL_LINE);
+    if (!numbered) continue;
+    const body = numbered[1]!.replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
+    const split = body.match(PROPOSAL_SPLIT);
+    if (!split) continue;
+    const course = split[1]!.trim();
+    const topic = split[2]!.trim();
+    if (course.length < 2 || topic.length < 2) continue;
+    lines.push({ course, topic });
+  }
+  return lines.slice(0, MAX_PROPOSED_BUILDS);
+}
+
+function levelKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * The course a proposal line names. A subject at two levels (GCSE Spanish and
+ * A-Level Spanish) is separated by the level label, and an ambiguous label is
+ * refused rather than guessed: a build on the wrong course spends a real one.
+ */
+function courseForProposal(
+  label: string,
+  courses: TutorAgentCourse[],
+): TutorAgentCourse | null {
+  const levelMatch = label.match(PROPOSAL_LEVEL);
+  const level = levelMatch ? levelKey(levelMatch[0]) : "";
+  const subjectText = label
+    .replace(PROPOSAL_LEVEL, "")
+    .replace(/\([^)]*\)/g, " ")
+    .trim();
+  if (!subjectText) return null;
+
+  const matches = courses.filter((course) => subjectMatch(subjectText, course.subject));
+  if (matches.length === 1) return matches[0]!;
+  if (matches.length === 0) return null;
+  if (!level) return null;
+
+  const byLevel = matches.filter((course) => levelKey(course.level) === level);
+  return byLevel.length === 1 ? byLevel[0]! : null;
+}
+
+/** The strongest unique title match, or null when nothing or a tie matches. */
+function bestByTitle<T>(
+  label: string,
+  items: T[],
+  titleOf: (item: T) => string,
+): T | null {
+  const scored = items
+    .map((item) => ({
+      item,
+      score: scoreTopic(label, {
+        id: "",
+        title: titleOf(item),
+        unitTitle: "",
+        number: 0,
+      }),
+    }))
+    .filter((entry) => entry.score >= 0.6)
+    .sort((a, b) => b.score - a.score);
+  if (scored.length === 0) return null;
+  // A tie between two topics means the label does not pick one.
+  if (scored[1] && scored[1].score === scored[0]!.score) return null;
+  return scored[0]!.item;
+}
+
+/**
+ * Turns the sets a reply offered into real plans for the student's courses.
+ *
+ * A line naming a topic builds that topic; a line naming a theme or unit
+ * builds the topics inside it. Anything that does not match is reported as
+ * unresolved so the reply can say it did not build rather than inventing a
+ * topic the student never asked for.
+ */
+export function resolveProposedBuilds(
+  reply: string,
+  courses: TutorAgentCourse[],
+): { plans: TutorProposedBuild[]; unresolved: string[] } {
+  const plans: TutorProposedBuild[] = [];
+  const unresolved: string[] = [];
+  // A reply that never mentioned sets is a numbered explanation, not an offer.
+  if (!/\bsets?\b/i.test(reply)) return { plans, unresolved };
+
+  const counts = countsForTutorBuild(reply);
+  const seen = new Set<string>();
+
+  for (const line of proposedBuildLines(reply)) {
+    const label = `${line.course} \u2014 ${line.topic}`;
+    const course = courseForProposal(line.course, courses);
+    if (!course) {
+      unresolved.push(label);
+      continue;
+    }
+
+    const topics = numberTopics(course);
+    if (topics.length === 0) {
+      unresolved.push(label);
+      continue;
+    }
+
+    const topic = bestByTitle(line.topic, topics, (entry) => entry.title);
+    let chosen = topic ? [topic] : [];
+    // A theme or unit name ("Identity and Culture") stands for the topics in it.
+    if (chosen.length === 0) {
+      const unit = bestByTitle(line.topic, course.units, (entry) => entry.title);
+      chosen = unit
+        ? topics.filter((entry) => entry.unitTitle === unit.title)
+        : [];
+    }
+    if (chosen.length === 0) {
+      unresolved.push(label);
+      continue;
+    }
+
+    const key = `${course.id}|${chosen.map((topic) => topic.id).join(",")}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    plans.push({
+      courseId: course.id,
+      subject: course.subject,
+      topicIds: chosen.map((topic) => topic.id),
+      firstTopicId: chosen[0]!.id,
+      label: labelForTopics(chosen),
+      counts,
+    });
+  }
+
+  return { plans: plans.slice(0, MAX_PROPOSED_BUILDS), unresolved };
+}

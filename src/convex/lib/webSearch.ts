@@ -93,6 +93,9 @@ function dedupe(results: WebResult[]): WebResult[] {
     const title = plainText(result.title);
     const snippet = truncate(plainText(result.snippet), SNIPPET_CHARS);
     if (!title || !result.url || snippet.length < 40) continue;
+    // A word's disambiguation page is never an answer, and "Sure" was once
+    // cited as a source for a GCSE question.
+    if (/\bdisambiguation\b/i.test(title)) continue;
     if (seen.has(result.url)) continue;
     seen.add(result.url);
     output.push({ title, url: result.url, snippet });
@@ -593,6 +596,61 @@ function isCovered(results: WebResult[]): boolean {
  * providers are tried — and if none is configured or all are exhausted, the
  * tutor still receives the thin keyless results rather than nothing.
  */
+/**
+ * Words that carry no subject on their own. A tutor message made only of these
+ * ("Ok, then, proceed to set generation") must not be sent to a search engine:
+ * the results are the words' dictionary pages, not the student's topic.
+ */
+const CONVERSATION_WORDS = new Set([
+  "sure", "really", "actually", "certain", "okay", "yes", "yeah", "please",
+  "thanks", "thank", "proceed", "continue", "generation", "sets", "set",
+  "those", "these", "them", "they", "that", "this", "all", "every", "each",
+  "more", "again", "still", "right", "correct", "wrong", "then",
+]);
+
+/**
+ * A question about the conversation itself, not about the subject: "Are you
+ * sure those are all the topics?" used to be searched verbatim and came back
+ * with Wikipedia's "Sure", "Are You Sure?" and "For Sure".
+ */
+const META_QUESTION =
+  /\b(?:are|were|is|was)\s+you\s+(?:sure|certain)\b|\bwhat do you mean\b|\bwhy did you\b|\bcan you (?:check|confirm|repeat|clarify)\b|\bthose are all\b|\bthat(?:'s| is) all\b|\bwas that (?:right|correct|all)\b/i;
+
+/** An instruction to act on the tutor's own proposal, which needs no search. */
+const CONVERSATION_ACTION =
+  /\b(?:proceed|go ahead|set generation|do it)\b|\b(?:create|build|make|generate)\s+(?:the|those|these)\s+sets?\b/i;
+
+/**
+ * The query a tutor message should actually search for, or "" when it should
+ * not search at all. Conversational openers are dropped, a question about the
+ * conversation is refused, and a message with no subject words left is refused
+ * rather than searched as a sentence.
+ */
+export function searchQueryFor(question: string): string {
+  const text = question.trim();
+  if (!text) return "";
+  if (META_QUESTION.test(text) || CONVERSATION_ACTION.test(text)) return "";
+
+  const shaped = text
+    // Openers stack ("ok, so…"), so keep stripping until none is left.
+    .replace(
+      /^(?:(?:ok(?:ay)?|so|now|then|and|but|also|right|well|hmm+|yes|yeah)\b[\s,.!]+)+/i,
+      "",
+    )
+    .replace(/^(?:can|could|would|will)\s+you\s+(?:please\s+)?/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const content = shaped
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !CONVERSATION_WORDS.has(word));
+  if (content.length === 0) return "";
+
+  return shaped.slice(0, 240);
+}
+
 export async function searchWeb(
   question: string,
   course?: string,
