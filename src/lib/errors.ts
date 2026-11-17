@@ -86,7 +86,14 @@ export function readableError(error: unknown, fallback: string): string {
   if (!(error instanceof Error) || !error.message.trim()) return fallback;
 
   const uncaught = error.message.match(/Uncaught Error:\s*([^\n]+)/);
-  const message = (uncaught?.[1] ?? error.message)
+  // A ConvexError is delivered with its real text in `data`; the client SDK
+  // replaces `message` with "Server Error". Without this the page could only
+  // fall back to a generic sentence for every deliberate server refusal.
+  const data = (error as { data?: unknown }).data;
+  const source =
+    uncaught?.[1] ??
+    (typeof data === "string" && data.trim() ? data : error.message);
+  const message = source
     .replace(/^\[[^\]]*Request ID[^\]]*\]\s*/i, "")
     .replace(/^Server Error\s*/i, "")
     .replace(/\s+at handler[\s\S]*$/, "")

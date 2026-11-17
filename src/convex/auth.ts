@@ -1,6 +1,6 @@
 import { convexAuth, getAuthSessionId } from "@convex-dev/auth/server";
 import { Anonymous } from "@convex-dev/auth/providers/Anonymous";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import {
   action,
@@ -233,7 +233,10 @@ export const signIn = action({
         email: sendEmail,
       });
       if (!gate.allowed) {
-        throw new Error(sendRefusalMessage(gate.retryAt, Date.now()));
+        // A plain Error is redacted to "Server Error" before it reaches the
+        // browser, which is why the page could only show a generic sentence.
+        // ConvexError's message is delivered as written, so the wait is real.
+        throw new ConvexError(sendRefusalMessage(gate.retryAt, Date.now()));
       }
     }
 

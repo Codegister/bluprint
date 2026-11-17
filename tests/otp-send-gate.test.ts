@@ -94,6 +94,19 @@ describe("the sign-in page shows that sentence", () => {
     expect(readableError(fromServer, fallback)).toBe(sentence);
   });
 
+  test("a ConvexError's real text reaches the page", () => {
+    // What the Convex client actually hands the page: a generic message plus
+    // the written sentence in `data`.
+    const sentence = "A code was requested recently. Try again in 60s.";
+    const fromServer = Object.assign(
+      new Error(
+        "[CONVEX A(auth:signIn)] [Request ID: abc] Server Error\n  Called by client",
+      ),
+      { name: "ConvexError", data: sentence },
+    );
+    expect(readableError(fromServer, fallback)).toBe(sentence);
+  });
+
   test("the hourly cap reaches the page", () => {
     const sentence =
       "Too many codes have been requested for this address. Try again later.";
