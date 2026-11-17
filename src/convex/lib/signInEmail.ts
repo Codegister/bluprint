@@ -34,18 +34,22 @@ export function signInEmail({
     "",
     `Your sign-in code is: ${code}`,
     "",
-    `Enter it on the BluPrint sign-in page. The code expires in ${minutes}.`,
+    `Enter it on the BluPrint page. The code expires in ${minutes}.`,
     "If you did not try to sign in, you can ignore this email.",
   ].join("\n");
 
   const html = `<!doctype html>
 <html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+  </head>
   <body style="margin:0;padding:24px;background:#f6f7f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
     <div style="max-width:480px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:28px;">
       <p style="margin:0 0 20px;font-size:15px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#4f46e5;">BluPrint</p>
       <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;">Your sign-in code</h1>
-      <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#374151;">Enter this code on the BluPrint sign-in page to finish signing in.</p>
-      <p style="margin:0 0 20px;padding:16px 0;text-align:center;border-radius:10px;background:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:30px;font-weight:700;letter-spacing:0.35em;color:#ffffff;">${escapeHtml(code)}</p>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#374151;">Enter this code on the BluPrint page to finish signing in.</p>
+      <p style="margin:0 0 20px;padding:16px 0;text-align:center;border-radius:10px;background:#111827;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:28px;font-weight:700;letter-spacing:0.3em;text-indent:0.3em;color:#ffffff;">${escapeHtml(code)}</p>
       <p style="margin:0;font-size:13px;line-height:1.6;color:#6b7280;">The code expires in ${minutes}. If you did not try to sign in, you can ignore this email.</p>
     </div>
   </body>
