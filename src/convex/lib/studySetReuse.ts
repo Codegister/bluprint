@@ -16,7 +16,10 @@ import {
  * A copy has to be at least as large as the request. The background review
  * adds a few items, so a smaller finished set cannot grow into a larger build;
  * `copyMeetsRequest` tells the caller whether a source can answer the request it
- * has, and a source that cannot is generated instead.
+ * has, and a source that cannot is generated instead. The student's own set for
+ * the same topics is the exception: it is grown in place by
+ * `grownStudySetTargets` instead of being duplicated, so the rows they have
+ * already reviewed are kept.
  *
  * It also does not have to cover every requested topic. When only some topics
  * overlap, the reusable rows for those topics are copied into a queued set and
@@ -135,6 +138,91 @@ export function copyMeetsRequest(
     source.quizCount >= requested.quiz &&
     source.examCount >= requested.exam
   );
+}
+
+export type StudySetTotals = { cards: number; quiz: number; exam: number };
+
+type StudySetSize = {
+  status: string;
+  cardCount: number;
+  quizCount: number;
+  examCount: number;
+  targetCardCount?: number;
+  targetQuizCount?: number;
+  targetExamCount?: number;
+};
+
+/** The totals a set is building towards, with the legacy default as fallback. */
+export function studySetTargets(set: StudySetSize): StudySetTotals {
+  return {
+    cards: set.targetCardCount ?? BUILD_DEFAULTS.cards,
+    quiz: set.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+    exam: set.targetExamCount ?? BUILD_DEFAULTS.exam,
+  };
+}
+
+/**
+ * Whether the set for these topics can answer the request as it stands.
+ *
+ * A finished set has to hold the totals itself. A set still building only has
+ * to be aimed at them: its own run will fill the rows. A set that fails this
+ * test is grown in place, which is why a small set is no longer duplicated
+ * beside the one the student already has.
+ */
+export function studySetAnswersRequest(
+  set: StudySetSize,
+  requested: StudySetTotals,
+): boolean {
+  if (set.status === "ready") return copyMeetsRequest(set, requested);
+  const targets = studySetTargets(set);
+  return copyMeetsRequest(
+    {
+      cardCount: targets.cards,
+      quizCount: targets.quiz,
+      examCount: targets.exam,
+    },
+    requested,
+  );
+}
+
+/** The targets raised to the request. A larger target is never lowered. */
+export function grownStudySetTargets(
+  set: StudySetSize,
+  requested: StudySetTotals,
+): StudySetTotals {
+  const current = studySetTargets(set);
+  return {
+    cards: Math.max(current.cards, requested.cards),
+    quiz: Math.max(current.quiz, requested.quiz),
+    exam: Math.max(current.exam, requested.exam),
+  };
+}
+
+/**
+ * The targets a request would raise a set to, or undefined when it is already
+ * aimed at that size.
+ *
+ * A ready set can hold fewer rows than its own targets: the generator ran out
+ * of material and finished with an honest "Built X of 100" note. That gap is a
+ * property of the set, not of the request, so asking for the same size again
+ * must not schedule another paid run against targets the set already has.
+ * Growth only happens when the request asks for more than the set has ever
+ * been aimed at; otherwise the caller reopens the set it already has.
+ */
+export function studySetGrowthTargets(
+  set: StudySetSize,
+  requested: StudySetTotals,
+): StudySetTotals | undefined {
+  const raised = grownStudySetTargets(set, requested);
+  const current = studySetTargets(set);
+  if (
+    raised.cards === current.cards &&
+    raised.quiz === current.quiz &&
+    raised.exam === current.exam
+  ) {
+    return undefined;
+  }
+  return raised;
 }
 
 /**

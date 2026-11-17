@@ -23,6 +23,14 @@ export type BuildCounts = {
   exams: number;
 };
 
+/**
+ * A big build that reached the end of a stage with a section still short.
+ *
+ * It is the internal signal to top the missing section up, not a failed build:
+ * the caller keeps everything that was written and, once the automatic attempts
+ * are spent, finishes the set with the honest "Built X of Y" note. The message
+ * is a server-side description and is never shown as an error.
+ */
 export class StudySetShortfallError extends Error {
   readonly section: "quiz" | "exam";
   readonly built: number;
@@ -43,13 +51,7 @@ export class StudySetShortfallError extends Error {
         : requested === 1
           ? "exam question"
           : "exam questions";
-    const finished =
-      saved.cards > 0
-        ? `Your ${saved.cards} flashcard${saved.cards === 1 ? " is" : "s are"} saved.`
-        : "Your notes are safe.";
-    super(
-      `Bluprint built ${built} of ${requested} ${noun}, so this section is incomplete and the set was not marked ready. ${finished} Retry to complete the ${section}.`,
-    );
+    super(`Built ${built} of ${requested} ${noun}.`);
     this.name = "StudySetShortfallError";
     this.section = section;
     this.built = built;

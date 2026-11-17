@@ -4607,6 +4607,17 @@ async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationAr
     ) {
       return { continued: true, retrying: true };
     }
+    // A set that came up short keeps everything it built and finishes with the
+    // honest "Built X of Y" note instead of a failed build.
+    if (
+      error instanceof StudySetShortfallError &&
+      savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0
+    ) {
+      await ctx.runMutation(internal.studySets.finishGeneration, {
+        setId: args.setId,
+      });
+      return { continued: true, finished: true };
+    }
     const refunded = await refundFailedAttempt(ctx, args);
     const message = buildFailureCopy(currentStage, savedCounts, isRateLimit(error));
     await ctx.runMutation(internal.studySets.failGeneration, {
@@ -4901,14 +4912,9 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
         }
       }
     }
-    if (plan.syllabus && savedCounts.quiz < plan.requested.quiz) {
-      throw new StudySetShortfallError(
-        "quiz",
-        savedCounts.quiz,
-        plan.requested.quiz,
-        savedCounts,
-      );
-    }
+    // A short quiz is finished with the honest count, not thrown before the
+    // exam stage: the exam questions are generated in the same window and the
+    // missing questions are topped up afterwards.
     currentStage = "save";
     await ctx.runMutation(internal.studySets.setProgress, {
       setId: args.setId,
@@ -4935,25 +4941,6 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
       final: false,
       quizOnly: true,
     });
-    // completeGeneration can still drop a question during its final quality
-    // pass. A syllabus request must fail here rather than continue to the exam
-    // stage and report a ready set with a short quiz.
-    if (
-      plan.syllabus &&
-      saved.counts &&
-      saved.counts.quiz < plan.requested.quiz
-    ) {
-      throw new StudySetShortfallError(
-        "quiz",
-        saved.counts.quiz,
-        plan.requested.quiz,
-        {
-          cards: saved.counts.cards,
-          quiz: saved.counts.quiz,
-          exams: saved.counts.exams,
-        },
-      );
-    }
     if (examPromise) {
       const examStage = await examPromise;
       let examCandidates = [
@@ -4969,33 +4956,9 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
         });
         if (latest) examCandidates = examsForWrite(latest.exams);
       }
-      if (examCandidates.length < plan.requested.exams) {
-        const checkpoint = await ctx.runMutation(
-          internal.studySets.completeGeneration,
-          {
-            setId: args.setId,
-            summary,
-            cards: toCardArgs(snapshot.cards),
-            quiz: [],
-            exams: toExamArgs(examCandidates),
-            title: summary.title,
-            requested: plan.requested,
-            final: false,
-            examsOnly: true,
-          },
-        );
-        if (checkpoint.stored && checkpoint.counts) {
-          savedCounts.cards = checkpoint.counts.cards;
-          savedCounts.quiz = checkpoint.counts.quiz;
-          savedCounts.exams = checkpoint.counts.exams;
-        }
-        throw new StudySetShortfallError(
-          "exam",
-          savedCounts.exams,
-          plan.requested.exams,
-          savedCounts,
-        );
-      }
+      // The final write below stores every exam question that did finish and
+      // marks the set ready with the honest count. The checks after it top the
+      // short sections up automatically, and finish them when that budget ends.
       const examSaved = await ctx.runMutation(
         internal.studySets.completeGeneration,
         {
@@ -5010,6 +4973,24 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
           examsOnly: true,
         },
       );
+      // The final storage pass can drop a question after the quiz checkpoint.
+      // A pathway build that ends short schedules one more automatic attempt
+      // for the missing section rather than failing the finished set.
+      if (
+        examSaved.counts &&
+        examSaved.counts.quiz < plan.requested.quiz
+      ) {
+        throw new StudySetShortfallError(
+          "quiz",
+          examSaved.counts.quiz,
+          plan.requested.quiz,
+          {
+            cards: examSaved.counts.cards,
+            quiz: examSaved.counts.quiz,
+            exams: examSaved.counts.exams,
+          },
+        );
+      }
       if (
         examSaved.counts &&
         examSaved.counts.exams < plan.requested.exams
@@ -5076,6 +5057,17 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
       }))
     ) {
       return { continued: true, retrying: true };
+    }
+    // A set that came up short keeps everything it built and finishes with the
+    // honest "Built X of Y" note instead of a failed build.
+    if (
+      error instanceof StudySetShortfallError &&
+      savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0
+    ) {
+      await ctx.runMutation(internal.studySets.finishGeneration, {
+        setId: args.setId,
+      });
+      return { continued: true, finished: true };
     }
     const refunded = await refundFailedAttempt(ctx, args);
     const message =
@@ -5245,36 +5237,9 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
     if (!(await setStillExists(ctx, args.setId))) {
       return { continued: false, cancelled: true };
     }
-    if (plan.syllabus && exams.length < plan.requested.exams) {
-      // Keep the exams that did finish. Without this checkpoint the next Retry
-      // starts again from the old one-exam placeholder, even though most of the
-      // paper was already generated.
-      const checkpoint = await ctx.runMutation(
-        internal.studySets.completeGeneration,
-        {
-          setId: args.setId,
-          summary,
-          cards: toCardArgs(snapshot.cards),
-          quiz: quizForWrite(snapshot.quiz),
-          exams: toExamArgs(exams),
-          title: summary.title,
-          requested: plan.requested,
-          final: false,
-          examsOnly: true,
-        },
-      );
-      if (checkpoint.stored && checkpoint.counts) {
-        savedCounts.cards = checkpoint.counts.cards;
-        savedCounts.quiz = checkpoint.counts.quiz;
-        savedCounts.exams = checkpoint.counts.exams;
-      }
-      throw new StudySetShortfallError(
-        "exam",
-        savedCounts.exams,
-        plan.requested.exams,
-        savedCounts,
-      );
-    }
+    // A short exam is finished with the honest count: the final write below
+    // keeps every question that did finish and records "Built X of Y" for the
+    // gap, and the automatic attempts top the missing ones up afterwards.
     currentStage = "save";
     await ctx.runMutation(internal.studySets.setProgress, {
       setId: args.setId,
@@ -5359,6 +5324,17 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
       }))
     ) {
       return { continued: true, retrying: true };
+    }
+    // A set that came up short keeps everything it built and finishes with the
+    // honest "Built X of Y" note instead of a failed build.
+    if (
+      error instanceof StudySetShortfallError &&
+      savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0
+    ) {
+      await ctx.runMutation(internal.studySets.finishGeneration, {
+        setId: args.setId,
+      });
+      return { continued: true, finished: true };
     }
     const refunded = await refundFailedAttempt(ctx, args);
     const message =
@@ -6190,29 +6166,10 @@ async function processStudySetForUser(
             }
           }
         }
-        // A partial reuse has not checkpointed the generated questions yet, so
-        // its saved count alone would look one batch short. Count the questions
-        // this run built as well; a checkpointed rebuild already added them to
-        // savedCounts and must not be counted twice.
-        const quizBuilt =
-          savedCounts.quiz +
-          (existing.generationNotes !== undefined ? quiz.length : 0);
-        if (syllabus && quizBuilt < requestedQuiz) {
-          throw new StudySetShortfallError(
-            "quiz",
-            quizBuilt,
-            requestedQuiz,
-            savedCounts,
-          );
-        }
+        // A short quiz does not stop the run: the exam questions are still
+        // built, and the final write records "Built X of 100" for whatever
+        // came up short instead of failing the whole set.
         await savePartial(summary, cards, quiz, []);
-      } else if (syllabus && reusedQuiz < requestedQuiz) {
-        throw new StudySetShortfallError(
-          "quiz",
-          reusedQuiz,
-          requestedQuiz,
-          savedCounts,
-        );
       }
 
       if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
@@ -6256,44 +6213,6 @@ async function processStudySetForUser(
       if (examStage.failure) {
         if (syllabus) throw examStage.failure;
         stageFailures.push({ stage: "exam", error: examStage.failure });
-      } else if (syllabus && reusedExams + exams.length < requestedExam) {
-        // Keep the exam questions that did finish before reporting the
-        // shortfall. The quiz checkpoint above is already safe.
-        if (existing.generationNotes === undefined && exams.length > 0) {
-          const checkpoint = await ctx.runMutation(
-            internal.studySets.completeGeneration,
-            {
-              setId,
-              summary,
-              cards: [],
-              quiz: [],
-              exams: toExamArgs(exams),
-              title: summary.title,
-              requested: {
-                cards: requestedCards,
-                quiz: requestedQuiz,
-                exams: requestedExam,
-              },
-              final: false,
-              examsOnly: true,
-            },
-          );
-          if (checkpoint.stored && checkpoint.counts) {
-            savedCounts.quiz = checkpoint.counts.quiz;
-            savedCounts.exams = checkpoint.counts.exams;
-          }
-        }
-        // The same rule as the quiz: partial reuse still holds its generated
-        // exams in this run until the final write.
-        const examBuilt =
-          savedCounts.exams +
-          (existing.generationNotes !== undefined ? exams.length : 0);
-        throw new StudySetShortfallError(
-          "exam",
-          examBuilt,
-          requestedExam,
-          savedCounts,
-        );
       }
 
       // Last chance to stop before writing rows: a set deleted while the exam
@@ -6419,6 +6338,16 @@ async function processStudySetForUser(
         }))
       ) {
         return { started: true, retrying: true };
+      }
+      // A big build that came up short is finished, not failed. Everything it
+      // built is already saved, so the set opens and the note states the honest
+      // counts instead of an error.
+      if (
+        error instanceof StudySetShortfallError &&
+        savedCounts.cards + savedCounts.quiz + savedCounts.exams > 0
+      ) {
+        await ctx.runMutation(internal.studySets.finishGeneration, { setId });
+        return { started: true, finished: true };
       }
       // A resumed run was already charged by its first action, so only a run
       // that spent a credit here may hand one back.

@@ -10,12 +10,14 @@ import {
   resumeStaleStudySet,
 } from "../src/convex/ai";
 import { refund } from "../src/convex/buildUsage";
+import { createTopicSetForTutor } from "../src/convex/courses";
 import {
   claimBackgroundRetry,
   claimContinuation,
   claimForProcessing,
   completeGeneration,
   failGeneration,
+  finishGeneration,
   getBuildSnapshot,
   getForProcessing,
   isActive,
@@ -29,7 +31,10 @@ import {
   copyStudySetContent,
   findSimilarCachedStudySet,
   findSimilarOwnedStudySet,
+  grownStudySetTargets,
   notesSimilarity,
+  studySetAnswersRequest,
+  studySetGrowthTargets,
   rememberStudySetForReuse,
   studySetReuseKey,
   studySetReuseKeyForSet,
@@ -261,6 +266,7 @@ function actionContext(
     [internal.studySets.isActive, isActive as unknown as InternalHandler],
     [internal.studySets.completeGeneration, completeGeneration as unknown as InternalHandler],
     [internal.studySets.failGeneration, failGeneration as unknown as InternalHandler],
+    [internal.studySets.finishGeneration, finishGeneration as unknown as InternalHandler],
     [internal.buildUsage.refund, refund as unknown as InternalHandler],
   ];
   const byName = new Map(
@@ -311,6 +317,317 @@ describe("study set reuse", () => {
         { cards: 100, quiz: 100, exam: 100 },
       ),
     ).toBe(false);
+  });
+
+  test("a short big build finishes ready with the honest count", async () => {
+    const tables = rowsForSource("set:short");
+    const set = tables.studySets[0]!;
+    set.status = "processing";
+    set.progress = "Saving your set…";
+    set.autoRetryCount = 2;
+    set.cardCount = 100;
+    set.quizCount = 84;
+    set.examCount = 91;
+    set.targetCardCount = 100;
+    set.targetQuizCount = 100;
+    set.targetExamCount = 100;
+    const { ctx } = fakeContext(tables);
+
+    await finishGeneration._handler(ctx, { setId: "set:short" });
+
+    // Finished, not failed: the set opens and the note says what it built
+    // against the target of a hundred, not that it was never marked ready.
+    expect(set.status).toBe("ready");
+    expect(set.progress).toBeUndefined();
+    expect(set.autoRetryCount).toBeUndefined();
+    expect(set.generationNote).toBe(
+      "Built 84 of 100 quiz questions. Built 91 of 100 exam questions.",
+    );
+  });
+
+  test("a pathway build that ends short finishes ready with the built count", async () => {
+    const tables = rowsForSource("set:pathway-short");
+    const set = tables.studySets[0]!;
+    set.courseId = "course:source";
+    set.notes = [
+      "Course: GCSE Biology",
+      "Exam board: AQA",
+      "Syllabus scope for this set:",
+      "Topic: Cell structure",
+      "Cells contain organelles that carry out specialised functions.",
+      "The nucleus stores genetic material and controls the cell.",
+    ].join("\n");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.generationNote = undefined;
+    set.cardCount = 1;
+    set.quizCount = 0;
+    set.examCount = 0;
+    set.targetCardCount = 1;
+    set.targetQuizCount = 100;
+    set.targetExamCount = 100;
+    // Automatic top-ups are already spent: the next shortfall is final.
+    set.autoRetryCount = 3;
+    tables.flashcards = [
+      {
+        ...tables.flashcards[0]!,
+        _id: "card:pathway",
+        setId: "set:pathway-short",
+        userId: "user:source",
+        front: "What do cells contain?",
+        back: "Organelles.",
+        order: 0,
+      },
+    ];
+    tables.quizQuestions = [];
+    tables.examQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      let content: string;
+      if (prompt.includes("quiz questions")) {
+        // One question per call against a hundred-question target: the live
+        // generator's short finish.
+        content = JSON.stringify({
+          questions: [
+            {
+              question: "Which organelle controls the cell?",
+              type: "typed",
+              answer: "nucleus",
+              acceptedAnswers: ["nucleus"],
+              explanation:
+                "The nucleus stores genetic material and controls the cell.",
+            },
+          ],
+        });
+      } else if (prompt.includes("marking guide")) {
+        content = JSON.stringify({
+          questions: [
+            {
+              question: "Describe the role of the nucleus in a cell.",
+              marks: 2,
+              modelAnswer:
+                "The nucleus stores genetic material and controls the cell.",
+              markingGuide: [
+                "1 mark: stores genetic material",
+                "1 mark: controls the cell",
+              ],
+            },
+          ],
+        });
+      } else {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables, { captureSchedule: true });
+      const scheduledHandler = processStudySetScheduled as unknown as {
+        _handler: (
+          ctx: unknown,
+          args: { setId: string; userId: string },
+        ) => Promise<unknown>;
+      };
+      await scheduledHandler._handler(action, {
+        setId: "set:pathway-short",
+        userId: "user:source",
+      });
+      const quizContinuation = action.scheduled.find(
+        ({ name }) => name === "ai:continueStudySetQuiz",
+      );
+      expect(quizContinuation).toBeDefined();
+      const continuation = continueStudySetQuiz as unknown as {
+        _handler: (
+          ctx: unknown,
+          args: Record<string, unknown>,
+        ) => Promise<{ continued: boolean; finished?: boolean }>;
+      };
+      await continuation._handler(action, quizContinuation!.args);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    // Finished, not failed: the set opens and the note states the honest count
+    // against the hundred-question target rather than an error.
+    expect(set.status).toBe("ready");
+    expect(set.progress).toBeUndefined();
+    expect(set.errorMessage).toBeUndefined();
+    expect(set.autoRetryCount).toBeUndefined();
+    expect(set.generationNote).toMatch(/Built \d+ of 100 quiz questions\./);
+    expect(set.cardCount).toBe(1);
+  });
+
+  test("the set for the same topics is grown, never duplicated", () => {
+    const asked = { cards: 100, quiz: 100, exam: 100 };
+    const short = {
+      status: "ready",
+      cardCount: 10,
+      quizCount: 3,
+      examCount: 1,
+      targetCardCount: 10,
+      targetQuizCount: 5,
+      targetExamCount: 3,
+    };
+    // The reported build: an existing ten-card set is not the answer to a
+    // hundred-card request, and it is grown in place instead of copied.
+    expect(studySetAnswersRequest(short, asked)).toBe(false);
+    expect(grownStudySetTargets(short, asked)).toEqual(asked);
+
+    const full = {
+      ...short,
+      cardCount: 100,
+      quizCount: 100,
+      examCount: 100,
+      targetCardCount: 100,
+      targetQuizCount: 100,
+      targetExamCount: 100,
+    };
+    expect(studySetAnswersRequest(full, asked)).toBe(true);
+    // Growing a larger set towards a smaller request never shrinks it.
+    expect(grownStudySetTargets(full, { cards: 10, quiz: 5, exam: 3 })).toEqual(
+      { cards: 100, quiz: 100, exam: 100 },
+    );
+
+    // A set still building at this size is this build; it must not be grown a
+    // second time while its own run is filling it.
+    const building = {
+      ...short,
+      status: "processing",
+      cardCount: 12,
+      targetCardCount: 100,
+      targetQuizCount: 100,
+      targetExamCount: 100,
+    };
+    expect(studySetAnswersRequest(building, asked)).toBe(true);
+
+    // A ready set already aimed at the hundred, which finished short, is not
+    // grown again: there is nothing left to raise, so the honest note stands
+    // and a repeat request schedules no second paid run.
+    const aimedShort = {
+      ...short,
+      cardCount: 56,
+      quizCount: 84,
+      examCount: 91,
+      targetCardCount: 100,
+      targetQuizCount: 100,
+      targetExamCount: 100,
+    };
+    expect(studySetAnswersRequest(aimedShort, asked)).toBe(false);
+    expect(studySetGrowthTargets(aimedShort, asked)).toBeUndefined();
+    // A set still below the request is grown to it.
+    expect(studySetGrowthTargets(short, asked)).toEqual(asked);
+  });
+
+  test("a ready set already aimed at the request is reopened without another charge", async () => {
+    const course = {
+      _id: "course:source",
+      userId: "user:source",
+      subject: "Biology",
+      level: "GCSE",
+      examBoard: "AQA",
+      tier: "Higher",
+      status: "ready",
+      completedTopics: [],
+      pathway: {
+        overview: "Cells and their organelles.",
+        examFormat: "Paper 1",
+        units: [
+          {
+            title: "Cells",
+            summary: "Cell structure.",
+            topics: [
+              {
+                id: "cell-structure",
+                title: "Cell structure",
+                summary:
+                  "Cells contain organelles that carry out specialised functions.",
+                keyPoints: ["The nucleus stores genetic material."],
+                examSkill: "Describe the function of an organelle.",
+              },
+            ],
+          },
+        ],
+      },
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const set = sourceSet({
+      _id: "set:short",
+      userId: "user:source",
+      courseId: "course:source",
+      // Finished short of its own hundred: the honest note already says so.
+      status: "ready",
+      cardCount: 56,
+      quizCount: 84,
+      examCount: 91,
+      targetCardCount: 100,
+      targetQuizCount: 100,
+      targetExamCount: 100,
+      generationNote:
+        "Built 56 of 100 flashcards. Built 84 of 100 quiz questions. Built 91 of 100 exam questions.",
+    });
+    const tables: Tables = {
+      users: [{ _id: "user:source", emailVerificationTime: 1 }],
+      courses: [course],
+      studySets: [set],
+      flashcards: [],
+      quizQuestions: [],
+      examQuestions: [],
+      studySetCache: [],
+      buildUsage: [],
+    };
+    const { ctx: base } = fakeContext(tables);
+    const scheduled: string[] = [];
+    const ctx = {
+      db: (base as unknown as { db: unknown }).db,
+      scheduler: {
+        runAfter: async (_delay: number, ref: unknown) => {
+          scheduled.push(functionNameOf(ref));
+        },
+      },
+    } as unknown as MutationCtx;
+
+    const handler = (createTopicSetForTutor as unknown as {
+      _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+    })._handler;
+    const result = await handler(ctx, {
+      userId: "user:source",
+      courseId: "course:source",
+      topicId: "cell-structure",
+      topicIds: ["cell-structure"],
+      targetCardCount: 100,
+      targetQuizCount: 100,
+      targetExamCount: 100,
+    });
+
+    // Reopened, not rebuilt: no second set, no growth run and no allowance
+    // spent on a size the set was already aimed at.
+    expect(result).toMatchObject({
+      setId: "set:short",
+      created: false,
+      scheduled: false,
+    });
+    expect(tables.studySets).toHaveLength(1);
+    expect(tables.buildUsage).toHaveLength(0);
+    expect(scheduled).toHaveLength(0);
+    expect(set.status).toBe("ready");
+    expect(set.generationNote).toContain("Built 56 of 100 flashcards");
   });
 
   test("clones a finished course set into a clean private copy", async () => {

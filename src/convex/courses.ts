@@ -31,6 +31,8 @@ import {
   copyCachedStudySet,
   copyMeetsRequest,
   findSimilarCachedStudySet,
+  studySetAnswersRequest,
+  studySetGrowthTargets,
   studySetReuseKey,
 } from "./lib/studySetReuse";
 import { requireUserId } from "./lib/requireUser";
@@ -898,18 +900,10 @@ async function createTopicSetForUser(
       if (!courseScopeMatches(course, set.notes, set.optionScope)) return false;
       const covered = set.topicIds ?? (set.topicId ? [set.topicId] : []);
       if (covered.join("|") === wanted) {
-        // Opening an existing set on a repeated tap is right only when it is
-        // the size this build asked for. Returning an older ten-card set for a
-        // hundred-card request made every tutor build look unchanged: the
-        // tutor "created" the set and the student opened the same small deck.
-        if (set.status === "ready") return copyMeetsRequest(set, requested);
-        // A set already building at least this size is this build; opening it
-        // avoids starting a duplicate run.
-        return (
-          (set.targetCardCount ?? BUILD_DEFAULTS.cards) >= requested.cards &&
-          (set.targetQuizCount ?? BUILD_DEFAULTS.quiz) >= requested.quiz &&
-          (set.targetExamCount ?? BUILD_DEFAULTS.exam) >= requested.exam
-        );
+        // The set that covers exactly these topics is this request's set. It
+        // is reopened when it is already big enough and grown in place when it
+        // is not, so a repeated build never adds a second set beside it.
+        return true;
       }
       // A caller that did not ask for a length (the timetable opening a session)
       // just wants the set for this topic, whichever build produced it.
@@ -920,12 +914,103 @@ async function createTopicSetForUser(
       );
     });
     if (match) {
+      if (studySetAnswersRequest(match, requested)) {
+        return {
+          setId: match._id,
+          created: false,
+          sections: chosen.length,
+          cached: false,
+          scheduled: false,
+        };
+      }
+
+      // It is smaller than this build asked for. A ready set whose targets
+      // already cover the request is not grown again: it finished short of its
+      // own target, so its honest "Built X of 100" note stands and a repeat
+      // request must not spend another build allowance rescheduling the same
+      // targets. Only a request beyond what the set has ever been aimed at
+      // grows it.
+      const raised = studySetGrowthTargets(match, requested);
+      if (!raised) {
+        return {
+          setId: match._id,
+          created: false,
+          sections: chosen.length,
+          cached: false,
+          scheduled: false,
+        };
+      }
+
+      // Grow the set that is already there: raising its targets and continuing
+      // fills only the missing cards and questions, keeps the student's own
+      // rows and progress, and stops a second set from appearing beside the
+      // first.
+      const now = Date.now();
+      const targets = {
+        targetCardCount: raised.cards,
+        targetQuizCount: raised.quiz,
+        targetExamCount: raised.exam,
+        updatedAt: now,
+      };
+
+      // A queued or running build picks the higher targets up at its next
+      // stage, so its own run grows this set without starting a second one.
+      if (match.status === "queued" || match.status === "processing") {
+        await ctx.db.patch(match._id, targets);
+        await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
+        return {
+          setId: match._id,
+          created: true,
+          sections: chosen.length,
+          cached: false,
+          scheduled: true,
+        };
+      }
+
+      // A finished or stopped set needs one more run. A set with saved work is
+      // continued rather than rebuilt, so its deck and questions are kept; the
+      // build allowance is spent here because that run does new generation.
+      await requireVerifiedUser(ctx, userId);
+      if (
+        match.summary !== undefined ||
+        match.cardCount + match.quizCount + match.examCount > 0
+      ) {
+        await consumeBuildAllowance(ctx, userId, "set");
+      }
+      await ctx.db.patch(match._id, {
+        ...targets,
+        status: "processing" as const,
+        progress: `Growing this set to ${raised.cards} flashcards, ${raised.quiz} quiz questions and ${raised.exam} exam questions…`,
+        progressPercent: 2,
+        errorMessage: undefined,
+        generationNote: undefined,
+        autoRetryCount: undefined,
+        processingStartedAt: undefined,
+      });
+      await ctx.db.patch(courseId, { lastStudiedAt: now, updatedAt: now });
+      let scheduled = false;
+      try {
+        await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
+          setId: match._id,
+          userId,
+        });
+        scheduled = true;
+      } catch (error) {
+        // Hand the set back to the normal queued path so the set page can
+        // start it, exactly as it does for a new set whose schedule failed.
+        await ctx.db.patch(match._id, {
+          status: "queued" as const,
+          progress: "Queued",
+          progressPercent: undefined,
+        });
+        console.error("Could not queue the growth of this set", match._id, error);
+      }
       return {
         setId: match._id,
-        created: false,
+        created: true,
         sections: chosen.length,
         cached: false,
-        scheduled: false,
+        scheduled,
       };
     }
 

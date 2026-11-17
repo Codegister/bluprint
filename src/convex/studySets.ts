@@ -52,7 +52,11 @@ import {
   repairCardAnswer,
   sourceCoverage,
 } from "./lib/studySetQuality";
-import { shortfallFor, shortfallSentence } from "./lib/buildDefaults";
+import {
+  builtOfNote,
+  shortfallFor,
+  shortfallSentence,
+} from "./lib/buildDefaults";
 import {
   hasSavedBuildWork,
   MAX_AUTOMATIC_REBUILDS,
@@ -1997,12 +2001,29 @@ export const completeGeneration = internalMutation({
       const named = generatedTitle.length >= 3 && set.titleSource !== "user";
       const examTotal = storedExams.length;
       const finalize = final !== false;
+      // A course-pathway build has the whole specification behind it, so a gap
+      // is the generator's limit: it says how many it built, never that the
+      // student's notes were too thin.
       const generationNote =
-        quizTotal < requested.quiz
-          ? shortfallFor("quiz", quizTotal, requested.quiz)
-          : examTotal < requested.exams
-            ? shortfallFor("exam", examTotal, requested.exams)
-            : "";
+        set.courseId !== undefined
+          ? builtOfNote(
+              { cards: set.cardCount, quiz: quizTotal, exam: examTotal },
+              {
+                cards: requested.cards,
+                quiz: requested.quiz,
+                exam: requested.exams,
+              },
+            )
+          : [
+              quizTotal < requested.quiz
+                ? shortfallFor("quiz", quizTotal, requested.quiz)
+                : "",
+              examTotal < requested.exams
+                ? shortfallFor("exam", examTotal, requested.exams)
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
       await ctx.db.patch(setId, {
         summary: storedSummary,
         ...(named ? { title: generatedTitle, titleSource: "auto" as const } : {}),
@@ -2215,20 +2236,32 @@ export const completeGeneration = internalMutation({
     const examTotal = preservedExams.length + storedExams.length;
 
     // One rule for every shortfall, using the numbers that were actually
-    // stored. The page never gets a second, contradictory explanation.
-    const generationNote = [
-      cardTotal < requested.cards
-        ? shortfallSentence(cardTotal, requested.cards)
-        : "",
-      quizTotal < requested.quiz
-        ? shortfallFor("quiz", quizTotal, requested.quiz)
-        : "",
-      examTotal < requested.exams
-        ? shortfallFor("exam", examTotal, requested.exams)
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    // stored. The page never gets a second, contradictory explanation. A
+    // course-pathway build states the counts it built; a pasted-notes build
+    // keeps the wording about what the notes supported.
+    const generationNote =
+      set.courseId !== undefined
+        ? builtOfNote(
+            { cards: cardTotal, quiz: quizTotal, exam: examTotal },
+            {
+              cards: requested.cards,
+              quiz: requested.quiz,
+              exam: requested.exams,
+            },
+          )
+        : [
+            cardTotal < requested.cards
+              ? shortfallSentence(cardTotal, requested.cards)
+              : "",
+            quizTotal < requested.quiz
+              ? shortfallFor("quiz", quizTotal, requested.quiz)
+              : "",
+            examTotal < requested.exams
+              ? shortfallFor("exam", examTotal, requested.exams)
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
 
     // If a section of the notes never made it into a card, question or exam
     // item, say so on the set page instead of dropping it silently.
@@ -2402,6 +2435,60 @@ export const markReady = internalMutation({
       progress: undefined,
       errorMessage: undefined,
       processingStartedAt: undefined,
+      updatedAt: Date.now(),
+    });
+    return { written: true };
+  },
+});
+
+/**
+ * Finishes a big build whose automatic attempts are spent with a section still
+ * short. Everything that was built stays, the set becomes ready, and the note
+ * says how many were built against the target: an honest "Built X of 100"
+ * instead of an error panel or a contradiction about being marked ready.
+ */
+export const finishGeneration = internalMutation({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const set = await ctx.db.get(setId);
+    if (!set) return { written: false };
+    const requested = {
+      cards: set.targetCardCount ?? BUILD_DEFAULTS.cards,
+      quiz: set.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+      exam: set.targetExamCount ?? BUILD_DEFAULTS.exam,
+    };
+    const built = {
+      cards: set.cardCount,
+      quiz: set.quizCount,
+      exam: set.examCount,
+    };
+    // A course-pathway build states the counts it built. A pasted-notes build
+    // keeps the wording about what the notes supported, so finishing short
+    // never starts claiming the material was worse than it is.
+    const note =
+      set.courseId !== undefined
+        ? builtOfNote(built, requested)
+        : [
+            built.cards < requested.cards
+              ? shortfallSentence(built.cards, requested.cards)
+              : "",
+            built.quiz < requested.quiz
+              ? shortfallFor("quiz", built.quiz, requested.quiz)
+              : "",
+            built.exam < requested.exam
+              ? shortfallFor("exam", built.exam, requested.exam)
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+    await ctx.db.patch(setId, {
+      status: "ready",
+      errorMessage: undefined,
+      ...(note ? { generationNote: note } : {}),
+      progress: undefined,
+      progressPercent: undefined,
+      processingStartedAt: undefined,
+      autoRetryCount: undefined,
       updatedAt: Date.now(),
     });
     return { written: true };

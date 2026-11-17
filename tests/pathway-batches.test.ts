@@ -72,9 +72,10 @@ describe("pathway section runner", () => {
       quiz: run.items.length,
       exams: 1,
     });
-    expect(error.message).toContain("56 of 100 quiz questions");
-    expect(error.message).toContain("not marked ready");
-    expect(error.message).toContain("43 flashcards are saved");
+    // A 100-question build that comes up short ends with the honest count, so
+    // the signal carries the same "Built X of 100" words the set page shows.
+    expect(error.message).toBe("Built 56 of 100 quiz questions.");
+    expect(error.message).not.toContain("not marked ready");
   });
 
   test("a section that fails does not discard the sections that succeeded", async () => {

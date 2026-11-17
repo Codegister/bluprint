@@ -58,6 +58,33 @@ export function shortfallFor(
 }
 
 /**
+ * The honest sentence for a big (course-pathway) build that finished short.
+ *
+ * A pathway build is generated from the specification, so a gap is the
+ * generator's limit, not the student's material: each short section states the
+ * number built and the number asked for, in the same "Built X of Y" words the
+ * page already uses, and never claims the maximum was reached.
+ */
+export function builtOfNote(
+  built: { cards: number; quiz: number; exam: number },
+  requested: { cards: number; quiz: number; exam: number },
+): string {
+  return [
+    built.cards < requested.cards
+      ? `Built ${built.cards} of ${requested.cards} flashcards.`
+      : "",
+    built.quiz < requested.quiz
+      ? `Built ${built.quiz} of ${requested.quiz} quiz questions.`
+      : "",
+    built.exam < requested.exam
+      ? `Built ${built.exam} of ${requested.exam} exam questions.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/**
  * Rewrites a stored note written before this wording existed, so an older set
  * shows the same rule as a new one instead of the old "because the notes only
  * support" sentence.

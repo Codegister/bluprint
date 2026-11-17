@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { materialLimits, noteFacts } from "../src/convex/lib/buildCapacity";
 import { StudySetShortfallError } from "../src/convex/lib/buildFailure";
-import { shortfallFor } from "../src/convex/lib/buildDefaults";
+import { builtOfNote, shortfallFor } from "../src/convex/lib/buildDefaults";
 import {
   filterGuideToNotes,
   isSupportedByNotes,
@@ -47,29 +47,40 @@ describe("shortfall copy", () => {
     );
   });
 
-  test("a pathway quiz shortfall is a clear failed build, not a quiet partial quiz", () => {
+  test("a pathway quiz shortfall is a topping-up signal, not a failure sentence", () => {
     const error = new StudySetShortfallError("quiz", 2, 100, {
       cards: 43,
       quiz: 2,
       exams: 1,
     });
     expect(error).toBeInstanceOf(Error);
-    expect(error.message).toContain("2 of 100 quiz questions");
-    expect(error.message).toContain("not marked ready");
-    expect(error.message).toContain("43 flashcards are saved");
-    expect(error.message).toContain("Retry");
+    expect(error.message).toBe("Built 2 of 100 quiz questions.");
   });
 
-  test("a pathway exam shortfall names the exam count and keeps the other work", () => {
+  test("a pathway exam shortfall never claims the set was not marked ready", () => {
     const error = new StudySetShortfallError("exam", 1, 87, {
       cards: 43,
       quiz: 100,
       exams: 1,
     });
-    expect(error.message).toContain("1 of 87 exam questions");
-    expect(error.message).toContain("not marked ready");
-    expect(error.message).toContain("43 flashcards are saved");
-    expect(error.message).toContain("Retry to complete the exam");
+    expect(error.message).toBe("Built 1 of 87 exam questions.");
+    expect(error.message).not.toContain("not marked ready");
+  });
+
+  test("a big build that stops short finishes with the honest counts", () => {
+    expect(
+      builtOfNote(
+        { cards: 100, quiz: 84, exam: 91 },
+        { cards: 100, quiz: 100, exam: 100 },
+      ),
+    ).toBe("Built 84 of 100 quiz questions. Built 91 of 100 exam questions.");
+    // A section that reached its target says nothing at all.
+    expect(
+      builtOfNote(
+        { cards: 100, quiz: 100, exam: 100 },
+        { cards: 100, quiz: 100, exam: 100 },
+      ),
+    ).toBe("");
   });
 
   test("card shortfalls keep the established wording", () => {
