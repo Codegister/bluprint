@@ -177,6 +177,8 @@ export function TutorChat({
   // The send that owns the composer. Stop and a newer send both take the next
   // id, so a request that settles late cannot clear the new one's state.
   const activeRequestRef = useRef(0);
+  // Set when Stop is pressed before the reply's row has reached this browser.
+  const pendingStopRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // The reply being written right now, if any.
@@ -223,6 +225,7 @@ export function TutorChat({
     setTier(chosenTier);
     const requestId = beginTutorRequest(activeRequestRef.current);
     activeRequestRef.current = requestId;
+    pendingStopRef.current = false;
     setError(null);
     setSending(true);
     setPending(question);
@@ -288,17 +291,54 @@ export function TutorChat({
       if (scope.kind === "set") {
         const id = setMessages?.find((message) => message.streaming)?._id;
         if (id) await stopTutorReply({ messageId: id });
+        else pendingStopRef.current = true;
       } else if (scope.kind === "course") {
         const id = courseMessages?.find((message) => message.streaming)?._id;
         if (id) await stopCourseTutorReply({ messageId: id });
+        else pendingStopRef.current = true;
       } else {
         const id = libraryMessages?.find((message) => message.streaming)?._id;
         if (id) await stopLibraryTutorReply({ messageId: id });
+        else pendingStopRef.current = true;
       }
     } catch {
       // The answer finished before the click landed; nothing to stop.
     }
   };
+
+  // Stop pressed before the reply's row reached this browser: the server creates
+  // the row as the action starts, so cancel the answer the moment it appears
+  // instead of letting it stream into a chat nobody is waiting on.
+  useEffect(() => {
+    if (!pendingStopRef.current) return;
+    const stopLateReply = async () => {
+      if (scope.kind === "set") {
+        const id = setMessages?.find((message) => message.streaming)?._id;
+        if (!id) return;
+        pendingStopRef.current = false;
+        await stopTutorReply({ messageId: id }).catch(() => {});
+      } else if (scope.kind === "course") {
+        const id = courseMessages?.find((message) => message.streaming)?._id;
+        if (!id) return;
+        pendingStopRef.current = false;
+        await stopCourseTutorReply({ messageId: id }).catch(() => {});
+      } else {
+        const id = libraryMessages?.find((message) => message.streaming)?._id;
+        if (!id) return;
+        pendingStopRef.current = false;
+        await stopLibraryTutorReply({ messageId: id }).catch(() => {});
+      }
+    };
+    void stopLateReply();
+  }, [
+    scope.kind,
+    setMessages,
+    courseMessages,
+    libraryMessages,
+    stopTutorReply,
+    stopCourseTutorReply,
+    stopLibraryTutorReply,
+  ]);
 
   const empty = messages !== undefined && messages.length === 0 && !sending;
 

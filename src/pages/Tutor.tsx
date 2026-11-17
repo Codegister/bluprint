@@ -209,6 +209,8 @@ export default function TutorPage() {
   // The send that owns the composer. Stop and a newer send both take the next
   // id, so a request that settles late cannot clear the new one's state.
   const activeRequestRef = useRef(0);
+  // Set when Stop is pressed before the reply's row has reached this browser.
+  const pendingStopRef = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const streaming = messages?.find((message) => message.streaming);
@@ -263,6 +265,7 @@ export default function TutorPage() {
     setTier(chosenTier);
     const requestId = beginTutorRequest(activeRequestRef.current);
     activeRequestRef.current = requestId;
+    pendingStopRef.current = false;
     setError(null);
     setSending(true);
     setPending(question);
@@ -319,14 +322,36 @@ export default function TutorPage() {
       if (validSetId) {
         const id = setMessages?.find((message) => message.streaming)?._id;
         if (id) await stopTutorReply({ messageId: id });
+        else pendingStopRef.current = true;
       } else if (validCourseId) {
         const id = courseMessages?.find((message) => message.streaming)?._id;
         if (id) await stopCourseTutorReply({ messageId: id });
+        else pendingStopRef.current = true;
       }
     } catch {
       // The answer finished before the click landed; nothing to stop.
     }
   };
+
+  // Stop pressed before the reply's row reached this browser: the server creates
+  // the row as the action starts, so cancel the answer the moment it appears.
+  useEffect(() => {
+    if (!pendingStopRef.current) return;
+    const stopLateReply = async () => {
+      if (validSetId) {
+        const id = setMessages?.find((message) => message.streaming)?._id;
+        if (!id) return;
+        pendingStopRef.current = false;
+        await stopTutorReply({ messageId: id }).catch(() => {});
+      } else if (validCourseId) {
+        const id = courseMessages?.find((message) => message.streaming)?._id;
+        if (!id) return;
+        pendingStopRef.current = false;
+        await stopCourseTutorReply({ messageId: id }).catch(() => {});
+      }
+    };
+    void stopLateReply();
+  }, [validSetId, validCourseId, setMessages, courseMessages, stopTutorReply, stopCourseTutorReply]);
 
   const empty = messages !== undefined && messages.length === 0 && !sending;
 
