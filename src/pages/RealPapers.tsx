@@ -1,3 +1,4 @@
+import { AiAllowance } from "@/components/AiAllowance";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { SkeletonRows } from "@/components/Skeletons";
@@ -258,6 +259,9 @@ export default function RealPapers() {
         )}
 
         <div className="mt-5 space-y-4">
+          {/* Marking here spends the same shared-key allowance as the tutor, so
+              the line appears before the first answer hits the cap. */}
+          <AiAllowance kind="marking" />
           {saved === undefined ? (
             <SkeletonRows rows={3} />
           ) : saved.length === 0 ? (

@@ -2,6 +2,7 @@ import { ExplainDialog } from "@/components/study/ExplainDialog";
 import { EASE } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AiAllowance } from "@/components/AiAllowance";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
@@ -205,6 +206,8 @@ export function ExamPractice({
               disabled={isGrading}
               className="mt-4 min-h-[140px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
             />
+
+            <AiAllowance kind="marking" className="mt-3" />
 
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
