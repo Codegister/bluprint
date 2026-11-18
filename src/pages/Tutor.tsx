@@ -9,6 +9,7 @@ import {
 } from "@/components/Skeletons";
 import { Mascot } from "@/components/Mascot";
 import { SetLibrary } from "@/components/study/SetLibrary";
+import { AiAllowance } from "@/components/AiAllowance";
 import { TutorChat, type TutorScope } from "@/components/study/TutorChat";
 import { TutorMessageContent } from "@/components/study/TutorMessageContent";
 import { PromptInput } from "@/components/ui/ai-chat-input";
@@ -504,6 +505,9 @@ export default function TutorPage() {
             className="mt-4 scroll-mt-24"
             {...enter(0.08, 10)}
           >
+            {tutorScope ? (
+              <AiAllowance kind="tutor" className="mb-3" />
+            ) : null}
             {tutorScope ? (
               <TutorChat
                 scope={tutorScope}

@@ -512,9 +512,9 @@ describe("Part 3 — build limits", () => {
   });
 
   test("3.2 the guest cap and the minimum material length are known before upload", () => {
-    const guest = buildLimit("set", "guest");
-    expect(guest.perHour).toBe(2);
-    expect(guest.perDay).toBe(6);
+    const guest = buildLimit("set", "guest", "shared");
+    expect(guest.perHour).toBe(1);
+    expect(guest.perDay).toBe(3);
     expect(MIN_NOTE_CHARS).toBe(40);
   });
 

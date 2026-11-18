@@ -4,7 +4,7 @@ import { internal } from "../src/convex/_generated/api";
 import { encryptKey, decryptKey, vaultReady } from "../src/convex/lib/keyVault";
 import { keyChain, preferredApiKey } from "../src/convex/lib/nvidiaConfig";
 import { connect } from "../src/convex/nvidiaKeys";
-import { forget, getStored, save, status } from "../src/convex/userKeys";
+import { forget, getStored, markHealth, save, status } from "../src/convex/userKeys";
 
 const FUNCTION_NAME = Symbol.for("functionName");
 
@@ -289,6 +289,37 @@ describe("stored key row", () => {
     expect(view.saved).toBe(true);
     expect(view.last4).toBe("cccc");
     expect(JSON.stringify(view)).not.toContain("nvapi-");
+  });
+
+  test("a rejection and a cooldown are recorded, and saving again clears them", async () => {
+    const { ctx, tables } = fakeContext();
+    await save._handler(ctx, {
+      userId: USER,
+      ciphertext: encryptKey("nvapi-health-key-eeeeeeeeeeeeeeee"),
+      last4: "eeee",
+      validatedAt: 4,
+    });
+
+    await markHealth._handler(ctx, { userId: USER, state: "rejected" });
+    expect(tables.userNvidiaKeys![0]!.rejectedAt).toBeGreaterThan(0);
+
+    await markHealth._handler(ctx, {
+      userId: USER,
+      state: "cooling",
+      coolingUntil: Date.now() + 45_000,
+    });
+    expect(tables.userNvidiaKeys![0]!.coolingUntil).toBeGreaterThan(Date.now());
+
+    // Re-saving a key NVIDIA just accepted puts the account back on the
+    // personal tier, so both markers go back to the cleared value.
+    await save._handler(ctx, {
+      userId: USER,
+      ciphertext: encryptKey("nvapi-health-key-ffffffffffffffff"),
+      last4: "ffff",
+      validatedAt: 5,
+    });
+    expect(tables.userNvidiaKeys![0]!.rejectedAt).toBe(0);
+    expect(tables.userNvidiaKeys![0]!.coolingUntil).toBe(0);
   });
 
   test("forget removes the row", async () => {

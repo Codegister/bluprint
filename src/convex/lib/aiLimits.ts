@@ -4,7 +4,10 @@
  * Builds already have their own allowance. Tutoring, marking, dictation and
  * vision do not produce a set, so they need a separate limit; without one a
  * script could call the public actions repeatedly and drain the deployment.
- * The numbers are deliberately generous for a real revision session.
+ *
+ * The ceiling only exists while the shared key pool pays. An account on its own
+ * connected key is spending its own NVIDIA quota, so there is no app-level cap
+ * — only NVIDIA's own rate limit.
  */
 import {
   DAY_MS,
@@ -16,64 +19,58 @@ import {
 
 export type AiKind = "tutor" | "marking" | "dictation" | "vision" | "explain";
 
-type AiLimit = { perHour: number; perDay: number; label: string };
-
-const LIMITS: Record<AiKind, Record<BuildIdentity, AiLimit>> = {
-  tutor: {
-    guest: { perHour: 10, perDay: 30, label: "tutor questions" },
-    member: { perHour: 40, perDay: 120, label: "tutor questions" },
-  },
-  marking: {
-    guest: { perHour: 15, perDay: 50, label: "marking requests" },
-    member: { perHour: 60, perDay: 200, label: "marking requests" },
-  },
-  dictation: {
-    guest: { perHour: 10, perDay: 30, label: "dictation clips" },
-    member: { perHour: 40, perDay: 120, label: "dictation clips" },
-  },
-  vision: {
-    guest: { perHour: 10, perDay: 30, label: "photo readings" },
-    member: { perHour: 40, perDay: 120, label: "photo readings" },
-  },
-  explain: {
-    guest: { perHour: 20, perDay: 60, label: "explanation requests" },
-    member: { perHour: 60, perDay: 180, label: "explanation requests" },
-  },
+export type AiLimit = {
+  perHour: number;
+  perDay: number;
+  /** No app-level cap: the personal key pays, so only NVIDIA limits this. */
+  unlimited: boolean;
+  label: string;
 };
 
+/** A personal key removes the app-level cap entirely. */
+const UNLIMITED: Record<AiKind, AiLimit> = {
+  tutor: { perHour: 0, perDay: 0, unlimited: true, label: "tutor questions" },
+  marking: { perHour: 0, perDay: 0, unlimited: true, label: "marking requests" },
+  dictation: { perHour: 0, perDay: 0, unlimited: true, label: "dictation clips" },
+  vision: { perHour: 0, perDay: 0, unlimited: true, label: "photo readings" },
+  explain: { perHour: 0, perDay: 0, unlimited: true, label: "explanation requests" },
+};
+
+/** The allowance while the shared key pool pays for the work. */
 const SHARED_LIMITS: Record<AiKind, Record<BuildIdentity, AiLimit>> = {
   tutor: {
-    guest: { perHour: 5, perDay: 15, label: "tutor questions" },
-    member: { perHour: 15, perDay: 50, label: "tutor questions" },
+    guest: { perHour: 5, perDay: 15, unlimited: false, label: "tutor questions" },
+    member: { perHour: 15, perDay: 50, unlimited: false, label: "tutor questions" },
   },
   marking: {
-    guest: { perHour: 8, perDay: 25, label: "marking requests" },
-    member: { perHour: 20, perDay: 70, label: "marking requests" },
+    guest: { perHour: 8, perDay: 25, unlimited: false, label: "marking requests" },
+    member: { perHour: 20, perDay: 70, unlimited: false, label: "marking requests" },
   },
   dictation: {
-    guest: { perHour: 5, perDay: 15, label: "dictation clips" },
-    member: { perHour: 15, perDay: 45, label: "dictation clips" },
+    guest: { perHour: 5, perDay: 15, unlimited: false, label: "dictation clips" },
+    member: { perHour: 15, perDay: 45, unlimited: false, label: "dictation clips" },
   },
   vision: {
-    guest: { perHour: 5, perDay: 15, label: "photo readings" },
-    member: { perHour: 15, perDay: 45, label: "photo readings" },
+    guest: { perHour: 5, perDay: 15, unlimited: false, label: "photo readings" },
+    member: { perHour: 15, perDay: 45, unlimited: false, label: "photo readings" },
   },
   explain: {
-    guest: { perHour: 10, perDay: 30, label: "explanation requests" },
-    member: { perHour: 20, perDay: 70, label: "explanation requests" },
+    guest: { perHour: 10, perDay: 30, unlimited: false, label: "explanation requests" },
+    member: { perHour: 20, perDay: 70, unlimited: false, label: "explanation requests" },
   },
 };
 
 /**
  * The allowance for one identity and kind, on the key tier paying for it.
- * Users on the shared pool get the smaller table; a personal key raises it.
+ * The default is the capped one, so a caller that has not considered keys gets
+ * the shared allowance rather than no limit at all.
  */
 export function aiLimit(
   kind: AiKind,
   identity: BuildIdentity,
-  tier: KeyTier = "own",
+  tier: KeyTier = "shared",
 ): AiLimit {
-  return tier === "shared" ? SHARED_LIMITS[kind][identity] : LIMITS[kind][identity];
+  return tier === "shared" ? SHARED_LIMITS[kind][identity] : UNLIMITED[kind];
 }
 
 export type AiAllowanceVerdict =
@@ -85,11 +82,14 @@ export function checkAiAllowance(args: {
   identity: BuildIdentity;
   now: number;
   spent: number[];
-  /** Whose key pays; defaults to the personal, more generous allowance. */
+  /** Whose key pays; defaults to the capped, shared allowance. */
   tier?: KeyTier;
 }): AiAllowanceVerdict {
-  const { kind, identity, now, spent, tier = "own" } = args;
+  const { kind, identity, now, spent, tier = "shared" } = args;
   const limit = aiLimit(kind, identity, tier);
+  // A personal key means no app-level cap: nothing to count.
+  if (limit.unlimited) return { allowed: true };
+
   const guestNote =
     identity === "guest"
       ? " Guests get the lower limit; add an email address to raise it."

@@ -45,6 +45,14 @@ const schema = defineSchema(
       last4: v.string(),
       /** When NVIDIA last accepted the key (ms since epoch). */
       validatedAt: v.number(),
+      /**
+       * Set when NVIDIA later refused the key (401/403). A refused key sends
+       * the account back to the shared pool, so it must lose the unlimited
+       * allowance. Cleared by saving a key that is accepted again.
+       */
+      rejectedAt: v.optional(v.number()),
+      /** End of a 429 cooldown (ms since epoch), same reasoning as above. */
+      coolingUntil: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     }).index("by_user", ["userId"]),

@@ -1,84 +1,75 @@
 /**
  * How often one identity may spend an AI build.
  *
- * Guests can start a build without an email address, and a build costs real
- * NVIDIA tokens at the owner's expense; three full builds back-to-back with no
- * friction is what this fixes. The rules are pure so they can be tested without
- * a deployment, and the Convex side only has to fetch timestamps.
+ * A build costs real tokens. When it runs on the deployment's shared key pool,
+ * every account draws on the same keys, so that path is capped: three full
+ * builds back-to-back with no friction is what this stops. An account that has
+ * connected its own key is spending its own NVIDIA quota instead, so it has no
+ * app-level cap — the only limit left is NVIDIA's own rate limit.
  *
- * Verified accounts get a deliberately more generous allowance: the limit is
- * there to stop a script, not a revision session.
+ * The rules are pure so they can be tested without a deployment, and the Convex
+ * side only has to fetch timestamps. The default tier is the capped one: a
+ * caller that forgets to say whose key pays errs towards the shared allowance
+ * rather than towards no limit at all.
  */
 
 export type BuildKind = "set" | "rebuild" | "paper";
 export type BuildIdentity = "guest" | "member";
 
 /**
- * Whose key pays for the work. `shared` is the deployment's pool and is the
- * scarce resource, so it carries the smaller allowance; `own` means the user
- * connected a personal key, and the limit there is only a script guard.
+ * Whose key pays for the work. `shared` is the deployment's pool, `own` is a
+ * connected personal key that NVIDIA is currently accepting.
  */
 export type KeyTier = "own" | "shared";
 
 export type BuildLimit = {
   perHour: number;
   perDay: number;
+  /** No app-level cap: the personal key pays, so only NVIDIA limits this. */
+  unlimited: boolean;
   /** What is being counted, in the words the student sees. */
   label: string;
 };
 
-const LIMITS: Record<BuildKind, Record<BuildIdentity, BuildLimit>> = {
+/** A personal key removes the app-level cap entirely. */
+const UNLIMITED: Record<BuildKind, BuildLimit> = {
+  set: { perHour: 0, perDay: 0, unlimited: true, label: "new set" },
+  rebuild: { perHour: 0, perDay: 0, unlimited: true, label: "rebuild" },
+  paper: { perHour: 0, perDay: 0, unlimited: true, label: "past paper" },
+};
+
+/**
+ * The allowance while a build runs on the shared key pool.
+ *
+ * Everyone without a personal key draws on the same keys, so one account cannot
+ * spend the whole deployment's capacity. Connecting a personal key removes the
+ * cap, which is what the refusal sentence tells the student.
+ */
+const SHARED_LIMITS: Record<BuildKind, Record<BuildIdentity, BuildLimit>> = {
   set: {
-    guest: { perHour: 2, perDay: 6, label: "new set" },
-    member: { perHour: 8, perDay: 40, label: "new set" },
+    guest: { perHour: 1, perDay: 3, unlimited: false, label: "new set" },
+    member: { perHour: 3, perDay: 10, unlimited: false, label: "new set" },
   },
   rebuild: {
-    guest: { perHour: 3, perDay: 10, label: "rebuild" },
-    member: { perHour: 12, perDay: 60, label: "rebuild" },
+    guest: { perHour: 2, perDay: 5, unlimited: false, label: "rebuild" },
+    member: { perHour: 4, perDay: 15, unlimited: false, label: "rebuild" },
   },
   paper: {
-    guest: { perHour: 1, perDay: 3, label: "past paper" },
-    member: { perHour: 4, perDay: 15, label: "past paper" },
+    guest: { perHour: 1, perDay: 2, unlimited: false, label: "past paper" },
+    member: { perHour: 1, perDay: 4, unlimited: false, label: "past paper" },
   },
 };
 
 export const HOUR_MS = 60 * 60 * 1000;
 export const DAY_MS = 24 * HOUR_MS;
 
-/**
- * The allowance while a build runs on the shared key pool.
- *
- * Everyone without a personal key draws on the same keys, so one account cannot
- * spend the whole deployment's capacity. Connecting a personal key raises the
- * limit to the table above, which is what the refusal sentence tells the student.
- */
-const SHARED_LIMITS: Record<BuildKind, Record<BuildIdentity, BuildLimit>> = {
-  set: {
-    guest: { perHour: 1, perDay: 3, label: "new set" },
-    member: { perHour: 3, perDay: 10, label: "new set" },
-  },
-  rebuild: {
-    guest: { perHour: 2, perDay: 5, label: "rebuild" },
-    member: { perHour: 4, perDay: 15, label: "rebuild" },
-  },
-  paper: {
-    guest: { perHour: 1, perDay: 2, label: "past paper" },
-    member: { perHour: 1, perDay: 4, label: "past paper" },
-  },
-};
-
-/**
- * The allowance for one identity and kind, on the key tier paying for it.
- *
- * `own` is the default so every caller that has not been taught about keys
- * keeps the previous, more generous numbers.
- */
+/** The allowance for one identity and kind, on the key tier paying for it. */
 export function buildLimit(
   kind: BuildKind,
   identity: BuildIdentity,
-  tier: KeyTier = "own",
+  tier: KeyTier = "shared",
 ): BuildLimit {
-  return tier === "shared" ? SHARED_LIMITS[kind][identity] : LIMITS[kind][identity];
+  return tier === "shared" ? SHARED_LIMITS[kind][identity] : UNLIMITED[kind];
 }
 
 /**
@@ -87,7 +78,7 @@ export function buildLimit(
  * sanitiser treats those as internal detail and would show a generic message.
  */
 export const OWN_KEY_UPGRADE_NOTE =
-  "Connect your own API key from the account menu for a higher limit.";
+  "Connect your own API key from the account menu for no limit.";
 
 export type AllowanceVerdict =
   | { allowed: true }
@@ -109,11 +100,14 @@ export function checkAllowance(args: {
   now: number;
   /** Timestamps of previous builds of the same kind, any order. */
   spent: number[];
-  /** Whose key pays; defaults to the personal, more generous allowance. */
+  /** Whose key pays; defaults to the capped, shared allowance. */
   tier?: KeyTier;
 }): AllowanceVerdict {
-  const { kind, identity, now, spent, tier = "own" } = args;
+  const { kind, identity, now, spent, tier = "shared" } = args;
   const limit = buildLimit(kind, identity, tier);
+  // A personal key means no app-level cap: nothing to count.
+  if (limit.unlimited) return { allowed: true };
+
   const guestNote =
     identity === "guest"
       ? " Guests share this lower limit; add an email address to sign in and raise it."

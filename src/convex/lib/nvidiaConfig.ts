@@ -296,7 +296,17 @@ export function readNvidiaKeys(): string[] {
  * `preferred` is what makes the own key exclusive rather than one of several
  * keys in rotation.
  */
-export type ApiKeyChain = string[] & { preferred?: string };
+export type ApiKeyChain = string[] & {
+  preferred?: string;
+  /**
+   * Tells the account's store that NVIDIA refused or throttled the preferred
+   * key, so the allowance stops treating that request as self-funded.
+   */
+  notePreferredKeyState?: (
+    state: "rejected" | "cooling",
+    coolingUntil?: number,
+  ) => Promise<void>;
+};
 
 /**
  * The keys one request may use: a user's own validated key, then the

@@ -312,6 +312,17 @@ async function resolveNvidiaKeys(
   const owner = userId ?? (await getAuthUserId(ctx));
   const own = owner ? await ownNvidiaKey(ctx, owner) : undefined;
   const keys = keyChain(own, readNvidiaKeys());
+  // A personal key that NVIDIA refuses or throttles sends this request to the
+  // shared pool, so the account must stop counting as self-funded.
+  if (own && owner) {
+    keys.notePreferredKeyState = async (state, coolingUntil) => {
+      await ctx.runMutation(internal.userKeys.markHealth, {
+        userId: owner,
+        state,
+        ...(coolingUntil === undefined ? {} : { coolingUntil }),
+      });
+    };
+  }
   if (keys.length === 0) {
     // Internal detail stays in the log; the student gets a sentence.
     console.error(
@@ -334,6 +345,26 @@ const KEY_COOLDOWN_MS = 45_000;
 const rejectedKeys = new Set<string>();
 const coolingKeys = new Map<string, number>();
 let keyCursor = 0;
+
+/**
+ * Records that NVIDIA refused or throttled the personal key, when that is the
+ * key that failed. Without this the account would keep the unlimited allowance
+ * while its requests actually fall back to the shared pool.
+ */
+async function notePreferredKeyState(
+  apiKeys: string[],
+  apiKey: string,
+  state: "rejected" | "cooling",
+  coolingUntil?: number,
+): Promise<void> {
+  const chain = apiKeys as ApiKeyChain;
+  if (chain.preferred !== apiKey || !chain.notePreferredKeyState) return;
+  try {
+    await chain.notePreferredKeyState(state, coolingUntil);
+  } catch (error) {
+    console.error("[ai] could not record that the personal key was refused", error);
+  }
+}
 
 /**
  * Picks the next usable key.
@@ -679,6 +710,12 @@ async function nvidiaChat(
     if (response.status === 429) {
       // Throttled: park this key briefly and try the next one straight away.
       coolingKeys.set(apiKey, Date.now() + KEY_COOLDOWN_MS);
+      await notePreferredKeyState(
+        apiKeys,
+        apiKey,
+        "cooling",
+        Date.now() + KEY_COOLDOWN_MS,
+      );
       if (attempt < maxAttempts - 1) {
         await sleep(400 * (attempt + 1));
         continue;
@@ -686,6 +723,7 @@ async function nvidiaChat(
     } else if (response.status === 401 || response.status === 403) {
       // Rejected: never use this key again in this process.
       rejectedKeys.add(apiKey);
+      await notePreferredKeyState(apiKeys, apiKey, "rejected");
       if (attempt < maxAttempts - 1) continue;
     } else if (response.status >= 500) {
       if (attempt < maxAttempts - 1) {
@@ -8294,12 +8332,19 @@ async function streamNvidiaAnswer(
         }
       } else if (response.status === 429) {
         coolingKeys.set(apiKey, Date.now() + KEY_COOLDOWN_MS);
+        await notePreferredKeyState(
+          apiKeys,
+          apiKey,
+          "cooling",
+          Date.now() + KEY_COOLDOWN_MS,
+        );
         if (attempt < maxAttempts - 1) {
           await sleep(400 * (attempt + 1));
           continue;
         }
       } else if (response.status === 401 || response.status === 403) {
         rejectedKeys.add(apiKey);
+        await notePreferredKeyState(apiKeys, apiKey, "rejected");
         if (attempt < maxAttempts - 1) continue;
       } else if (response.status >= 500) {
         if (attempt < maxAttempts - 1) {

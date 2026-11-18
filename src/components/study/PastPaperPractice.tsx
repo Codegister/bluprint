@@ -1,6 +1,7 @@
 import { EASE } from "@/components/motion/Motion";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AiAllowance } from "@/components/AiAllowance";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
@@ -42,6 +43,7 @@ export function PastPaperPractice({
   cover?: PaperCover | null;
 }) {
   const gradeAnswer = useAction(api.ai.gradePastPaperAnswer);
+  // Marking draws on the same shared-key allowance the tutor does.
   const disputeMark = useAction(api.ai.disputePastPaperMark);
   const { unavailable: aiUnavailable } = useAiAvailability();
   const family = boardFamily(examBoard);
@@ -395,6 +397,8 @@ export function PastPaperPractice({
                         : "min-h-[140px]",
                   )}
                 />
+
+                <AiAllowance kind="marking" className="mt-3" />
 
                 <div className="print-hide mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs font-medium text-muted-foreground">

@@ -542,10 +542,17 @@ Get keys from [NVIDIA Build](https://build.nvidia.com/).
 
 ### Connecting a personal NVIDIA key (optional)
 
-Builds, tutor questions and marking run on a smaller allowance while they draw on the
-shared key pool; connecting a personal key raises it (`buildLimits.ts` and `aiLimits.ts`
-hold both tables). The refusal sentence names the way up: **Connect your own API key from
-the account menu for a higher limit.**
+Builds, tutor questions and marking are capped while they draw on the shared key pool;
+connecting a personal key removes the app-level cap entirely (`buildLimits.ts` and
+`aiLimits.ts` hold the shared tables and the unlimited personal tier). The tutor and the
+marking screens show the remaining allowance once it gets low, and the refusal sentence
+names the way up: **Connect your own API key from the account menu for no limit.**
+
+The personal tier only applies while NVIDIA accepts the key. When the transport records a
+401/403 or a 429 on the preferred key, `userNvidiaKeys.rejectedAt`/`coolingUntil` is set and
+`keyTierFor` puts the account back on the shared allowance, because its next request falls
+back to the pool; a 429 clears itself when the cooldown passes, and saving a key that is
+accepted again clears a rejection.
 
 A user who wants those higher limits can connect their own NVIDIA key from the account
 menu (**NVIDIA key**). The sheet links to the [model list](https://build.nvidia.com/models)

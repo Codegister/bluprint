@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SkeletonRows } from "@/components/Skeletons";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { AiAllowance } from "@/components/AiAllowance";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
@@ -269,6 +270,7 @@ export default function Mock() {
                 placeholder="Answer as you would in the exam. The clock keeps running."
                 className="mt-3 bg-white text-sm"
               />
+              <AiAllowance kind="marking" className="mt-3" />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[0.72rem] text-muted-foreground">
                   {answeredCount} of {plural(questions.length, "question")} answered ·{" "}

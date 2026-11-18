@@ -466,7 +466,7 @@ export function CreateSetDialog({
         </div>
 
         <div className="px-6 pb-6 sm:px-7">
-          {usage && (usage.tier === "shared" || usage.identity === "guest") && (
+          {usage?.tier === "shared" && (
             <div
               className={cn(
                 "mb-4 rounded-2xl px-3.5 py-3 text-xs leading-relaxed",
@@ -476,33 +476,22 @@ export function CreateSetDialog({
               )}
               role={usage.canBuild ? "note" : "alert"}
             >
-              {usage.tier === "shared" ? (
-                usage.canBuild ? (
-                  <>
-                    Shared key limit: {usage.perHour} new sets an hour (
-                    {usage.remainingHour} left this hour). Connect your own API
-                    key from the account menu for {usage.ownKeyPerHour} an hour.
-                  </>
-                ) : (
-                  <>
-                    Shared key limit reached: {usage.perHour} new sets an hour.
-                    The limit resets in about {usage.retryMinutes} minute
-                    {usage.retryMinutes === 1 ? "" : "s"}. Connect your own API
-                    key from the account menu for {usage.ownKeyPerHour} an hour.
-                  </>
-                )
-              ) : usage.canBuild ? (
+              {usage.canBuild ? (
                 <>
-                  Guest workspace: {usage.perHour} new sets an hour (
-                  {usage.remainingHour}{" "}
-                  left this hour). Add an email to raise the cap to{" "}
-                  {buildLimit("set", "member", "own").perHour}.
+                  Shared key limit: {usage.perHour} new sets an hour (
+                  {usage.remainingHour} left this hour)
+                  {usage.identity === "guest"
+                    ? ", the guest allowance"
+                    : ""}
+                  . Connect your own API key from the account menu for no limit.
                 </>
               ) : (
                 <>
-                  Guest set limit reached: {usage.perHour} new sets an hour. The limit
-                  resets in about {usage.retryMinutes} minute
-                  {usage.retryMinutes === 1 ? "" : "s"}. Add an email to raise it.
+                  Shared key limit reached: {usage.perHour} new sets an hour
+                  {usage.identity === "guest" ? " on the guest allowance" : ""}.
+                  The limit resets in about {usage.retryMinutes} minute
+                  {usage.retryMinutes === 1 ? "" : "s"}. Connect your own API key
+                  from the account menu for no limit.
                 </>
               )}
             </div>

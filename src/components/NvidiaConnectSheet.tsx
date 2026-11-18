@@ -251,22 +251,36 @@ export function NvidiaConnectSheet({
               <div>
                 <dt className="font-semibold">With your own key</dt>
                 <dd className="text-muted-foreground">
-                  {ownSets.perHour} new sets an hour, {ownSets.perDay} a day ·{" "}
-                  {ownTutor.perHour} tutor questions an hour, {ownTutor.perDay} a day.
+                  {ownSets.unlimited
+                    ? "No Bluprint limit on builds, tutor questions or marking — only NVIDIA's own rate limit applies."
+                    : `${ownSets.perHour} new sets an hour · ${ownTutor.perHour} tutor questions an hour.`}
                 </dd>
               </div>
             </dl>
-            {saved ? (
+            {saved && status?.health === "rejected" ? (
+              <p className="mt-2 text-[0.78rem] leading-relaxed text-[#A81F28]">
+                NVIDIA is refusing your saved key, so your requests are running
+                on the shared key and its limits. Paste a working key above to
+                get back to no limit.
+              </p>
+            ) : saved && status?.health === "cooling" ? (
               <p className="mt-2 text-[0.78rem] leading-relaxed text-brand-ink">
-                You're connected, so your requests already get the higher
-                limits — no other action needed.
+                NVIDIA is rate-limiting your saved key right now, so your
+                requests are using the shared key until the cooldown passes.
+                You go back to no limit automatically.
+              </p>
+            ) : saved ? (
+              <p className="mt-2 text-[0.78rem] leading-relaxed text-brand-ink">
+                You're connected, so your requests aren't counted — no other
+                action needed. If NVIDIA ever refuses the key, Bluprint falls
+                back to the shared key and its limits until you reconnect.
               </p>
             ) : (
               <p className="mt-2 text-[0.78rem] leading-relaxed text-muted-foreground">
                 {status?.sharedPool
                   ? "Without a key you stay on the shared limits above. Nothing breaks; they are just lower because everyone shares one allowance."
                   : "This workspace has no shared key, so connecting your own is how study sets get built."}{" "}
-                To raise your limits, connect a key with the steps above — there
+                To remove the limits, connect a key with the steps above — there
                 is nothing to pay Bluprint and no plan to upgrade.
               </p>
             )}

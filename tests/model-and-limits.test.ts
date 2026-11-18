@@ -114,15 +114,16 @@ describe("note length", () => {
 });
 
 describe("build allowances", () => {
-  test("a guest gets two new sets an hour, then a clear limit message", () => {
-    const limit = buildLimit("set", "guest");
-    expect(limit.perHour).toBe(2);
+  test("a guest on the shared key gets one new set an hour, then a clear limit message", () => {
+    const limit = buildLimit("set", "guest", "shared");
+    expect(limit.perHour).toBe(1);
 
     const allowed = checkAllowance({
       kind: "set",
       identity: "guest",
       now: NOW,
-      spent: [NOW - 10_000],
+      spent: [],
+      tier: "shared",
     });
     expect(allowed.allowed).toBe(true);
 
@@ -130,7 +131,8 @@ describe("build allowances", () => {
       kind: "set",
       identity: "guest",
       now: NOW,
-      spent: [NOW - 10_000, NOW - 5_000],
+      spent: [NOW - 5_000],
+      tier: "shared",
     });
     expect(refused.allowed).toBe(false);
     if (!refused.allowed) {

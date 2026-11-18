@@ -169,9 +169,6 @@ export const status = query({
         : "member";
     const tier = await keyTierFor(ctx, userId);
     const limit = buildLimit("set", identity, tier);
-    // What connecting a personal key would give, so the dialog can name the
-    // number the student is being offered rather than saying "higher".
-    const ownKeyLimit = buildLimit("set", identity, "own");
     const rows = await ctx.db
       .query("buildUsage")
       .withIndex("by_user_at", (q) => q.eq("userId", userId))
@@ -190,14 +187,18 @@ export const status = query({
     return {
       identity,
       tier,
+      // A personal key means no app-level cap, so there is nothing to count.
+      unlimited: limit.unlimited,
       perHour: limit.perHour,
       perDay: limit.perDay,
-      ownKeyPerHour: ownKeyLimit.perHour,
-      ownKeyPerDay: ownKeyLimit.perDay,
       usedThisHour: inHour.length,
       usedToday: inDay.length,
-      remainingHour: Math.max(0, limit.perHour - inHour.length),
-      remainingToday: Math.max(0, limit.perDay - inDay.length),
+      remainingHour: limit.unlimited
+        ? 0
+        : Math.max(0, limit.perHour - inHour.length),
+      remainingToday: limit.unlimited
+        ? 0
+        : Math.max(0, limit.perDay - inDay.length),
       canBuild: verdict.allowed,
       retryMinutes: verdict.allowed
         ? 0
