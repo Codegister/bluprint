@@ -388,6 +388,39 @@ function ErrorPanel({ set }: { set: Doc<"studySets"> }) {
   );
 }
 
+/** A section the student opened before the build reached it. */
+function StillBuilding({
+  section,
+  setId,
+}: {
+  section: SetSection;
+  setId: Id<"studySets">;
+}) {
+  return (
+    <div className="surface-card mx-auto w-full max-w-2xl p-7 text-center sm:p-9">
+      <Mascot size={92} float={false} className="mx-auto" />
+      <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-panel px-3 py-1 text-xs font-semibold text-brand-ink/70">
+        <Loader2 className="size-3 animate-spin" aria-hidden />
+        Still building
+      </p>
+      <h2 className="mt-3 font-display text-[1.35rem] font-bold text-brand-ink">
+        {SECTION_LABEL[section]} will appear here
+      </h2>
+      <p className="mx-auto mt-2 max-w-md text-[0.86rem] leading-relaxed text-muted-foreground">
+        Bluprint is still generating this part of the set. Your summary is saved,
+        and this page updates by itself as each section lands.
+      </p>
+      <Button
+        asChild
+        variant="outline"
+        className="mt-4 h-10 rounded-full border-border bg-white px-5 text-[0.82rem] font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+      >
+        <Link to={`/sets/${setId}`}>Go to the summary</Link>
+      </Button>
+    </div>
+  );
+}
+
 /** The prose summary the build wrote, shown for both course and upload sets. */
 function SummaryOverview({ set }: { set: Doc<"studySets"> }) {
   const summary = set.summary;
@@ -670,6 +703,10 @@ function StudyActions({
   quizTotal: number;
 }) {
   const mastery = percent(set.knownCount, set.cardCount);
+  // The summary is saved before the rest of the run. A section with no rows
+  // yet is still generating, so it reads as in progress and never as an empty
+  // study mode a new student might think is broken.
+  const building = set.status === "processing";
   const items = [
     {
       value: "cards",
@@ -711,6 +748,7 @@ function StudyActions({
     <section className="set-actions" aria-label="Study modes">
       {ordered.map((item) => {
         const isRecommended = item.value === recommended;
+        const pending = building && item.count === 0;
         return (
           <Link
             key={item.label}
@@ -723,12 +761,16 @@ function StudyActions({
             <span className="min-w-0 flex-1">
               <span className="set-action-title-row">
                 <span className="set-action-title">{item.label}</span>
-                <span className="set-action-count">{item.count}</span>
-                {isRecommended && (
+                <span className="set-action-count">
+                  {pending ? "Building" : item.count}
+                </span>
+                {isRecommended && !pending && (
                   <span className="set-action-badge">Start here</span>
                 )}
               </span>
-              <span className="set-action-note">{item.note}</span>
+              <span className="set-action-note">
+                {pending ? "Still generating" : item.note}
+              </span>
             </span>
             <ArrowRight className="set-action-arrow size-4" aria-hidden />
           </Link>
@@ -836,6 +878,9 @@ export default function StudySet() {
     if (details === null) return <MissingCard />;
 
     const set = details.set;
+    // The summary is written before the cards and questions. While that run is
+    // still going, a count reads as in progress instead of as a zero.
+    const buildingSet = set.status === "processing";
     const qualification = qualificationLabel(set);
     // A frontend can reach the old backend for a few seconds during a deploy;
     // that server has no `asOf`. Fall back to the previous all-cards view there
@@ -864,6 +909,13 @@ export default function StudySet() {
       set.summary !== undefined && set.status !== "queued";
     const showOverview = !isMode && summaryAvailable;
     const showTabs = set.status === "ready" || showSection || summaryAvailable;
+    // A section opened before the run reached it. Its page would otherwise be
+    // an empty study mode, which reads as a broken set to a new student.
+    const unbuiltSection =
+      set.status === "processing" &&
+      ((activeSection === "cards" && set.cardCount === 0) ||
+        (activeSection === "quiz" && set.quizCount === 0) ||
+        (activeSection === "exam" && set.examCount === 0));
     // The one sentence for a build that came in under the request, in the same
     // words the generator wrote it with.
     const shortfall = set.generationNote
@@ -974,9 +1026,15 @@ export default function StudySet() {
 
           <dl className="set-facts" aria-label="Set progress">
             {[
-              { label: "Exam ready", value: `${details.readiness.score}%` },
-              { label: "Cards due", value: String(details.dueCount) },
-              { label: "Quiz", value: `${details.quizAnswered}/${details.quizTotal}` },
+              { label: "Exam ready", value: buildingSet && details.readiness.score === 0 ? "Building" : `${details.readiness.score}%` },
+              { label: "Cards due", value: buildingSet && set.cardCount === 0 ? "Building" : String(details.dueCount) },
+              {
+                label: "Quiz",
+                value:
+                  buildingSet && set.quizCount === 0
+                    ? "Building"
+                    : `${details.quizAnswered}/${details.quizTotal}`,
+              },
               {
                 label: "Exam date",
                 value: details.pace
@@ -1050,6 +1108,8 @@ export default function StudySet() {
           <ErrorPanel set={set} />
         ) : set.status !== "ready" && !showSection && !showOverview ? (
           <BuildingPanel set={set} stale={details.processingStale} />
+        ) : isMode && unbuiltSection ? (
+          <StillBuilding section={activeSection} setId={set._id} />
         ) : isMode ? (
           <div className="set-mode">
             {activeSection === "cards" &&
@@ -1115,6 +1175,15 @@ export default function StudySet() {
           </div>
         ) : (
           <>
+            {/* The summary lands first, but the run has not finished. The
+                progress panel stays at the top so the page never opens on a
+                set of zeros; the counts below read as in progress until each
+                section arrives. */}
+            {buildingSet && (
+              <div className="mb-6">
+                <BuildingPanel set={set} stale={details.processingStale} />
+              </div>
+            )}
             <div className="set-overview-intro">
               <p className="set-kicker">Study modes</p>
               <h2 className="set-section-title">Open the part you need.</h2>
@@ -1133,7 +1202,12 @@ export default function StudySet() {
               ).length;
               const rows = [
                 {
-                  label: `${set.cardCount} card${set.cardCount === 1 ? "" : "s"}`,
+                  label:
+                    set.cardCount > 0
+                      ? `${set.cardCount} card${set.cardCount === 1 ? "" : "s"}`
+                      : buildingSet
+                        ? "Flashcards building…"
+                        : "No flashcards",
                   title: "Flashcards built from these notes",
                 },
                 {
@@ -1143,14 +1217,18 @@ export default function StudySet() {
                   label:
                     set.quizCount > 0
                       ? `Quiz ${details.quizAnswered}/${set.quizCount}`
-                      : "No quiz questions",
+                      : buildingSet
+                        ? "Quiz building…"
+                        : "No quiz questions",
                   title: "Quiz questions answered, out of the ones built",
                 },
                 {
                   label:
                     set.examCount > 0
                       ? `Exam ${examMarked}/${set.examCount}`
-                      : "No exam questions",
+                      : buildingSet
+                        ? "Exam questions building…"
+                        : "No exam questions",
                   title: "Written answers marked, out of the ones built",
                 },
               ];

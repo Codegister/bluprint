@@ -1942,6 +1942,125 @@ describe("study set reuse", () => {
     expect(set.cardCount).toBe(2);
   });
 
+  test("a pathway build writes cards for every section, not just the first", async () => {
+    const tables = rowsForSource("set:pathway-cards");
+    const set = tables.studySets[0]!;
+    set.notes = [
+      "Course: GCSE Chemistry",
+      "Exam board: AQA",
+      "Syllabus scope for this set:",
+      "",
+      "Section 1: Atomic structure",
+      "Unit: Atomic structure",
+      "Atoms contain protons, neutrons and electrons.",
+      "Covers:",
+      "- Relative atomic mass",
+      "",
+      "Section 2: Bonding",
+      "Unit: Bonding",
+      "Ionic compounds form between metals and non-metals.",
+      "Covers:",
+      "- Ionic and covalent bonds",
+      "",
+      "Section 3: Quantitative chemistry",
+      "Unit: Quantitative chemistry",
+      "The mole measures the amount of substance.",
+      "Covers:",
+      "- Conservation of mass",
+    ].join("\n");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.cardCount = 0;
+    set.quizCount = 0;
+    set.examCount = 0;
+    set.targetCardCount = 3;
+    set.targetQuizCount = 1;
+    set.targetExamCount = 0;
+    tables.flashcards = [];
+    tables.quizQuestions = [];
+    tables.examQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    const prompts: string[] = [];
+    const facts: Record<string, { front: string; back: string }> = {
+      "Atomic structure": {
+        front: "What do atoms contain?",
+        back: "Protons, neutrons and electrons.",
+      },
+      Bonding: {
+        front: "What do ionic compounds form between?",
+        back: "Metals and non-metals.",
+      },
+      "Quantitative chemistry": {
+        front: "What does the mole measure?",
+        back: "The amount of substance.",
+      },
+    };
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      if (!/Create \d+ revision flashcards/.test(prompt)) {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      prompts.push(prompt);
+      const section = /only the section "([^"]+)"/.exec(prompt)?.[1] ?? "";
+      const fact = facts[section];
+      if (!fact) throw new Error(`Card request did not name its section: ${section}`);
+      const content = JSON.stringify({
+        cards: [{ ...fact, keyPoint: fact.back }],
+      });
+      return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables);
+      const handler = (continueStudySetCards as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<unknown>;
+      })._handler;
+      await handler(action, {
+        setId: "set:pathway-cards",
+        userId: "user:source",
+        runStartedAt: 1,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    // One request per section, each scoped to that section alone. A single
+    // whole-brief prompt was clipped and wrote cards for the early topics only.
+    expect(prompts).toHaveLength(3);
+    for (const [section, prompt] of [
+      ["Atomic structure", prompts[0]!],
+      ["Bonding", prompts[1]!],
+      ["Quantitative chemistry", prompts[2]!],
+    ] as const) {
+      expect(prompt).toContain(section);
+      for (const other of Object.keys(facts)) {
+        if (other !== section) expect(prompt).not.toContain(other);
+      }
+    }
+    const cards = tables.flashcards.filter((row) => row.setId === "set:pathway-cards");
+    expect(cards.map((card) => card.front).sort()).toEqual(
+      Object.values(facts)
+        .map((fact) => fact.front)
+        .sort(),
+    );
+    expect(set.cardCount).toBe(3);
+  });
+
   test("a long continuation builds cards, quiz and exams in parallel", async () => {
     const tables = rowsForSource("set:parallel");
     const set = tables.studySets[0]!;

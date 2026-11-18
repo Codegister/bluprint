@@ -119,6 +119,89 @@ export function fallbackSummaryTitle(label?: string | null): string {
   return clean || "Study topic";
 }
 
+/** The headings a pathway brief uses: `Section 3: Bonding`, or `Topic:` alone. */
+const SCOPE_HEADING = /^(?:Section\s+\d+:|Topic:)\s*(.+)$/i;
+
+type ScopeSection = { heading: string; body: string[] };
+
+function splitScope(notes: string): {
+  preamble: string[];
+  sections: ScopeSection[];
+} {
+  const preamble: string[] = [];
+  const sections: ScopeSection[] = [];
+  let current: ScopeSection | null = null;
+  for (const line of notes.split(/\r?\n/)) {
+    if (SCOPE_HEADING.test(line)) {
+      current = { heading: line.trim(), body: [] };
+      sections.push(current);
+    } else if (current) {
+      current.body.push(line);
+    } else {
+      preamble.push(line);
+    }
+  }
+  return { preamble, sections };
+}
+
+/** Whole lines that fit in `room`, clipping only a first line that is too long. */
+function linesWithin(lines: string[], room: number): string {
+  let kept = "";
+  for (const line of lines) {
+    const candidate = kept ? `${kept}\n${line}` : line;
+    if (candidate.length > room) {
+      if (!kept) return line.slice(0, Math.max(0, room)).trimEnd();
+      break;
+    }
+    kept = candidate;
+  }
+  return kept.trim();
+}
+
+/**
+ * The material a summary call sees, and how many topics it spans.
+ *
+ * A whole-subject brief can be longer than the model input the build clips to
+ * (`MAX_NOTES_CHARS`). Clipping the end meant a set built from every chemistry
+ * topic was summarised from its opening topic alone. When the brief is too
+ * long, every section keeps its heading and as much of its own opening as an
+ * even share of the budget allows, so no topic drops out of the call. A brief
+ * that already fits is passed through untouched.
+ */
+export function summaryMaterialScope(
+  notes: string,
+  maxChars: number,
+): { material: string; sections: number; shortened: boolean } {
+  const clean = notes.trim();
+  const { preamble, sections } = splitScope(clean);
+  if (sections.length <= 1 || clean.length <= maxChars) {
+    return {
+      material: clean,
+      sections: Math.max(1, sections.length),
+      shortened: false,
+    };
+  }
+
+  // The course preamble (subject, board, options) is shared by every topic, so
+  // it is kept whole and the remainder is split evenly across the sections.
+  const preambleText = linesWithin(
+    preamble,
+    Math.min(400, Math.floor(maxChars / 6)),
+  );
+  const room = Math.max(0, maxChars - preambleText.length);
+  const perSection = Math.max(40, Math.floor(room / sections.length));
+  const parts = preambleText ? [preambleText] : [];
+  for (const section of sections) {
+    const heading = section.heading.slice(0, perSection).trimEnd();
+    const body = linesWithin(
+      section.body,
+      Math.max(0, perSection - heading.length - 1),
+    );
+    parts.push(body ? `${heading}\n${body}` : heading);
+  }
+  return { material: parts.join("\n\n"), sections: sections.length, shortened: true };
+}
+
 /**
  * Reads one model response into a summary. The title is always a string: the
  * model's own topic name when it reads like one, otherwise the subject label.

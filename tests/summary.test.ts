@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   SUMMARY_FIELDS,
   parseSummary,
+  summaryMaterialScope,
   summaryValidator,
   toSummaryArgs,
 } from "../src/convex/lib/summary";
@@ -74,5 +75,48 @@ describe("summary generation → validation", () => {
   test("a missing title falls back to a clean label", () => {
     const noTitle = FIXTURE.replace(/\s*"title":\s*"[^"]*",/, "");
     expect(parseSummary(noTitle, "Cell Biology").title).toBe("Cell Biology");
+  });
+});
+
+describe("summary scope material", () => {
+  // The brief a set built from every chemistry topic carries: one section per
+  // topic, longer than the model input once the whole selection is included.
+  const EVERY_TOPIC = Array.from(
+    { length: 24 },
+    (_, index) =>
+      `Section ${index + 1}: Topic ${index + 1}\nUnit: Unit ${index + 1}\n${(
+        "Detail about this topic. "
+      ).repeat(20)}Covers:\n- point ${index + 1}`,
+  ).join("\n");
+
+  test("every topic stays in the summary input when the brief is too long", () => {
+    const scope = summaryMaterialScope(EVERY_TOPIC, 1_200);
+    expect(scope.sections).toBe(24);
+    expect(scope.shortened).toBe(true);
+    expect(scope.material.length).toBeLessThanOrEqual(1_200);
+    // The bug this covers: head-clipping kept the first topics and dropped the
+    // rest, so a whole-subject set was summarised from its opening topic.
+    for (let index = 1; index <= 24; index += 1) {
+      expect(scope.material).toContain(`Section ${index}: Topic ${index}`);
+    }
+  });
+
+  test("a brief that already fits is passed through untouched", () => {
+    const notes = "Topic: Osmosis\nUnit: Transport\nWater crosses membranes.";
+    expect(summaryMaterialScope(notes, 12_000)).toEqual({
+      material: notes,
+      sections: 1,
+      shortened: false,
+    });
+  });
+
+  test("a short multi-topic brief is not shortened", () => {
+    const notes =
+      "Section 1: Atoms\nUnit: Atomic structure\nAtoms have protons.\nSection 2: Bonds\nUnit: Bonding\nIons attract.";
+    expect(summaryMaterialScope(notes, 12_000)).toEqual({
+      material: notes,
+      sections: 2,
+      shortened: false,
+    });
   });
 });

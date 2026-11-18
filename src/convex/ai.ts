@@ -70,7 +70,11 @@ import {
   prepareCards,
   prepareQuiz,
 } from "./lib/studySetQuality";
-import { parseSummary, type Summary } from "./lib/summary";
+import {
+  parseSummary,
+  summaryMaterialScope,
+  type Summary,
+} from "./lib/summary";
 import {
   SYLLABUS_CONTENT_SOURCE,
   cardSourceRule,
@@ -1284,28 +1288,43 @@ async function summariseNotes(
   syllabus = false,
 ): Promise<Summary> {
   const qualification = qualificationText(context);
+  // A multi-topic brief must reach the summary whole. Sending its first
+  // `MAX_NOTES_CHARS` characters made a set built from every chemistry topic
+  // summarise only its opening topic.
+  const scope = syllabus
+    ? summaryMaterialScope(notes, MAX_NOTES_CHARS)
+    : { material: notes, sections: 1, shortened: false };
+  const multiTopic = syllabus && scope.sections > 1;
   const raw = await generationChat(apiKeys, "summary", {
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       {
         role: "user",
         content:
-          `${materialBlock(notes)}\n\n` +
+          `${materialBlock(scope.material)}\n\n` +
           (qualification
             ? `This material is for ${qualification}. Angle the exam focus at that qualification and use its command words.\n`
             : "") +
           (syllabus
             ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n`
             : "") +
-          (syllabus
-            ? "Create a revision summary of the subject content these topics cover. Return JSON shaped exactly like:\n"
-            : "Create a revision summary of the material. Return JSON shaped exactly like:\n") +
-          '{"title":"2-5 word topic name","overview":"3-5 sentence overview","keyPoints":["6-10 specific points worth remembering"],"examFocus":["3-5 likely exam angles or things to memorise"]}\n' +
-          "The title names the topic, the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. " +
+          (multiTopic
+            ? `Create a revision summary of the subject content all ${scope.sections} topics in this selection cover. ` +
+              "The overview must span the whole selection: name each topic area in the order it appears and say what it covers, instead of describing only the first topic. " +
+              "Draw the key points and exam focus from different topics rather than one part of the course. Return JSON shaped exactly like:\n"
+            : syllabus
+              ? "Create a revision summary of the subject content these topics cover. Return JSON shaped exactly like:\n"
+              : "Create a revision summary of the material. Return JSON shaped exactly like:\n") +
+          (multiTopic
+            ? '{"title":"2-5 word name for the whole selection","overview":"6-8 sentence overview covering every topic in the selection","keyPoints":["6-10 specific points worth remembering, drawn from across the topics"],"examFocus":["3-5 likely exam angles or things to memorise, drawn from across the topics"]}\n'
+            : '{"title":"2-5 word topic name","overview":"3-5 sentence overview","keyPoints":["6-10 specific points worth remembering"],"examFocus":["3-5 likely exam angles or things to memorise"]}\n') +
+          (multiTopic
+            ? "The title names the whole selection (the course and level), the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. "
+            : "The title names the topic, the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. ") +
           `${summaryFidelityRule(syllabus)} No markdown inside values.`,
       },
     ],
-    maxTokens: 2200,
+    maxTokens: multiTopic ? 2600 : 2200,
     temperature: 0.15,
     topP: 1.0,
     disableThinking: true,
@@ -1323,6 +1342,7 @@ const QUIZ_BATCH_SIZE = 10;
 // Small topic batches are generated in parallel. Three calls at once keeps a
 // long pathway inside the action's time limit without hammering one provider
 // key with the whole subject at once.
+const CARD_SCOPE_CONCURRENCY = 4;
 const QUIZ_SCOPE_CONCURRENCY = 5;
 // Exam questions carry a longer marking guide, so two section calls at a time
 // is the safe balance between throughput and provider limits.
@@ -1494,6 +1514,9 @@ async function generateCards(
   // Called with only the cards accepted from this batch. A caller that can save
   // partial builds uses it to make each batch durable before asking for another.
   onCardsAccepted?: (cards: GeneratedCard[]) => Promise<void> | void,
+  // A pathway batch names the one section it may cover, so a section-scoped
+  // prompt stays inside that section.
+  scopeLabel = "",
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
   const seen = new Set<string>();
@@ -1528,6 +1551,9 @@ async function generateCards(
             "Each card must test one fact, not a list. Do not write a yes/no question, and never put the answer in the question itself. Do not write generic cards whose answer is obvious from the topic name. Fronts must ask one specific, unambiguous question. Backs must answer only that question in at most two sentences and 40 words, with the precise detail and a caveat where one exists. Never copy a sentence from the material: restate the fact as a short answer. " +
             "Every card also needs keyPoint: one revision-ready claim of at most 25 words, in the same order as the card, not a verbatim source sentence. " +
             `${cardSourceRule(syllabus)} ` +
+            (syllabus && scopeLabel
+              ? `This batch covers only the section "${scopeLabel}". Stay inside it. `
+              : "") +
             contentNotSpecRule(syllabus) +
             " " +
             (previous
@@ -1610,6 +1636,97 @@ async function generateCards(
     );
   }
   return cards.slice(0, target);
+}
+
+/**
+ * Builds a long pathway deck one section at a time.
+ *
+ * A whole-subject brief is clipped to the model input limit, so one prompt for
+ * the deck wrote cards for the opening topics and none for the rest — a set
+ * built from every chemistry topic only had cards for the first ones. Section
+ * batches keep each call small and inside its own topic, and every section gets
+ * an even share of the deck. The caller keeps the honest shortfall note when
+ * duplicates or a failed section leave the merged deck under the request.
+ */
+async function generatePathwayCards(
+  apiKeys: string[],
+  notes: string,
+  target: number,
+  deadline = Number.POSITIVE_INFINITY,
+  onProgress?: BatchProgress,
+  reviewCards = "",
+  onCardsAccepted?: (cards: GeneratedCard[]) => Promise<void> | void,
+): Promise<GeneratedCard[]> {
+  const sections = pathwaySectionScopes(notes, target);
+  if (sections.length === 0) return [];
+  // Cards get no spare allowance: the quiz adds spare questions to survive
+  // cross-section deduplication, but the same spare per section would multiply
+  // a 20-card opening stage into dozens of batches.
+  const share = Math.max(1, Math.ceil(target / sections.length));
+  const scopes = sections.map((scope) => ({
+    ...scope,
+    target: Math.min(share, target),
+  }));
+
+  const run = await runPathwayBatches({
+    scopes,
+    concurrency: CARD_SCOPE_CONCURRENCY,
+    deadline,
+    progressTarget: target,
+    generate: (scope) =>
+      generateCards(
+        apiKeys,
+        scope.notes,
+        scope.target,
+        deadline,
+        undefined,
+        true,
+        reviewCards,
+        onCardsAccepted,
+        scope.label,
+      ),
+    onProgress,
+  });
+
+  for (const failure of run.failures) {
+    console.error("Pathway card section failed", failure.label, failure.error);
+  }
+
+  if (run.items.length === 0 && run.failures.length > 0) {
+    const first = run.failures[0]!.error;
+    throw first instanceof Error
+      ? first
+      : new Error("The flashcards could not be generated.");
+  }
+
+  // Sections can meet at the same fact. Keep the first copy here; the storage
+  // mutation makes the final decision against the whole deck.
+  const kept: GeneratedCard[] = [];
+  for (const card of run.items) {
+    const key = card.front.trim().toLowerCase();
+    if (!key) continue;
+    if (
+      kept.some((previous) =>
+        isNearDuplicateStudyItem(
+          { prompt: previous.front, answer: previous.back },
+          { prompt: card.front, answer: card.back },
+        ),
+      )
+    ) {
+      continue;
+    }
+    kept.push(card);
+  }
+  if (kept.length < target) {
+    console.error("Pathway cards short after deduplication", {
+      target,
+      generated: run.items.length,
+      afterDedupe: kept.length,
+      failedSections: run.failures.length,
+      skippedSections: run.skippedSections,
+    });
+  }
+  return kept.slice(0, target);
 }
 
 async function generateQuiz(
@@ -4317,16 +4434,26 @@ async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationAr
         });
       const cardStage = await stage(
         () =>
-          generateCards(
-            apiKeys,
-            plan.notes,
-            remaining,
-            parallelDeadline,
-            undefined,
-            plan.syllabus,
-            reuseCardDigest(snapshot.cards),
-            checkpointCards,
-          ),
+          plan.syllabus
+            ? generatePathwayCards(
+                apiKeys,
+                plan.notes,
+                remaining,
+                parallelDeadline,
+                undefined,
+                reuseCardDigest(snapshot.cards),
+                checkpointCards,
+              )
+            : generateCards(
+                apiKeys,
+                plan.notes,
+                remaining,
+                parallelDeadline,
+                undefined,
+                false,
+                reuseCardDigest(snapshot.cards),
+                checkpointCards,
+              ),
         [],
       );
       // A card failure must not discard a quiz or exam that finished in the
@@ -5993,16 +6120,26 @@ async function processStudySetForUser(
       currentStage = "cards";
       const cardStage = await stage(
         () =>
-          generateCards(
-            apiKeys,
-            notes,
-            initialCardTarget,
-            deadline,
-            canKeepPartial ? undefined : reportCards,
-            syllabus,
-            "",
-            checkpointCards,
-          ),
+          syllabus
+            ? generatePathwayCards(
+                apiKeys,
+                notes,
+                initialCardTarget,
+                deadline,
+                canKeepPartial ? undefined : reportCards,
+                "",
+                checkpointCards,
+              )
+            : generateCards(
+                apiKeys,
+                notes,
+                initialCardTarget,
+                deadline,
+                canKeepPartial ? undefined : reportCards,
+                false,
+                "",
+                checkpointCards,
+              ),
         [],
       );
       const cards = cardStage.value;
@@ -6436,14 +6573,10 @@ export const regenerateCards = action({
           { course: existing.course, examBoard: existing.examBoard, level: existing.level },
           existing.courseId !== undefined,
         ).catch(() => null)) ?? summaryFromNotes(notes, existing.course);
-      const cards = await generateCards(
-        apiKeys,
-        notes,
-        target,
-        deadline,
-        undefined,
-        existing.courseId !== undefined,
-      );
+      const cards =
+        existing.courseId !== undefined
+          ? await generatePathwayCards(apiKeys, notes, target, deadline)
+          : await generateCards(apiKeys, notes, target, deadline);
       if (cards.length === 0) {
         throw new Error(
           "No cards could be rebuilt from these notes. Add at least two specific facts and retry.",
