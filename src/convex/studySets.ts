@@ -1771,6 +1771,70 @@ export const isActive = internalQuery({
   },
 });
 
+/**
+ * Appends one accepted card batch to a running pathway build.
+ *
+ * The full `completeGeneration` pass grounds every section, re-derives the
+ * summary's key points and recomputes coverage across the whole deck, so its
+ * cost grows with the set. On a max-size pathway build that overran the
+ * one-second mutation limit partway through the deck and stopped the flashcard
+ * stage with the remaining sections unsaved. A checkpoint only has to make the
+ * batch durable: the generator has already grounded and shortened these cards,
+ * and the stage's final save still applies the deck-wide rules.
+ */
+export const appendCards = internalMutation({
+  args: { setId: v.id("studySets"), cards: v.array(cardInput) },
+  handler: async (ctx, { setId, cards }) => {
+    const set = await ctx.db.get(setId);
+    if (!set) return { stored: false as const };
+    const existing = await ctx.db
+      .query("flashcards")
+      .withIndex("by_set", (q) => q.eq("setId", setId))
+      .collect();
+    const specPoints = set.specPoints ?? [];
+    const seen = new Set(existing.map((row) => row.front.trim().toLowerCase()));
+    const offset = existing.length;
+    const now = Date.now();
+    let added = 0;
+    for (const card of cards) {
+      const key = card.front.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      await ctx.db.insert("flashcards", {
+        setId,
+        userId: set.userId,
+        front: card.front,
+        back: card.back,
+        order: offset + added,
+        beyondNotes: card.beyondNotes,
+        specRef:
+          specPoints.length > 0
+            ? (matchSpecPoint(`${card.front} ${card.back}`, specPoints).id ??
+              undefined)
+            : undefined,
+        recallThreshold: 0.75,
+        recallUnits: deriveRecallUnits(card.back),
+        status: "new",
+        reviewCount: 0,
+        dueAt: now,
+        intervalDays: 0,
+        fsrsState: "new",
+        lapses: 0,
+        reps: 0,
+      });
+      added += 1;
+    }
+    const cardCount = offset + added;
+    if (added > 0) {
+      await ctx.db.patch(setId, { cardCount, updatedAt: Date.now() });
+    }
+    return {
+      stored: added > 0,
+      counts: { cards: cardCount, quiz: set.quizCount, exams: set.examCount },
+    };
+  },
+});
+
 export const completeGeneration = internalMutation({
   args: {
     setId: v.id("studySets"),

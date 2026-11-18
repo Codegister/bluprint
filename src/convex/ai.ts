@@ -4406,20 +4406,28 @@ async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationAr
       const checkpointCards = async (batch: GeneratedCard[]) =>
         runCheckpoint(async () => {
           if (!(await setStillExists(ctx, args.setId))) throw new BuildCancelled();
-          const checkpoint = await ctx.runMutation(
-            internal.studySets.completeGeneration,
-            {
-              setId: args.setId,
-              summary,
-              cards: toCardArgs(batch),
-              quiz: [],
-              exams: [],
-              keepExisting: true,
-              title: summary.title,
-              requested: plan.requested,
-              final: false,
-            },
-          );
+          // A pathway build checkpoints every section. The full generation
+          // pass rewrites every section and recomputes coverage across the
+          // whole deck, which overran the one-second mutation limit partway
+          // through a max-size set; the append path only makes this batch
+          // durable. Text builds keep the full checkpoint, because their decks
+          // are small and their summary key points follow the deck.
+          const checkpoint = plan.syllabus
+            ? await ctx.runMutation(internal.studySets.appendCards, {
+                setId: args.setId,
+                cards: toCardArgs(batch),
+              })
+            : await ctx.runMutation(internal.studySets.completeGeneration, {
+                setId: args.setId,
+                summary,
+                cards: toCardArgs(batch),
+                quiz: [],
+                exams: [],
+                keepExisting: true,
+                title: summary.title,
+                requested: plan.requested,
+                final: false,
+              });
           if (checkpoint.stored && checkpoint.counts) {
             savedCounts.cards = checkpoint.counts.cards;
             savedCounts.quiz = checkpoint.counts.quiz;
@@ -6086,24 +6094,32 @@ async function processStudySetForUser(
       const checkpointCards = canKeepPartial
         ? async (batch: GeneratedCard[]) => {
             if (!(await setStillExists(ctx, setId))) throw new BuildCancelled();
-            const saved = await ctx.runMutation(
-              internal.studySets.completeGeneration,
-              {
-                setId,
-                summary,
-                cards: toCardArgs(batch),
-                quiz: [],
-                exams: [],
-                keepExisting: true,
-                title: summary.title,
-                requested: {
-                  cards: requestedCards,
-                  quiz: requestedQuiz,
-                  exams: requestedExam,
-                },
-                final: false,
-              },
-            );
+            // A pathway checkpoint appends the batch instead of rewriting
+            // every section; see appendCards for the mutation-limit failure
+            // this avoids.
+            const saved = syllabus
+              ? await ctx.runMutation(internal.studySets.appendCards, {
+                  setId,
+                  cards: toCardArgs(batch),
+                })
+              : await ctx.runMutation(
+                  internal.studySets.completeGeneration,
+                  {
+                    setId,
+                    summary,
+                    cards: toCardArgs(batch),
+                    quiz: [],
+                    exams: [],
+                    keepExisting: true,
+                    title: summary.title,
+                    requested: {
+                      cards: requestedCards,
+                      quiz: requestedQuiz,
+                      exams: requestedExam,
+                    },
+                    final: false,
+                  },
+                );
             if (saved.stored && saved.counts) {
               savedCounts.cards = saved.counts.cards;
               savedCounts.quiz = saved.counts.quiz;
@@ -6583,11 +6599,37 @@ export const regenerateCards = action({
         );
       }
       const content = await ctx.runQuery(internal.studySets.getContentForRepair, { setId });
-      await ctx.runMutation(internal.studySets.completeGeneration, {
-        setId,
-        summary,
-        cards: toCardArgs(cards),
-        quiz: content.quiz.map((question) => ({
+      const requestedTotals = {
+        cards: requested,
+        quiz: existing.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+        exams: existing.targetExamCount ?? BUILD_DEFAULTS.exam,
+      };
+      // Save one section at a time. The old single call rewrote the deck, the
+      // quiz and every exam question in one mutation, which overran the
+      // one-second limit on a max-size set and turned a finished regeneration
+      // into a failed build.
+      const cardSave = await ctx.runMutation(
+        internal.studySets.completeGeneration,
+        {
+          setId,
+          summary,
+          cards: toCardArgs(cards),
+          quiz: [],
+          exams: [],
+          title: summary.title,
+          requested: requestedTotals,
+          cardsOnly: true,
+        },
+      );
+      if (!cardSave.stored) {
+        throw new Error(
+          "No cards could be rebuilt from these notes. Add at least two specific facts and retry.",
+        );
+      }
+      // Re-check the quiz against the new deck, then save it on its own so the
+      // mutation stays inside its time limit.
+      const preparedQuiz = prepareQuizForStorage(
+        content.quiz.map((question) => ({
           question: question.question,
           options: question.options,
           correctIndex: question.correctIndex,
@@ -6597,6 +6639,28 @@ export const regenerateCards = action({
           acceptedAnswers: question.acceptedAnswers,
           beyondNotes: question.beyondNotes,
         })),
+        cards,
+        notes,
+        existing.level,
+        existing.course,
+      );
+      await ctx.runMutation(internal.studySets.completeGeneration, {
+        setId,
+        summary,
+        cards: [],
+        quiz: [],
+        exams: [],
+        preparedQuiz,
+        title: summary.title,
+        requested: requestedTotals,
+        quizOnly: true,
+        keepProgress: true,
+      });
+      await ctx.runMutation(internal.studySets.completeGeneration, {
+        setId,
+        summary,
+        cards: [],
+        quiz: [],
         exams: content.exams.map((question) => ({
           question: question.question,
           marks: question.marks,
@@ -6606,11 +6670,8 @@ export const regenerateCards = action({
           criteria: question.criteria,
         })),
         title: summary.title,
-        requested: {
-          cards: requested,
-          quiz: existing.targetQuizCount ?? BUILD_DEFAULTS.quiz,
-          exams: existing.targetExamCount ?? BUILD_DEFAULTS.exam,
-        },
+        requested: requestedTotals,
+        examsOnly: true,
       });
       return { started: true };
     } catch (error) {

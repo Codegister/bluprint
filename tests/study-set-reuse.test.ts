@@ -12,6 +12,7 @@ import {
 import { refund } from "../src/convex/buildUsage";
 import { createTopicSetForTutor } from "../src/convex/courses";
 import {
+  appendCards,
   claimBackgroundRetry,
   claimContinuation,
   claimForProcessing,
@@ -265,6 +266,7 @@ function actionContext(
     [internal.studySets.setProgress, setProgress as unknown as InternalHandler],
     [internal.studySets.isActive, isActive as unknown as InternalHandler],
     [internal.studySets.completeGeneration, completeGeneration as unknown as InternalHandler],
+    [internal.studySets.appendCards, appendCards as unknown as InternalHandler],
     [internal.studySets.failGeneration, failGeneration as unknown as InternalHandler],
     [internal.studySets.finishGeneration, finishGeneration as unknown as InternalHandler],
     [internal.buildUsage.refund, refund as unknown as InternalHandler],
