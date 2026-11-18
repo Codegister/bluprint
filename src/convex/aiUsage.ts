@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { DAY_MS, type BuildIdentity } from "./lib/buildLimits";
 import { checkAiAllowance } from "./lib/aiLimits";
+import { keyTierFor } from "./lib/keyTier";
 
 const kindValidator = v.union(
   v.literal("tutor"),
@@ -20,13 +21,16 @@ export const consume = internalMutation({
       (user as { isAnonymous?: boolean | null }).isAnonymous === true
         ? "guest"
         : "member";
+    // Tutoring and marking on the shared pool get the smaller allowance; a
+    // connected personal key raises it, which the refusal sentence says.
+    const tier = await keyTierFor(ctx, userId);
     const now = Date.now();
     const rows = await ctx.db
       .query("aiUsage")
       .withIndex("by_user_at", (q) => q.eq("userId", userId))
       .collect();
     const spent = rows.filter((row) => row.kind === kind).map((row) => row.at);
-    const verdict = checkAiAllowance({ kind, identity, now, spent });
+    const verdict = checkAiAllowance({ kind, identity, now, spent, tier });
     if (!verdict.allowed) throw new Error(verdict.message);
 
     for (const row of rows) {

@@ -13,6 +13,13 @@
 export type BuildKind = "set" | "rebuild" | "paper";
 export type BuildIdentity = "guest" | "member";
 
+/**
+ * Whose key pays for the work. `shared` is the deployment's pool and is the
+ * scarce resource, so it carries the smaller allowance; `own` means the user
+ * connected a personal key, and the limit there is only a script guard.
+ */
+export type KeyTier = "own" | "shared";
+
 export type BuildLimit = {
   perHour: number;
   perDay: number;
@@ -38,10 +45,49 @@ const LIMITS: Record<BuildKind, Record<BuildIdentity, BuildLimit>> = {
 export const HOUR_MS = 60 * 60 * 1000;
 export const DAY_MS = 24 * HOUR_MS;
 
-/** The allowance for one identity and kind. */
-export function buildLimit(kind: BuildKind, identity: BuildIdentity): BuildLimit {
-  return LIMITS[kind][identity];
+/**
+ * The allowance while a build runs on the shared key pool.
+ *
+ * Everyone without a personal key draws on the same keys, so one account cannot
+ * spend the whole deployment's capacity. Connecting a personal key raises the
+ * limit to the table above, which is what the refusal sentence tells the student.
+ */
+const SHARED_LIMITS: Record<BuildKind, Record<BuildIdentity, BuildLimit>> = {
+  set: {
+    guest: { perHour: 1, perDay: 3, label: "new set" },
+    member: { perHour: 3, perDay: 10, label: "new set" },
+  },
+  rebuild: {
+    guest: { perHour: 2, perDay: 5, label: "rebuild" },
+    member: { perHour: 4, perDay: 15, label: "rebuild" },
+  },
+  paper: {
+    guest: { perHour: 1, perDay: 2, label: "past paper" },
+    member: { perHour: 1, perDay: 4, label: "past paper" },
+  },
+};
+
+/**
+ * The allowance for one identity and kind, on the key tier paying for it.
+ *
+ * `own` is the default so every caller that has not been taught about keys
+ * keeps the previous, more generous numbers.
+ */
+export function buildLimit(
+  kind: BuildKind,
+  identity: BuildIdentity,
+  tier: KeyTier = "own",
+): BuildLimit {
+  return tier === "shared" ? SHARED_LIMITS[kind][identity] : LIMITS[kind][identity];
 }
+
+/**
+ * The half of the refusal that says how to get out of the shared allowance.
+ * Deliberately free of provider names and key names: the browser's error
+ * sanitiser treats those as internal detail and would show a generic message.
+ */
+export const OWN_KEY_UPGRADE_NOTE =
+  "Connect your own API key from the account menu for a higher limit.";
 
 export type AllowanceVerdict =
   | { allowed: true }
@@ -63,13 +109,16 @@ export function checkAllowance(args: {
   now: number;
   /** Timestamps of previous builds of the same kind, any order. */
   spent: number[];
+  /** Whose key pays; defaults to the personal, more generous allowance. */
+  tier?: KeyTier;
 }): AllowanceVerdict {
-  const { kind, identity, now, spent } = args;
-  const limit = buildLimit(kind, identity);
+  const { kind, identity, now, spent, tier = "own" } = args;
+  const limit = buildLimit(kind, identity, tier);
   const guestNote =
     identity === "guest"
       ? " Guests share this lower limit; add an email address to sign in and raise it."
       : "";
+  const keyNote = tier === "shared" ? ` ${OWN_KEY_UPGRADE_NOTE}` : "";
 
   const plural = (count: number) => (count === 1 ? "" : "s");
   const hourly = `${limit.perHour} ${limit.label}${plural(limit.perHour)} an hour`;
@@ -87,7 +136,7 @@ export function checkAllowance(args: {
       message:
         `You have reached the build limit: ${hourly} and ${daily}. The hourly limit resets in about ${waitMinutes} ${
           waitMinutes === 1 ? "minute" : "minutes"
-        }.${guestNote} Nothing was built, so no tokens were spent.`,
+        }.${keyNote}${guestNote} Nothing was built, so no tokens were spent.`,
     };
   }
 
@@ -100,7 +149,7 @@ export function checkAllowance(args: {
       message:
         `You have reached the build limit: ${daily}, with a maximum of ${hourly}. The daily limit resets in about ${waitHours} ${
           waitHours === 1 ? "hour" : "hours"
-        }.${guestNote} Nothing was built, so no tokens were spent.`,
+        }.${keyNote}${guestNote} Nothing was built, so no tokens were spent.`,
     };
   }
 

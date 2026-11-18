@@ -6,7 +6,13 @@
  * script could call the public actions repeatedly and drain the deployment.
  * The numbers are deliberately generous for a real revision session.
  */
-import { DAY_MS, HOUR_MS, type BuildIdentity } from "./buildLimits";
+import {
+  DAY_MS,
+  HOUR_MS,
+  OWN_KEY_UPGRADE_NOTE,
+  type BuildIdentity,
+  type KeyTier,
+} from "./buildLimits";
 
 export type AiKind = "tutor" | "marking" | "dictation" | "vision" | "explain";
 
@@ -35,8 +41,39 @@ const LIMITS: Record<AiKind, Record<BuildIdentity, AiLimit>> = {
   },
 };
 
-export function aiLimit(kind: AiKind, identity: BuildIdentity): AiLimit {
-  return LIMITS[kind][identity];
+const SHARED_LIMITS: Record<AiKind, Record<BuildIdentity, AiLimit>> = {
+  tutor: {
+    guest: { perHour: 5, perDay: 15, label: "tutor questions" },
+    member: { perHour: 15, perDay: 50, label: "tutor questions" },
+  },
+  marking: {
+    guest: { perHour: 8, perDay: 25, label: "marking requests" },
+    member: { perHour: 20, perDay: 70, label: "marking requests" },
+  },
+  dictation: {
+    guest: { perHour: 5, perDay: 15, label: "dictation clips" },
+    member: { perHour: 15, perDay: 45, label: "dictation clips" },
+  },
+  vision: {
+    guest: { perHour: 5, perDay: 15, label: "photo readings" },
+    member: { perHour: 15, perDay: 45, label: "photo readings" },
+  },
+  explain: {
+    guest: { perHour: 10, perDay: 30, label: "explanation requests" },
+    member: { perHour: 20, perDay: 70, label: "explanation requests" },
+  },
+};
+
+/**
+ * The allowance for one identity and kind, on the key tier paying for it.
+ * Users on the shared pool get the smaller table; a personal key raises it.
+ */
+export function aiLimit(
+  kind: AiKind,
+  identity: BuildIdentity,
+  tier: KeyTier = "own",
+): AiLimit {
+  return tier === "shared" ? SHARED_LIMITS[kind][identity] : LIMITS[kind][identity];
 }
 
 export type AiAllowanceVerdict =
@@ -48,13 +85,16 @@ export function checkAiAllowance(args: {
   identity: BuildIdentity;
   now: number;
   spent: number[];
+  /** Whose key pays; defaults to the personal, more generous allowance. */
+  tier?: KeyTier;
 }): AiAllowanceVerdict {
-  const { kind, identity, now, spent } = args;
-  const limit = aiLimit(kind, identity);
+  const { kind, identity, now, spent, tier = "own" } = args;
+  const limit = aiLimit(kind, identity, tier);
   const guestNote =
     identity === "guest"
       ? " Guests get the lower limit; add an email address to raise it."
       : "";
+  const keyNote = tier === "shared" ? ` ${OWN_KEY_UPGRADE_NOTE}` : "";
 
   const inHour = spent.filter((at) => now - at < HOUR_MS);
   if (inHour.length >= limit.perHour) {
@@ -63,7 +103,7 @@ export function checkAiAllowance(args: {
       allowed: false,
       message:
         `You have reached the AI limit for ${limit.label}: ${limit.perHour} an hour and ${limit.perDay} a day. ` +
-        `It resets in about ${wait} ${wait === 1 ? "minute" : "minutes"}.${guestNote} Nothing was sent to the AI.`,
+        `It resets in about ${wait} ${wait === 1 ? "minute" : "minutes"}.${keyNote}${guestNote} Nothing was sent to the AI.`,
     };
   }
 
@@ -74,7 +114,7 @@ export function checkAiAllowance(args: {
       allowed: false,
       message:
         `You have reached the AI limit for ${limit.label}: ${limit.perHour} an hour and ${limit.perDay} a day. ` +
-        `It resets in about ${wait} ${wait === 1 ? "hour" : "hours"}.${guestNote} Nothing was sent to the AI.`,
+        `It resets in about ${wait} ${wait === 1 ? "hour" : "hours"}.${keyNote}${guestNote} Nothing was sent to the AI.`,
     };
   }
 

@@ -466,7 +466,7 @@ export function CreateSetDialog({
         </div>
 
         <div className="px-6 pb-6 sm:px-7">
-          {usage?.identity === "guest" && (
+          {usage && (usage.tier === "shared" || usage.identity === "guest") && (
             <div
               className={cn(
                 "mb-4 rounded-2xl px-3.5 py-3 text-xs leading-relaxed",
@@ -476,10 +476,27 @@ export function CreateSetDialog({
               )}
               role={usage.canBuild ? "note" : "alert"}
             >
-              {usage.canBuild ? (
+              {usage.tier === "shared" ? (
+                usage.canBuild ? (
+                  <>
+                    Shared key limit: {usage.perHour} new sets an hour (
+                    {usage.remainingHour} left this hour). Connect your own API
+                    key from the account menu for {usage.ownKeyPerHour} an hour.
+                  </>
+                ) : (
+                  <>
+                    Shared key limit reached: {usage.perHour} new sets an hour.
+                    The limit resets in about {usage.retryMinutes} minute
+                    {usage.retryMinutes === 1 ? "" : "s"}. Connect your own API
+                    key from the account menu for {usage.ownKeyPerHour} an hour.
+                  </>
+                )
+              ) : usage.canBuild ? (
                 <>
-                  Guest workspace: {usage.perHour} new sets an hour ({usage.remainingHour}{" "}
-                  left this hour). Add an email to raise the cap to {buildLimit("set", "member").perHour}.
+                  Guest workspace: {usage.perHour} new sets an hour (
+                  {usage.remainingHour}{" "}
+                  left this hour). Add an email to raise the cap to{" "}
+                  {buildLimit("set", "member", "own").perHour}.
                 </>
               ) : (
                 <>

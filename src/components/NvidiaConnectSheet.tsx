@@ -8,6 +8,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { api } from "@/convex/_generated/api";
+import { aiLimit } from "@/convex/lib/aiLimits";
+import { buildLimit } from "@/convex/lib/buildLimits";
 import { notifyError } from "@/lib/errors";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { CheckCircle2, ExternalLink, KeyRound, Loader2 } from "lucide-react";
@@ -15,15 +17,18 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 /**
- * Where NVIDIA keys are created and managed. Users sign in there themselves —
- * Bluprint never signs anyone up, and this link is the whole hand-off.
+ * Where keys are created. There is no separate "API keys" page that hands out a
+ * new key: the Generate button lives on a model's page, so the link opens the
+ * model list and the steps say which button to press once a model is open.
+ * Users sign in there themselves — Bluprint never signs anyone up.
  */
-const GET_KEY_URL = "https://build.nvidia.com/settings/api-keys";
+const GET_KEY_URL = "https://build.nvidia.com/models";
 
 const STEPS = [
   "Open build.nvidia.com and sign in with your email. That joins the free NVIDIA Developer Program.",
-  "On the API Keys page, choose Generate API Key and copy the key it shows (it starts with nvapi-).",
-  "Paste it below. Bluprint checks it with NVIDIA straight away, then saves it encrypted on your account.",
+  "Pick any model from the Models page and open it — the key works for every model, not just that one.",
+  "Press Generate API Key on the model page and copy the key it shows (it starts with nvapi-).",
+  "Paste it below. Bluprint checks it straight away, then saves it encrypted on your account.",
 ];
 
 export function NvidiaConnectSheet({
@@ -34,6 +39,9 @@ export function NvidiaConnectSheet({
   onOpenChange: (open: boolean) => void;
 }) {
   const status = useQuery(api.userKeys.status);
+  // The same allowance the build dialog shows, so the numbers here cannot
+  // drift from what the server actually enforces.
+  const allowance = useQuery(api.buildUsage.status);
   const connect = useAction(api.nvidiaKeys.connect);
   const forget = useMutation(api.userKeys.forget);
   const [draft, setDraft] = useState("");
@@ -45,6 +53,11 @@ export function NvidiaConnectSheet({
 
   const saved = status?.saved === true;
   const canSave = status?.canSave !== false;
+  const identity = allowance?.identity ?? "member";
+  const sharedSets = buildLimit("set", identity, "shared");
+  const sharedTutor = aiLimit("tutor", identity, "shared");
+  const ownSets = buildLimit("set", identity, "own");
+  const ownTutor = aiLimit("tutor", identity, "own");
 
   async function check() {
     const candidate = draft.trim();
@@ -134,7 +147,7 @@ export function NvidiaConnectSheet({
 
           <div>
             <h3 className="text-[0.72rem] font-semibold tracking-wide text-muted-foreground uppercase">
-              Three steps
+              Four steps
             </h3>
             <ol className="mt-2 space-y-2">
               {STEPS.map((step, index) => (
@@ -224,11 +237,39 @@ export function NvidiaConnectSheet({
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-4">
-            <p className="text-[0.78rem] leading-relaxed text-muted-foreground">
-              {status?.sharedPool
-                ? "If you skip this, nothing breaks: Bluprint's shared key builds your sets and answers your tutor questions as it does now."
-                : "This workspace has no shared key, so connecting your own is how study sets get built."}
-            </p>
+            <h3 className="text-[0.72rem] font-semibold tracking-wide text-muted-foreground uppercase">
+              What you get
+            </h3>
+            <dl className="mt-2 space-y-2 text-[0.78rem] leading-relaxed text-brand-ink">
+              <div>
+                <dt className="font-semibold">On the shared key</dt>
+                <dd className="text-muted-foreground">
+                  {sharedSets.perHour} new sets an hour, {sharedSets.perDay} a day ·{" "}
+                  {sharedTutor.perHour} tutor questions an hour, {sharedTutor.perDay} a day.
+                </dd>
+              </div>
+              <div>
+                <dt className="font-semibold">With your own key</dt>
+                <dd className="text-muted-foreground">
+                  {ownSets.perHour} new sets an hour, {ownSets.perDay} a day ·{" "}
+                  {ownTutor.perHour} tutor questions an hour, {ownTutor.perDay} a day.
+                </dd>
+              </div>
+            </dl>
+            {saved ? (
+              <p className="mt-2 text-[0.78rem] leading-relaxed text-brand-ink">
+                You're connected, so your requests already get the higher
+                limits — no other action needed.
+              </p>
+            ) : (
+              <p className="mt-2 text-[0.78rem] leading-relaxed text-muted-foreground">
+                {status?.sharedPool
+                  ? "Without a key you stay on the shared limits above. Nothing breaks; they are just lower because everyone shares one allowance."
+                  : "This workspace has no shared key, so connecting your own is how study sets get built."}{" "}
+                To raise your limits, connect a key with the steps above — there
+                is nothing to pay Bluprint and no plan to upgrade.
+              </p>
+            )}
             <p className="mt-2 text-[0.72rem] leading-relaxed text-muted-foreground">
               Your key stays under NVIDIA's trial terms, which are for
               prototyping rather than production use. That is why this is

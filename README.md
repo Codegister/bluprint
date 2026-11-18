@@ -542,10 +542,17 @@ Get keys from [NVIDIA Build](https://build.nvidia.com/).
 
 ### Connecting a personal NVIDIA key (optional)
 
-A user who wants their own usage limits can connect their own NVIDIA key from the
-account menu (**NVIDIA key**). The sheet explains the three steps, links to
-[build.nvidia.com](https://build.nvidia.com/settings/api-keys), and checks the pasted key
-with a one-token chat completion before saving it, so a typo is reported immediately.
+Builds, tutor questions and marking run on a smaller allowance while they draw on the
+shared key pool; connecting a personal key raises it (`buildLimits.ts` and `aiLimits.ts`
+hold both tables). The refusal sentence names the way up: **Connect your own API key from
+the account menu for a higher limit.**
+
+A user who wants those higher limits can connect their own NVIDIA key from the account
+menu (**NVIDIA key**). The sheet links to the [model list](https://build.nvidia.com/models)
+and explains the real flow: sign in, open any model, then press **Generate API Key** on the
+model page — there is no separate "API keys" page that issues a new key. The pasted key is
+checked with a one-token chat completion before it is saved, so a typo is reported
+immediately.
 (`GET /v1/models` is not a valid check: that catalogue endpoint answers 200 without any key
 at all.)
 

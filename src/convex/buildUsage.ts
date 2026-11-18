@@ -15,6 +15,7 @@ import { v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
 import { internalMutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { keyTierFor } from "./lib/keyTier";
 import { requireUserId } from "./lib/requireUser";
 import {
   DAY_MS,
@@ -38,6 +39,9 @@ export async function consumeBuildAllowance(
   kind: BuildKind,
 ): Promise<void> {
   const identity = await identityFor(ctx, userId);
+  // No personal key means this build spends the shared pool, which is capped
+  // lower; the refusal tells the student how to raise it.
+  const tier = await keyTierFor(ctx, userId);
   const now = Date.now();
 
   const rows = await ctx.db
@@ -51,7 +55,7 @@ export async function consumeBuildAllowance(
     .map((row) => row.at)
     .sort((a, b) => a - b);
 
-  const verdict = checkAllowance({ kind, identity, now, spent });
+  const verdict = checkAllowance({ kind, identity, now, spent, tier });
   if (!verdict.allowed) {
     throw new Error(verdict.message);
   }
@@ -163,7 +167,11 @@ export const status = query({
       user !== null && (user as { isAnonymous?: boolean | null }).isAnonymous === true
         ? "guest"
         : "member";
-    const limit = buildLimit("set", identity);
+    const tier = await keyTierFor(ctx, userId);
+    const limit = buildLimit("set", identity, tier);
+    // What connecting a personal key would give, so the dialog can name the
+    // number the student is being offered rather than saying "higher".
+    const ownKeyLimit = buildLimit("set", identity, "own");
     const rows = await ctx.db
       .query("buildUsage")
       .withIndex("by_user_at", (q) => q.eq("userId", userId))
@@ -176,12 +184,16 @@ export const status = query({
       identity,
       now,
       spent,
+      tier,
     });
     const oldestHour = inHour.length > 0 ? Math.min(...inHour) : now;
     return {
       identity,
+      tier,
       perHour: limit.perHour,
       perDay: limit.perDay,
+      ownKeyPerHour: ownKeyLimit.perHour,
+      ownKeyPerDay: ownKeyLimit.perDay,
       usedThisHour: inHour.length,
       usedToday: inDay.length,
       remainingHour: Math.max(0, limit.perHour - inHour.length),
