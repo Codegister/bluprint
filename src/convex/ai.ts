@@ -11,6 +11,7 @@
  * instead of straight to NVIDIA; see `gateway.toml` and the README.
  */
 
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -104,6 +105,8 @@ import {
   type AlternativeCredit,
   type MarkCheck,
 } from "./lib/markingCriteria";
+import { decryptKey } from "./lib/keyVault";
+import type { ApiKeyChain } from "./lib/nvidiaConfig";
 import { requireUserId } from "./lib/requireUser";
 import {
   fetchCognitoOutline,
@@ -164,6 +167,8 @@ import {
   NVIDIA_TEXT_MODEL,
   NVIDIA_VISION_MODEL,
   generationModelChain,
+  keyChain,
+  preferredApiKey,
   readNvidiaKeys,
   readTutorTier,
   textModelCandidates,
@@ -273,11 +278,45 @@ type GeneratedExam = {
 // Key resolution
 // ---------------------------------------------------------------------------
 
-function resolveNvidiaKeys(): string[] {
-  const keys = readNvidiaKeys();
+/**
+ * Opens a user's own saved key, or undefined when they have not added one.
+ *
+ * A key that cannot be decrypted (for example after the deployment secret was
+ * rotated) is logged and ignored: generation still runs on the shared pool, so
+ * a vault problem never stops a student from working.
+ */
+async function ownNvidiaKey(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+): Promise<string | undefined> {
+  try {
+    const stored = await ctx.runQuery(internal.userKeys.getStored, { userId });
+    if (!stored) return undefined;
+    return decryptKey(stored.ciphertext);
+  } catch (error) {
+    console.error("[ai] a saved NVIDIA key could not be read", error);
+    return undefined;
+  }
+}
+
+/**
+ * The keys for one request: the user's own validated key when they added one,
+ * then the deployment's shared pool as the fallback. Background actions pass
+ * the owner of the work they are building, so a user's own key covers their
+ * builds too.
+ */
+async function resolveNvidiaKeys(
+  ctx: ActionCtx,
+  userId?: Id<"users">,
+): Promise<ApiKeyChain> {
+  const owner = userId ?? (await getAuthUserId(ctx));
+  const own = owner ? await ownNvidiaKey(ctx, owner) : undefined;
+  const keys = keyChain(own, readNvidiaKeys());
   if (keys.length === 0) {
     // Internal detail stays in the log; the student gets a sentence.
-    console.error("[ai] no NVIDIA_API_KEY is configured on this deployment");
+    console.error(
+      "[ai] no NVIDIA key is available: none saved by this user and no NVIDIA_API_KEY on the deployment",
+    );
     throw new Error(AI_UNAVAILABLE_MESSAGE);
   }
   return keys;
@@ -297,10 +336,14 @@ const coolingKeys = new Map<string, number>();
 let keyCursor = 0;
 
 /**
- * Picks the next usable key, advancing round-robin so back-to-back requests
- * are spread across the pool instead of exhausting one key at a time.
+ * Picks the next usable key.
+ *
+ * A user's own key is used on its own for every request while NVIDIA accepts
+ * it. Only once it has been rejected or is cooling down after a 429 does the
+ * shared pool fill in, and the own key is tried again the moment it is usable.
+ * Requests with no own key rotate round-robin across the pool as before.
  */
-function nextApiKey(keys: string[]): string {
+function nextApiKey(keys: string[] & { preferred?: string }): string {
   const active = keys.filter((key) => !rejectedKeys.has(key));
   if (active.length === 0) {
     console.error("[ai] every NVIDIA_API_KEY on this deployment was rejected");
@@ -308,6 +351,13 @@ function nextApiKey(keys: string[]): string {
   }
 
   const now = Date.now();
+  const own = preferredApiKey(
+    keys,
+    (key) =>
+      !rejectedKeys.has(key) && (coolingKeys.get(key) ?? 0) <= Date.now(),
+  );
+  if (own) return own;
+
   const ready = active.filter((key) => (coolingKeys.get(key) ?? 0) <= now);
   // If every key is cooling down, try the pool again rather than fail early.
   const pool = ready.length > 0 ? ready : active;
@@ -2326,7 +2376,7 @@ export const buildPastPaper = internalAction({
       });
       if (!course) throw new Error("The course for this paper no longer exists.");
 
-      const apiKeys = resolveNvidiaKeys();
+      const apiKeys = await resolveNvidiaKeys(ctx, paper.userId);
       // The specification is already on the course, so the wait from here is the
       // writing. Saying so is what stops the page sitting on "Reading your
       // specification…" for the whole build.
@@ -2558,7 +2608,7 @@ export const gradePastPaperAnswer = action({
     const course = await ctx.runQuery(internal.courses.getForBuild, {
       courseId: data.paper.courseId,
     });
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
     let marked: MarkedAnswer;
     try {
       marked = await withProviderGuard(ctx, "marking", () =>
@@ -2662,7 +2712,7 @@ export const disputePastPaperMark = action({
     const course = await ctx.runQuery(internal.courses.getForBuild, {
       courseId: data.paper.courseId,
     });
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
     const marked = await withProviderGuard(ctx, "marking", () =>
       markExamAnswer(
       apiKeys,
@@ -3709,7 +3759,7 @@ export const writeTopicNotes = internalAction({
       ...(found.topic.examSkill ? { examSkill: found.topic.examSkill } : {}),
     };
 
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
     const sections = await generateTopicNotes(apiKeys, topic, {
       qualification:
         qualificationText({
@@ -4247,7 +4297,7 @@ async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationAr
   let currentStage: BuildStage = "cards";
 
   try {
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, args.userId);
     // The quiz normally waits for the deck so it can avoid testing the same
     // facts. On a long continuation the three sections are independent enough
     // to overlap: quiz generation starts against the cards already saved, then
@@ -4825,7 +4875,7 @@ async function continueStudySetQuizForUser(ctx: ActionCtx, args: ContinuationArg
   let preparedQuizForSave: GeneratedQuiz[] | undefined;
 
   try {
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, args.userId);
     let quiz = args.replaceExisting ? [] : quizForWrite(snapshot.quiz);
     // A pathway quiz that was checkpointed short must be completed, not
     // accepted as the final answer just because some rows exist.
@@ -5275,7 +5325,7 @@ async function continueStudySetExamsForUser(ctx: ActionCtx, args: ContinuationAr
   let currentStage: BuildStage = "exam";
 
   try {
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, args.userId);
     let exams = args.replaceExisting ? [] : examsForWrite(snapshot.exams);
     // A pathway exam checkpoint with only a few questions must be completed,
     // not treated as finished because some rows exist.
@@ -5667,7 +5717,7 @@ export const reviewReusedStudySet = internalAction({
     let newExams: GeneratedExam[] = [];
 
     try {
-      const apiKeys = resolveNvidiaKeys();
+      const apiKeys = await resolveNvidiaKeys(ctx, args.userId);
 
       if (availableCards > 0) {
         try {
@@ -5931,7 +5981,7 @@ async function processStudySetForUser(
     let preparedQuizForSave: GeneratedQuiz[] | undefined;
 
     try {
-      const apiKeys = resolveNvidiaKeys();
+      const apiKeys = await resolveNvidiaKeys(ctx, userId);
       let notes = (existing.generationNotes?.trim() || existing.notes).trim();
 
       if (existing.sourceImageIds.length > 0) {
@@ -6560,7 +6610,7 @@ export const regenerateCards = action({
     }
 
     try {
-      const apiKeys = resolveNvidiaKeys();
+      const apiKeys = await resolveNvidiaKeys(ctx, userId);
       const notes = existing.notes.trim();
       if (!withinNoteLimit(notes) || notes.length < 40) {
         throw new Error(
@@ -7585,7 +7635,7 @@ export const gradeExamAnswer = action({
 
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "marking" });
 
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
     let marked: MarkedAnswer;
     try {
       marked = await withProviderGuard(ctx, "marking", () =>
@@ -7659,7 +7709,7 @@ export const transcribeAnswerPhoto = action({
       throw new Error("That photo is too large. Try one under 8 MB.");
     }
     const mime = blob.type?.startsWith("image/") ? blob.type : "image/jpeg";
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
     const instruction =
       kind === "scheme"
         ? "This image is a photograph of an exam mark scheme. Transcribe every credit point, one per line, keeping any \"1 mark\" or number prefixes and the wording exactly. Do not summarise, merge or add points. If something is illegible, write [unclear]."
@@ -7710,7 +7760,7 @@ export const markRealQuestion = action({
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "marking" });
 
     const { row, course } = data;
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
     let marked: MarkedAnswer;
     try {
       marked = await withProviderGuard(ctx, "marking", () =>
@@ -8676,7 +8726,7 @@ export const askTutor = action({
     const marking = shouldMarkAnswer(previousReply, text);
 
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
 
     // The main tutor models are text models. Read the image once with the
     // vision model, then give the tutor a faithful description beside the
@@ -8823,7 +8873,7 @@ export const askCourseTutor = action({
     const marking = shouldMarkAnswer(previousReply, text);
 
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
 
     const attachmentIds = (imageIds ?? []).slice(0, MAX_TUTOR_IMAGES);
     let imageContext = "";
@@ -8948,7 +8998,7 @@ export const askLibraryTutor = action({
     const marking = shouldMarkAnswer(previousReply, text);
 
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "tutor" });
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
 
     const attachmentIds = (imageIds ?? []).slice(0, MAX_TUTOR_IMAGES);
     let imageContext = "";
@@ -9161,7 +9211,7 @@ export const explainQuestion = action({
 
     await ctx.runMutation(internal.aiUsage.consume, { userId, kind: "explain" });
 
-    const apiKeys = resolveNvidiaKeys();
+    const apiKeys = await resolveNvidiaKeys(ctx, userId);
     const system = [
       EXPLAIN_SYSTEM_PROMPT,
       explainLevelRules(explainLevel, asked),

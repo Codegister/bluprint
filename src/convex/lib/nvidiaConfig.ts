@@ -13,6 +13,7 @@
  */
 export const NVIDIA_CHAT_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
 
+
 /**
  * Models NVIDIA has already retired.
  *
@@ -286,6 +287,44 @@ export function readNvidiaKeys(): string[] {
     .map((key) => key.trim())
     .filter(Boolean);
   return [...new Set(keys)];
+}
+
+/**
+ * A request's key list, with the user's own key marked as preferred.
+ *
+ * The array keeps the pool's shape so every existing transport keeps working;
+ * `preferred` is what makes the own key exclusive rather than one of several
+ * keys in rotation.
+ */
+export type ApiKeyChain = string[] & { preferred?: string };
+
+/**
+ * The keys one request may use: a user's own validated key, then the
+ * deployment's shared pool. Duplicates are dropped, and an absent own key
+ * leaves the pool exactly as it was, so nothing changes for anyone who skips
+ * connecting a key.
+ */
+export function keyChain(ownKey: string | undefined, pool: string[]): ApiKeyChain {
+  const own = ownKey?.trim();
+  const keys = [...new Set([own, ...pool].filter((key): key is string => Boolean(key)))] as ApiKeyChain;
+  if (own && keys.includes(own)) keys.preferred = own;
+  return keys;
+}
+
+/**
+ * The key to use while the user's own key is usable.
+ *
+ * A preferred key is used for every request on its own; the shared pool is
+ * only reached once it has been rejected or is cooling down after a 429. The
+ * `usable` callback is supplied by the transport, which knows both states.
+ */
+export function preferredApiKey(
+  chain: string[] & { preferred?: string },
+  usable: (key: string) => boolean,
+): string | undefined {
+  const preferred = chain.preferred;
+  if (!preferred || !chain.includes(preferred)) return undefined;
+  return usable(preferred) ? preferred : undefined;
 }
 
 /** Keep prompts bounded so a giant PDF paste does not blow the context window. */

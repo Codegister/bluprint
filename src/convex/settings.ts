@@ -20,13 +20,20 @@ import {
 export const aiStatus = query({
   args: {},
   handler: async (ctx) => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
     const keys = readNvidiaKeys();
+
+    // A user's own connected key counts as AI being available even when the
+    // deployment has no shared pool left, because their requests go out on it.
+    const ownKey = await ctx.db
+      .query("userNvidiaKeys")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
 
     // Course pathways are scraped, so they need no key. This status only
     // describes the AI used to build study sets, marking and tutoring.
     return {
-      configured: keys.length > 0,
+      configured: keys.length > 0 || ownKey !== null,
       // Neither the number of keys nor the environment variable name is
       // returned: both are operational detail, and the UI has no use for them.
       // Exactly three levels, in order: Fast, Balanced, Deep. The NVIDIA model

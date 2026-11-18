@@ -34,6 +34,21 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
+    // A user's own NVIDIA key, if they connected one. The key is sealed with
+    // AES-GCM by `nvidiaKeys.connect` before it is written here; the plaintext
+    // never reaches this table and never goes back to the browser. Only the
+    // last four characters are readable, for "ending 1234" in the sheet.
+    userNvidiaKeys: defineTable({
+      userId: v.id("users"),
+      /** `v1:<iv>:<tag>:<ciphertext>`, all base64. */
+      ciphertext: v.string(),
+      last4: v.string(),
+      /** When NVIDIA last accepted the key (ms since epoch). */
+      validatedAt: v.number(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_user", ["userId"]),
+
     // Attempt accounting for the six-digit email code, one row per address.
     // Convex Auth verifies the code, but it has no per-code attempt limit, so a
     // code could be guessed at indefinitely. This row is what the sign-in page

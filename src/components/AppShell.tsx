@@ -1,4 +1,5 @@
 import { Brand } from "@/components/Brand";
+import { NvidiaConnectSheet } from "@/components/NvidiaConnectSheet";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { ProfilePictureDialog } from "@/components/ProfilePictureDialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -164,6 +165,7 @@ function Sidebar({
   const [savingName, setSavingName] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [nvidiaOpen, setNvidiaOpen] = useState(false);
   const updateDisplayName = useMutation(api.users.updateDisplayName);
   const updateAvatar = useMutation(api.users.updateAvatar);
   const avatarSeed = user?._id ?? user?.email ?? "guest";
@@ -424,6 +426,13 @@ function Sidebar({
               >
                 Sign out
               </button>
+              <button
+                type="button"
+                onClick={() => setNvidiaOpen(true)}
+                className="text-[0.76rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+              >
+                NVIDIA key
+              </button>
               {user && !user.isAnonymous && (
                 <button
                   type="button"
@@ -442,6 +451,11 @@ function Sidebar({
           </div>
         )}
       </div>
+
+      <NvidiaConnectSheet
+        open={nvidiaOpen}
+        onOpenChange={setNvidiaOpen}
+      />
 
       <ProfilePictureDialog
         open={avatarOpen}

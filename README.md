@@ -534,12 +534,39 @@ comma-separated value. Convex functions read it as `process.env.NVIDIA_API_KEY`.
 Every NVIDIA request rotates to the next key in the pool. A key that returns HTTP 429 is
 cooled down for 45 seconds and the request immediately moves to the next key. A key
 rejected with 401 or 403 is dropped from rotation for the life of the server process.
-There is no key configuration screen and no key storage in the database.
 
 This is a shared pool for the whole app. Friends do not need their own NVIDIA accounts,
 and usage bills to whoever owns the keys.
 
 Get keys from [NVIDIA Build](https://build.nvidia.com/).
+
+### Connecting a personal NVIDIA key (optional)
+
+A user who wants their own usage limits can connect their own NVIDIA key from the
+account menu (**NVIDIA key**). The sheet explains the three steps, links to
+[build.nvidia.com](https://build.nvidia.com/settings/api-keys), and checks the pasted key
+with a one-token chat completion before saving it, so a typo is reported immediately.
+(`GET /v1/models` is not a valid check: that catalogue endpoint answers 200 without any key
+at all.)
+
+- The user creates the NVIDIA account themselves. Bluprint never signs anyone up and
+  never asks for an email or password, which is what keeps the app inside NVIDIA's trial
+  terms — those terms are trial-only either way, so a personal key is a convenience, not
+  a production licence.
+- The key is sealed with AES-256-GCM in the `nvidiaKeys.connect` action and stored on the
+  user's `userNvidiaKeys` row. Only the last four characters are readable; the plaintext is
+  never returned to the browser or written to a log.
+- Their requests use that key on its own while NVIDIA accepts it. The shared pool is only
+  a fallback: it takes over when the personal key is rejected (401/403) or cooling down after
+  a 429, and the personal key is used again as soon as it is usable. Someone who never
+  connects a key sees no change.
+
+Set the sealing secret once per deployment (32 bytes of hex). Rotating it invalidates every
+stored key, after which those users fall back to the shared pool:
+
+```bash
+npx convex env set NVIDIA_KEY_SECRET "$(openssl rand -hex 32)"
+```
 
 ### Web access for the tutor
 
