@@ -11,7 +11,6 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import { specCoverage, type SpecPoint } from "./lib/specMapping";
-import { keyPointCoverage } from "./lib/studySetQuality";
 
 async function itemsForSet(
   ctx: { db: { query: (table: "flashcards" | "quizQuestions" | "examQuestions") => any } },
@@ -36,21 +35,34 @@ export const forSet = query({
 
     const points = (set.specPoints ?? []) as SpecPoint[];
     const { cards, quiz, exam } = await itemsForSet(ctx, setId);
-    // New sets carry one explicit link per key point. That link is the source
-    // of coverage; a set built before links existed still uses item tags.
+    // Coverage comes from the items this set actually holds. A key-point link
+    // counts, and so does a card or question tagged to the statement: a set
+    // built across many topics has far more statements than summary key points,
+    // so the links alone would mark most of a large set "Not covered" while its
+    // cards were tagged to those statements all along.
     const linkedKeyPoints = set.summary?.keyPointSpecs;
-    const coverage =
-      linkedKeyPoints !== undefined
-        ? keyPointCoverage(points, linkedKeyPoints)
-        : specCoverage(points, [...cards, ...quiz, ...exam]);
     const linkedIds = new Set((linkedKeyPoints ?? []).map((link) => link.specRef));
+    const taggedCoverage = specCoverage(points, [...cards, ...quiz, ...exam]);
+    const coveredIds = new Set([
+      ...linkedIds,
+      ...taggedCoverage.covered.map((point) => point.id),
+    ]);
+    const covered = points.filter((point) => coveredIds.has(point.id));
+    const coverage = {
+      total: points.length,
+      covered,
+      uncovered: points.filter((point) => !coveredIds.has(point.id)),
+      percent: points.length > 0
+        ? Math.round((covered.length / points.length) * 100)
+        : 0,
+    };
     const tagged = (rows: Array<{ specRef?: string }>) =>
       rows.filter((row) => (row.specRef ?? "").length > 0).length;
 
     return {
       points,
       keyPoints: linkedKeyPoints,
-      missingKeyPoints: points.filter((point) => !linkedIds.has(point.id)),
+      missingKeyPoints: points.filter((point) => !coveredIds.has(point.id)),
       coverage,
       tagged: {
         cards: tagged(cards),

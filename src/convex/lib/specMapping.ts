@@ -111,6 +111,43 @@ export function specCoverage(
   };
 }
 
+/** How many specification statements one set keeps, across all its topics. */
+export const SET_SPEC_POINT_LIMIT = 60;
+
+/**
+ * The statements kept with a set, taken a slice at a time from every topic it
+ * covers. A flat `slice(0, 60)` spent the whole allowance on the first topics,
+ * so cards written for later topics had no statement to match against and the
+ * coverage panel stopped part-way through the selection. One point is taken per
+ * topic in each pass, then the next, so every topic is represented up to the
+ * limit and a topic with fewer statements does not hold up the rest. The result
+ * is returned in topic order for a stable, readable checklist.
+ */
+export function selectSpecPoints(
+  topicPoints: ReadonlyArray<readonly SpecPoint[]>,
+  limit: number = SET_SPEC_POINT_LIMIT,
+): SpecPoint[] {
+  if (limit <= 0) return [];
+  const picked: Array<{ topic: number; index: number; point: SpecPoint }> = [];
+  const depth = topicPoints.reduce(
+    (max, points) => Math.max(max, points.length),
+    0,
+  );
+  for (let index = 0; index < depth && picked.length < limit; index += 1) {
+    for (
+      let topic = 0;
+      topic < topicPoints.length && picked.length < limit;
+      topic += 1
+    ) {
+      const point = topicPoints[topic]![index];
+      if (point !== undefined) picked.push({ topic, index, point });
+    }
+  }
+  return picked
+    .sort((left, right) => left.topic - right.topic || left.index - right.index)
+    .map(({ point }) => point);
+}
+
 /**
  * Tags a batch of items in order, reusing a tag when the same statement is the
  * best match so a set does not scatter one statement across several ids.

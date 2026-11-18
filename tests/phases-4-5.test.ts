@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { predictGrade, boundaryRow } from "../src/convex/lib/gradeBoundaries";
-import { matchSpecPoint, specCoverage } from "../src/convex/lib/specMapping";
+import {
+  matchSpecPoint,
+  selectSpecPoints,
+  specCoverage,
+} from "../src/convex/lib/specMapping";
 import { calibrationFor, calibrationSentence } from "../src/convex/lib/calibration";
 import { assembleMock, parseMarkScheme, schemeIsUsable } from "../src/convex/lib/realPaper";
 import {
@@ -95,6 +99,66 @@ describe("specification mapping", () => {
       uncovered: [],
       percent: 0,
     });
+  });
+
+  test("the statement allowance reaches every selected topic, not just the first", () => {
+    // Twenty-four topics with four statements each: the old flat cap kept only
+    // the first fifteen topics. Every topic must now be represented.
+    const topicPoints = Array.from({ length: 24 }, (_, topic) =>
+      Array.from({ length: 4 }, (_, index) => ({
+        id: `t${topic}:${index}`,
+        text: `Statement ${index + 1} for topic ${topic + 1}`,
+      })),
+    );
+
+    const selected = selectSpecPoints(topicPoints);
+    expect(selected).toHaveLength(60);
+
+    const counts = new Map<number, number>();
+    for (const point of selected) {
+      const topic = Number(point.id.slice(1).split(":")[0]);
+      counts.set(topic, (counts.get(topic) ?? 0) + 1);
+    }
+    expect(counts.size).toBe(24);
+    // An even share of the sixty: two statements each, with the twelve spare
+    // slots going to the topics that come first in the selection.
+    expect(Math.min(...counts.values())).toBe(2);
+    expect(Math.max(...counts.values())).toBe(3);
+
+    // Each topic keeps its own leading statements, in its original order.
+    for (let topic = 0; topic < 24; topic += 1) {
+      const ids = selected
+        .filter((point) => point.id.startsWith(`t${topic}:`))
+        .map((point) => point.id);
+      expect(ids).toEqual(
+        Array.from({ length: counts.get(topic)! }, (_, index) => `t${topic}:${index}`),
+      );
+    }
+  });
+
+  test("one topic still gets the whole allowance, and no topic can starve another", () => {
+    const single = Array.from({ length: 70 }, (_, index) => ({
+      id: `t1:${index}`,
+      text: `Statement ${index}`,
+    }));
+    expect(selectSpecPoints([single])).toHaveLength(60);
+    expect(selectSpecPoints([single])[0]!.id).toBe("t1:0");
+
+    // A topic with two statements is not skipped while a longer one takes the
+    // cap: the short topic is fully represented before the long one gets the
+    // rest.
+    const short = [
+      { id: "a:0", text: "Short topic one" },
+      { id: "a:1", text: "Short topic two" },
+    ];
+    const long = Array.from({ length: 100 }, (_, index) => ({
+      id: `b:${index}`,
+      text: `Long topic ${index}`,
+    }));
+    const mixed = selectSpecPoints([short, long]);
+    expect(mixed).toHaveLength(60);
+    expect(mixed.filter((point) => point.id.startsWith("a:"))).toHaveLength(2);
+    expect(mixed.filter((point) => point.id.startsWith("b:"))).toHaveLength(58);
   });
 });
 

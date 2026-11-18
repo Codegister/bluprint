@@ -19,6 +19,8 @@ import {
   validateStudySelection,
 } from "./lib/catalogue";
 import { literatureChoicesFor } from "./lib/literatureChoices";
+import { matchSpecPoint, selectSpecPoints } from "./lib/specMapping";
+import { linkKeyPointsToSpecs } from "./lib/studySetQuality";
 import {
   courseOptionsLine,
   courseScopeFor,
@@ -1038,15 +1040,17 @@ async function createTopicSetForUser(
         : `Course pathway · ${chosen.length} topics`;
     // The specification statements this set is built from, kept with the set
     // so cards and questions can be tagged to them and coverage reported
-    // later, even if the pathway is rebuilt.
-    const specPoints = chosen
-      .flatMap(({ topic }) =>
+    // later, even if the pathway is rebuilt. The allowance is spread across
+    // every selected topic; taking the first sixty statements spent it all on
+    // the opening topics and left later-topic cards untagged.
+    const specPoints = selectSpecPoints(
+      chosen.map(({ topic }) =>
         topic.keyPoints.map((text, index) => ({
           id: `${topic.id}:${index}`,
           text: `${topic.specReference ? `${topic.specReference} ` : ""}${text}`,
         })),
-      )
-      .slice(0, 60);
+      ),
+    );
     const cacheKey = studySetReuseKey({
       notes,
       course: courseLabel,
@@ -1289,6 +1293,128 @@ function buildTopicNotes(
 
   return parts.filter((line) => line !== "").join("\n");
 }
+
+/** How many cards and questions one rebuild pass retags. */
+const SET_RETAG_BATCH = 300;
+
+/**
+ * Rebuilds the specification statements of a set that already exists.
+ *
+ * Sets written before the statement allowance was spread across topics kept
+ * only the first sixty statements, so their later topics had nothing to match
+ * against and the coverage panel stopped part-way through the course. This
+ * re-derives the statements from the current pathway, relinks the set's key
+ * points to them and retags its cards and questions. Every value it writes is
+ * derived from the pathway, so running it again is safe; items are retagged a
+ * batch at a time and `remaining` says whether another pass is needed.
+ */
+export const refreshSetSpecPoints = internalMutation({
+  args: { setId: v.id("studySets") },
+  handler: async (ctx, { setId }) => {
+    const set = await ctx.db.get(setId);
+    if (!set) return { refreshed: false, reason: "missing" as const };
+    if (!set.courseId) return { refreshed: false, reason: "no-course" as const };
+    const course = await ctx.db.get(set.courseId);
+    if (!course?.pathway) {
+      return { refreshed: false, reason: "no-pathway" as const };
+    }
+
+    // The set's own topics, in pathway order, so the statements are the ones
+    // its material was written for rather than the course's whole list.
+    const covered = new Set(set.topicIds ?? (set.topicId ? [set.topicId] : []));
+    const sections = course.pathway.units
+      .flatMap((unit) => unit.topics.map((topic) => ({ unit, topic })))
+      .filter(({ topic }) => covered.has(topic.id));
+    const specPoints = selectSpecPoints(
+      sections.map(({ topic }) =>
+        topic.keyPoints.map((text, index) => ({
+          id: `${topic.id}:${index}`,
+          text: `${topic.specReference ? `${topic.specReference} ` : ""}${text}`,
+        })),
+      ),
+    );
+
+    const summary = set.summary;
+    const linked =
+      specPoints.length > 0
+        ? linkKeyPointsToSpecs(summary?.keyPoints ?? [], specPoints)
+        : undefined;
+    await ctx.db.patch(setId, {
+      specPoints,
+      ...(summary && linked
+        ? { summary: { ...summary, keyPointSpecs: linked.links } }
+        : {}),
+      updatedAt: Date.now(),
+    });
+
+    const [cards, quiz, exam] = await Promise.all([
+      ctx.db
+        .query("flashcards")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+      ctx.db
+        .query("quizQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+      ctx.db
+        .query("examQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+    ]);
+
+    const bestRef = (text: string) =>
+      specPoints.length > 0
+        ? (matchSpecPoint(text, specPoints).id ?? undefined)
+        : undefined;
+    let budget = SET_RETAG_BATCH;
+    let retagged = 0;
+    let remaining = 0;
+
+    for (const card of cards) {
+      const next = bestRef(`${card.front} ${card.back}`);
+      if (next === card.specRef) continue;
+      if (budget <= 0) {
+        remaining += 1;
+        continue;
+      }
+      await ctx.db.patch(card._id, { specRef: next });
+      budget -= 1;
+      retagged += 1;
+    }
+    for (const question of quiz) {
+      const next = bestRef(question.question);
+      if (next === question.specRef) continue;
+      if (budget <= 0) {
+        remaining += 1;
+        continue;
+      }
+      await ctx.db.patch(question._id, { specRef: next });
+      budget -= 1;
+      retagged += 1;
+    }
+    for (const question of exam) {
+      const next = bestRef(question.question);
+      if (next === question.specRef) continue;
+      if (budget <= 0) {
+        remaining += 1;
+        continue;
+      }
+      await ctx.db.patch(question._id, { specRef: next });
+      budget -= 1;
+      retagged += 1;
+    }
+
+    return {
+      refreshed: true,
+      topics: sections.length,
+      points: specPoints.length,
+      linked: linked?.links.length ?? 0,
+      missing: linked?.missing.length ?? 0,
+      retagged,
+      remaining,
+    };
+  },
+});
 
 /**
  * Stores the Cognito links read for an older course. It only fills fields the
