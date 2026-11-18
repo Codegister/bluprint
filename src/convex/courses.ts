@@ -1366,40 +1366,46 @@ export const refreshSetSpecPoints = internalMutation({
       specPoints.length > 0
         ? (matchSpecPoint(text, specPoints).id ?? undefined)
         : undefined;
+
+    // One list of rows to retag, each with the write it needs, so the batching
+    // below is the same for cards, quiz questions and exam questions.
+    type RetagItem = {
+      text: string;
+      specRef?: string;
+      write: (specRef: string | undefined) => Promise<void>;
+    };
+    const items: RetagItem[] = [
+      ...cards.map((card) => ({
+        text: `${card.front} ${card.back}`,
+        specRef: card.specRef,
+        write: (specRef: string | undefined) =>
+          ctx.db.patch(card._id, { specRef }),
+      })),
+      ...quiz.map((question) => ({
+        text: question.question,
+        specRef: question.specRef,
+        write: (specRef: string | undefined) =>
+          ctx.db.patch(question._id, { specRef }),
+      })),
+      ...exam.map((question) => ({
+        text: question.question,
+        specRef: question.specRef,
+        write: (specRef: string | undefined) =>
+          ctx.db.patch(question._id, { specRef }),
+      })),
+    ];
+
     let budget = SET_RETAG_BATCH;
     let retagged = 0;
     let remaining = 0;
-
-    for (const card of cards) {
-      const next = bestRef(`${card.front} ${card.back}`);
-      if (next === card.specRef) continue;
+    for (const item of items) {
+      const next = bestRef(item.text);
+      if (next === item.specRef) continue;
       if (budget <= 0) {
         remaining += 1;
         continue;
       }
-      await ctx.db.patch(card._id, { specRef: next });
-      budget -= 1;
-      retagged += 1;
-    }
-    for (const question of quiz) {
-      const next = bestRef(question.question);
-      if (next === question.specRef) continue;
-      if (budget <= 0) {
-        remaining += 1;
-        continue;
-      }
-      await ctx.db.patch(question._id, { specRef: next });
-      budget -= 1;
-      retagged += 1;
-    }
-    for (const question of exam) {
-      const next = bestRef(question.question);
-      if (next === question.specRef) continue;
-      if (budget <= 0) {
-        remaining += 1;
-        continue;
-      }
-      await ctx.db.patch(question._id, { specRef: next });
+      await item.write(next);
       budget -= 1;
       retagged += 1;
     }
