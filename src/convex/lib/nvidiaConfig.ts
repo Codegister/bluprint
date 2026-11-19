@@ -208,6 +208,16 @@ export type TutorTier = {
    * low effort even when it is correct.
    */
   thinkingFloorMs: number;
+  /**
+   * How long the stream may stay open.
+   *
+   * Measured against the real endpoint on a hard A-level proof: Deep finished a
+   * 2,000-token thinking pass in 35–47s, but a 3,500-token pass took 64s. A
+   * saturated 5,600-token answer can therefore sit near 80s, so Deep gets a
+   * longer window than the quick levels rather than losing an answer that is
+   * seconds from finishing.
+   */
+  timeoutMs: number;
 };
 
 /**
@@ -237,6 +247,7 @@ export const TUTOR_TIERS: TutorTier[] = [
     thinking: false,
     thinkingTokens: 0,
     thinkingFloorMs: 0,
+    timeoutMs: 90_000,
   },
   {
     id: "balanced",
@@ -255,6 +266,7 @@ export const TUTOR_TIERS: TutorTier[] = [
     thinkingTokens: 1000,
     // Enough to read as consideration, short enough not to feel stalled.
     thinkingFloorMs: 1200,
+    timeoutMs: 90_000,
   },
   {
     id: "deep",
@@ -273,10 +285,14 @@ export const TUTOR_TIERS: TutorTier[] = [
     maxTokens: 5600,
     temperature: 0.25,
     thinking: true,
+    // Stays at 2,000: the measured 3,500-token pass took 64s of a 90s window on
+    // the real endpoint, which leaves no room for a slow day. 2,000 answered the
+    // same hard proof in 35–47s while still thinking for 30–40s first.
     thinkingTokens: 2000,
     // Deep is the level chosen when the student wants effort, so it pauses
     // noticeably longer than Balanced before the first word appears.
     thinkingFloorMs: 3200,
+    timeoutMs: 120_000,
   },
 ];
 

@@ -78,6 +78,15 @@ describe("tutor levels", () => {
     }
   });
 
+  test("Deep's stream window covers a reasoned answer, and no level is unbounded", () => {
+    // Measured on the real endpoint: a 3,500-token thinking pass took 64s, so a
+    // saturated Deep answer can sit near the 90s window the quick levels use.
+    expect(deep.timeoutMs).toBeGreaterThan(90_000);
+    expect(deep.timeoutMs).toBeLessThanOrEqual(180_000);
+    expect(balanced.timeoutMs).toBe(90_000);
+    expect(fast.timeoutMs).toBe(90_000);
+  });
+
   test("a level label can be resolved back to its own tier", () => {
     expect(balanced.label).toBe("Balanced");
     expect(deep.id).toBe("deep");

@@ -684,6 +684,11 @@ never an addition, so a model that already took longer is not delayed. If a prov
 rejects the thinking fields, the tutor drops the budget, then thinking, and answers
 anyway.
 
+Deep's stream may stay open for 120s; the other levels keep 90s. Measured against the
+real endpoint on a hard A-level proof, a 2,000-token pass finished in 35–47s but a
+3,500-token pass took 64s, so the budget stays at 2,000 and the window is what grows:
+a saturated Deep answer should never lose a reply that was seconds from finishing.
+
 Set overrides on the Convex deployment the same way as `NVIDIA_API_KEY`. A retired model id
 is skipped before a request is made: `/src/convex/lib/nvidiaConfig.ts` keeps a short list of
 withdrawn ids and replaces them with a checked fallback. Study-set generation has its own

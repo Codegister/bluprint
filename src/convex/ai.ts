@@ -8336,7 +8336,9 @@ async function streamNvidiaAnswer(
               }
             : { chat_template_kwargs: { enable_thinking: false } }),
         }),
-        signal: AbortSignal.timeout(90_000),
+        // The level's own window: a saturated Deep answer needs more than the
+        // quick levels ever do.
+        signal: AbortSignal.timeout(tier.timeoutMs),
       });
     } catch {
       if (attempt < maxAttempts - 1) {
@@ -8462,7 +8464,7 @@ async function streamWebAnswer(
       stream: true,
       plugins: [{ id: "web", max_results: 4 }],
     }),
-    signal: AbortSignal.timeout(90_000),
+    signal: AbortSignal.timeout(tier.timeoutMs),
   });
 
   if (!response.ok || !response.body) {
