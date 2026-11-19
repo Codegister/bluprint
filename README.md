@@ -857,6 +857,13 @@ Reopening the set shows the saved result.
   start the speech engine refused while the previous session was still ending (the usual
   reason the microphone appeared to do nothing between cards), resumes listening when a
   continuous session ends by itself, and reports every failure instead of swallowing it.
+- **A half-done run survives leaving.** Cards, quiz and exam practice keep their position,
+  the answers already given and the session counts in `lib/studySession.ts`, written to
+  localStorage under `bluprint:run:<kind>:<set>` on every move and read back when the
+  runner mounts — switching section or closing the tab no longer restarts the run at the
+  first card. Server state stays authoritative: FSRS reviews and submitted quizzes are
+  already saved. A stored run is dropped when the questions changed, when every card in it
+  has been reviewed, or once it is a week old.
 - **Daily counts.** `studyDays` holds one row per person per UTC day with cards reviewed
   and questions answered. Cards and quiz questions both increment `questionsAnswered`, so a
   quiz-only session still moves the tiered streak.

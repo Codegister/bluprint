@@ -1149,6 +1149,7 @@ export default function StudySet() {
                 <FlashcardReview
                   key={`${set._id}-${reviewAhead ? "ahead" : "due"}`}
                   cards={reviewAhead ? details.cards : dueCards}
+                  resumeKey={`${set._id}-${reviewAhead ? "ahead" : "due"}`}
                   onTakeQuiz={() => navigate(`/sets/${set._id}/quiz`)}
                 />
               ))}

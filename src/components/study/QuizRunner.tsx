@@ -6,6 +6,12 @@ import { quizScorePercent } from "@/convex/lib/studySetQuality";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { EASE, SPRING } from "@/components/motion/Motion";
 import { notifyError } from "@/lib/errors";
+import {
+  clearQuizRun,
+  readQuizRun,
+  saveQuizRun,
+  type QuizResponseState,
+} from "@/lib/studySession";
 import { cn } from "@/lib/utils";
 import { useMutation } from "convex/react";
 import { animate, motion, useReducedMotion } from "framer-motion";
@@ -113,15 +119,28 @@ export function QuizRunner({
   const checkAnswer = useMutation(api.studySets.checkQuizAnswer);
   const submitQuiz = useMutation(api.studySets.submitQuiz);
 
-  const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState<number | null>(null);
-  const [typed, setTyped] = useState("");
-  const [checked, setChecked] = useState(false);
+  // A quiz left half-done resumes on the same question, with the answers
+  // already given and any score already shown. The questions have to be the
+  // same ones, so readQuizRun drops a run from an older version of the set.
+  const [resume] = useState(() =>
+    readQuizRun(
+      setId,
+      quiz.map((question) => question._id),
+    ),
+  );
+  const [index, setIndex] = useState(() => resume?.index ?? 0);
+  const [selected, setSelected] = useState<number | null>(
+    () => resume?.selected ?? null,
+  );
+  const [typed, setTyped] = useState(() => resume?.typed ?? "");
+  const [checked, setChecked] = useState(() => resume?.checked ?? false);
   const [checking, setChecking] = useState(false);
   const [feedback, setFeedback] = useState<{ correct: boolean; expected: string } | null>(
-    null,
+    () => resume?.feedback ?? null,
   );
-  const [responses, setResponses] = useState<QuizResponse[]>([]);
+  const [responses, setResponses] = useState<QuizResponse[]>(
+    () => (resume?.responses as unknown as QuizResponse[] | undefined) ?? [],
+  );
   const [result, setResult] = useState<{
     score: number;
     total: number;
@@ -131,12 +150,25 @@ export function QuizRunner({
       expected: string;
       answered: boolean;
     }>;
-  } | null>(null);
+  } | null>(() => resume?.result ?? null);
   const [submitting, setSubmitting] = useState(false);
 
   const question = quiz[index];
   const isLast = index + 1 >= quiz.length;
   const kind = question?.type ?? "mcq";
+
+  // Written on every move, so leaving at any point resumes here.
+  useEffect(() => {
+    saveQuizRun(setId, {
+      index,
+      responses: responses as unknown as Array<QuizResponseState | null>,
+      selected,
+      typed,
+      checked,
+      feedback,
+      result,
+    });
+  }, [setId, index, responses, selected, typed, checked, feedback, result]);
 
   const answeredCount = useMemo(
     () => responses.filter(Boolean).length,
@@ -216,6 +248,7 @@ export function QuizRunner({
           <Button
             variant="outline"
             onClick={() => {
+              clearQuizRun(setId);
               setIndex(0);
               setSelected(null);
               setTyped("");

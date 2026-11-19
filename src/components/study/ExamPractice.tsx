@@ -13,12 +13,13 @@ import {
 } from "@/convex/lib/markingCriteria";
 import { readableError } from "@/lib/errors";
 import { markLabel, pointLabel } from "@/lib/format";
+import { readExamRun, saveExamRun } from "@/lib/studySession";
 import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
 import { Check, ChevronDown, Loader2, Upload, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export function ExamPractice({
@@ -35,9 +36,25 @@ export function ExamPractice({
   const transcribe = useAction(api.ai.transcribeAnswerPhoto);
   const { unavailable: aiUnavailable } = useAiAvailability();
   const [readingPhotoId, setReadingPhotoId] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>(() =>
-    Object.fromEntries(exams.map((exam) => [exam._id, exam.userAnswer ?? ""])),
-  );
+  const [answers, setAnswers] = useState<Record<string, string>>(() => {
+    // A half-written answer is real work: the server only has graded answers,
+    // so the text typed here is restored from the last visit to this set.
+    const run = readExamRun(
+      setId,
+      exams.map((exam) => exam._id),
+    );
+    return Object.fromEntries(
+      exams.map((exam) => [
+        exam._id,
+        run?.answers[exam._id] ?? exam.userAnswer ?? "",
+      ]),
+    );
+  });
+
+  // Written on every keystroke, so leaving mid-answer loses nothing.
+  useEffect(() => {
+    saveExamRun(setId, { answers });
+  }, [setId, answers]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [gradingId, setGradingId] = useState<string | null>(null);
 

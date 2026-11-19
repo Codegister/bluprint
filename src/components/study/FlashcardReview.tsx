@@ -13,12 +13,13 @@ import {
 import { useDictation } from "@/hooks/use-dictation";
 import { notifyError, readableError } from "@/lib/errors";
 import { isConnectionFailure, queueReview } from "@/lib/offlineCache";
+import { clearCardRun, readCardRun, saveCardRun } from "@/lib/studySession";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useAction, useMutation } from "convex/react";
 import { motion } from "framer-motion";
 import { Check, Keyboard, Mic, MicOff, Sparkles, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Rating = 1 | 2 | 3 | 4;
 
@@ -110,16 +111,29 @@ export function FlashcardReview({
   cards,
   onTakeQuiz,
   sprint = false,
+  resumeKey,
 }: {
   cards: StudyCard[];
   onTakeQuiz?: () => void;
   /** Sprint sessions mix sets and show each card's set name. */
   sprint?: boolean;
+  /**
+   * Identifies this run for resuming (normally the set id). Sprint sessions mix
+   * sets, so they pass nothing and keep their place only while open.
+   */
+  resumeKey?: string;
 }) {
   const reviewCard = useMutation(api.studySets.reviewCard);
   const checkByMeaning = useAction(api.ai.gradeRecallAnswer);
   const { unavailable: aiUnavailable } = useAiAvailability();
-  const [index, setIndex] = useState(0);
+  // A run left half-done resumes where it stopped. Ratings are saved as they
+  // are made, so the cards already reviewed have left the live list;
+  // readCardRun remaps the position onto the cards still due instead of
+  // restarting at the first one.
+  const [resume] = useState(() =>
+    resumeKey ? readCardRun(resumeKey, cards.map((card) => card._id)) : null,
+  );
+  const [index, setIndex] = useState(() => resume?.index ?? 0);
   const [typed, setTyped] = useState("");
   const [showInput, setShowInput] = useState(false);
   const [checked, setChecked] = useState(false);
@@ -135,13 +149,10 @@ export function FlashcardReview({
   // is being marked instead of a rating row they might tap too early.
   const [grading, setGrading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [finished, setFinished] = useState(false);
-  const [session, setSession] = useState<Record<Rating, number>>({
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-  });
+  const [finished, setFinished] = useState(() => resume?.finished ?? false);
+  const [session, setSession] = useState<Record<Rating, number>>(
+    () => resume?.counts ?? { 1: 0, 2: 0, 3: 0, 4: 0 },
+  );
 
   const dictation = useDictation(setTyped);
 
@@ -150,7 +161,7 @@ export function FlashcardReview({
   // soon as it stops matching — either would skip the next card mid-session.
   const [sessionCards] = useState<StudyCard[]>(cards);
   const [queueIds, setQueueIds] = useState<string[]>(() =>
-    sortCards(cards).map((card) => card._id),
+    resume ? resume.queueIds : sortCards(cards).map((card) => card._id),
   );
   const queue = useMemo(
     () =>
@@ -176,6 +187,12 @@ export function FlashcardReview({
       ).length,
     [queue, liveDue, sessionStart],
   );
+
+  // Written on every move, so leaving at any point resumes here.
+  useEffect(() => {
+    if (!resumeKey) return;
+    saveCardRun(resumeKey, { queueIds, index, counts: session, finished });
+  }, [resumeKey, queueIds, index, session, finished]);
 
   const current = queue[index];
   const answered = session[1] + session[2] + session[3] + session[4];
@@ -348,6 +365,7 @@ export function FlashcardReview({
   };
 
   const restart = () => {
+    if (resumeKey) clearCardRun(resumeKey);
     setQueueIds(sortCards(sessionCards).map((card) => card._id));
     setIndex(0);
     setFinished(false);

@@ -44,7 +44,7 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
             <ArrowLeft className="size-3.5" /> Back to the set
           </Button>
         </div>
-        <FlashcardReview key={setId} cards={data.cards} />
+        <FlashcardReview key={setId} cards={data.cards} resumeKey={`weak:${setId}`} />
       </>
     );
   }
