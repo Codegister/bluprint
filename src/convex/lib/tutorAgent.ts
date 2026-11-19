@@ -102,6 +102,20 @@ export function isTutorBuildRequest(question: string): boolean {
   return BUILD_REQUEST.some((pattern) => pattern.test(text));
 }
 
+/**
+ * A build whose material is the tutor's own conversation, not a course topic:
+ * "turn all the quotes you've given me into a set".
+ *
+ * Without this the planner treats the message as a topic request and can spend
+ * a build on whatever course topic happens to overlap a common word.
+ */
+const CONVERSATION_MATERIAL =
+  /\b(?:quotes?|lines?|points?|notes?|facts?|examples?|tables?|lists?|material)\b[^.!?]{0,80}\b(?:you(?:'ve| have)?\s+(?:given|gave|provided|listed|shared|found|written|made|shown)|(?:from\s+)?(?:above|earlier)|your\s+(?:last\s+)?(?:reply|answer|message))\b/i;
+
+export function isConversationMaterialBuild(question: string): boolean {
+  return isTutorBuildRequest(question) && CONVERSATION_MATERIAL.test(question.trim());
+}
+
 const TOPIC_WORDS: Record<string, number> = {
   one: 1,
   two: 2,
@@ -152,6 +166,60 @@ const STOP_WORDS = new Set([
   "course",
   "create",
   "deck",
+  "you",
+  "your",
+  "yours",
+  "we",
+  "our",
+  "ours",
+  "i",
+  "it",
+  "its",
+  "they",
+  "them",
+  "their",
+  "he",
+  "she",
+  "his",
+  "her",
+  "were",
+  "was",
+  "are",
+  "is",
+  "be",
+  "been",
+  "being",
+  "do",
+  "does",
+  "did",
+  "can",
+  "could",
+  "would",
+  "should",
+  "will",
+  "shall",
+  "may",
+  "might",
+  "must",
+  "not",
+  "no",
+  "yes",
+  "actually",
+  "really",
+  "just",
+  "given",
+  "give",
+  "using",
+  "use",
+  "when",
+  "where",
+  "why",
+  "how",
+  "what",
+  "which",
+  "who",
+  "whom",
+  "whose",
   "exam",
   "flashcard",
   "flashcards",
@@ -286,6 +354,13 @@ function scoreTopic(question: string, topic: TutorAgentTopic): number {
   return hits === 0 ? 0 : hits / titleWords.length;
 }
 
+/** True when the question names the first meaningful word of a title. */
+function headWordMatches(question: string, title: string): boolean {
+  const head = significantTokens(title)[0];
+  if (!head) return false;
+  return tokens(question).some((word) => sameWord(word, head));
+}
+
 function topicByTitle(
   question: string,
   topics: TutorAgentTopic[],
@@ -295,10 +370,15 @@ function topicByTitle(
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score);
   if (scored.length === 0) return null;
+  // One incidental word from a longer title ("you" in "When You Were Mine")
+  // is not a topic request. Accept a dominant overlap, or a match on the
+  // title's head word ("holidays" in "Holidays and travel").
+  const best = scored[0]!;
+  if (best.score < 0.5 && !headWordMatches(question, best.topic.title)) return null;
   // A tie means the request is genuinely ambiguous. Asking which topic is
   // safer than spending a build on the wrong one.
-  if (scored[1] && scored[1].score === scored[0]!.score) return null;
-  return scored[0]!.topic;
+  if (scored[1] && scored[1].score === best.score) return null;
+  return best.topic;
 }
 
 function subjectMatch(question: string, subject: string): boolean {

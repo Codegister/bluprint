@@ -24,6 +24,7 @@ import {
 } from "./lib/buildDefaults";
 import {
   isBuildConfirmation,
+  isConversationMaterialBuild,
   isTutorBuildRequest,
   planTutorBuild,
   resolveProposedBuilds,
@@ -164,7 +165,11 @@ import {
   TUTOR_UNAVAILABLE_MESSAGE,
 } from "./lib/aiMessages";
 import { incidentKind } from "./lib/incidentRules";
-import { noteLimitMessage, withinNoteLimit } from "./lib/noteLimits";
+import {
+  MAX_NOTE_CHARS,
+  noteLimitMessage,
+  withinNoteLimit,
+} from "./lib/noteLimits";
 import {
   MAX_NOTES_CHARS,
   NVIDIA_CHAT_URL,
@@ -3005,6 +3010,108 @@ async function startTutorBuild(
  * turned into a note for the tutor rather than an exception, so the student
  * still gets an answer explaining what happened.
  */
+/**
+ * The material the tutor itself put in the chat, newest turns last.
+ *
+ * Only assistant replies are used: the quotes, tables and worked points the
+ * student is referring to live there, and the student's instructions are not
+ * study material. The newest turns win when the thread is over the note limit.
+ */
+function tutorConversationNotes(
+  messages: Array<{ role: string; content: string }>,
+  previousReply: string | undefined,
+  question: string,
+): string {
+  const replies = messages
+    .filter((message) => message.role === "assistant" && message.content.trim())
+    .map((message) => message.content.trim());
+  if (replies.length === 0 && previousReply?.trim()) replies.push(previousReply.trim());
+
+  // "The quotes you've given me" means the quoted material, not every aside in
+  // the thread. If replies with quoted lines exist, build from those only.
+  const quoted = /\bquotes?\b/i.test(question)
+    ? replies.filter((reply) => /["\u201c\u201d]/.test(reply))
+    : [];
+  const material = quoted.length > 0 ? quoted : replies;
+  const joined = material.slice(-8).join("\n\n");
+  return joined.length <= MAX_NOTE_CHARS
+    ? joined
+    : joined.slice(joined.length - MAX_NOTE_CHARS);
+}
+
+type TutorConversationMaterial = {
+  notes: string;
+  course?: string;
+  examBoard?: string;
+  level?: string;
+};
+
+/**
+ * Turns the tutor's own quoted material into a set instead of guessing a topic.
+ *
+ * The set is a normal text set, so it builds, queues and links exactly like one
+ * pasted from notes. It is deliberately not attached to a course topic: the
+ * quotes may span two texts, and no single pathway topic owns them.
+ */
+async function startTutorConversationBuild(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+  conversation: TutorConversationMaterial,
+): Promise<TutorBuildAction> {
+  const counts = {
+    cards: BUILD_DEFAULTS.cards,
+    quiz: BUILD_DEFAULTS.quiz,
+    exam: BUILD_DEFAULTS.exam,
+  };
+  const plan: TutorBuildPlan = {
+    status: "build",
+    courseId: "",
+    subject: conversation.course ?? "your tutor chat",
+    topicIds: [],
+    firstTopicId: "",
+    label: "the quotes and notes from this conversation",
+    counts,
+  };
+
+  try {
+    const setId = await ctx.runMutation(
+      internal.studySets.createFromTutorConversation,
+      {
+        userId,
+        notes: conversation.notes,
+        title: "Quotes from the tutor",
+        ...(conversation.course ? { course: conversation.course } : {}),
+        ...(conversation.examBoard ? { examBoard: conversation.examBoard } : {}),
+        ...(conversation.level ? { level: conversation.level } : {}),
+        targetCardCount: counts.cards,
+        targetQuizCount: counts.quiz,
+        targetExamCount: counts.exam,
+      },
+    );
+    return {
+      builtSetId: setId,
+      note: tutorBuildNote({
+        plan,
+        setId,
+        created: true,
+        cached: false,
+        started: true,
+      }),
+    };
+  } catch (error) {
+    console.error("Tutor conversation build could not start", error);
+    return {
+      note: tutorBuildNote({
+        plan,
+        created: false,
+        cached: false,
+        started: false,
+        failure: safeTutorBuildError(error),
+      }),
+    };
+  }
+}
+
 /** The tutor's last reply: what a "proceed" is agreeing with. */
 function lastAssistantReply(
   messages: Array<{ role: string; content: string }>,
@@ -3070,6 +3177,8 @@ async function runTutorBuild(
     unitTitle?: string;
     /** The tutor's previous reply, which a confirmation agrees with. */
     previousReply?: string;
+    /** The tutor's own material, for a request to turn it into a set. */
+    conversation?: TutorConversationMaterial;
   },
 ): Promise<TutorBuildAction | null> {
   // "Ok, then, proceed to set generation" names no verb or material of its
@@ -3078,6 +3187,23 @@ async function runTutorBuild(
     const proposed = await buildProposedSets(ctx, userId, options.previousReply);
     if (proposed) return proposed;
   }
+
+  // A request to turn the tutor's own quotes into a set must not be resolved
+  // against a course topic: it has material of its own, and the topic planner
+  // can otherwise land on an unrelated poem or chapter.
+  if (isConversationMaterialBuild(question)) {
+    if (!options.conversation?.notes.trim()) {
+      return {
+        note:
+          "The student asked you to build a set from material in this conversation, but there is no material to draw on. " +
+          "Do not claim anything was built. " +
+          NO_MATERIAL_IN_CHAT +
+          " Ask them to paste the quotes or name the course topic they want instead.",
+      };
+    }
+    return await startTutorConversationBuild(ctx, userId, options.conversation);
+  }
+
   // Avoid a database read on every ordinary tutor question.
   if (!isTutorBuildRequest(question)) return null;
   const courses = await ctx.runQuery(internal.tutor.getTutorBuildCourses, { userId });
@@ -9005,6 +9131,12 @@ export const askTutor = action({
       const build = await runTutorBuild(ctx, userId, text, {
         currentCourseId: context.set.courseId,
         previousReply,
+        conversation: {
+          notes: tutorConversationNotes(context.messages, previousReply, text),
+          course: context.set.course,
+          examBoard: context.set.examBoard,
+          level: context.set.level,
+        },
       });
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
@@ -9148,6 +9280,12 @@ export const askCourseTutor = action({
         currentCourseId: courseId,
         unitTitle,
         previousReply,
+        conversation: {
+          notes: tutorConversationNotes(context.messages, previousReply, text),
+          course: context.course,
+          examBoard: context.examBoard,
+          level: context.level,
+        },
       });
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
@@ -9273,7 +9411,12 @@ export const askLibraryTutor = action({
     try {
       // The planner reads every course too, so "build a Spanish quiz" works from
       // a home question without a selected course.
-      const build = await runTutorBuild(ctx, userId, text, { previousReply });
+      const build = await runTutorBuild(ctx, userId, text, {
+        previousReply,
+        conversation: {
+          notes: tutorConversationNotes(context.messages, previousReply, text),
+        },
+      });
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
       // whether the student stopped while the build was running.

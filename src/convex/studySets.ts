@@ -11,6 +11,7 @@ import {
 } from "./_generated/server";
 import {
   clipNote,
+  MIN_NOTE_CHARS,
   noteLimitMessage,
   withinNoteLimit,
 } from "./lib/noteLimits";
@@ -896,6 +897,93 @@ export const create = mutation({
     } catch (error) {
       // The set is already saved; opening it still starts a queued build.
       console.error("Could not queue this study set build", setId, error);
+    }
+
+    return setId;
+  },
+});
+
+/**
+ * A set built from the tutor's own conversation.
+ *
+ * "Turn all the quotes you've given me into a set" has no course topic behind
+ * it: the material is the assistant's replies. This writes those replies as a
+ * normal text set, so the same generation, allowance and ownership rules apply
+ * without inventing a topic the student never asked for.
+ */
+export const createFromTutorConversation = internalMutation({
+  args: {
+    userId: v.id("users"),
+    notes: v.string(),
+    title: v.string(),
+    course: v.optional(v.string()),
+    examBoard: v.optional(v.string()),
+    level: v.optional(v.string()),
+    targetCardCount: v.number(),
+    targetQuizCount: v.number(),
+    targetExamCount: v.number(),
+  },
+  handler: async (ctx, { userId, ...args }) => {
+    await requireVerifiedUser(ctx, userId);
+
+    const notes = normalizeStudyText(args.notes);
+    if (notes.length < MIN_NOTE_CHARS) {
+      throw new Error("There was not enough material in this conversation to build a set.");
+    }
+    if (!withinNoteLimit(notes)) {
+      throw new Error(noteLimitMessage(notes.length));
+    }
+
+    await consumeBuildAllowance(ctx, userId, "set");
+
+    const now = Date.now();
+    const setId = await ctx.db.insert("studySets", {
+      userId,
+      title: args.title.trim().slice(0, 80) || "Quotes from the tutor",
+      // The generator may replace this with a title taken from the quotes.
+      titleSource: "auto",
+      notes,
+      sourceType: "text",
+      sourceLabel: "Tutor conversation",
+      course: safeLabel(args.course),
+      examBoard: safeLabel(args.examBoard),
+      level: safeLabel(args.level),
+      sourceImageIds: [],
+      status: "queued",
+      progress: "Queued",
+      cardCount: 0,
+      quizCount: 0,
+      examCount: 0,
+      targetCardCount: targetCount(
+        args.targetCardCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        BUILD_DEFAULTS.cards,
+      ),
+      targetQuizCount: targetCount(
+        args.targetQuizCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        BUILD_DEFAULTS.quiz,
+      ),
+      targetExamCount: targetCount(
+        args.targetExamCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        BUILD_DEFAULTS.exam,
+      ),
+      knownCount: 0,
+      updatedAt: now,
+    });
+
+    try {
+      await ctx.scheduler.runAfter(0, internal.ai.processStudySetScheduled, {
+        setId,
+        userId,
+      });
+    } catch (error) {
+      // The set is saved; opening it starts a queued build as a fallback.
+      console.error("Could not queue this tutor conversation set", setId, error);
     }
 
     return setId;

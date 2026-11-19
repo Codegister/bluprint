@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   countsForTutorBuild,
+  isConversationMaterialBuild,
   isTutorBuildRequest,
   numberTopics,
   planTutorBuild,
@@ -30,6 +31,23 @@ const spanish: TutorAgentCourse = {
   ],
 };
 
+const english: TutorAgentCourse = {
+  id: "english",
+  subject: "English Literature",
+  level: "GCSE",
+  examBoard: "AQA",
+  units: [
+    {
+      title: "Poetry anthology",
+      topics: [{ id: "duffy", title: "When You Were Mine" }],
+    },
+    {
+      title: "Shakespeare",
+      topics: [{ id: "macbeth", title: "Macbeth" }],
+    },
+  ],
+};
+
 const biology: TutorAgentCourse = {
   id: "biology",
   subject: "Biology",
@@ -55,6 +73,21 @@ describe("tutor build intent", () => {
     expect(isTutorBuildRequest("What is a study set?")).toBe(false);
     expect(isTutorBuildRequest("I need help with this quiz")).toBe(false);
     expect(isTutorBuildRequest("Don't build me a quiz")).toBe(false);
+  });
+});
+
+describe("tutor conversation builds", () => {
+  test("recognises a set built from the tutor's own material", () => {
+    expect(
+      isConversationMaterialBuild(
+        "Actually, can you generate a set using all the quotes you've given me?",
+      ),
+    ).toBe(true);
+    expect(
+      isConversationMaterialBuild("Build me a set from the notes you gave me above"),
+    ).toBe(true);
+    expect(isConversationMaterialBuild("Build me a quiz on cell division")).toBe(false);
+    expect(isConversationMaterialBuild("What is a study set?")).toBe(false);
   });
 });
 
@@ -219,6 +252,31 @@ describe("tutor build planner", () => {
       expect(isTutorBuildRequest(question)).toBe(true);
       expect(planTutorBuild(question, [spanish, biology]).status).toBe("build-many");
     }
+  });
+
+  test("an incidental word from a longer title is not a topic request", () => {
+    // The old matcher scored "you" against "When You Were Mine" and spent the
+    // build on that poem instead of the quotes the student asked about.
+    expect(
+      planTutorBuild(
+        "Actually, can you generate a set using all the quotes you've given me?",
+        [english],
+        { currentCourseId: "english" },
+      ),
+    ).toEqual({
+      status: "needs-topic",
+      courseId: "english",
+      subject: "English Literature",
+    });
+  });
+
+  test("a title's head word still resolves a short request", () => {
+    const plan = planTutorBuild("Build me a quiz on holidays", [spanish], {
+      currentCourseId: "spanish",
+    });
+    expect(plan.status).toBe("build");
+    if (plan.status !== "build") return;
+    expect(plan.topicIds).toEqual(["holidays"]);
   });
 
   test("a named subject keeps an every-course request to that subject", () => {
