@@ -803,14 +803,27 @@ export function filterSaveMyExamsLiteratureOutline(
 export function findSaveMyExamsNotesPages(
   indexes: SaveMyExamsNotesIndex[],
   topic: { title: string; reference?: string },
+  options: { unitTitle?: string } = {},
 ): SaveMyExamsNotePage[] {
   const pages = new Map<string, SaveMyExamsNotePage>();
   for (const index of indexes) {
     for (const page of index.pages) if (!pages.has(page.url)) pages.set(page.url, page);
   }
-  const all = [...pages.values()];
+  const everything = [...pages.values()];
   const wanted = titleKey(topic.title);
   if (!wanted) return [];
+
+  // A part that names a religion scopes every match, exact title matches
+  // included: "The Mass" exists in Christianity and must not be handed to an
+  // Islam part just because the title is identical.
+  const unit = options.unitTitle ? titleKey(options.unitTitle) : "";
+  const religion = RELIGION_HINTS.find((hint) => hint.pattern.test(unit));
+  const all = religion
+    ? everything.filter((page) => {
+        const text = titleKey(`${page.sectionTitle} ${page.topicTitle}`);
+        return religion.words.some((word) => text.includes(word));
+      })
+    : everything;
 
   const limit = (rows: SaveMyExamsNotePage[]) => rows.slice(0, MAX_TOPIC_PAGES);
 
@@ -833,7 +846,102 @@ export function findSaveMyExamsNotesPages(
 
   const exactSubtopic = all.filter((page) => titleKey(page.title) === wanted);
   if (exactSubtopic.length === 1) return exactSubtopic;
-  return [];
+
+  // Saved pathways do not always use the notes site's exact topic names:
+  // Literature says "Macbeth" where Save My Exams says "Macbeth" but puts the
+  // text in the section, RS says "The Trinity" where Save My Exams says
+  // "Christian Beliefs: The Trinity & Creation", and a poetry cluster drops
+  // the site's "Anthology" suffix. The unit title carries the pathway — the
+  // set text, the religion — so it is used to keep the match inside the right
+  // one instead of falling through to a general page.
+  return options.unitTitle
+    ? contextualTopicPages(all, topic, options.unitTitle)
+    : [];
+}
+
+const RELIGION_HINTS: ReadonlyArray<{ pattern: RegExp; words: string[] }> = [
+  { pattern: /christian|catholic/i, words: ["christian", "church"] },
+  { pattern: /islam|muslim/i, words: ["islam", "muslim"] },
+  { pattern: /judaism|jewish|judaic/i, words: ["juda", "jewish"] },
+];
+
+/**
+ * Words that describe the course structure rather than the concept, so they
+ * must not decide which published topic a pathway topic is.
+ */
+const CONCEPT_STOPWORDS = new Set([
+  "the", "and", "of", "a", "an", "in", "to", "for", "on", "with",
+  "about", "its", "their", "from", "into", "that", "this", "key", "main",
+  "other", "belief", "beliefs", "practice", "practices", "religion",
+  "religious", "ethics", "paper", "unit", "area", "study", "part", "topic",
+  "theme", "themes", "matters", "christian", "christianity", "catholic",
+  "islam", "muslim", "judaism", "jewish",
+]);
+
+function conceptWords(value: string): string[] {
+  const seen = new Set<string>();
+  for (const raw of value
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .split(/[^a-z0-9]+/)) {
+    if (raw.length < 3 || CONCEPT_STOPWORDS.has(raw)) continue;
+    const word =
+      raw.length > 4 && raw.endsWith("s") && !raw.endsWith("ss")
+        ? raw.slice(0, -1)
+        : raw;
+    seen.add(word);
+  }
+  return [...seen];
+}
+
+/**
+ * Matches a pathway topic to a published topic by concept, inside the part's
+ * own pathway where that part names one (a set text, a religion).
+ *
+ * Only a full concept match counts: "Pilgrimage and festivals" is not
+ * "Worship & Celebrations" just because both are religious practice, and a
+ * near miss would put another religion's or text's notes under this topic.
+ * Several published topics can tie legitimately; a generic RS part such as
+ * "Religion and Ethics" covers the same concept in each religion, so those
+ * are merged rather than one being picked at random.
+ */
+function contextualTopicPages(
+  pages: SaveMyExamsNotePage[],
+  topic: { title: string },
+  unitTitle: string,
+): SaveMyExamsNotePage[] {
+  const unit = titleKey(unitTitle);
+  if (!unit) return [];
+
+  const religion = RELIGION_HINTS.find((hint) => hint.pattern.test(unit));
+  const pool = religion
+    ? pages.filter((page) => {
+        const text = titleKey(`${page.sectionTitle} ${page.topicTitle}`);
+        return religion.words.some((word) => text.includes(word));
+      })
+    : pages;
+  if (pool.length === 0) return [];
+
+  const wanted = conceptWords(topic.title);
+  if (wanted.length === 0) return [];
+
+  const byTopic = new Map<string, SaveMyExamsNotePage[]>();
+  for (const page of pool) {
+    const haystack = new Set([
+      ...conceptWords(page.topicTitle),
+      ...conceptWords(page.title),
+    ]);
+    if (!wanted.every((word) => haystack.has(word))) continue;
+    const entry = byTopic.get(page.topicTitle);
+    if (entry) entry.push(page);
+    else byTopic.set(page.topicTitle, [page]);
+  }
+  if (byTopic.size === 0) return [];
+
+  return [...byTopic.values()]
+    .slice(0, 3)
+    .flatMap((entry) => entry)
+    .slice(0, MAX_TOPIC_PAGES);
 }
 
 function nodeType(node: JsonObject): string {
@@ -1199,4 +1307,22 @@ export async function fetchSaveMyExamsPage(
 
 export function saveMyExamsSiteOrigin(): string {
   return SITE;
+}
+
+/**
+ * Whether a notes index belongs to the course that was matched.
+ *
+ * The site sometimes redirects a course's notes URL to a subject-level hub that
+ * still renders an outline. Those pages are not this course's index, so the
+ * base path has to sit under the resolved course path (…/aqa/18/) rather than
+ * being a shorter prefix of it (…/aqa/).
+ */
+export function notesIndexBelongsToCourse(
+  indexBasePath: string,
+  courseBasePath: string,
+): boolean {
+  const base = courseBasePath.endsWith("/")
+    ? courseBasePath
+    : `${courseBasePath}/`;
+  return indexBasePath.startsWith(base);
 }

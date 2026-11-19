@@ -11,6 +11,7 @@ import { requireUserId } from "./lib/requireUser";
 import {
   fetchSaveMyExamsPage,
   findSaveMyExamsNotesPages,
+  notesIndexBelongsToCourse,
   parseSaveMyExamsNotePage,
   parseSaveMyExamsNotesIndex,
   parseSaveMyExamsPastPapers,
@@ -21,9 +22,23 @@ import {
 } from "./lib/savemyexams";
 import {
   cleanSections,
+  NOTES_SOURCE_VERSION,
   topicNotesOriginValidator,
   type TopicNotesOrigin,
 } from "./lib/topicNotes";
+import {
+  cognitoNotesPagesForTopic,
+  fetchCognitoNotesSource,
+  fetchCognitoPage,
+  groupCognitoTopicLinks,
+  parseCognitoTopicPage,
+  topicNotesPages,
+} from "./lib/cognito";
+import {
+  emptyNotesRead,
+  mergeNotesReads,
+  type NotesRead,
+} from "./lib/notesMerge";
 
 /**
  * Save My Exams content shown inside Bluprint, plus the notes Bluprint writes
@@ -82,7 +97,10 @@ export const getTopicNotes = query({
     // action below sees them as stale and replaces them on the next visit.
     return (
       rows.find(
-        (row) => row.origin === "savemyexams" || row.origin === "bluprint",
+        (row) =>
+          row.origin === "savemyexams" ||
+          row.origin === "combined" ||
+          row.origin === "bluprint",
       ) ?? null
     );
   },
@@ -151,6 +169,7 @@ export const saveTopicNotes = internalMutation({
       sections,
       sources,
       origin: origin ?? "savemyexams",
+      sourceVersion: NOTES_SOURCE_VERSION,
       fetchedAt: Date.now(),
     });
   },
@@ -206,13 +225,16 @@ async function inBatches<T, R>(
 function findTopic(
   course: Doc<"courses">,
   topicId: string,
-): { title: string; reference?: string } | null {
+): { title: string; reference?: string; unitTitle: string } | null {
   for (const unit of course.pathway?.units ?? []) {
     for (const topic of unit.topics) {
       if (topic.id === topicId) {
         return {
           title: topic.title,
           ...(topic.specReference ? { reference: topic.specReference } : {}),
+          // The part carries the pathway: a set text or a religion. Both notes
+          // sources need it to pick the right page when names repeat.
+          unitTitle: unit.title,
         };
       }
     }
@@ -236,11 +258,9 @@ function lastPathSegment(url: string): string | undefined {
  */
 async function readPublishedNotes(
   course: SaveMyExamsCourse,
-  topic: { title: string; reference?: string },
-): Promise<{
-  sections: Array<{ heading: string; blocks: string[] }>;
-  sources: Array<{ title: string; url: string }>;
-}> {
+  topic: { title: string; reference?: string; unitTitle: string },
+): Promise<NotesRead> {
+  const base = `${saveMyExamsSiteOrigin()}${course.basePath}`;
   const indexes: SaveMyExamsNotesIndex[] = [];
   let reachedIndex = false;
   let indexError = false;
@@ -248,21 +268,26 @@ async function readPublishedNotes(
     const response = await fetchSaveMyExamsPage(path);
     if (response.status === "ok") {
       reachedIndex = true;
+      // A redirect to a general notes hub is not this course's index, even if
+      // it renders an index of its own.
+      if (!response.url.startsWith(base)) continue;
       const parsed = parseSaveMyExamsNotesIndex(response.html);
-      if (parsed) indexes.push(parsed);
+      if (parsed && notesIndexBelongsToCourse(parsed.basePath, course.basePath)) {
+        indexes.push(parsed);
+      }
     } else if (response.status === "error") {
       indexError = true;
     }
   }
   if (!reachedIndex && indexError) {
-    throw new Error(
-              "The published notes could not be reached just now. Try again in a moment.",
-    );
+    return { ...emptyNotesRead(), failed: true };
   }
-  if (indexes.length === 0) return { sections: [], sources: [] };
+  if (indexes.length === 0) return emptyNotesRead();
 
-  const pages = findSaveMyExamsNotesPages(indexes, topic);
-  if (pages.length === 0) return { sections: [], sources: [] };
+  const pages = findSaveMyExamsNotesPages(indexes, topic, {
+    unitTitle: topic.unitTitle,
+  });
+  if (pages.length === 0) return emptyNotesRead();
 
   let reachedPage = false;
   let pageError = false;
@@ -281,9 +306,7 @@ async function readPublishedNotes(
     return sections ? { page, sections } : null;
   });
   if (!reachedPage && pageError) {
-    throw new Error(
-              "The published notes could not be reached just now. Try again in a moment.",
-    );
+    return { ...emptyNotesRead(), failed: true };
   }
 
   const successful = read.filter(
@@ -293,13 +316,80 @@ async function readPublishedNotes(
     successful.flatMap((result) => result.sections),
   ).slice(0, MAX_SECTIONS);
   // Pages that exist but carried no notes are not worth citing.
-  if (sections.length === 0) return { sections: [], sources: [] };
+  if (sections.length === 0) return emptyNotesRead();
   return {
     sections,
     sources: successful.map((result) => ({
       title: result.page.title,
       url: result.page.url,
     })),
+    failed: false,
+  };
+}
+
+/** How many Cognito subtopic pages one topic reads, alongside the other source. */
+const COGNITO_MAX_PAGES = 5;
+
+/**
+ * Cognito's published notes for the same topic.
+ *
+ * Cognito publishes one index per course and links every subtopic from it.
+ * Literature restarts its numbering for each set text, so the link list is
+ * assigned to the outline's own sections before a topic is matched; a topic in
+ * the Macbeth part can then never receive Romeo & Juliet's pages. RS has no
+ * Cognito course, so the reader returns nothing there and the Save My Exams
+ * read stands alone rather than being replaced by a general page.
+ */
+async function readCognitoPublishedNotes(
+  course: Doc<"courses">,
+  topic: { title: string; reference?: string; unitTitle: string },
+): Promise<NotesRead> {
+  const stored = course.pathway?.sourceUrl;
+  const source = await fetchCognitoNotesSource(
+    {
+      level: course.level,
+      subject: course.subject,
+      examBoard: course.examBoard,
+      ...(course.tier ? { tier: course.tier } : {}),
+      ...(course.variant ? { variant: course.variant } : {}),
+    },
+    stored && /\/notes$/i.test(stored) ? stored : undefined,
+  );
+  if (!source) return emptyNotesRead();
+
+  const groups = groupCognitoTopicLinks(source.links, source.outline);
+  const pages = groups
+    ? cognitoNotesPagesForTopic(groups, source.links, topic, topic.unitTitle)
+    : topicNotesPages(source.links, topic);
+  const selected = pages.slice(0, COGNITO_MAX_PAGES);
+  if (selected.length === 0) return emptyNotesRead();
+
+  const pagePrefix = `${source.pageUrl.replace(/\/$/, "")}/`;
+  const read = await inBatches(selected, NOTES_CONCURRENCY, async (page) => {
+    const response = await fetchCognitoPage(page.url);
+    // Leaf links are relative to the index; a redirect away from it means the
+    // page is not this course's note.
+    if (!response || !response.url.startsWith(pagePrefix)) return null;
+    const sections = parseCognitoTopicPage(response.html).filter(
+      (section) => !/\b(?:test yourself|quiz)\b/i.test(section.heading),
+    );
+    return sections.length > 0 ? { page, sections } : null;
+  });
+
+  const successful = read.filter(
+    (result): result is NonNullable<typeof result> => result !== null,
+  );
+  const sections = cleanSections(
+    successful.flatMap((result) => result.sections),
+  ).slice(0, MAX_SECTIONS);
+  if (sections.length === 0) return emptyNotesRead();
+  return {
+    sections,
+    sources: successful.map((result) => ({
+      title: result.page.title,
+      url: result.page.url,
+    })),
+    failed: false,
   };
 }
 
@@ -330,8 +420,15 @@ export const loadTopicNotes = action({
     // A copy with no sections was stored before notes were written for topics
     // Save My Exams does not cover, and a Cognito copy came from the old source;
     // both are treated as missing and replaced.
-    const cacheable =
-      cached?.origin === "savemyexams" || cached?.origin === "bluprint";
+    // A copy from the old single-source reader, or from a notes pipeline before
+    // this one, is read again rather than kept for the rest of its month.
+    const cacheable = Boolean(
+      cached &&
+        (cached.origin === "savemyexams" ||
+          cached.origin === "combined" ||
+          cached.origin === "bluprint") &&
+        (cached.sourceVersion ?? 0) >= NOTES_SOURCE_VERSION,
+    );
     if (
       cached &&
       cacheable &&
@@ -341,46 +438,69 @@ export const loadTopicNotes = action({
       return {
         sections: cached.sections.length,
         cached: true,
-        origin: cached.origin === "bluprint" ? "bluprint" : "savemyexams",
+        origin:
+          cached.origin === "bluprint"
+            ? "bluprint"
+            : cached.origin === "combined"
+              ? "combined"
+              : "savemyexams",
       };
     }
 
     const topic = findTopic(course, topicId);
     if (!topic) throw new Error("That topic is not part of this pathway.");
 
-    const resolved = await resolveSaveMyExamsCourse({
-      level: course.level,
-      subject: course.subject,
-      examBoard: course.examBoard,
-      ...(course.tier ? { tier: course.tier } : {}),
-      ...(course.variant ? { variant: course.variant } : {}),
-      ...(course.rsRoute ? { rsRoute: course.rsRoute } : {}),
+    // Both published sources are read together: Save My Exams' exam-board
+    // cards lead, Cognito's cards fill the remaining slots, and a failure of
+    // one never throws away what the other found. RS has no Cognito course, so
+    // there the Save My Exams read simply stands alone.
+    const [sme, cognito] = await Promise.all([
+      (async (): Promise<NotesRead> => {
+        const resolved = await resolveSaveMyExamsCourse({
+          level: course.level,
+          subject: course.subject,
+          examBoard: course.examBoard,
+          ...(course.tier ? { tier: course.tier } : {}),
+          ...(course.variant ? { variant: course.variant } : {}),
+          ...(course.rsRoute ? { rsRoute: course.rsRoute } : {}),
+        });
+        if (resolved.status === "unavailable") {
+          return { ...emptyNotesRead(), failed: true };
+        }
+        if (resolved.status === "unmatched") return emptyNotesRead();
+        return await readPublishedNotes(resolved.course, topic);
+      })(),
+      readCognitoPublishedNotes(course, topic),
+    ]);
+
+    const published = mergeNotesReads(sme, cognito, {
+      primaryLimit: 8,
+      totalLimit: MAX_SECTIONS,
     });
-    if (resolved.status === "unavailable") {
+    if (published.sections.length > 0) {
+      const origin: TopicNotesOrigin =
+        cognito.sections.length > 0 ? "combined" : "savemyexams";
+      await ctx.runMutation(internal.cognitoLibrary.saveTopicNotes, {
+        courseId,
+        topicId,
+        sections: published.sections,
+        sources: published.sources,
+        origin,
+      });
+      return {
+        sections: published.sections.length,
+        cached: false,
+        origin,
+      };
+    }
+
+    if (sme.failed && cognito.failed) {
       throw new Error(
         "The notes source could not be reached just now. Try again in a moment.",
       );
     }
 
-    if (resolved.status === "matched") {
-      const published = await readPublishedNotes(resolved.course, topic);
-      if (published.sections.length > 0) {
-        await ctx.runMutation(internal.cognitoLibrary.saveTopicNotes, {
-          courseId,
-          topicId,
-          sections: published.sections,
-          sources: published.sources,
-          origin: "savemyexams",
-        });
-        return {
-          sections: published.sections.length,
-          cached: false,
-          origin: "savemyexams",
-        };
-      }
-    }
-
-    // No safe Save My Exams match for this topic, so Bluprint writes the notes
+    // Neither published source covers this topic, so Bluprint writes the notes
     // and stores them under its own name.
     const written = await ctx.runAction(internal.ai.writeTopicNotes, {
       courseId,

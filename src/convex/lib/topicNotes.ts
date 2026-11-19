@@ -31,6 +31,16 @@ export type TopicNoteSection = { heading: string; blocks: string[] };
 export const MAX_HEADING_CHARS = 160;
 export const MAX_BLOCK_CHARS = 400;
 export const MAX_NOTE_SECTIONS = 12;
+
+/**
+ * The notes pipeline version stored with each cached topic.
+ *
+ * A cached topic written before the combined Save My Exams + Cognito reader
+ * has no version, so it is read again on the student's next visit instead of
+ * keeping the old single-source copy for the rest of its month. Bump this when
+ * the way a topic is read changes and every topic should be re-read once.
+ */
+export const NOTES_SOURCE_VERSION = 2;
 export const MAX_BLOCKS_PER_SECTION = 14;
 
 export const topicNoteSectionValidator = v.object({
@@ -42,10 +52,15 @@ export const topicNoteSectionValidator = v.object({
  * Where a stored copy of the notes came from. "cognito" is legacy only: it
  * keeps old rows valid until they are read again and replaced.
  */
-export type TopicNotesOrigin = "savemyexams" | "cognito" | "bluprint";
+export type TopicNotesOrigin =
+  | "savemyexams"
+  | "combined"
+  | "cognito"
+  | "bluprint";
 
 export const topicNotesOriginValidator = v.union(
   v.literal("savemyexams"),
+  v.literal("combined"),
   v.literal("cognito"),
   v.literal("bluprint"),
 );

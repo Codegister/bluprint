@@ -57,7 +57,8 @@ export function TopicNotes({
 
   const sections = cached?.sections ?? [];
   const written = cached?.origin === "bluprint";
-  const fromPublishedNotes = cached?.origin === "savemyexams";
+  const fromPublishedNotes =
+    cached?.origin === "savemyexams" || cached?.origin === "combined";
 
   return (
     <motion.div

@@ -599,13 +599,55 @@ async function fetchCombinedScienceOutline(
 }
 
 /**
+ * Whether a fetched page is the notes index for the course that was asked for.
+ *
+ * Cognito redirects unknown paths to subject hubs, and a hub still renders an
+ * outline, so the winning page is checked against the exact level, subject and
+ * board that was requested. A general URL is rejected rather than scraped.
+ */
+export function cognitoNotesUrlMatches(
+  url: string,
+  levelSlug: string,
+  subjectSlug: string,
+  boardSlug: string | null,
+): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.origin !== SITE) return false;
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts[0] !== "courses") return false;
+    if (parts[1] !== levelSlug) return false;
+    // Cognito stores some subjects under a longer slug (biology is served from
+    // biology-triple), so the requested slug may be its prefix.
+    const offered = parts[2] ?? "";
+    if (offered !== subjectSlug && !offered.startsWith(`${subjectSlug}-`)) {
+      return false;
+    }
+    if (boardSlug && !parts.includes(boardSlug)) return false;
+    return parts[parts.length - 1] === "notes";
+  } catch {
+    return false;
+  }
+}
+
+function notesBasePath(url: string): string {
+  return new URL(url).pathname.replace(/\/$/, "");
+}
+
+type CognitoCoursePage = {
+  page: { url: string; html: string };
+  outline: CognitoOutline;
+  kind: "notes" | "specification" | "combined";
+};
+
+/**
  * Walks the same route as "Find my course": qualification, subject, exam board,
  * then tier. Cognito redirects dated routes (biology → biology-triple) itself,
  * so the candidate URLs are tried in order and the first readable outline wins.
  */
-export async function fetchCognitoOutline(
+async function readCognitoCourse(
   course: CognitoCourse,
-): Promise<CognitoOutline | null> {
+): Promise<CognitoCoursePage | null> {
   const levelSlug = LEVEL_SLUGS[course.level.trim()];
   if (!levelSlug) return null;
 
@@ -618,12 +660,19 @@ export async function fetchCognitoOutline(
   // Combined Science adds a Biology / Chemistry / Physics step before the board.
   if (subjectSlug === "combined-science") {
     if (!boardSlug || routes.length === 0) return null;
-    return await fetchCombinedScienceOutline(
+    const outline = await fetchCombinedScienceOutline(
       levelSlug,
       boardSlug,
       routes[0]!,
       course.examBoard,
     );
+    return outline
+      ? {
+          page: { url: outline.sourceUrl, html: "" },
+          outline,
+          kind: "combined",
+        }
+      : null;
   }
 
   const candidates: string[] = [];
@@ -646,8 +695,11 @@ export async function fetchCognitoOutline(
   for (const path of [...new Set(candidates)]) {
     const page = await fetchPage(`${SITE}${path}`);
     if (!page) continue;
+    if (!cognitoNotesUrlMatches(page.url, levelSlug, subjectSlug, boardSlug)) {
+      continue;
+    }
     const outline = parseCognitoPage(page.html, page.url);
-    if (outline) return outline;
+    if (outline) return { page, outline, kind: "notes" };
   }
 
   // The notes page is a client-rendered shell for some courses. The
@@ -657,12 +709,84 @@ export async function fetchCognitoOutline(
       `${SITE}/specifications/${levelSlug}/${subjectSlug}/${boardSlug}`,
     );
     if (spec) {
-      const outline = parseSpecificationPage(spec.html, spec.url);
-      if (outline) return outline;
+      const parsed = new URL(spec.url);
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (
+        parsed.origin === SITE &&
+        parts[0] === "specifications" &&
+        parts[1] === levelSlug &&
+        parts[2] === subjectSlug &&
+        parts[3] === boardSlug
+      ) {
+        const outline = parseSpecificationPage(spec.html, spec.url);
+        if (outline) return { page: spec, outline, kind: "specification" };
+      }
     }
   }
 
   return null;
+}
+
+/** The outline a pathway builder uses. */
+export async function fetchCognitoOutline(
+  course: CognitoCourse,
+): Promise<CognitoOutline | null> {
+  return (await readCognitoCourse(course))?.outline ?? null;
+}
+
+/**
+ * The notes index itself: the outline plus its leaf links.
+ *
+ * A pathway built from Cognito already stores the exact notes address, so it
+ * is preferred. Otherwise the course is resolved the same way as the pathway,
+ * which means the same strict level/subject/board check applies. A
+ * specification outline is not a notes index and returns null: the notes
+ * reader falls back to the other source rather than scraping a general page.
+ */
+export async function fetchCognitoNotesSource(
+  course: CognitoCourse,
+  preferredUrl?: string,
+): Promise<{
+  outline: CognitoOutline;
+  pageUrl: string;
+  links: CognitoTopicPageLink[];
+} | null> {
+  const preferred = preferredUrl?.trim();
+  if (preferred) {
+    const levelSlug = LEVEL_SLUGS[course.level.trim()];
+    const boardSlug = boardSlugFor(course.examBoard);
+    if (levelSlug && preferred.startsWith(`${SITE}/courses/`)) {
+      const page = await fetchPage(preferred);
+      if (page) {
+        const parts = new URL(page.url).pathname.split("/").filter(Boolean);
+        const subjectSlug = parts[2];
+        if (
+          subjectSlug &&
+          cognitoNotesUrlMatches(page.url, levelSlug, subjectSlug, boardSlug)
+        ) {
+          const outline = parseCognitoPage(page.html, page.url);
+          if (outline) {
+            return {
+              outline,
+              pageUrl: page.url,
+              links: parseCognitoTopicLinks(page.html, notesBasePath(page.url)),
+            };
+          }
+        }
+      }
+    }
+  }
+
+  const found = await readCognitoCourse(course);
+  if (!found || found.kind !== "notes") return null;
+  return {
+    outline: found.outline,
+    pageUrl: found.page.url,
+    links: parseCognitoTopicLinks(
+      found.page.html,
+      notesBasePath(found.page.url),
+    ),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -745,14 +869,25 @@ export function parseCognitoTopicPage(html: string): CognitoNoteSection[] {
   return sections;
 }
 
-/** The leaf notes pages linked from a course's notes index. */
-export function parseCognitoTopicLinks(html: string): CognitoTopicPageLink[] {
+/**
+ * The leaf notes pages linked from a course's notes index.
+ *
+ * `basePath` keeps the links to the index they came from. Literature publishes
+ * every set text on one index and the site also links between courses, so
+ * without this a link from another course could be read as this topic's notes.
+ */
+export function parseCognitoTopicLinks(
+  html: string,
+  basePath?: string,
+): CognitoTopicPageLink[] {
+  const prefix = basePath ? `${SITE}${basePath.replace(/\/$/, "")}/` : null;
   const found = new Map<string, CognitoTopicPageLink>();
   for (const match of html.matchAll(/href="([^"]+\/notes\/[^"/?#]+\/[^"/?#]+)"/g)) {
     const raw = match[1]!;
     // Links are root-relative, so they join the site origin rather than the
     // page's own route (Cognito drops the tier segment from leaf links).
     const absolute = raw.startsWith("http") ? raw : `${SITE}${raw}`;
+    if (prefix && !absolute.startsWith(prefix)) continue;
     if (found.has(absolute)) continue;
     const slug = decodeURIComponent(absolute.split("/").pop() ?? "");
     const reference = /^(\d+(?:\.\d+)*)[-_]/.exec(slug)?.[1];
@@ -824,6 +959,144 @@ export function topicNotesPages(
     return have.length >= 4 && (have.includes(wanted) || wanted.includes(have));
   });
   return byName.slice(0, MAX_TOPIC_PAGES);
+}
+
+/** The leaf pages of one set text or paper, in the index's own order. */
+export type CognitoTopicGroup = {
+  section: string;
+  links: CognitoTopicPageLink[];
+};
+
+/**
+ * Assigns a flat notes index to the outline's own sections.
+ *
+ * Literature restarts numbering for every set text (Macbeth 1.1 and Romeo &
+ * Juliet 1.1 are different pages), so a number alone cannot say which text a
+ * page belongs to. The outline is authoritative: its sections and subtopics
+ * are in document order and the index links are in the same order, so walking
+ * both in step assigns each link to its text. If the counts do not line up
+ * exactly the grouping is refused, and the caller must not guess by number.
+ */
+export function groupCognitoTopicLinks(
+  links: CognitoTopicPageLink[],
+  outline: CognitoOutline,
+): CognitoTopicGroup[] | null {
+  let cursor = 0;
+  const groups: CognitoTopicGroup[] = [];
+  for (const section of outline.sections) {
+    const expected = section.topics.flatMap((topic) =>
+      topic.subtopics.map((subtopic) => subtopic.reference),
+    );
+    if (expected.length === 0 || expected.some((reference) => !reference)) {
+      return null;
+    }
+    const start = cursor;
+    for (const reference of expected) {
+      const link = links[cursor];
+      if (!link || link.reference !== reference) return null;
+      cursor += 1;
+    }
+    groups.push({ section: section.title, links: links.slice(start, cursor) });
+  }
+  return cursor === links.length ? groups : null;
+}
+
+/** "1. Shakespeare" and "Shakespeare" are the same part. */
+function stripUnitNumber(title: string): string {
+  return title.replace(/^\d+[.)]?\s*/, "").trim();
+}
+
+const GROUP_STOPWORDS = new Set([
+  "the",
+  "and",
+  "of",
+  "a",
+  "an",
+  "anthology",
+  "poetry",
+  "section",
+  "part",
+  "paper",
+  "unit",
+  "revision",
+  "notes",
+]);
+
+function groupWords(value: string): Set<string> {
+  const words = new Set<string>();
+  for (const raw of value
+    .toLowerCase()
+    .replace(/[’']/g, "")
+    .split(/[^a-z0-9]+/)) {
+    if (raw.length < 3 || GROUP_STOPWORDS.has(raw)) continue;
+    words.add(
+      raw.length > 4 && raw.endsWith("s") && !raw.endsWith("ss")
+        ? raw.slice(0, -1)
+        : raw,
+    );
+  }
+  return words;
+}
+
+/**
+ * Whether a section is the topic itself. Literature names a poetry cluster
+ * "Power & Conflict" where Cognito names the section "Power & Conflict
+ * Anthology", so the structure words are ignored rather than requiring the
+ * titles to be identical.
+ */
+function sectionIsTopic(sectionTitle: string, topicTitle: string): boolean {
+  const wanted = groupWords(topicTitle);
+  if (wanted.size === 0) return false;
+  const have = groupWords(sectionTitle);
+  return [...wanted].every((word) => have.has(word));
+}
+
+/**
+ * The notes pages for one pathway topic, looked up inside its own part first.
+ *
+ * A topic that names the part itself (Literature's "Macbeth" under the
+ * Shakespeare part) gets that text's pages. Otherwise the topic's
+ * specification number selects its subtopics within the part, and only when
+ * that is unambiguous; a flat fallback is used for courses whose numbering is
+ * unique across the whole index.
+ */
+export function cognitoNotesPagesForTopic(
+  groups: CognitoTopicGroup[],
+  links: CognitoTopicPageLink[],
+  topic: { title: string; reference?: string },
+  unitTitle: string,
+): CognitoTopicPageLink[] {
+  const wanted = titleKey(topic.title);
+  const unit = titleKey(stripUnitNumber(unitTitle));
+
+  // The topic names the part itself (a set text, a poetry cluster): the whole
+  // part is this topic's notes.
+  const topicSection =
+    groups.find((group) => titleKey(group.section) === wanted) ??
+    groups.find((group) => sectionIsTopic(group.section, topic.title));
+  if (topicSection) return topicSection.links.slice(0, MAX_TOPIC_PAGES);
+
+  // Otherwise the unit names the part and the topic's number selects its
+  // subtopics inside it, so a repeated number in another text is never read.
+  const unitSection = groups.find((group) => titleKey(group.section) === unit);
+  if (unitSection) {
+    const reference = topic.reference?.trim();
+    if (reference) {
+      const under = unitSection.links.filter(
+        (link) =>
+          link.reference !== undefined &&
+          (link.reference === reference ||
+            link.reference.startsWith(`${reference}.`)),
+      );
+      if (under.length > 0) return under.slice(0, MAX_TOPIC_PAGES);
+    }
+    const exact = unitSection.links.filter(
+      (link) => titleKey(link.title) === wanted,
+    );
+    return exact.length === 1 ? exact : [];
+  }
+
+  return topicNotesPages(links, topic);
 }
 
 /**

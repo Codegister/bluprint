@@ -311,11 +311,17 @@ Each course has five sections: **Pathway**, **Specification**, **Notes**, **Prac
 papers and topic papers behind one toggle) and **Study sets**. **Specification** lists the
 course's spec points by unit, ticking each one once the material built for its topic covers
 it, so the tab doubles as the list of what is still missing.
-**Notes** reads each topic's notes in place,
-and it is the one place a course cannot be missing: where the subject publishes notes they
-are shown as published, and where it does not — Edexcel GCSE Religious Studies, AQA GCSE
-Spanish, and any topic whose note pages do not line up — Bluprint writes detailed notes
-from the specification and the panel says so. A study set opens on its **Overview**, which is
+**Notes** reads each topic's notes in place from both published sources: Save My Exams'
+exam-board cards lead and Cognito's cards fill the remaining slots, so a topic one site
+covers thinly still gets the other's detail. Each source is resolved to the exact course
+before anything is read — level, subject, board, tier, the Edexcel RS route, and for English
+Literature the chosen set text — and a redirect to a general notes hub is rejected rather
+than scraped. Cognito restarts its numbering for every set text, so its flat index is
+assigned to the outline's own sections before a topic is matched; an RE concept is matched
+only inside the named religion, and a partial name is left alone. Where neither source has
+a safe match — RS topics outside Save My Exams' own titles, AQA GCSE Spanish, and any topic
+whose pages do not line up — Bluprint writes detailed notes from the specification and the
+panel says so. A study set opens on its **Overview**, which is
 just the specification points the set was built from, each one ticked once cards or questions
 cover it; its tabs are **Flashcards**, **Quiz**, **Exam practice** and **Needs work** (when
 there is any). A set built from your own uploads has no specification to list, so its

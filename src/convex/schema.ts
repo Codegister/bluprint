@@ -588,10 +588,13 @@ const schema = defineSchema(
       origin: v.optional(
         v.union(
           v.literal("savemyexams"),
+          v.literal("combined"),
           v.literal("cognito"),
           v.literal("bluprint"),
         ),
       ),
+      // Which notes pipeline wrote this row; a missing version is re-read.
+      sourceVersion: v.optional(v.number()),
       fetchedAt: v.number(),
     }).index("by_course_topic", ["courseId", "topicId"]),
 
