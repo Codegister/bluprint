@@ -192,6 +192,22 @@ export type TutorTier = {
   model: string;
   maxTokens: number;
   temperature: number;
+  /**
+   * Whether the model thinks before it writes. The deeper levels do, because an
+   * answer that arrives before the student has finished reading the question
+   * reads as a canned one rather than a worked one.
+   */
+  thinking: boolean;
+  /** Hidden reasoning tokens the model may spend before the answer starts. */
+  thinkingTokens: number;
+  /**
+   * The shortest time the answer stays behind the thinking indicator.
+   *
+   * This is a floor, never an addition: a model that thinks for longer than
+   * this is not delayed at all. It exists because a very fast reply reads as
+   * low effort even when it is correct.
+   */
+  thinkingFloorMs: number;
 };
 
 /**
@@ -216,6 +232,11 @@ export const TUTOR_TIERS: TutorTier[] = [
     model: tierModel("NVIDIA_TUTOR_FAST_MODEL", "nvidia/nemotron-3.5-bolt-e4b"),
     maxTokens: 1100,
     temperature: 0.35,
+    // Fast means fast: no reasoning pass, and the answer appears as it is
+    // written. This is the level a student picks when they want a definition.
+    thinking: false,
+    thinkingTokens: 0,
+    thinkingFloorMs: 0,
   },
   {
     id: "balanced",
@@ -225,8 +246,15 @@ export const TUTOR_TIERS: TutorTier[] = [
     tagline: "Everyday default · steady detail",
     icon: "scale",
     model: tierModel("NVIDIA_TUTOR_BALANCED_MODEL", NVIDIA_TEXT_MODEL),
-    maxTokens: 1600,
+    // Reasoning and the visible answer share one `max_tokens` budget, so the
+    // ceiling is the thinking allowance plus room for a full answer. Spending
+    // 1,600 on both left almost nothing once the model thought.
+    maxTokens: 3200,
     temperature: 0.3,
+    thinking: true,
+    thinkingTokens: 1000,
+    // Enough to read as consideration, short enough not to feel stalled.
+    thinkingFloorMs: 1200,
   },
   {
     id: "deep",
@@ -239,8 +267,16 @@ export const TUTOR_TIERS: TutorTier[] = [
       "NVIDIA_TUTOR_DEEP_MODEL",
       tierModel("NVIDIA_TUTOR_POWERFUL_MODEL", "nvidia/nemotron-3-ultra-550b-a55b"),
     ),
-    maxTokens: 2600,
+    // The same rule as Balanced, sized for the largest model: a deep reasoning
+    // pass plus a long answer. Ultra is the slowest endpoint, so the cap stays
+    // inside the 90s stream timeout rather than spending the whole budget.
+    maxTokens: 5600,
     temperature: 0.25,
+    thinking: true,
+    thinkingTokens: 2000,
+    // Deep is the level chosen when the student wants effort, so it pauses
+    // noticeably longer than Balanced before the first word appears.
+    thinkingFloorMs: 3200,
   },
 ];
 

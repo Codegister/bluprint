@@ -8191,6 +8191,19 @@ function tidyTutorText(text: string): string {
 }
 
 /**
+ * The answer as the student should see it.
+ *
+ * A model with thinking on can print its reasoning inline when the endpoint has
+ * no reasoning parser. Closed blocks are removed, and an unclosed one hides
+ * everything after it, so the first snapshots never flash chain-of-thought.
+ */
+function visibleAnswer(text: string): string {
+  const closed = stripReasoning(text);
+  const open = closed.search(/<think(?:ing)?>|<thought>|<reasoning>/i);
+  return open >= 0 ? closed.slice(0, open) : closed;
+}
+
+/**
  * Reads an OpenAI-compatible server-sent-event chat stream, calling `onSnapshot`
  * roughly eight times a second with the text written so far. OpenRouter's web
  * plugin also streams url_citation annotations; those become the saved sources,
@@ -8252,13 +8265,14 @@ async function readChatStream(
       }
     }
 
-    if (answer && Date.now() - lastEmit > 120) {
+    const visible = visibleAnswer(answer);
+    if (visible && Date.now() - lastEmit > 120) {
       lastEmit = Date.now();
-      await onSnapshot(tidyTutorText(answer), sources);
+      await onSnapshot(tidyTutorText(visible), sources);
     }
   }
 
-  return { text: tidyTutorText(answer).trim(), sources };
+  return { text: tidyTutorText(visibleAnswer(answer)).trim(), sources };
 }
 
 /**
@@ -8279,12 +8293,17 @@ async function streamNvidiaAnswer(
   // so a tutor question still gets an answer.
   const models = modelChain(tier.model, textModelCandidates());
   let modelIndex = 0;
-  const maxAttempts = Math.max(
-    2,
-    Math.min(apiKeys.length + 1, 4),
-    Math.min(models.length, 3),
-  );
-  let thinkingDisabled = true;
+  const maxAttempts =
+    Math.max(
+      2,
+      Math.min(apiKeys.length + 1, 4),
+      Math.min(models.length, 3),
+    ) + (tier.thinking ? 2 : 0);
+  // Deep and Balanced think before they answer; Fast does not. A provider that
+  // rejects the thinking fields is downgraded rather than failing the question,
+  // which is why a thinking level is allowed more attempts below.
+  let thinkingOn = tier.thinking;
+  let thinkingBudget: number | null = thinkingOn ? tier.thinkingTokens : null;
   let lastStatus: number | null = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -8306,9 +8325,16 @@ async function streamNvidiaAnswer(
           top_p: 1,
           max_tokens: tier.maxTokens,
           stream: true,
-          ...(thinkingDisabled
-            ? { chat_template_kwargs: { enable_thinking: false } }
-            : {}),
+          // Reasoning models read this from their chat template. The budget
+          // caps the hidden thinking so the visible answer still has room.
+          ...(thinkingOn
+            ? {
+                chat_template_kwargs: { enable_thinking: true },
+                ...(thinkingBudget === null
+                  ? {}
+                  : { thinking_token_budget: thinkingBudget }),
+              }
+            : { chat_template_kwargs: { enable_thinking: false } }),
         }),
         signal: AbortSignal.timeout(90_000),
       });
@@ -8351,9 +8377,12 @@ async function streamNvidiaAnswer(
           await sleep(1000 * (attempt + 1));
           continue;
         }
-      } else if (response.status === 400 && thinkingDisabled) {
-        // The model does not understand the thinking flag; drop it and retry.
-        thinkingDisabled = false;
+      } else if (response.status === 400 && thinkingOn) {
+        // The model or the gateway does not take the thinking fields. Drop the
+        // budget first (some endpoints accept the flag alone), then thinking
+        // itself, so the student still gets an answer.
+        if (thinkingBudget !== null) thinkingBudget = null;
+        else thinkingOn = false;
         if (attempt < maxAttempts - 1) continue;
       } else {
         console.error(
@@ -8374,6 +8403,14 @@ async function streamNvidiaAnswer(
     const result = await readChatStream(response, onSnapshot);
     if (result.text.length > 0) {
       return { text: stripReasoning(result.text).trim(), sources: result.sources };
+    }
+    // Nothing visible came back: the model may have spent the whole budget on
+    // hidden thinking. Answer plainly on the next try rather than leaving the
+    // student with an empty reply.
+    if (thinkingOn) {
+      thinkingOn = false;
+      thinkingBudget = null;
+      if (attempt < maxAttempts - 1) continue;
     }
     if (attempt < maxAttempts - 1) continue;
     throw providerError(
@@ -8445,6 +8482,28 @@ function sourcesFrom(results: WebResult[]): StreamSource[] {
 }
 
 /**
+ * Holds the first visible words back until the level's thinking floor passes.
+ *
+ * The chat shows a thinking indicator while a streaming reply has no text yet,
+ * so this keeps a suspiciously instant answer behind that indicator long enough
+ * to read as considered. Only the first write waits, and only for the time left
+ * on the floor, so a model that genuinely took its time is never slowed.
+ */
+function pacedSnapshot(onSnapshot: Snapshot, floorMs: number): Snapshot {
+  if (floorMs <= 0) return onSnapshot;
+  const visibleAt = Date.now() + floorMs;
+  let released = false;
+  return async (text, sources) => {
+    if (!released) {
+      released = true;
+      const wait = visibleAt - Date.now();
+      if (wait > 0) await sleep(wait);
+    }
+    await onSnapshot(text, sources);
+  };
+}
+
+/**
  * Answers as the tutor, streaming into `onSnapshot`.
  *
  * With web access on, the free sources are searched first: Wikipedia, Wikibooks,
@@ -8464,12 +8523,15 @@ async function streamTutorAnswer(
   onSnapshot: Snapshot,
   agentNote?: string,
 ): Promise<StreamResult> {
+  // Deep and Balanced hold the first words behind the thinking indicator; Fast
+  // streams straight through.
+  const paced = pacedSnapshot(onSnapshot, tier.thinkingFloorMs);
   if (!useWeb) {
     return await streamNvidiaAnswer(
       apiKeys,
       tutorPrompt(context, question, [], "off", agentNote),
       tier,
-      onSnapshot,
+      paced,
     );
   }
 
@@ -8482,7 +8544,7 @@ async function streamTutorAnswer(
       apiKeys,
       tutorPrompt(context, question, [], "empty", agentNote),
       tier,
-      onSnapshot,
+      paced,
     );
   }
 
@@ -8494,7 +8556,7 @@ async function streamTutorAnswer(
       apiKeys,
       tutorPrompt(context, question, results, "sources", agentNote),
       tier,
-      onSnapshot,
+      paced,
     );
     return { text: grounded.text, sources: sourcesFrom(results) };
   }
@@ -8503,7 +8565,7 @@ async function streamTutorAnswer(
     return await streamWebAnswer(
       tutorPrompt(context, question, [], "browsing", agentNote),
       tier,
-      onSnapshot,
+      paced,
     );
   } catch (error) {
     // A stopped reply is not a web failure: never retry it on another provider.
@@ -8515,7 +8577,7 @@ async function streamTutorAnswer(
       apiKeys,
       tutorPrompt(context, question, [], "empty", agentNote),
       tier,
-      onSnapshot,
+      paced,
     );
   }
 }

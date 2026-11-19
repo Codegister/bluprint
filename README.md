@@ -674,6 +674,16 @@ The three tutor levels are Fast, Balanced and Deep; `NVIDIA_TUTOR_POWERFUL_MODEL
 older extra tier names are still read where present, but new deployments only need the
 three above.
 
+Fast answers directly. Balanced and Deep think first: the request sets
+`chat_template_kwargs.enable_thinking` with a `thinking_token_budget` of 1,000 and 2,000
+tokens. Hidden thinking and the visible answer share one `max_tokens` ceiling, so those
+levels also raise it (3,200 and 5,600) to leave the answer room after the reasoning. Both
+levels hold their first visible words behind the chat's thinking indicator for a moment
+(1.2s and 3.2s) so an instant answer still reads as a considered one; the wait is a floor,
+never an addition, so a model that already took longer is not delayed. If a provider
+rejects the thinking fields, the tutor drops the budget, then thinking, and answers
+anyway.
+
 Set overrides on the Convex deployment the same way as `NVIDIA_API_KEY`. A retired model id
 is skipped before a request is made: `/src/convex/lib/nvidiaConfig.ts` keeps a short list of
 withdrawn ids and replaces them with a checked fallback. Study-set generation has its own

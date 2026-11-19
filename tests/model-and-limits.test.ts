@@ -3,7 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   isRetiredModel,
   liveModel,
+  readTutorTier,
   textModelCandidates,
+  TUTOR_TIER_DETAILS,
   NVIDIA_TEXT_FALLBACK_MODELS,
 } from "../src/convex/lib/nvidiaConfig";
 import {
@@ -46,6 +48,47 @@ describe("current AI models", () => {
     const candidates = textModelCandidates();
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates.every((model) => !isRetiredModel(model))).toBe(true);
+  });
+});
+
+describe("tutor levels", () => {
+  const fast = readTutorTier("Fast");
+  const balanced = readTutorTier("Balanced");
+  const deep = readTutorTier("Deep");
+
+  test("Fast answers without a reasoning pass so it stays quick", () => {
+    expect(fast.thinking).toBe(false);
+    expect(fast.thinkingFloorMs).toBe(0);
+  });
+
+  test("Balanced and Deep think before answering", () => {
+    for (const tier of [balanced, deep]) {
+      expect(tier.thinking).toBe(true);
+      expect(tier.thinkingTokens).toBeGreaterThanOrEqual(1000);
+      expect(tier.thinkingFloorMs).toBeGreaterThan(0);
+    }
+    expect(deep.thinkingTokens).toBeGreaterThan(balanced.thinkingTokens);
+  });
+
+  test("reasoning and the answer fit inside the level's token ceiling", () => {
+    for (const tier of [balanced, deep]) {
+      // Reasoning and visible output share one `max_tokens` budget, so the
+      // ceiling must also leave room for the answer itself.
+      expect(tier.maxTokens).toBeGreaterThanOrEqual(tier.thinkingTokens + 1000);
+    }
+  });
+
+  test("a level label can be resolved back to its own tier", () => {
+    expect(balanced.label).toBe("Balanced");
+    expect(deep.id).toBe("deep");
+    expect(readTutorTier("nonsense").id).toBe(balanced.id);
+    expect(readTutorTier(undefined).id).toBe(balanced.id);
+  });
+
+  test("the browser is only given labels, not models or budgets", () => {
+    for (const detail of TUTOR_TIER_DETAILS) {
+      expect(Object.keys(detail).sort()).toEqual(["icon", "label", "tagline"]);
+    }
   });
 });
 
