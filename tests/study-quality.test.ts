@@ -8,6 +8,7 @@ import {
   MAX_CARD_BACK_CHARS,
   cardNeedsRepair,
   cleanExplanation,
+  dedupeExamQuestions,
   explanationLeaksAnswer,
   explanationTeaches,
   repairQuizExplanation,
@@ -733,5 +734,46 @@ describe("Part 5 — fixture sign-off", () => {
     );
     expect(error).toContain("33");
     expect(error).toContain("40");
+  });
+
+  test("reworded exam questions are the same retrieval task", () => {
+    const questions = [
+      {
+        question:
+          "Explain how Duffy presents the mother's lost freedom in 'Before You Were Mine'.",
+        modelAnswer: "Duffy presents the mother's lost freedom through …",
+      },
+      {
+        question:
+          "Explain how Duffy presents the theme of lost freedom in 'Before You Were Mine'.",
+        modelAnswer: "Duffy presents lost freedom as a theme through …",
+      },
+      {
+        question:
+          "How does Duffy use the verb 'possessive' to present the speaker's feelings?",
+        modelAnswer: "The verb suggests ownership rather than affection …",
+      },
+    ];
+    const kept = dedupeExamQuestions(questions);
+    expect(kept).toHaveLength(2);
+    expect(kept[1]!.question).toContain("possessive");
+  });
+
+  test("an exam question already in the set is not added again", () => {
+    const existing = [
+      {
+        question:
+          "Explain how Duffy presents the mother's lost freedom in 'Before You Were Mine'.",
+        modelAnswer: "Duffy presents the mother's lost freedom through …",
+      },
+    ];
+    const incoming = [
+      {
+        question:
+          "Explain how Duffy presents the theme of lost freedom in 'Before You Were Mine'.",
+        modelAnswer: "Duffy presents lost freedom as a theme through …",
+      },
+    ];
+    expect(dedupeExamQuestions(incoming, existing)).toHaveLength(0);
   });
 });

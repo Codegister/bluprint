@@ -45,7 +45,9 @@ import {
   MAX_CARD_BACK_CHARS,
   MAX_CARD_FRONT_CHARS,
   cardNeedsRepair,
+  dedupeExamQuestions,
   gradeQuizResponse,
+  isNearDuplicateStudyItem,
   keyPointsForCards,
   linkKeyPointsToSpecs,
   prepareCards,
@@ -1881,13 +1883,32 @@ export const appendCards = internalMutation({
       .collect();
     const specPoints = set.specPoints ?? [];
     const seen = new Set(existing.map((row) => row.front.trim().toLowerCase()));
+    // Batches arrive from different sections of the same pathway, so an exact
+    // front is not enough: two sections can ask the same fact in different
+    // words. Compare against the saved deck and this batch's accepted cards.
+    const accepted = existing.map((row) => ({
+      front: row.front,
+      back: row.back,
+    }));
     const offset = existing.length;
     const now = Date.now();
     let added = 0;
     for (const card of cards) {
       const key = card.front.trim().toLowerCase();
-      if (!key || seen.has(key)) continue;
+      if (
+        !key ||
+        seen.has(key) ||
+        accepted.some((previous) =>
+          isNearDuplicateStudyItem(
+            { prompt: previous.front, answer: previous.back },
+            { prompt: card.front, answer: card.back },
+          ),
+        )
+      ) {
+        continue;
+      }
       seen.add(key);
+      accepted.push({ front: card.front, back: card.back });
       await ctx.db.insert("flashcards", {
         setId,
         userId: set.userId,
@@ -2128,9 +2149,9 @@ export const completeGeneration = internalMutation({
       const excessQuiz = quizRows.slice(requested.quiz);
       for (const row of excessQuiz) await ctx.db.delete(row._id);
       const quizTotal = quizRows.length - excessQuiz.length;
-      const storedExams = exams
-        .map((question) => cleanGeneratedText(question, set.level, set.course))
-        .slice(0, requested.exams);
+      const storedExams = dedupeExamQuestions(
+        exams.map((question) => cleanGeneratedText(question, set.level, set.course)),
+      ).slice(0, requested.exams);
       for (const [index, question] of storedExams.entries()) {
         await ctx.db.insert("examQuestions", {
           setId,
@@ -2263,13 +2284,26 @@ export const completeGeneration = internalMutation({
     const storedQuiz = quiz.map((question) =>
       cleanGeneratedText(question, level, subject),
     );
-    const storedExams = exams.map((question) =>
-      cleanGeneratedText(question, level, subject),
+    const storedExams = dedupeExamQuestions(
+      exams.map((question) => cleanGeneratedText(question, level, subject)),
+      preservedExams,
     );
 
     // A card is a fact from the notes, not a copy of them. This pass grounds,
     // shortens and deduplicates the deck before any count is written.
-    const { cards: contentCards } = prepareCards(storedCards, set.notes);
+    const { cards: preparedCards } = prepareCards(storedCards, set.notes);
+    // A text build checkpoints batch by batch. Later batches must not restate
+    // a card that an earlier batch already saved, or a small set can grow into
+    // a long deck of paraphrases.
+    const contentCards = preparedCards.filter(
+      (card) =>
+        !preservedCards.some((row) =>
+          isNearDuplicateStudyItem(
+            { prompt: row.front, answer: row.back },
+            { prompt: card.front, answer: card.back },
+          ),
+        ),
+    );
     const allCards = [...preservedCards, ...contentCards];
     // The summary and the deck cannot disagree: one key point per card, in the
     // same order, each derived from that card's question and answer.

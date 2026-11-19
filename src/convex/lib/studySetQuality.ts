@@ -145,7 +145,9 @@ function studyStem(word: string): string {
 function studyWords(text: string): string[] {
   return normalizeAnswer(text)
     .split(" ")
-    .filter((word) => word.length > 0 && !STUDY_STOP_WORDS.has(word))
+    // "mother's" normalises to "mother s"; the orphan possessive token would
+    // otherwise dilute the overlap between two questions about the same idea.
+    .filter((word) => word.length > 0 && word !== "s" && !STUDY_STOP_WORDS.has(word))
     .map(studyStem);
 }
 
@@ -232,6 +234,38 @@ export function isNearDuplicateStudyItem(
  * specification are rejected before the duplicate check, so a meta question
  * can never displace a real content question that happened to be later.
  */
+/**
+ * Keeps the first exam question of each near-duplicate pair.
+ *
+ * Exam stems and model answers are long, so two questions that differ by a
+ * phrase ("the mother's lost freedom" / "the theme of lost freedom") are the
+ * same retrieval task. The exact-prompt set the generator used to keep let
+ * both through, and the marking guides made the repetition expensive.
+ */
+export function dedupeExamQuestions<
+  T extends { question: string; modelAnswer: string },
+>(
+  items: readonly T[],
+  existing: ReadonlyArray<{ question: string; modelAnswer: string }> = [],
+): T[] {
+  const kept: T[] = [];
+  for (const item of items) {
+    const candidate = { prompt: item.question, answer: item.modelAnswer };
+    if (
+      [...existing, ...kept].some((previous) =>
+        isNearDuplicateStudyItem(
+          { prompt: previous.question, answer: previous.modelAnswer },
+          candidate,
+        ),
+      )
+    ) {
+      continue;
+    }
+    kept.push(item);
+  }
+  return kept;
+}
+
 export function dedupeStudyItems<T>(
   items: readonly T[],
   promptOf: (item: T) => string,

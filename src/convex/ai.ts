@@ -67,6 +67,7 @@ import {
 } from "./lib/recall";
 import { cleanGeneratedText } from "./lib/register";
 import {
+  dedupeExamQuestions,
   isNearDuplicateStudyItem,
   keyPointsForCards,
   prepareCards,
@@ -2095,7 +2096,6 @@ async function generateExams(
 ): Promise<GeneratedExam[]> {
   const qualification = qualificationText(context);
   const exams: GeneratedExam[] = [];
-  const seen = new Set<string>();
 
   const maxAttempts = Math.min(14, Math.ceil(target / EXAM_BATCH_SIZE) + 2);
   for (
@@ -2191,15 +2191,12 @@ async function generateExams(
           })
           .filter((exam): exam is GeneratedExam => exam !== null);
 
-    let added = 0;
-    for (const exam of supported) {
-      const key = exam.question.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      exams.push(exam);
-      added += 1;
-      if (exams.length >= target) break;
-    }
+    const accepted = dedupeExamQuestions(supported, exams).slice(
+      0,
+      Math.max(0, target - exams.length),
+    );
+    const added = accepted.length;
+    exams.push(...accepted);
     if (added > 0) {
       // Persist before reporting, exactly like the card batches.
       await onExamsAccepted?.(exams.slice());
@@ -2248,15 +2245,8 @@ async function generatePathwayExams(
   const scopes = pathwaySectionScopes(notes, target);
   if (scopes.length === 0) return [];
 
-  const uniqueExams = (items: readonly GeneratedExam[]) => {
-    const seen = new Set<string>();
-    return items.filter((exam) => {
-      const key = normalizeAnswer(exam.question);
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  };
+  const uniqueExams = (items: readonly GeneratedExam[]) =>
+    dedupeExamQuestions(items);
 
   const run = await runPathwayBatches({
     scopes,
@@ -2295,13 +2285,7 @@ async function generatePathwayExams(
 
   // Sections can occasionally meet at the same broad question. Keep the first
   // copy here; completeGeneration makes the final storage decision.
-  const seen = new Set<string>();
-  const unique = run.items.filter((exam) => {
-    const key = normalizeAnswer(exam.question);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const unique = dedupeExamQuestions(run.items);
   if (unique.length < target) {
     console.error("Pathway exam short after deduplication", {
       target,
