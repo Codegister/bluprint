@@ -1980,16 +1980,40 @@ body {
   color: var(--danger-ink) !important;
 }
 
-:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[class*="w-full"][class*="bg-brand-panel"] {
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[data-selected="true"] {
   border-color: color-mix(in srgb, var(--signal) 55%, var(--desk-line)) !important;
   background: color-mix(in srgb, var(--signal) 8%, var(--desk-raised)) !important;
   color: var(--desk-ink) !important;
 }
 
-:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[class*="w-full"][class*="bg-brand-panel"] span:first-child {
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card button[data-selected="true"] span:first-child {
   border-color: var(--signal) !important;
   background: var(--signal) !important;
   color: var(--signal-ink) !important;
+}
+
+/* The verdict box follows the same success/danger pair as the option rows. */
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card [data-feedback] {
+  border: 1px solid transparent;
+  border-radius: 9px !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card [data-feedback="correct"] {
+  border-color: var(--success-line) !important;
+  background: var(--success-wash) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card [data-feedback="incorrect"] {
+  border-color: var(--danger-line) !important;
+  background: var(--danger-wash) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card [data-feedback-text="correct"] {
+  color: var(--success-ink) !important;
+}
+
+:is(#root, #preview-root) .set-screen[data-section="quiz"] .surface-card [data-feedback-text="incorrect"] {
+  color: var(--danger-ink) !important;
 }
 
 .set-screen[data-section="quiz"] .surface-card > div:last-child button {

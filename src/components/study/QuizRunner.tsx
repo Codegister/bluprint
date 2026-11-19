@@ -396,6 +396,8 @@ export function QuizRunner({
                   key={option}
                   type="button"
                   disabled={checked}
+                  aria-pressed={isSelected}
+                  data-selected={!checked && isSelected ? "true" : undefined}
                   onClick={() => setSelected(optionIndex)}
                   transition={SPRING}
                   className={cn(
@@ -463,10 +465,12 @@ export function QuizRunner({
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: EASE }}
+            data-feedback={correct ? "correct" : "incorrect"}
             className={cn("mt-4 rounded-2xl p-4", correct ? "bg-[#E9FBF3]" : "bg-[#FFEEF0]")}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p
+                data-feedback-text={correct ? "correct" : "incorrect"}
                 className={cn(
                   "text-xs font-semibold",
                   correct ? "text-success" : "text-danger",
