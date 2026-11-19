@@ -107,6 +107,7 @@ export const listMessages = query({
       streaming: row.streaming ?? false,
       stopped: row.stopped ?? false,
       sources: row.sources ?? [],
+      reasoning: row.reasoning ?? "",
       builtSetId: row.builtSetId,
       builtSetIds: replySetIds(row),
     }));
@@ -195,6 +196,7 @@ export const listCourseMessages = query({
         streaming: row.streaming ?? false,
         stopped: row.stopped ?? false,
         sources: row.sources ?? [],
+        reasoning: row.reasoning ?? "",
         builtSetId: row.builtSetId,
         builtSetIds: replySetIds(row),
       }),
@@ -306,6 +308,7 @@ export const listLibraryMessages = query({
       streaming: row.streaming ?? false,
       stopped: row.stopped ?? false,
       sources: row.sources ?? [],
+      reasoning: row.reasoning ?? "",
       builtSetId: row.builtSetId,
       builtSetIds: replySetIds(row),
     }));
@@ -424,6 +427,9 @@ export const getTutorBuildCourses = internalQuery({
  */
 const MAX_ANSWER_CHARS = 8000;
 const MAX_QUESTION_CHARS = 1200;
+// Richer than the answer: a hard Deep question measured 7,500 characters of
+// thinking, and a longer pass is still worth keeping for the disclosure.
+const MAX_REASONING_CHARS = 16_000;
 
 /** Persists the question and opens an empty reply for the streaming action. */
 export const beginTutorExchange = internalMutation({
@@ -477,13 +483,19 @@ export const appendTutorAnswer = internalMutation({
     messageId: v.id("tutorMessages"),
     content: v.string(),
     sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
+    // The model's thinking so far. Sent even when empty, so a retry without
+    // thinking clears reasoning left by the attempt before it.
+    reasoning: v.optional(v.string()),
   },
-  handler: async (ctx, { messageId, content, sources }) => {
+  handler: async (ctx, { messageId, content, sources, reasoning }) => {
     const row = await ctx.db.get(messageId);
     if (!row || !row.streaming) return { stopped: true };
     await ctx.db.patch(messageId, {
       content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
+      ...(reasoning === undefined
+        ? {}
+        : { reasoning: normalizeAnswerText(reasoning, MAX_REASONING_CHARS) }),
     });
     return { stopped: false };
   },
@@ -579,13 +591,17 @@ export const appendCourseTutorAnswer = internalMutation({
     messageId: v.id("courseTutorMessages"),
     content: v.string(),
     sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
+    reasoning: v.optional(v.string()),
   },
-  handler: async (ctx, { messageId, content, sources }) => {
+  handler: async (ctx, { messageId, content, sources, reasoning }) => {
     const row = await ctx.db.get(messageId);
     if (!row || !row.streaming) return { stopped: true };
     await ctx.db.patch(messageId, {
       content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
+      ...(reasoning === undefined
+        ? {}
+        : { reasoning: normalizeAnswerText(reasoning, MAX_REASONING_CHARS) }),
     });
     return { stopped: false };
   },
@@ -649,13 +665,17 @@ export const appendLibraryTutorAnswer = internalMutation({
     messageId: v.id("libraryTutorMessages"),
     content: v.string(),
     sources: v.optional(v.array(v.object({ title: v.string(), url: v.string() }))),
+    reasoning: v.optional(v.string()),
   },
-  handler: async (ctx, { messageId, content, sources }) => {
+  handler: async (ctx, { messageId, content, sources, reasoning }) => {
     const row = await ctx.db.get(messageId);
     if (!row || !row.streaming) return { stopped: true };
     await ctx.db.patch(messageId, {
       content: normalizeAnswerText(content, MAX_ANSWER_CHARS),
       ...(sources === undefined ? {} : { sources: sanitizeTutorSources(sources) }),
+      ...(reasoning === undefined
+        ? {}
+        : { reasoning: normalizeAnswerText(reasoning, MAX_REASONING_CHARS) }),
     });
     return { stopped: false };
   },

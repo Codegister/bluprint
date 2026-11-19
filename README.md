@@ -684,6 +684,11 @@ never an addition, so a model that already took longer is not delayed. If a prov
 rejects the thinking fields, the tutor drops the budget, then thinking, and answers
 anyway.
 
+The tutor keeps whatever reasoning the model produced on the reply row (`reasoning` on the three
+`*TutorMessages` tables, capped at 16,000 characters) and shows it behind a collapsed
+**Reasoning** disclosure under each assistant message, labelled “thinking…” while it is still
+streaming. Fast answers and older replies have none, so the block is simply absent.
+
 Deep's stream may stay open for 120s; the other levels keep 90s. Measured against the
 real endpoint on a hard A-level proof, a 2,000-token pass finished in 35–47s but a
 3,500-token pass took 64s, so the budget stays at 2,000 and the window is what grows:

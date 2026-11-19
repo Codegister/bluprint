@@ -24,7 +24,14 @@ import { cn } from "@/lib/utils";
 import { useAiAvailability } from "@/lib/useAiAvailability";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowRight, Check, Globe, Sparkles, Square } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Globe,
+  Sparkles,
+  Square,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
@@ -57,6 +64,39 @@ function hostOf(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * The tutor's own thinking, folded away under the answer.
+ *
+ * Closed by default: the answer is what a student came for, and this is there
+ * for when they want to check how it was reached. Fast answers have none, and
+ * the block never appears when the model produced no reasoning.
+ */
+function ReasoningDetails({
+  reasoning,
+  streaming,
+}: {
+  reasoning: string;
+  streaming: boolean;
+}) {
+  return (
+    <details className="group mt-2.5 rounded-xl border border-brand-sky/20 bg-white/70 px-3 py-2 open:bg-white">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[0.74rem] font-semibold text-brand-ink/70 [&::-webkit-details-marker]:hidden">
+        <ChevronDown
+          className="size-3.5 shrink-0 transition-transform group-open:rotate-180"
+          aria-hidden
+        />
+        Reasoning
+        <span className="font-normal text-muted-foreground">
+          {streaming ? "· thinking…" : "· how the tutor got there"}
+        </span>
+      </summary>
+      <p className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap border-t border-border/60 pt-2 text-[0.76rem] leading-relaxed text-muted-foreground">
+        {reasoning}
+      </p>
+    </details>
+  );
 }
 
 /** Numbered links that match the [1], [2] citations in an answer. */
@@ -478,6 +518,13 @@ export function TutorChat({
                             : "Thinking…"}
                       </span>
                     )}
+                    {message.role === "assistant" &&
+                      (message.reasoning ?? "").trim().length > 0 && (
+                        <ReasoningDetails
+                          reasoning={message.reasoning ?? ""}
+                          streaming={message.streaming === true}
+                        />
+                      )}
                   </div>
                   {message.role === "assistant" && !message.streaming && (
                     <div className="max-w-[86%]">

@@ -8175,9 +8175,18 @@ function tutorPrompt(
 type StreamSource = { title: string; url: string };
 
 /** What one streamed answer produced. */
-type StreamResult = { text: string; sources: StreamSource[] };
+type StreamResult = {
+  text: string;
+  sources: StreamSource[];
+  /** The model's own thinking, when the level produced any. */
+  reasoning: string;
+};
 
-type Snapshot = (fullText: string, sources: StreamSource[]) => Promise<void>;
+type Snapshot = (
+  fullText: string,
+  sources: StreamSource[],
+  reasoning: string,
+) => Promise<void>;
 
 /**
  * The chat renders plain text, so markdown links and emphasis are flattened.
@@ -8220,6 +8229,9 @@ async function readChatStream(
   const sources: StreamSource[] = [];
   let buffer = "";
   let answer = "";
+  // Reasoning models stream their thinking in a separate field. It is kept for
+  // the reply's "Reasoning" disclosure, never mixed into the answer.
+  let reasoning = "";
   let lastEmit = 0;
 
   const addSource = (candidate: unknown) => {
@@ -8252,8 +8264,13 @@ async function readChatStream(
           }>;
         };
         const choice = payload.choices?.[0];
-        const piece = choice?.delta?.content;
+        const delta = choice?.delta as
+          | { content?: string; reasoning_content?: string; reasoning?: string }
+          | undefined;
+        const piece = delta?.content;
         if (typeof piece === "string" && piece) answer += piece;
+        const thought = delta?.reasoning_content ?? delta?.reasoning;
+        if (typeof thought === "string" && thought) reasoning += thought;
         for (const annotation of [
           ...(choice?.delta?.annotations ?? []),
           ...(choice?.message?.annotations ?? []),
@@ -8266,13 +8283,17 @@ async function readChatStream(
     }
 
     const visible = visibleAnswer(answer);
-    if (visible && Date.now() - lastEmit > 120) {
+    if ((visible || reasoning) && Date.now() - lastEmit > 120) {
       lastEmit = Date.now();
-      await onSnapshot(tidyTutorText(visible), sources);
+      await onSnapshot(tidyTutorText(visible), sources, reasoning.trim());
     }
   }
 
-  return { text: tidyTutorText(visibleAnswer(answer)).trim(), sources };
+  return {
+    text: tidyTutorText(visibleAnswer(answer)).trim(),
+    sources,
+    reasoning: reasoning.trim(),
+  };
 }
 
 /**
@@ -8404,7 +8425,11 @@ async function streamNvidiaAnswer(
 
     const result = await readChatStream(response, onSnapshot);
     if (result.text.length > 0) {
-      return { text: stripReasoning(result.text).trim(), sources: result.sources };
+      return {
+        text: stripReasoning(result.text).trim(),
+        sources: result.sources,
+        reasoning: result.reasoning,
+      };
     }
     // Nothing visible came back: the model may have spent the whole budget on
     // hidden thinking. Answer plainly on the next try rather than leaving the
@@ -8495,13 +8520,15 @@ function pacedSnapshot(onSnapshot: Snapshot, floorMs: number): Snapshot {
   if (floorMs <= 0) return onSnapshot;
   const visibleAt = Date.now() + floorMs;
   let released = false;
-  return async (text, sources) => {
-    if (!released) {
+  return async (text, sources, reasoning) => {
+    // The reasoning is shown behind its own disclosure, so it is never held
+    // back: a student who opens it during the wait sees the real thinking.
+    if (!released && text) {
       released = true;
       const wait = visibleAt - Date.now();
       if (wait > 0) await sleep(wait);
     }
-    await onSnapshot(text, sources);
+    await onSnapshot(text, sources, reasoning);
   };
 }
 
@@ -8560,7 +8587,11 @@ async function streamTutorAnswer(
       tier,
       paced,
     );
-    return { text: grounded.text, sources: sourcesFrom(results) };
+    return {
+      text: grounded.text,
+      sources: sourcesFrom(results),
+      reasoning: grounded.reasoning,
+    };
   }
 
   try {
@@ -8905,10 +8936,11 @@ export const askTutor = action({
         // Off unless the browser explicitly asks for it.
         useWeb === true,
         chosenTier,
-        async (content, sources) => {
+        async (content, sources, reasoning) => {
           const saved = await ctx.runMutation(internal.tutor.appendTutorAnswer, {
             messageId,
             content,
+            reasoning,
             ...(sources.length > 0 ? { sources } : {}),
           });
           if (saved.stopped) throw new TutorStopped();
@@ -8921,6 +8953,7 @@ export const askTutor = action({
       await ctx.runMutation(internal.tutor.appendTutorAnswer, {
         messageId,
         content: result.text,
+        reasoning: result.reasoning,
         ...(result.sources.length > 0 ? { sources: result.sources } : {}),
       });
       await ctx.runMutation(internal.tutor.finishTutorExchange, { messageId });
@@ -9036,10 +9069,11 @@ export const askCourseTutor = action({
         // Off unless the browser explicitly asks for it.
         useWeb === true,
         chosenTier,
-        async (content, sources) => {
+        async (content, sources, reasoning) => {
           const saved = await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
             messageId,
             content,
+            reasoning,
             ...(sources.length > 0 ? { sources } : {}),
           });
           if (saved.stopped) throw new TutorStopped();
@@ -9050,6 +9084,7 @@ export const askCourseTutor = action({
       await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
         messageId,
         content: result.text,
+        reasoning: result.reasoning,
         ...(result.sources.length > 0 ? { sources: result.sources } : {}),
       });
       await ctx.runMutation(internal.tutor.finishCourseTutorExchange, {
@@ -9164,10 +9199,11 @@ export const askLibraryTutor = action({
         modelQuestion,
         useWeb === true,
         chosenTier,
-        async (content, sources) => {
+        async (content, sources, reasoning) => {
           const saved = await ctx.runMutation(internal.tutor.appendLibraryTutorAnswer, {
             messageId,
             content,
+            reasoning,
             ...(sources.length > 0 ? { sources } : {}),
           });
           if (saved.stopped) throw new TutorStopped();
@@ -9178,6 +9214,7 @@ export const askLibraryTutor = action({
       await ctx.runMutation(internal.tutor.appendLibraryTutorAnswer, {
         messageId,
         content: result.text,
+        reasoning: result.reasoning,
         ...(result.sources.length > 0 ? { sources: result.sources } : {}),
       });
       await ctx.runMutation(internal.tutor.finishLibraryTutorExchange, {

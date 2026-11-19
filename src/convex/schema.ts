@@ -957,6 +957,10 @@ const schema = defineSchema(
       userId: v.id("users"),
       role: v.union(v.literal("user"), v.literal("assistant")),
       content: v.string(),
+      // The model's own thinking, when the level produced any. The chat shows it
+      // behind a collapsed “Reasoning” disclosure; optional because Fast answers
+      // and older replies have none.
+      reasoning: v.optional(v.string()),
       createdAt: v.number(),
       // True while the reply is still being written token by token. The chat
       // renders the growing content live and shows a caret.
@@ -983,6 +987,10 @@ const schema = defineSchema(
       unitTitle: v.optional(v.string()),
       role: v.union(v.literal("user"), v.literal("assistant")),
       content: v.string(),
+      // The model's own thinking, when the level produced any. The chat shows it
+      // behind a collapsed “Reasoning” disclosure; optional because Fast answers
+      // and older replies have none.
+      reasoning: v.optional(v.string()),
       createdAt: v.number(),
       streaming: v.optional(v.boolean()),
       stopped: v.optional(v.boolean()),
@@ -1001,6 +1009,10 @@ const schema = defineSchema(
       userId: v.id("users"),
       role: v.union(v.literal("user"), v.literal("assistant")),
       content: v.string(),
+      // The model's own thinking, when the level produced any. The chat shows it
+      // behind a collapsed “Reasoning” disclosure; optional because Fast answers
+      // and older replies have none.
+      reasoning: v.optional(v.string()),
       createdAt: v.number(),
       streaming: v.optional(v.boolean()),
       stopped: v.optional(v.boolean()),
