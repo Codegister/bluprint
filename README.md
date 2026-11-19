@@ -909,6 +909,11 @@ same rate-limit messages as the rest of the app.
   a second line of defence: generated cards, quiz questions and exam questions about essay
   structure are dropped even when a content brief mentions technique. The version bump to 5
   rebuilds stored courses, so existing pathways are cleaned up without touching student sets.
+- A rebuild is reproducible. It re-reads the source the course was built from — Save My
+  Exams or Cognito, never the other site's different unit/topic structure — retries a dropped
+  request, and keeps the stored map if that source cannot be reached. The paper split and
+  sync stamp are preserved, and a rebuild whose scraped map is identical leaves the course and
+  its cached notes untouched instead of rewriting them.
 - AQA GCSE Biology (8461) does not use a notes-site index at all. Its pathway is a checked
   specification map in AQA's own 4.x numbering, with active transport and the required
   practicals, and no "Exam Skills" part. The course page states which source a pathway

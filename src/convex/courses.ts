@@ -10,6 +10,7 @@ import {
 } from "./_generated/server";
 import { BUILD_DEFAULTS, clampBuildCount } from "./lib/buildDefaults";
 import { withinNoteLimit } from "./lib/noteLimits";
+import { samePathway } from "./lib/pathwayIdentity";
 import { isExamTechniqueTitle } from "./lib/pathwaySkills";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
 import {
@@ -1603,6 +1604,20 @@ export const completeBuild = internalMutation({
   handler: async (ctx, { courseId, pathway }) => {
     const course = await ctx.db.get(courseId);
     if (!course) throw new Error("Course not found.");
+
+    // A rebuild of unchanged published content is a no-op. Rewriting the map
+    // would drop every cached note and past-paper list for no reason, so the
+    // same course would look different after a rebuild that changed nothing.
+    if (course.pathway && samePathway(course.pathway, pathway)) {
+      await ctx.db.patch(courseId, {
+        status: "ready",
+        progress: undefined,
+        errorMessage: undefined,
+        processingStartedAt: undefined,
+        updatedAt: Date.now(),
+      });
+      return;
+    }
 
     // Preserve tick-offs across a rebuild by matching topic titles, not
     // positional ids — a regenerated map may reorder units.

@@ -3305,7 +3305,7 @@ function filterLiteratureOutline(
  * no model is consulted, so a pathway cannot contain an invented topic or miss
  * a published one. The AI is used later, to build a study set from a topic.
  */
-function buildPathwayFromOutline(
+export function buildPathwayFromOutline(
   course: PathwayCourse,
   rawOutline: CourseOutline,
 ): CoursePathway {
@@ -3394,11 +3394,20 @@ async function scrapeSaveMyExamsPathway(
     ...(course.variant ? { variant: course.variant } : {}),
     ...(course.rsRoute ? { rsRoute: course.rsRoute } : {}),
   });
+  // "Unavailable" is a network failure, not a missing course. It is raised so
+  // the build retries this same source instead of quietly changing the map to
+  // whichever other site answered.
+  if (resolved.status === "unavailable") {
+    throw new Error("Save My Exams could not be reached just now.");
+  }
   if (resolved.status !== "matched") return null;
 
   const indexes: SaveMyExamsNotesIndex[] = [];
   for (const path of resolved.course.notesIndexPaths) {
     const page = await fetchSaveMyExamsPage(path);
+    if (page.status === "error") {
+      throw new Error("The published outline could not be reached just now.");
+    }
     if (page.status !== "ok") return null;
     const index = parseSaveMyExamsNotesIndex(page.html);
     if (!index) return null;
@@ -3585,6 +3594,66 @@ function fallbackPathway(course: {
 }
 
 /**
+ * The source order a build follows.
+ *
+ * A course keeps the source it was built from. Regenerating it from the other
+ * site would change its units, topic titles and ids even though the course is
+ * the same, so a rebuild re-reads its own source only. A starter map is not a
+ * source of record: it is retried against both sites so a published outline
+ * replaces it once, then stays.
+ */
+export function pathwaySourcePlan(
+  previousSource:
+    | "savemyexams"
+    | "cognito"
+    | "bluprint"
+    | "rs"
+    | "specification"
+    | undefined,
+): Array<"savemyexams" | "cognito" | "starter"> {
+  if (previousSource === "savemyexams") return ["savemyexams"];
+  if (previousSource === "cognito") return ["cognito"];
+  return ["savemyexams", "cognito", "starter"];
+}
+
+/** Two attempts at a remote read, so one dropped connection is not a rebuild. */
+const PATHWAY_RETRY_DELAY_MS = 750;
+async function readTwice<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, PATHWAY_RETRY_DELAY_MS));
+    return await run();
+  }
+}
+
+/** One entry per paper, in paper order, with no duplicate topic ids. */
+function canonicalPapers(
+  papers: Array<{ label: string; topicIds: string[] }> | undefined,
+): Array<{ label: string; topicIds: string[] }> | undefined {
+  if (!papers) return undefined;
+  const rows = papers
+    .map((paper) => ({
+      label: paper.label.trim(),
+      topicIds: [...new Set(paper.topicIds)],
+    }))
+    .filter((paper) => paper.label.length > 0 && paper.topicIds.length > 0)
+    .sort((a, b) =>
+      a.label.localeCompare(b.label, "en", { numeric: true }),
+    );
+  return rows.length > 0 ? rows : undefined;
+}
+
+/** Whether stored paper groups still point at topics this map has. */
+function papersMatchUnits(
+  papers: Array<{ label: string; topicIds: string[] }>,
+  units: PathwayUnit[],
+): boolean {
+  const ids = new Set(units.flatMap((unit) => unit.topics.map((topic) => topic.id)));
+  return papers.every((paper) => paper.topicIds.every((id) => ids.has(id)));
+}
+
+/**
  * Scrapes the pathway for one course. Cognito is the only source; the starter
  * map is used when the site does not publish that course, and no model is
  * asked to fill the gap.
@@ -3592,7 +3661,12 @@ function fallbackPathway(course: {
 async function generateCoursePathway(
   course: PathwayCourse,
   allowFallback = true,
+  previous?: CoursePathway,
 ): Promise<CoursePathway> {
+  // The saved metadata is part of the map and must not change just because it
+  // was rebuilt; only a first build stamps the time.
+  const syncedAt = previous?.cognitoSyncedAt ?? Date.now();
+
   // Religious Studies comes from the saved Edexcel A/B content in
   // lib/rsPathways. Cognito has no page for it, and the generic starter map
   // talked about mark schemes instead of the religion itself, so RS is never
@@ -3603,7 +3677,7 @@ async function generateCoursePathway(
     return splitPathwaySkills<CoursePathway>({
       ...religiousStudies,
       source: "rs",
-      cognitoSyncedAt: Date.now(),
+      cognitoSyncedAt: syncedAt,
       version: CURRENT_PATHWAY_VERSION,
     });
   }
@@ -3616,23 +3690,24 @@ async function generateCoursePathway(
     return splitPathwaySkills<CoursePathway>({
       ...aqaBiology,
       source: "specification",
-      cognitoSyncedAt: Date.now(),
+      cognitoSyncedAt: syncedAt,
       version: CURRENT_PATHWAY_VERSION,
     });
   }
 
+  // Read in the fixed order above. An error is retried, then raised, so the
+  // caller keeps the stored map; it is never treated as "this source does not
+  // have the course" and replaced with a different site's structure.
   let pathway: CoursePathway | null = null;
-  try {
-    pathway = await scrapeSaveMyExamsPathway(course);
-  } catch {
-    // A temporary Save My Exams failure falls back to the old reader below.
-  }
-  if (!pathway) {
-    try {
-      pathway = await scrapePathway(course);
-    } catch {
-      // Fall through to the starter map.
+  for (const source of pathwaySourcePlan(previous?.source)) {
+    if (source === "savemyexams") {
+      pathway = await readTwice(() => scrapeSaveMyExamsPathway(course));
+    } else if (source === "cognito") {
+      pathway = await readTwice(() => scrapePathway(course));
+    } else {
+      pathway = fallbackPathway(course);
     }
+    if (pathway) break;
   }
 
   if (!pathway) {
@@ -3658,11 +3733,20 @@ async function generateCoursePathway(
   // Cognito spec references, so its maps use the whole-course paper instead of
   // attaching the wrong groups.
   if (!completed.papers && completed.source !== "savemyexams") {
-    const paperMap = await fetchCognitoPaperMap(course).catch(() => null);
-    const papers = derivePaperGroups(completed.units, paperMap);
+    const paperMap = await readTwice(() => fetchCognitoPaperMap(course)).catch(
+      () => null,
+    );
+    const derived = derivePaperGroups(completed.units, paperMap);
+    // A dropped paper-map request must not remove groups the student already
+    // had; they are reused while they still point at this map's topics.
+    const kept =
+      previous?.papers && papersMatchUnits(previous.papers, completed.units)
+        ? previous.papers
+        : undefined;
+    const papers = canonicalPapers(derived ?? kept);
     if (papers) completed.papers = papers;
   }
-  completed.cognitoSyncedAt = Date.now();
+  completed.cognitoSyncedAt = syncedAt;
   completed.version = CURRENT_PATHWAY_VERSION;
   return completed;
 }
@@ -3861,7 +3945,11 @@ export const buildCoursePathway = internalAction({
     try {
       // A rebuild keeps its previous map if every model fails; only a brand-new
       // course is allowed to fall back to the starter outline.
-      const pathway = await generateCoursePathway(course, !course.pathway);
+      const pathway = await generateCoursePathway(
+        course,
+        !course.pathway,
+        course.pathway ?? undefined,
+      );
       await ctx.runMutation(internal.courses.completeBuild, { courseId, pathway });
       return { ok: true };
     } catch {
