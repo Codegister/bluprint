@@ -555,11 +555,11 @@ back to the pool; a 429 clears itself when the cooldown passes, and saving a key
 accepted again clears a rejection.
 
 A user who wants those higher limits can connect their own NVIDIA key from the account
-menu (**NVIDIA key**). The sheet links to the [model list](https://build.nvidia.com/models)
-and explains the real flow: sign in, open any model, then press **Generate API Key** on the
-model page — there is no separate "API keys" page that issues a new key. The pasted key is
-checked with a one-token chat completion before it is saved, so a typo is reported
-immediately.
+menu (**NVIDIA key**). The sheet links straight to
+[the API keys page](https://build.nvidia.com/settings/api-keys) and explains the real flow:
+sign in, click the profile icon in the top right, choose **API Keys**, press **Generate API
+Key**, then copy the key (NVIDIA shows it once). The pasted key is checked with a one-token
+chat completion before it is saved, so a typo is reported immediately.
 (`GET /v1/models` is not a valid check: that catalogue endpoint answers 200 without any key
 at all.)
 

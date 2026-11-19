@@ -17,17 +17,17 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 /**
- * Where keys are created. There is no separate "API keys" page that hands out a
- * new key: the Generate button lives on a model's page, so the link opens the
- * model list and the steps say which button to press once a model is open.
- * Users sign in there themselves — Bluprint never signs anyone up.
+ * Where keys are created: the API keys page behind the profile menu. The steps
+ * and the link must match what NVIDIA actually shows, because a student who
+ * cannot find the button assumes Bluprint is broken. Users sign in there
+ * themselves — Bluprint never signs anyone up.
  */
-const GET_KEY_URL = "https://build.nvidia.com/models";
+const GET_KEY_URL = "https://build.nvidia.com/settings/api-keys";
 
 const STEPS = [
   "Open build.nvidia.com and sign in with your email. That joins the free NVIDIA Developer Program.",
-  "Pick any model from the Models page and open it — the key works for every model, not just that one.",
-  "Press Generate API Key on the model page and copy the key it shows (it starts with nvapi-).",
+  "Click your profile icon in the top right corner, then choose API Keys.",
+  "Press Generate API Key (any name works) and copy the key it shows — it starts with nvapi- and NVIDIA only shows it once.",
   "Paste it below. Bluprint checks it straight away, then saves it encrypted on your account.",
 ];
 
@@ -168,7 +168,7 @@ export function NvidiaConnectSheet({
               rel="noreferrer noopener"
               className="mt-3 inline-flex items-center gap-1.5 text-[0.82rem] font-semibold text-brand-sky underline-offset-2 hover:underline"
             >
-              Open build.nvidia.com
+              Open your NVIDIA API keys
               <ExternalLink className="size-3.5" aria-hidden />
             </a>
           </div>
