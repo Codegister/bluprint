@@ -160,6 +160,11 @@ export function PathwaySectionsDialog({
               : ""}
           </p>
 
+          <p className="mt-2 text-[0.68rem] leading-relaxed text-muted-foreground">
+            Exam-technique guides sit beside the content on the course page and
+            are never included in a set.
+          </p>
+
           <div className="mt-5 rounded-2xl border border-border bg-[#FCFCFD] p-4">
             <p className="text-[0.72rem] font-semibold text-brand-ink">
               How much should Bluprint build?

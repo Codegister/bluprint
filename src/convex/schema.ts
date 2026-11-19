@@ -324,6 +324,18 @@ const schema = defineSchema(
                   examSkill: v.string(),
                 }),
               ),
+              // Exam-technique pages from the published outline, kept beside
+              // the content instead of inside it: they are guidance, and no
+              // study set is ever built from them.
+              skills: v.optional(
+                v.array(
+                  v.object({
+                    title: v.string(),
+                    summary: v.string(),
+                    keyPoints: v.array(v.string()),
+                  }),
+                ),
+              ),
             }),
           ),
         }),

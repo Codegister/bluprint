@@ -895,6 +895,14 @@ same rate-limit messages as the rest of the app.
 - The pathway is a direct mapping of those headings: summaries, key points and exam skills
   are assembled from the scraped subtopics. Nothing is invented, so the map covers the
   entire published specification and no unit needs a model call.
+- Exam-technique pages in that outline ("How to Answer…", "Exam technique", command
+  words, mark schemes, a bare "Overview") are not content. `lib/pathwaySkills` moves them
+  into the part's `skills` list while the pathway is assembled, for every source, so the
+  course page can still show the guides — with an **Ask the tutor** link — while the picker,
+  topic counts, coverage and set builder only ever see real topics. `isExamTechniqueItem` is
+  a second line of defence: generated cards, quiz questions and exam questions about essay
+  structure are dropped even when a content brief mentions technique. The version bump to 5
+  rebuilds stored courses, so existing pathways are cleaned up without touching student sets.
 - AQA GCSE Biology (8461) does not use a notes-site index at all. Its pathway is a checked
   specification map in AQA's own 4.x numbering, with active transport and the required
   practicals, and no "Exam Skills" part. The course page states which source a pathway

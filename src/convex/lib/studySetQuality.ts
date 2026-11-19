@@ -181,6 +181,31 @@ export function isSpecificationItem(prompt: string, answer = ""): boolean {
 export type StudyItemText = { prompt: string; answer?: string };
 
 /**
+ * Items about exam craft rather than the subject.
+ *
+ * Pathways keep technique pages beside the content, and a model can still write
+ * "What is the function of the writer's methods section in a 19th-century novel
+ * essay?" from a content brief that mentions technique. Those questions test
+ * nothing a student can revise, so they are rejected alongside specification
+ * meta. The patterns are meta-shaped on purpose: "How does the writer use
+ * methods to present…" is a real literature question and must survive.
+ */
+export function isExamTechniqueItem(prompt: string, answer = ""): boolean {
+  const text = `${prompt} ${answer}`.toLowerCase();
+  return [
+    /\b(?:function|purpose|role) of (?:the )?(?:[a-z' ]{1,30} )?section\b/,
+    /\bsection (?:of|in) (?:an?|the|your) [a-z0-9 -]{0,20}\bessay\b/,
+    /\bin (?:an?|the|your) [a-z0-9 -]{0,20}\bessay\b/,
+    /\bhow (?:should|do|would|can) (?:you|students?|candidates?) (?:structure|plan|answer|write|approach)\b/,
+    /\b(?:command words?|assessment objectives?|mark schemes?|level descriptors?|writing frames?|exam techniques?|exam skills?)\b/,
+    /\bhow many (?:marks|paragraphs|sentences|minutes|bullet points)\b/,
+    /\bwhat (?:does|do) (?:the )?examiners? (?:want|look for|reward|expect)\b/,
+    /\b(?:best|correct) way to (?:answer|structure|plan) (?:an?|the|your)\b/,
+    /\b(?:essay|answer) (?:structure|plan|frame)\b/,
+  ].some((pattern) => pattern.test(text));
+}
+
+/**
  * Two items are duplicates when their prompts say the same thing, or when one
  * is a thin reword of the other and marks the same answer. Rewording a card or
  * question is not a new retrieval, so it must not appear twice in a deck.
@@ -222,6 +247,7 @@ export function dedupeStudyItems<T>(
     if (
       options.reject?.(item) ||
       isSpecificationItem(prompt, candidate.answer) ||
+      isExamTechniqueItem(prompt, candidate.answer) ||
       kept.some((previous) =>
         isNearDuplicateStudyItem(
           { prompt: promptOf(previous), answer: answerOf(previous) },
@@ -277,7 +303,13 @@ export function alignQuizToCards<T extends QuizLike>(
   for (const item of items) {
     if (isNegativeDiscrimination(item, keyPoints)) continue;
     const answer = correctAnswerFor(item);
-    if (!answer || isSpecificationItem(item.question, answer)) continue;
+    if (
+      !answer ||
+      isSpecificationItem(item.question, answer) ||
+      isExamTechniqueItem(item.question, answer)
+    ) {
+      continue;
+    }
     // A card can mention an off-spec term, but the quiz may not test it.
     if (findOffSpecTerm(answer, options.level, options.subject)) continue;
 
@@ -749,6 +781,7 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
       !front ||
       !back ||
       isSpecificationItem(front, back) ||
+      isExamTechniqueItem(front, back) ||
       lowValueCardReason({ front, back })
     ) {
       dropped += 1;
@@ -1205,6 +1238,10 @@ export function prepareQuiz<T extends QuizLike>(
     }
     if (isSpecificationItem(item.question, answer)) {
       reasons.push("specification meta");
+      continue;
+    }
+    if (isExamTechniqueItem(item.question, answer)) {
+      reasons.push("exam technique");
       continue;
     }
     if (isNegativeDiscrimination(item, keyPoints)) {

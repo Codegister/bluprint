@@ -128,6 +128,10 @@ import {
   type SaveMyExamsNotesIndex,
 } from "./lib/savemyexams";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
+import {
+  splitPathwaySkills,
+  type PathwaySkill,
+} from "./lib/pathwaySkills";
 import { courseOptionsLine } from "./lib/courseScope";
 import { buildRsPathway } from "./lib/rsPathways";
 import {
@@ -3138,7 +3142,13 @@ type PathwayTopic = {
   keyPoints: string[];
   examSkill: string;
 };
-type PathwayUnit = { title: string; summary: string; topics: PathwayTopic[] };
+type PathwayUnit = {
+  title: string;
+  summary: string;
+  topics: PathwayTopic[];
+  /** Technique pages that belong beside this part but are never content. */
+  skills?: PathwaySkill[];
+};
 type CoursePathway = {
   overview: string;
   examFormat: string;
@@ -3335,7 +3345,12 @@ function buildPathwayFromOutline(
     })),
   }));
 
-  const topicCount = withIds.reduce((sum, unit) => sum + unit.topics.length, 0);
+  // Exam-technique pages are guidance, not content. Moving them before ids,
+  // counts and the overview are computed means nothing downstream can offer a
+  // guide as a buildable topic or write a set from it.
+  const builtUnits = splitPathwaySkills({ units: withIds }).units;
+
+  const topicCount = builtUnits.reduce((sum, unit) => sum + unit.topics.length, 0);
   const label =
     outline.label || `${course.level} ${course.subject} (${course.examBoard})`;
   const code = outline.specificationCode
@@ -3345,9 +3360,9 @@ function buildPathwayFromOutline(
   return {
     overview:
       outline.intro?.trim() ||
-      `${label}${code}: a complete pathway built from the published specification, split into ${withIds.length} unit${withIds.length === 1 ? "" : "s"} and ${topicCount} topics.`,
+      `${label}${code}: a complete pathway built from the published specification, split into ${builtUnits.length} unit${builtUnits.length === 1 ? "" : "s"} and ${topicCount} topics.`,
     examFormat: `Check the ${course.examBoard} specification${code} for paper structure, weighting and duration.`,
-    units: withIds,
+    units: builtUnits,
   };
 }
 
@@ -3552,18 +3567,20 @@ function fallbackPathway(course: {
     );
   }
 
+  const withIds = units.map((entry, unitIndex) => ({
+    ...entry,
+    topics: entry.topics.map((topic, topicIndex) => ({
+      ...topic,
+      id: `u${unitIndex + 1}t${topicIndex + 1}`,
+    })),
+  }));
+
   return {
     overview: `A starter revision pathway for ${level} ${subject}${tier} with ${board}. Open a topic to build a study set, or rebuild this map later for a fuller specification-specific version.`,
     examFormat: `Check the current ${board} specification for paper structure, durations and weightings.`,
     source: "bluprint",
     version: CURRENT_PATHWAY_VERSION,
-    units: units.map((entry, unitIndex) => ({
-      ...entry,
-      topics: entry.topics.map((topic, topicIndex) => ({
-        ...topic,
-        id: `u${unitIndex + 1}t${topicIndex + 1}`,
-      })),
-    })),
+    units: splitPathwaySkills({ units: withIds }).units,
   };
 }
 
@@ -3583,12 +3600,12 @@ async function generateCoursePathway(
   const religiousStudies = buildRsPathway(course);
   if (religiousStudies) {
     // RS is saved content, so there is no notes page or paper split to read.
-    return {
+    return splitPathwaySkills<CoursePathway>({
       ...religiousStudies,
       source: "rs",
       cognitoSyncedAt: Date.now(),
       version: CURRENT_PATHWAY_VERSION,
-    };
+    });
   }
 
   // AQA GCSE Biology is mapped to the board's own specification, not to a
@@ -3596,12 +3613,12 @@ async function generateCoursePathway(
   // stops a notes-site "Exam Skills" page becoming part 8 of 8.
   const aqaBiology = buildAqaBiologyPathway(course);
   if (aqaBiology) {
-    return {
+    return splitPathwaySkills<CoursePathway>({
       ...aqaBiology,
       source: "specification",
       cognitoSyncedAt: Date.now(),
       version: CURRENT_PATHWAY_VERSION,
-    };
+    });
   }
 
   let pathway: CoursePathway | null = null;
@@ -3630,10 +3647,11 @@ async function generateCoursePathway(
   // Save My Exams already publishes each poetry cluster as a topic with its
   // own notes. The Cognito/fallback maps still get Bluprint's complete saved
   // anthology, exactly once, so none of their poems go missing.
-  const completed: CoursePathway =
+  const completed: CoursePathway = splitPathwaySkills(
     pathway.source === "savemyexams"
       ? pathway
-      : (completeAnthology(pathway as PathwayLike, course) as CoursePathway);
+      : (completeAnthology(pathway as PathwayLike, course) as CoursePathway),
+  );
 
   // Papers are grouped only after the pathway is final, so the groups point at
   // the topics the student can actually see. Save My Exams' own topics are not

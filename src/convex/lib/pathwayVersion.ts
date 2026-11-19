@@ -5,5 +5,7 @@
  *
  * 4: option-scoped Literature filtering now applies to every outline source,
  *    including Cognito and the starter map.
+ * 5: exam-technique pages moved out of content topics into each unit's
+ *    `skills` list, so the set builder can no longer pick them.
  */
-export const CURRENT_PATHWAY_VERSION = 4;
+export const CURRENT_PATHWAY_VERSION = 5;

@@ -1177,6 +1177,40 @@ export default function Course() {
                                 );
                               })}
                             </div>
+
+                            {unit.skills && unit.skills.length > 0 && (
+                              <div className="mt-3 rounded-2xl border border-dashed border-border bg-brand-panel/40 p-3.5">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-[0.66rem] font-semibold uppercase tracking-[0.12em] text-chrome-7">
+                                    Exam technique
+                                  </p>
+                                  <button
+                                    type="button"
+                                    onClick={() => openTutor(unit.title)}
+                                    className="inline-flex h-7 items-center gap-1 rounded-full border border-border bg-white px-2.5 text-[0.7rem] font-semibold text-brand-ink transition-colors hover:bg-brand-panel"
+                                  >
+                                    <Sparkles className="size-3.5" aria-hidden />
+                                    Ask the tutor
+                                  </button>
+                                </div>
+                                <p className="mt-1 text-[0.7rem] leading-relaxed text-muted-foreground">
+                                  How to answer questions on this part. Guidance
+                                  only — it is not included when you build a set.
+                                </p>
+                                <ul className="mt-2 space-y-1.5">
+                                  {unit.skills.map((skill) => (
+                                    <li key={skill.title}>
+                                      <p className="text-[0.8rem] font-semibold text-brand-ink">
+                                        {skill.title}
+                                      </p>
+                                      <p className="text-[0.74rem] leading-relaxed text-muted-foreground">
+                                        {skill.summary}
+                                      </p>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         )}
                       </li>

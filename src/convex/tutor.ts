@@ -266,7 +266,17 @@ export const getCourseTutorContext = internalQuery({
               .join("\n"),
           )
           .join("\n");
-        return `## ${entry.title}\n${entry.summary}\n${topics}`;
+        // Technique guides sit beside the content on the pathway. The tutor can
+        // discuss them when asked, but they are labelled as guidance so an
+        // answer about the subject is never built around them.
+        const technique = (entry.skills ?? [])
+          .map((skill) => `- ${skill.title}: ${skill.summary}`)
+          .join("\n");
+        return `## ${entry.title}\n${entry.summary}\n${topics}${
+          technique
+            ? `\n### Exam technique (guidance, not subject content)\n${technique}`
+            : ""
+        }`;
       })
       .join("\n\n");
 

@@ -10,6 +10,7 @@ import {
 } from "./_generated/server";
 import { BUILD_DEFAULTS, clampBuildCount } from "./lib/buildDefaults";
 import { withinNoteLimit } from "./lib/noteLimits";
+import { isExamTechniqueTitle } from "./lib/pathwaySkills";
 import { CURRENT_PATHWAY_VERSION } from "./lib/pathwayVersion";
 import {
   canonicalSubject,
@@ -837,6 +838,10 @@ async function createTopicSetForUser(
     const outline: PathwaySection[] = course.pathway.units
       .flatMap((unit) => unit.topics.map((topic) => ({ unit, topic })))
       .filter(({ topic }) => {
+        // Technique guides are guidance, not content. A course stored before
+        // the split still lists them as topics, so they are dropped here too:
+        // the builder must never write a set from one, rebuilt or not.
+        if (isExamTechniqueTitle(topic.title)) return false;
         if (seenTopics.has(topic.id)) return false;
         seenTopics.add(topic.id);
         return true;
@@ -848,10 +853,24 @@ async function createTopicSetForUser(
         throw new Error("Choose at least one topic for this set.");
       }
       const byId = new Map(outline.map((entry) => [entry.topic.id, entry]));
-      if (uniqueIds.some((id) => !byId.has(id))) {
+      const pathwayTopicIds = new Set(
+        course.pathway.units.flatMap((unit) =>
+          unit.topics.map((topic) => topic.id),
+        ),
+      );
+      // An older course still lists guides among its topics, and the UI sends
+      // their ids with a whole-part selection. They are dropped rather than
+      // failing the build, so the student still gets the content they chose.
+      const selectedIds = uniqueIds.filter((id) => byId.has(id));
+      if (uniqueIds.some((id) => !byId.has(id) && !pathwayTopicIds.has(id))) {
         throw new Error("Some of those topics are no longer part of this pathway.");
       }
-      const selected = new Set(uniqueIds);
+      if (selectedIds.length === 0) {
+        throw new Error(
+          "Exam-technique guides are not part of a study set. Choose a subject topic instead.",
+        );
+      }
+      const selected = new Set(selectedIds);
       chosen = outline.filter((entry) => selected.has(entry.topic.id));
     } else {
       const startIndex = outline.findIndex((entry) => entry.topic.id === topicId);
@@ -1567,6 +1586,15 @@ export const completeBuild = internalMutation({
               keyPoints: v.array(v.string()),
               examSkill: v.string(),
             }),
+          ),
+          skills: v.optional(
+            v.array(
+              v.object({
+                title: v.string(),
+                summary: v.string(),
+                keyPoints: v.array(v.string()),
+              }),
+            ),
           ),
         }),
       ),
