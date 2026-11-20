@@ -1074,6 +1074,16 @@ const schema = defineSchema(
       alertedAt: v.optional(v.number()),
     }).index("by_at", ["at"]),
 
+    // The liveness probe's latest verdict on the deployment's own keys. One
+    // row, rewritten every check: the app reads it to warn about a refused key
+    // before a build fails, and a fresh "ok" is what clears that warning. No
+    // keys, prompts or model output — a state and a time.
+    deploymentKeyHealth: defineTable({
+      at: v.number(),
+      /** Whether the provider accepted the pool on the last probe. */
+      state: v.union(v.literal("ok"), v.literal("refused")),
+    }),
+
     // One row per person per calendar day (UTC) so the dashboard can show a
     // daily review goal and a streak without storing every review event.
     studyDays: defineTable({

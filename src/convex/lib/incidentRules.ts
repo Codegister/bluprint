@@ -55,23 +55,31 @@ export type IncidentKind =
 export type DeploymentKeyState = "ok" | "missing" | "refused";
 
 /**
- * Reads the deployment pool's state from its size and the incidents it caused.
+ * How long a probe verdict speaks for the deployment.
  *
- * Only `health-check` incidents count: the liveness probe is the one caller
- * that spends the shared key and nothing else, so a student's dead personal
- * key can never make the deployment look broken to everyone else.
+ * Six probe intervals: one missed check is normal, a day of silence should not
+ * keep a stale warning on screen. Past this the app assumes nothing is known
+ * rather than something is wrong.
+ */
+export const DEPLOYMENT_KEY_FRESHNESS_MS = 60 * 60 * 1000;
+
+/**
+ * Reads the deployment pool's state from its size and the newest probe verdict.
+ *
+ * The verdict, not the incident log, is what decides: incidents keep failures
+ * forever, so an old refusal would keep the warning up after the key was
+ * replaced. The probe rewrites its verdict on every check, including the good
+ * ones, which is what lets the warning clear itself.
  */
 export function deploymentKeyState(
   keyCount: number,
-  incidents: Array<{ purpose: string; kind: string }>,
+  probe: { at: number; state: "ok" | "refused" } | null,
+  now: number,
 ): DeploymentKeyState {
   if (keyCount === 0) return "missing";
-  const refused = incidents.some(
-    (row) =>
-      row.purpose === "health-check" &&
-      (row.kind === "auth" || row.kind === "no-credits"),
-  );
-  return refused ? "refused" : "ok";
+  if (!probe) return "ok";
+  if (now - probe.at > DEPLOYMENT_KEY_FRESHNESS_MS) return "ok";
+  return probe.state;
 }
 
 /** Groups an upstream status into the cause a person would act on. */

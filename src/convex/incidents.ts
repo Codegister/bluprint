@@ -43,6 +43,23 @@ export const record = internalMutation({
   },
 });
 
+/**
+ * Writes the deployment pool's verdict, replacing the previous one.
+ *
+ * It lives here rather than in `modelProbe`, which is a Node action file and
+ * may not define a mutation. One row is kept: the app only ever needs the most
+ * recent verdict, and a good check has to be able to overwrite a refusal.
+ */
+export const saveDeploymentKeyHealth = internalMutation({
+  args: { state: v.union(v.literal("ok"), v.literal("refused")) },
+  handler: async (ctx, { state }) => {
+    const at = Date.now();
+    const row = await ctx.db.query("deploymentKeyHealth").first();
+    if (row) await ctx.db.patch(row._id, { at, state });
+    else await ctx.db.insert("deploymentKeyHealth", { at, state });
+  },
+});
+
 /** Incidents in a window, newest first. Used by the sweep and by hand. */
 export const recent = internalQuery({
   args: { since: v.number() },

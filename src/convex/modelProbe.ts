@@ -81,6 +81,10 @@ export const tryOne = internalAction({
 /**
  * Asks every configured model for a few tokens and records the failures that
  * mean a model is gone or an account cannot use it. Scheduled from crons.ts.
+ *
+ * It also leaves one verdict on the pool as a whole, which the app reads to
+ * warn about a refused key before a build fails. A good check writes "ok", so
+ * replacing the key clears that warning on the next run.
  */
 export const check = internalAction({
   args: {},
@@ -137,6 +141,13 @@ export const check = internalAction({
         return { model, status };
       }),
     );
+
+    const refused = results.some(({ status }) =>
+      [401, 402, 403].includes(status),
+    );
+    await ctx.runMutation(internal.incidents.saveDeploymentKeyHealth, {
+      state: refused ? "refused" : "ok",
+    });
 
     return { checked: results.length, results };
   },

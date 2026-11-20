@@ -21,6 +21,7 @@ import {
 } from "../src/convex/lib/noteLimits";
 import {
   ALERT_COOLDOWN_MS,
+  DEPLOYMENT_KEY_FRESHNESS_MS,
   INCIDENT_WINDOW_MS,
   deploymentKeyState,
   isFatalKind,
@@ -220,37 +221,37 @@ describe("build allowances", () => {
 });
 
 describe("the deployment key's own state", () => {
-  const healthCheck = { purpose: "health-check", kind: "auth" };
-
   test("no configured key is missing, not refused", () => {
     // The two used to read the same, which sent whoever was on call looking for
     // a provider refusal when the variable had simply never been set.
-    expect(deploymentKeyState(0, [])).toBe("missing");
-    expect(deploymentKeyState(0, [healthCheck])).toBe("missing");
-  });
-
-  test("a probe refused for auth or credits means the pool is refused", () => {
-    expect(deploymentKeyState(1, [healthCheck])).toBe("refused");
-    expect(deploymentKeyState(2, [{ purpose: "health-check", kind: "no-credits" }])).toBe(
-      "refused",
-    );
-  });
-
-  test("a healthy pool is ok, and other causes are not a refused key", () => {
-    expect(deploymentKeyState(1, [])).toBe("ok");
+    expect(deploymentKeyState(0, null, NOW)).toBe("missing");
     expect(
-      deploymentKeyState(1, [
-        { purpose: "health-check", kind: "model-unavailable" },
-        { purpose: "health-check", kind: "rate-limit" },
-      ]),
-    ).toBe("ok");
+      deploymentKeyState(0, { at: NOW, state: "refused" }, NOW),
+    ).toBe("missing");
   });
 
-  test("only the shared-key probe speaks for the deployment", () => {
-    // A student's own dead key records an auth incident too, under the purpose
-    // of the feature they were using. It must not tell everyone else that the
-    // deployment is broken.
-    expect(deploymentKeyState(1, [{ purpose: "build", kind: "auth" }])).toBe("ok");
-    expect(deploymentKeyState(1, [{ purpose: "tutor", kind: "auth" }])).toBe("ok");
+  test("the newest probe verdict is the state, in both directions", () => {
+    expect(deploymentKeyState(1, { at: NOW, state: "refused" }, NOW)).toBe("refused");
+    // A good check replaces the verdict, so replacing the key clears the
+    // warning instead of leaving the old refusal on screen.
+    expect(deploymentKeyState(1, { at: NOW, state: "ok" }, NOW)).toBe("ok");
+  });
+
+  test("an absent or stale verdict says nothing is wrong", () => {
+    expect(deploymentKeyState(1, null, NOW)).toBe("ok");
+    expect(
+      deploymentKeyState(
+        1,
+        { at: NOW - DEPLOYMENT_KEY_FRESHNESS_MS - 1, state: "refused" },
+        NOW,
+      ),
+    ).toBe("ok");
+    expect(
+      deploymentKeyState(
+        1,
+        { at: NOW - DEPLOYMENT_KEY_FRESHNESS_MS, state: "refused" },
+        NOW,
+      ),
+    ).toBe("refused");
   });
 });

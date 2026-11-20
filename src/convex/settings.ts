@@ -1,10 +1,6 @@
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
-import {
-  INCIDENT_WINDOW_MS,
-  deploymentKeyState,
-  type DeploymentKeyState,
-} from "./lib/incidentRules";
+import { deploymentKeyState } from "./lib/incidentRules";
 import {
   DEFAULT_TUTOR_TIER_LABEL,
   TUTOR_TIER_DETAILS,
@@ -40,15 +36,9 @@ export const aiStatus = query({
     // but only the second one has a provider to complain about, and the app
     // showing the difference is what turns a silent outage into something the
     // owner sees before a build fails.
-    let deploymentKeys: DeploymentKeyState = "missing";
-    if (keys.length > 0) {
-      const incidents = await ctx.db
-        .query("aiIncidents")
-        .withIndex("by_at", (q) => q.gte("at", Date.now() - INCIDENT_WINDOW_MS))
-        .order("desc")
-        .take(200);
-      deploymentKeys = deploymentKeyState(keys.length, incidents);
-    }
+    const probe =
+      keys.length > 0 ? await ctx.db.query("deploymentKeyHealth").first() : null;
+    const deploymentKeys = deploymentKeyState(keys.length, probe, Date.now());
 
     // Course pathways are scraped, so they need no key. This status only
     // describes the AI used to build study sets, marking and tutoring.
