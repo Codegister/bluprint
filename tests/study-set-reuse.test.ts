@@ -236,6 +236,20 @@ type InternalHandler = {
   _handler: (ctx: MutationCtx, args: Record<string, unknown>) => Promise<unknown>;
 };
 
+/**
+ * A student with no personal NVIDIA key saved.
+ *
+ * Every generation stage resolves its keys before it starts, so the action asks
+ * for this row first. Production answers null when the account has not connected
+ * a key, and the build runs on the shared pool; the real query reads a table this
+ * fixture does not carry, so the answer is given directly rather than through the
+ * in-memory database. A test that needs a personal key would stub a ciphertext
+ * here instead.
+ */
+const noStoredUserKey: InternalHandler = {
+  _handler: async () => null,
+};
+
 function functionNameOf(ref: unknown): string {
   return String((ref as Record<symbol, unknown>)[FUNCTION_NAME]);
 }
@@ -269,6 +283,7 @@ function actionContext(
     [internal.studySets.appendCards, appendCards as unknown as InternalHandler],
     [internal.studySets.failGeneration, failGeneration as unknown as InternalHandler],
     [internal.studySets.finishGeneration, finishGeneration as unknown as InternalHandler],
+    [internal.userKeys.getStored, noStoredUserKey],
     [internal.buildUsage.refund, refund as unknown as InternalHandler],
   ];
   const byName = new Map(

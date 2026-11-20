@@ -35,6 +35,43 @@ describe("material capacity", () => {
     expect(limits.quiz).toBeLessThanOrEqual(2);
     expect(limits.exam).toBeLessThanOrEqual(2);
   });
+
+  // A deck's bullets are facts, and they usually carry no full stop at all.
+  // Sentence punctuation alone read a 41-slide deck as one statement and capped
+  // its build at two cards, so a 50-card request built four.
+  const slideDeck = Array.from(
+    { length: 41 },
+    (_, index) =>
+      [
+        `Slide ${index + 1}`,
+        `Topic ${index + 1} defines its term precisely`,
+        `Example ${index + 1} illustrates the process in context`,
+        `Figure ${index + 1} shows the value measured in the experiment`,
+        `Exception ${index + 1} is the case students most often confuse`,
+      ].join(" • "),
+  ).join(" ");
+
+  test("a bulleted slide deck supports the size the student asked for", () => {
+    const limits = materialLimits(slideDeck);
+    expect(limits.cards).toBeGreaterThanOrEqual(50);
+    expect(limits.quiz).toBeGreaterThanOrEqual(50);
+    expect(limits.exam).toBeGreaterThanOrEqual(20);
+  });
+
+  test("a bullet is a statement boundary on its own", () => {
+    expect(
+      noteFacts("Nucleus contains DNA • Mitochondria release energy • Ribosomes make proteins"),
+    ).toHaveLength(3);
+  });
+
+  test("a long note with no full stops still counts its facts", () => {
+    const noPunctuation = Array.from(
+      { length: 40 },
+      (_, index) => `fact number ${index + 1} about the topic in hand`,
+    ).join(" and ");
+    expect(noteFacts(noPunctuation)).toHaveLength(1);
+    expect(materialLimits(noPunctuation).cards).toBeGreaterThan(4);
+  });
 });
 
 describe("shortfall copy", () => {

@@ -19,6 +19,7 @@ import {
   MAX_NOTE_CHARS,
   MAX_NOTE_CHARS_LABEL,
   MIN_NOTE_CHARS,
+  clipNote,
   noteLimitMessage,
 } from "@/convex/lib/noteLimits";
 import { materialLimits } from "@/convex/lib/buildCapacity";
@@ -31,6 +32,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { shortTitle, titleFromSource } from "@/convex/lib/titles";
 import { compressImage, extractVideoFrames } from "@/lib/media";
+import { readPptxDeck } from "@/lib/pptx";
 import { pathwayPartOptions } from "@/lib/pathwaySections";
 import { useAiAvailability } from "@/lib/useAiAvailability";
 import { cn } from "@/lib/utils";
@@ -41,6 +43,7 @@ import {
   GraduationCap,
   Image as ImageIcon,
   Loader2,
+  Presentation,
   Video,
   X,
 } from "lucide-react";
@@ -49,7 +52,16 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 type ImageDraft = { file: File; preview: string };
-type Mode = "photos" | "video" | "text" | "course";
+/** A PowerPoint already read in the browser: its slide text is the notes. */
+type DeckDraft = {
+  file: File;
+  notes: string;
+  slideCount: number;
+  textSlides: number;
+  /** True when the deck ran past the note limit and was cut to it. */
+  truncated: boolean;
+};
+type Mode = "course" | "photos" | "video" | "slides" | "text";
 
 const MAX_PHOTOS = 8;
 
@@ -69,7 +81,7 @@ function titleFromFile(name: string): string {
 }
 
 const dropzoneClass =
-  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-border bg-background px-5 py-9 text-center transition-colors hover:border-brand-pink/50 hover:bg-white";
+  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-border bg-background px-5 py-9 text-center transition-colors hover:border-brand-pink/50 hover:bg-card";
 
 export function CreateSetDialog({
   open,
@@ -97,6 +109,8 @@ export function CreateSetDialog({
   const [name, setName] = useState("");
   const [images, setImages] = useState<ImageDraft[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [deck, setDeck] = useState<DeckDraft | null>(null);
+  const [readingDeck, setReadingDeck] = useState(false);
   const [text, setText] = useState("");
   // The one build config the product quotes everywhere (hero copy, pathway
   // sets, the edit dialog and this one), so the numbers never disagree.
@@ -108,13 +122,19 @@ export function CreateSetDialog({
   const [countsTouched, setCountsTouched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState("");
-  // Limits shown before anything is uploaded. For pasted notes the sliders use
-  // the real material ceiling; photos and video are sized after OCR, so they
-  // keep the account maximum and explain that the build may be smaller.
+  // The text a build would actually read: typed notes, or a deck's slides.
+  const materialText =
+    mode === "text"
+      ? text.trim()
+      : mode === "slides"
+        ? (deck?.notes ?? "")
+        : "";
+  // Limits shown before anything is uploaded. For pasted notes and slide text
+  // the sliders use the real material ceiling; photos and video are sized after
+  // OCR, so they keep the account maximum and explain that the build may be
+  // smaller.
   const noteLimits =
-    mode === "text" && text.trim().length >= MIN_NOTE_CHARS
-      ? materialLimits(text)
-      : null;
+    materialText.length >= MIN_NOTE_CHARS ? materialLimits(materialText) : null;
   const maxCards = noteLimits?.cards ?? BUILD_MAX;
   const maxQuiz = noteLimits?.quiz ?? BUILD_MAX;
   const maxExam = noteLimits?.exam ?? BUILD_MAX;
@@ -215,6 +235,7 @@ export function CreateSetDialog({
     previewsRef.current = [];
     setImages([]);
     setVideoFile(null);
+    setDeck(null);
   };
 
   const reset = () => {
@@ -225,6 +246,7 @@ export function CreateSetDialog({
     setQuizCount(BUILD_DEFAULTS.quiz);
     setExamCount(BUILD_DEFAULTS.exam);
     setCountsTouched(false);
+    setReadingDeck(false);
     setMode("photos");
     setStep("");
     setError(null);
@@ -268,6 +290,49 @@ export function CreateSetDialog({
     URL.revokeObjectURL(preview);
     previewsRef.current = previewsRef.current.filter((item) => item !== preview);
     setImages((current) => current.filter((image) => image.preview !== preview));
+  };
+
+  /**
+   * A deck is read as soon as it is chosen, so a file Bluprint cannot read — an
+   * old binary .ppt, or a deck that is only pictures — is refused before a
+   * build is paid for rather than after it comes back empty.
+   */
+  const chooseDeck = async (file: File | null) => {
+    if (!file) return;
+    setError(null);
+    setDeck(null);
+    if (!/\.(pptx|pptm|ppsx)$/i.test(file.name)) {
+      setError(
+        "That isn't a PowerPoint Bluprint can read. Use a .pptx — an older .ppt has to be saved again from PowerPoint.",
+      );
+      return;
+    }
+    setReadingDeck(true);
+    try {
+      const parsed = await readPptxDeck(file);
+      const notes = parsed.text.trim();
+      if (notes.length < MIN_NOTE_CHARS) {
+        setError(
+          "That deck's slides have almost no readable text — it may be all pictures. Upload photos or screenshots of the slides instead.",
+        );
+        return;
+      }
+      setDeck({
+        file,
+        notes: clipNote(notes),
+        slideCount: parsed.slideCount,
+        textSlides: parsed.textSlides,
+        truncated: notes.length > MAX_NOTE_CHARS,
+      });
+    } catch (deckError) {
+      setError(
+        deckError instanceof Error
+          ? deckError.message
+          : "Could not read that PowerPoint.",
+      );
+    } finally {
+      setReadingDeck(false);
+    }
   };
 
   const uploadBlob = async (blob: Blob): Promise<Id<"_storage">> => {
@@ -315,6 +380,10 @@ export function CreateSetDialog({
     }
     if (mode === "video" && !videoFile) {
       setError("Choose a video to sample frames from.");
+      return;
+    }
+    if (mode === "slides" && !deck) {
+      setError("Choose a PowerPoint deck to build from.");
       return;
     }
     if (mode === "text" && text.trim().length < MIN_NOTE_CHARS) {
@@ -366,8 +435,13 @@ export function CreateSetDialog({
       let sourceImageIds: Id<"_storage">[] = [];
       let sourceLabel = "";
       let notes = "";
-      // The course path returns earlier, so only upload types reach here.
-      const sourceType = mode as Exclude<Mode, "course">;
+      // The course path returns earlier, so only upload types reach here. A
+      // deck arrives as text: its slides were read in the browser, so what is
+      // stored is the notes every build reads, labelled with the file's name.
+      const sourceType =
+        mode === "slides"
+          ? ("text" as const)
+          : (mode as Exclude<Mode, "course" | "slides">);
 
       if (mode === "photos") {
         const ids: Id<"_storage">[] = [];
@@ -388,6 +462,11 @@ export function CreateSetDialog({
         sourceLabel = videoFile.name.slice(0, 100);
       }
 
+      if (mode === "slides" && deck) {
+        notes = deck.notes;
+        sourceLabel = deck.file.name.slice(0, 100);
+      }
+
       if (mode === "text") {
         notes = text.trim();
         sourceLabel = "Pasted notes";
@@ -406,9 +485,11 @@ export function CreateSetDialog({
       const fallbackTitle =
         mode === "video" && videoFile
           ? titleFromFile(videoFile.name)
-          : mode === "photos" && images[0]
-            ? titleFromFile(images[0].file.name)
-            : titleFromSource(notes) || "Study set";
+          : mode === "slides" && deck
+            ? titleFromFile(deck.file.name)
+            : mode === "photos" && images[0]
+              ? titleFromFile(images[0].file.name)
+              : titleFromSource(notes) || "Study set";
       const typedName = name.trim();
 
       setStep("Saving set…");
@@ -457,9 +538,9 @@ export function CreateSetDialog({
               Add study material
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed text-muted-foreground">
-              Build from a course topic, or upload photos and notes. Bluprint reads
-              the material, then writes a summary, flashcards, a quiz and exam
-              practice.
+              Build from a course topic, upload photos or a PowerPoint, or paste
+              notes. Bluprint reads the material, then writes a summary,
+              flashcards, a quiz and exam practice.
             </DialogDescription>
           </DialogHeader>
           </motion.div>
@@ -539,7 +620,7 @@ export function CreateSetDialog({
             }}
             className="mt-5 gap-4"
           >
-            <TabsList className="rise-stagger grid h-auto w-full grid-cols-4 gap-1 rounded-full bg-brand-panel p-1">
+            <TabsList className="rise-stagger grid h-auto w-full grid-cols-5 gap-1 rounded-full bg-brand-panel p-1">
               {[
                 {
                   value: "course",
@@ -560,6 +641,12 @@ export function CreateSetDialog({
                   tone: "text-brand-peach",
                 },
                 {
+                  value: "slides",
+                  label: "Slides",
+                  icon: Presentation,
+                  tone: "text-brand-teal",
+                },
+                {
                   value: "text",
                   label: "Paste",
                   icon: FileText,
@@ -572,9 +659,12 @@ export function CreateSetDialog({
                     key={tab.value}
                     value={tab.value}
                     disabled={isLoading}
-                    className="h-9 gap-1 rounded-full px-1 text-[0.8rem] font-semibold text-muted-foreground data-[state=active]:bg-white data-[state=active]:text-brand-ink data-[state=active]:shadow-sm sm:gap-1.5 sm:text-sm"
+                    className="h-9 gap-1 rounded-full px-1 text-[0.8rem] font-semibold text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-brand-ink data-[state=active]:shadow-sm sm:gap-1.5 sm:text-sm"
                   >
-                    <Icon className={cn("size-3.5 shrink-0", tab.tone)} aria-hidden />
+                    <Icon
+                      className={cn("hidden size-3.5 shrink-0 sm:block", tab.tone)}
+                      aria-hidden
+                    />
                     {tab.label}
                   </TabsTrigger>
                 );
@@ -707,7 +797,7 @@ export function CreateSetDialog({
                         type="button"
                         aria-label={`Remove ${image.file.name}`}
                         onClick={() => removePhoto(image.preview)}
-                        className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-white text-muted-foreground transition-colors hover:text-[#A81F28]"
+                        className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-card text-muted-foreground transition-colors hover:text-[#A81F28]"
                       >
                         <X className="size-3" />
                       </button>
@@ -754,12 +844,81 @@ export function CreateSetDialog({
                     type="button"
                     variant="ghost"
                     aria-label="Remove video"
-                    className="h-8 shrink-0 rounded-full px-3 text-xs font-semibold text-muted-foreground hover:bg-white hover:text-brand-ink"
+                    className="h-8 shrink-0 rounded-full px-3 text-xs font-semibold text-muted-foreground hover:bg-card hover:text-brand-ink"
                     onClick={() => setVideoFile(null)}
                     disabled={isLoading}
                   >
                     Remove
                   </Button>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="slides" className="mt-0">
+              <label
+                className={cn(
+                  dropzoneClass,
+                  (isLoading || readingDeck) && "pointer-events-none opacity-60",
+                )}
+              >
+                <span className="font-display text-base font-bold text-brand-ink">
+                  Drop a PowerPoint here
+                </span>
+                <span className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+                  A .pptx deck, up to 100 MB. The slide text is read in the browser,
+                  so the file stays on your device.
+                </span>
+                <input
+                  type="file"
+                  accept=".pptx,.pptm,.ppsx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                  className="hidden"
+                  disabled={isLoading || readingDeck}
+                  onChange={(event) => {
+                    void chooseDeck(event.target.files?.[0] ?? null);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+
+              {readingDeck && (
+                <p
+                  className="mt-3 flex items-center gap-2 rounded-2xl bg-brand-panel px-3.5 py-2.5 text-xs font-medium text-muted-foreground"
+                  role="status"
+                >
+                  <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden />
+                  Reading the slides…
+                </p>
+              )}
+
+              {deck && !readingDeck && (
+                <div className="mt-3 rounded-2xl bg-brand-panel p-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-brand-ink">
+                        {deck.file.name}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {fileSize(deck.file.size)} · {plural(deck.slideCount, "slide")} ·
+                        text read from {plural(deck.textSlides, "slide")}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      aria-label="Remove PowerPoint"
+                      className="h-8 shrink-0 rounded-full px-3 text-xs font-semibold text-muted-foreground hover:bg-card hover:text-brand-ink"
+                      onClick={() => setDeck(null)}
+                      disabled={isLoading}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  {deck.truncated && (
+                    <p className="mt-2.5 rounded-xl bg-[#FFF6E5] px-2.5 py-2 text-[0.7rem] leading-relaxed text-[#8A5D00]">
+                      This deck is longer than one build can read, so Bluprint uses
+                      the first {MAX_NOTE_CHARS_LABEL} characters of slide text.
+                    </p>
+                  )}
                 </div>
               )}
             </TabsContent>
@@ -774,7 +933,7 @@ export function CreateSetDialog({
                 placeholder="Paste lecture notes, a textbook section or your own writing…"
                 rows={8}
                 disabled={isLoading}
-                className="min-h-[190px] resize-y rounded-2xl border-border bg-white text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
+                className="min-h-[190px] resize-y rounded-2xl border-border bg-card text-sm leading-relaxed text-brand-ink shadow-none placeholder:text-muted-foreground/90 focus-visible:border-chrome-6 focus-visible:ring-chrome-6/15"
               />
               <div className="mt-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground">
                 <span>At least {MIN_NOTE_CHARS} characters; a few sentences is enough to start</span>
@@ -920,13 +1079,15 @@ export function CreateSetDialog({
                   ? "Clear, straight-on photos transcribe best"
                   : mode === "video"
                     ? "Slides and printed pages work best"
-                    : "Pasted notes are saved with the set"}
+                    : mode === "slides"
+                      ? "Slide text is saved with the set"
+                      : "Pasted notes are saved with the set"}
             </p>
             <div className="flex gap-2 sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
-                className="h-11 flex-1 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel sm:flex-none"
+                className="h-11 flex-1 rounded-full border-border bg-card px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel sm:flex-none"
                 onClick={() => handleClose(false)}
                 disabled={isLoading}
               >

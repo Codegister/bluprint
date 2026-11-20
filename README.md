@@ -146,13 +146,15 @@ course never lands in a "needs a retry" state.
 
 ### 2. Build a set, from a course or your own material
 
-**Add material** opens four sources on one dialog. **Course** builds from a topic you have
+**Add material** opens five sources on one dialog. **Course** builds from a topic you have
 already mapped, defaulting to the next unfinished topic and using that topic's specification
 notes, so the set is grounded without another upload; building the same topic twice opens
 the set you already have instead of duplicating it. When courses are ready this is the tab
 the dialog opens on. **Photos** takes up to eight pages, **Video** samples six frames in the
-browser, and **Paste** takes up to 20,000 characters of notes — the right path for a single
-handout or material that does not follow a specification. For those three, the dialog asks
+browser, **Slides** reads the text out of a `.pptx` deck in the browser (the file itself is
+never uploaded, and a deck of pictures only is refused with a pointer to photos), and
+**Paste** takes up to 20,000 characters of notes — the right path for a single
+handout or material that does not follow a specification. For those four, the dialog asks
 for the material and how much to build: three sliders choose flashcards, quiz questions and
 exam-style questions separately, each from 1 to 100. A course set takes its size from the
 pathway instead. Uploaded sets are named after the source file or the first line of the
@@ -182,7 +184,8 @@ earned. Four practice papers per course is the cap; remove one to build another.
 ## What version 1 does
 
 1. **Add source material** — up to eight photos (JPG or PNG), a video (six frames are
-   sampled in the browser), or pasted text.
+   sampled in the browser), a PowerPoint (`.pptx`) deck, whose slide text is read in the
+   browser, or pasted text.
 2. **Compile** — NVIDIA reads the source, then generates a structured summary and up to
    100 of each: detail-heavy flashcards, quiz questions with explanations, and written
    exam questions with marking guides. The numbers are chosen with three sliders at
@@ -435,7 +438,10 @@ Sets built from a course topic link back to that course.
 - **Requested counts are capped by the material.** The sliders allow 1–100, but before
   generating Bluprint estimates a ceiling from the notes' words and distinct statements —
   roughly one card per 6 words or two per statement, one quiz question per 8 words or one
-  per statement, and one exam question per 15 words or one per statement. The request is
+  per statement, and one exam question per 15 words or one per statement. A statement ends
+  at sentence punctuation or at a bullet, and a long text carrying no punctuation counts
+  one statement per 40 words, so a slide deck written as fragments is not read as a single
+  fact. The request is
   kept on the set, so the page can say "asked for 100, built 34" and explain that the
   material set the limit. Exam questions still need more substance than a flashcard.
 - **A single failed generation stage does not lose the set.** Bad JSON is repaired first

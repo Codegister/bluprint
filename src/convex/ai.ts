@@ -4553,11 +4553,13 @@ async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationAr
   try {
     const apiKeys = await resolveNvidiaKeys(ctx, args.userId);
     // The quiz normally waits for the deck so it can avoid testing the same
-    // facts. On a long continuation the three sections are independent enough
-    // to overlap: quiz generation starts against the cards already saved, then
-    // the finished deck filters any overlaps and tops up the shortfall. This
-    // keeps the no-repeat rule while removing the two sequential generation
-    // windows. Small decks stay sequential because one batch already finishes.
+    // facts. The three sections are independent enough to overlap once a full
+    // card batch is still to come: quiz generation starts against the cards
+    // already saved, then the finished deck filters any overlaps and tops up
+    // the shortfall. This keeps the no-repeat rule while removing the two
+    // sequential generation windows. A shorter tail stays sequential: one batch
+    // finishes in about the time an overlap would save, and a quiz seeded from
+    // one or two cards spends more on top-ups than it gains.
     const parallelStages =
       remaining >= CARD_BATCH_SIZE &&
       set.generationNotes === undefined &&

@@ -14,13 +14,24 @@
 
 export type MaterialLimits = { cards: number; quiz: number; exam: number };
 
+/**
+ * How many words one statement is assumed to hold when a text has no sentence
+ * punctuation to split on. Without this floor a slide deck written as fragments
+ * counted as one statement: a 41-slide, 1,243-word deck was capped at two
+ * cards, because nothing in it ended in a full stop.
+ */
+const WORDS_PER_STATEMENT_FLOOR = 40;
+
 /** Statements in the material, used as a proxy for distinct facts. */
 export function noteFacts(notes: string): string[] {
   const clean = notes.replace(/\s+/g, " ").trim();
   if (!clean) return [];
 
+  // A statement ends at sentence punctuation or at a bullet. Slide decks and
+  // handouts list each fact as its own bullet with no full stop, so bullets are
+  // boundaries in their own right; the deck reader keeps them as `•`.
   const parts = clean
-    .split(/(?<=[.!?;:])\s+/)
+    .split(/(?<=[.!?;:])\s+|\s*[•·]\s*/)
     .map((part) => part.trim())
     .filter((part) => part.length >= 20);
   const source = parts.length > 0 ? parts : [clean];
@@ -43,7 +54,12 @@ export function noteFacts(notes: string): string[] {
 export function materialLimits(notes: string, max = 100): MaterialLimits {
   const clean = notes.replace(/\s+/g, " ").trim();
   const words = clean ? clean.split(" ").length : 0;
-  const facts = Math.max(1, noteFacts(notes).length);
+  const facts = Math.max(
+    1,
+    noteFacts(notes).length,
+    // A long text that happens to carry no punctuation still holds facts.
+    Math.ceil(words / WORDS_PER_STATEMENT_FLOOR),
+  );
   const byWords = (divisor: number) => Math.max(1, Math.floor(words / divisor));
 
   return {
