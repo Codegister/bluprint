@@ -44,6 +44,36 @@ export type IncidentKind =
   | "network"
   | "empty-answer";
 
+/**
+ * Why the deployment's own AI key is not usable, when it is not.
+ *
+ * "missing" is a deployment with nothing configured, so no request can ever be
+ * sent; "refused" is a key the provider turned away, which the liveness probe
+ * records as a `health-check` incident. They read the same to a student but
+ * they are not the same problem, and only one of them is worth retrying.
+ */
+export type DeploymentKeyState = "ok" | "missing" | "refused";
+
+/**
+ * Reads the deployment pool's state from its size and the incidents it caused.
+ *
+ * Only `health-check` incidents count: the liveness probe is the one caller
+ * that spends the shared key and nothing else, so a student's dead personal
+ * key can never make the deployment look broken to everyone else.
+ */
+export function deploymentKeyState(
+  keyCount: number,
+  incidents: Array<{ purpose: string; kind: string }>,
+): DeploymentKeyState {
+  if (keyCount === 0) return "missing";
+  const refused = incidents.some(
+    (row) =>
+      row.purpose === "health-check" &&
+      (row.kind === "auth" || row.kind === "no-credits"),
+  );
+  return refused ? "refused" : "ok";
+}
+
 /** Groups an upstream status into the cause a person would act on. */
 export function incidentKind(status: number): IncidentKind {
   if (status === 404 || status === 410) return "model-unavailable";

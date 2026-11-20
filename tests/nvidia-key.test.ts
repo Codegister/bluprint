@@ -184,10 +184,25 @@ describe("key rotation after a refusal", () => {
     rotation.refuse("nvapi-a", now);
 
     // Parked: the request fails fast instead of hammering the key.
-    expect(rotation.next(chain, now + 1_000)).toBeUndefined();
-    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS - 1)).toBeUndefined();
+    expect(rotation.next(chain, now + 1_000)).toEqual({ blocked: "refused" });
+    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS - 1)).toEqual({
+      blocked: "refused",
+    });
     // And back in rotation afterwards, so the process is never wedged for good.
-    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toBe("nvapi-a");
+    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toEqual({
+      key: "nvapi-a",
+    });
+  });
+
+  test("an empty pool is blocked as empty, never as a refusal", () => {
+    const rotation = new KeyRotation();
+    const empty = keyChain(undefined, []);
+
+    expect(rotation.next(empty, now)).toEqual({ blocked: "empty" });
+    // Still empty after a refusal elsewhere: the message a deployment without a
+    // key produces must not depend on what the provider did.
+    rotation.refuse("nvapi-a", now);
+    expect(rotation.next(empty, now)).toEqual({ blocked: "empty" });
   });
 
   test("a refusal parks longer than a throttle, so the window is not the 429 one", () => {
@@ -196,7 +211,7 @@ describe("key rotation after a refusal", () => {
     const rotation = new KeyRotation();
     const chain = keyChain(undefined, ["nvapi-a"]);
     rotation.refuse("nvapi-a", now);
-    expect(rotation.next(chain, now + KEY_COOLDOWN_MS + 1)).toBeUndefined();
+    expect(rotation.next(chain, now + KEY_COOLDOWN_MS + 1)).toEqual({ blocked: "refused" });
   });
 
   test("a refused own key hands the request to the pool and comes back later", () => {
@@ -204,8 +219,10 @@ describe("key rotation after a refusal", () => {
     const chain = keyChain("nvapi-mine", ["nvapi-a"]);
     rotation.refuse("nvapi-mine", now);
 
-    expect(rotation.next(chain, now)).toBe("nvapi-a");
-    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toBe("nvapi-mine");
+    expect(rotation.next(chain, now)).toEqual({ key: "nvapi-a" });
+    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toEqual({
+      key: "nvapi-mine",
+    });
   });
 
   test("a 429 still cools a key briefly and is still tried when the pool is cooling", () => {
@@ -215,8 +232,8 @@ describe("key rotation after a refusal", () => {
 
     // Throttled keys are never parked out of a request: waiting is worse than a
     // possible second 429, and this is the behaviour a 429 already had.
-    expect(rotation.next(chain, now + 1_000)).toBe("nvapi-a");
-    expect(rotation.next(chain, now + KEY_COOLDOWN_MS)).toBe("nvapi-a");
+    expect(rotation.next(chain, now + 1_000)).toEqual({ key: "nvapi-a" });
+    expect(rotation.next(chain, now + KEY_COOLDOWN_MS)).toEqual({ key: "nvapi-a" });
   });
 
   test("every key refused means no key, not the retired one", () => {
@@ -225,8 +242,8 @@ describe("key rotation after a refusal", () => {
     rotation.refuse("nvapi-a", now);
     rotation.refuse("nvapi-b", now);
 
-    expect(rotation.next(chain, now)).toBeUndefined();
-    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toBeDefined();
+    expect(rotation.next(chain, now)).toEqual({ blocked: "refused" });
+    expect("key" in rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toBe(true);
   });
 });
 

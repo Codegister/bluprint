@@ -510,7 +510,7 @@ export const previewFixtures = {
     streak: 12,
     sets: [],
   },
-  aiStatus: { configured: true },
+  aiStatus: { configured: true, deploymentKeys: "ok" },
   courses: [],
   plan: previewPlan,
   today,

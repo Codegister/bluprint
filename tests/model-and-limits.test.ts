@@ -22,6 +22,7 @@ import {
 import {
   ALERT_COOLDOWN_MS,
   INCIDENT_WINDOW_MS,
+  deploymentKeyState,
   isFatalKind,
   shouldAlert,
 } from "../src/convex/lib/incidentRules";
@@ -215,5 +216,41 @@ describe("build allowances", () => {
       spent: [NOW - HOUR_MS - 1_000, NOW - HOUR_MS - 2_000],
     });
     expect(verdict.allowed).toBe(true);
+  });
+});
+
+describe("the deployment key's own state", () => {
+  const healthCheck = { purpose: "health-check", kind: "auth" };
+
+  test("no configured key is missing, not refused", () => {
+    // The two used to read the same, which sent whoever was on call looking for
+    // a provider refusal when the variable had simply never been set.
+    expect(deploymentKeyState(0, [])).toBe("missing");
+    expect(deploymentKeyState(0, [healthCheck])).toBe("missing");
+  });
+
+  test("a probe refused for auth or credits means the pool is refused", () => {
+    expect(deploymentKeyState(1, [healthCheck])).toBe("refused");
+    expect(deploymentKeyState(2, [{ purpose: "health-check", kind: "no-credits" }])).toBe(
+      "refused",
+    );
+  });
+
+  test("a healthy pool is ok, and other causes are not a refused key", () => {
+    expect(deploymentKeyState(1, [])).toBe("ok");
+    expect(
+      deploymentKeyState(1, [
+        { purpose: "health-check", kind: "model-unavailable" },
+        { purpose: "health-check", kind: "rate-limit" },
+      ]),
+    ).toBe("ok");
+  });
+
+  test("only the shared-key probe speaks for the deployment", () => {
+    // A student's own dead key records an auth incident too, under the purpose
+    // of the feature they were using. It must not tell everyone else that the
+    // deployment is broken.
+    expect(deploymentKeyState(1, [{ purpose: "build", kind: "auth" }])).toBe("ok");
+    expect(deploymentKeyState(1, [{ purpose: "tutor", kind: "auth" }])).toBe("ok");
   });
 });

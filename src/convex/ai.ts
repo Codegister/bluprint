@@ -383,17 +383,25 @@ async function notePreferredKeyState(
  * pool as before.
  */
 function nextApiKey(keys: string[]): string {
-  const key = keyRotation.next(keys as ApiKeyChain, Date.now());
-  if (!key) {
+  const choice = keyRotation.next(keys as ApiKeyChain, Date.now());
+  if ("key" in choice) return choice.key;
+
+  // The two empty cases are logged differently on purpose: "no key at all" is
+  // a deployment that was never configured, and reading it as a refusal sends
+  // whoever is on call looking for a provider problem that does not exist.
+  if (choice.blocked === "empty") {
+    console.error(
+      "[ai] no NVIDIA key is configured on this deployment: NVIDIA_API_KEY is unset and this user has no saved key",
+    );
+  } else {
     // Every key is parked after a refusal. This request fails fast; the next
     // attempt, after the window, tries them again instead of losing the key for
     // the life of the process.
     console.error(
-      "[ai] every NVIDIA_API_KEY on this deployment was refused; the next attempt tries them again",
+      "[ai] the provider refused every NVIDIA_API_KEY on this deployment; the next attempt tries them again",
     );
-    throw new Error(AI_UNAVAILABLE_MESSAGE);
   }
-  return key;
+  throw new Error(AI_UNAVAILABLE_MESSAGE);
 }
 
 // ---------------------------------------------------------------------------

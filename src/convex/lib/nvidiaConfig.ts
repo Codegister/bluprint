@@ -408,6 +408,19 @@ export const KEY_COOLDOWN_MS = 45_000;
 export const KEY_REJECTION_COOLDOWN_MS = 90_000;
 
 /**
+ * What one request should try: a key, or why there is none.
+ *
+ * The two blocked cases are kept apart because they need different fixes. An
+ * empty pool means nothing is configured, so retrying cannot help and the
+ * deployment is the thing to change. A refused pool means the provider turned
+ * the keys away, and the same keys are worth trying again after the window.
+ */
+export type KeyChoice =
+  | { key: string }
+  | { blocked: "empty" }
+  | { blocked: "refused" };
+
+/**
  * Which key one request should use, and which keys are currently parked.
  *
  * A refused key is left out until its window passes; a throttled key is
@@ -451,25 +464,27 @@ export class KeyRotation {
   }
 
   /**
-   * The next key to try, or undefined when every key is parked after a refusal.
-   * The preferred key wins whenever it is usable.
+   * The next key to try, or the reason the request has none. The preferred key
+   * wins whenever it is usable.
    */
-  next(chain: ApiKeyChain, now: number): string | undefined {
+  next(chain: ApiKeyChain, now: number): KeyChoice {
+    if (chain.length === 0) return { blocked: "empty" };
+
     const usable = chain.filter((key) => !this.refused(key, now));
-    if (usable.length === 0) return undefined;
+    if (usable.length === 0) return { blocked: "refused" };
 
     const own = preferredApiKey(
       chain,
       (key) => !this.refused(key, now) && !this.cooling(key, now),
     );
-    if (own) return own;
+    if (own) return { key: own };
 
     const ready = usable.filter((key) => !this.cooling(key, now));
     // If every key is cooling down, try the pool again rather than fail early.
     const pool = ready.length > 0 ? ready : usable;
     const key = pool[this.cursor % pool.length]!;
     this.cursor = (this.cursor + 1) % 10_000;
-    return key;
+    return { key };
   }
 }
 

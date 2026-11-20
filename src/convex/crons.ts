@@ -22,12 +22,15 @@ crons.interval(
   {},
 );
 
-// Once an hour, ask each configured model for a few tokens. A retired model is
-// recorded as a fatal incident even while the request path's fallback keeps the
-// product working, so the alert fires before every fallback is exhausted too.
+// Every ten minutes, ask each configured model for a few tokens. A retired
+// model or a key the provider refuses is recorded as a fatal incident even
+// while the request path's fallback keeps the product working, so the alert and
+// the in-app notice say so before builds fail. It runs as often as the sweep
+// because the deployment key's state is read from these rows: an hourly probe
+// would leave a refusal invisible for most of an hour.
 crons.interval(
   "ai-model-liveness",
-  { minutes: 60 },
+  { minutes: 10 },
   internal.modelProbe.check,
   {},
 );

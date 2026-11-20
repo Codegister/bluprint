@@ -1,6 +1,11 @@
 import { query } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
 import {
+  INCIDENT_WINDOW_MS,
+  deploymentKeyState,
+  type DeploymentKeyState,
+} from "./lib/incidentRules";
+import {
   DEFAULT_TUTOR_TIER_LABEL,
   TUTOR_TIER_DETAILS,
   TUTOR_TIER_LABELS,
@@ -30,10 +35,28 @@ export const aiStatus = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
 
+    // Why the deployment's own pool cannot serve requests, when it cannot. A
+    // missing key and a key the provider refuses read the same to a student,
+    // but only the second one has a provider to complain about, and the app
+    // showing the difference is what turns a silent outage into something the
+    // owner sees before a build fails.
+    let deploymentKeys: DeploymentKeyState = "missing";
+    if (keys.length > 0) {
+      const incidents = await ctx.db
+        .query("aiIncidents")
+        .withIndex("by_at", (q) => q.gte("at", Date.now() - INCIDENT_WINDOW_MS))
+        .order("desc")
+        .take(200);
+      deploymentKeys = deploymentKeyState(keys.length, incidents);
+    }
+
     // Course pathways are scraped, so they need no key. This status only
     // describes the AI used to build study sets, marking and tutoring.
     return {
       configured: keys.length > 0 || ownKey !== null,
+      // "ok", "missing" or "refused". No key values, no counts, no names: the
+      // app only needs to know which sentence to show.
+      deploymentKeys,
       // Neither the number of keys nor the environment variable name is
       // returned: both are operational detail, and the UI has no use for them.
       // Exactly three levels, in order: Fast, Balanced, Deep. The NVIDIA model

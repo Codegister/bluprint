@@ -495,6 +495,21 @@ export default function TutorPage() {
             </p>
           )}
 
+          {/* A refused deployment key is not a student's problem to fix, but it
+              is theirs to understand: without this the first sign is a build
+              failing halfway. The state comes from the liveness probe's own
+              incidents, so it clears by itself once the key is replaced. */}
+          {aiStatus?.deploymentKeys === "refused" && (
+            <p
+              role="alert"
+              className="mt-4 rounded-2xl bg-[#FFEEF0] px-4 py-2.5 text-[0.8rem] font-medium text-[#A81F28]"
+            >
+              NVIDIA is refusing this workspace's AI key, so new study sets,
+              quiz and exam questions, and tutor answers will fail until it is
+              replaced. Saved material still works.
+            </p>
+          )}
+
           <GettingStarted onExploreTutor={focusTutor} />
 
           {/* The tutor is the page's main tool: the full chat with model tiers,
