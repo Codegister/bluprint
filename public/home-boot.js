@@ -81,7 +81,7 @@
     var path = window.location.pathname.replace(/index\.html$/, "");
     var base = path.charAt(path.length - 1) === "/" ? path : path + "/";
     window.location.assign(
-      base + "auth?returnTo=" + encodeURIComponent("/tutor?new=1"),
+      base + "auth?returnTo=" + encodeURIComponent("/tutor"),
     );
   });
 

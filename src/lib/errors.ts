@@ -55,6 +55,15 @@ const STUDENT_MESSAGES = [
   "A code was requested recently",
   "Too many codes have been requested for this address",
   "Too many codes were tried from this network",
+  // Password sign-in. The server writes these sentences, and the page shows
+  // them as they are instead of a generic "couldn't sign in".
+  "That email and password don't match an account",
+  "Too many password tries",
+  "This account already has a password",
+  "The password could not be checked",
+  "Verify your email with a code before setting a password",
+  "Choose a password with at least",
+  "Enter a valid email address",
   "That item was not found",
   "That item does not belong to you",
   "Account not found",

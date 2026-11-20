@@ -8,19 +8,31 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { safeReturnTo } from "@/lib/authRedirect";
 import { cn } from "@/lib/utils";
 
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowLeft, ArrowRight, Loader2, Mail } from "lucide-react";
+import { useConvex } from "convex/react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+  Lock,
+  Mail,
+} from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 
 /** How long the page waits before offering another code. */
 const RESEND_SECONDS = 60;
+
+/** The same minimum the server enforces, so the hint never promises a rule. */
+const MIN_PASSWORD_LENGTH = 8;
 
 /** Seconds remaining until a timestamp, for the page's own countdown. */
 function secondsUntil(at: number | undefined, now: number): number {
@@ -39,6 +51,7 @@ function resolveRedirectAfterAuth(returnTo: string | null, fallback = "/tutor") 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, user, signIn } = useAuth();
   const navigate = useNavigate();
+  const convex = useConvex();
   const [searchParams] = useSearchParams();
   const linkMode = searchParams.get("link") === "1";
   const convertingGuest = linkMode && user?.isAnonymous === true;
@@ -47,7 +60,15 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     searchParams.get("returnTo"),
     redirectAfterAuth,
   );
-  const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
+  // The page's four steps. The first visit signs in with an emailed code and
+  // then offers a password; every later visit starts at the password, with the
+  // code still there for anyone who would rather not use one.
+  const [step, setStep] = useState<
+    | { kind: "email" }
+    | { kind: "password"; email: string }
+    | { kind: "code"; email: string }
+    | { kind: "newPassword"; email: string }
+  >({ kind: "email" });
   const [otp, setOtp] = useState("");
   const [typedEmail, setTypedEmail] = useState("");
   // The address a code was last sent to, and when. The cooldown belongs to the
@@ -74,7 +95,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const attemptsLeft = Math.max(0, 5 - failures);
   const resendIn =
     lastSent &&
-    step !== "signIn" &&
+    step.kind === "code" &&
     lastSent.email === step.email.trim().toLowerCase()
       ? Math.max(
           0,
@@ -89,11 +110,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   useEffect(() => {
     // A guest who arrived through "Add an email" is authenticated already, but
     // must stay on this screen to verify the new address. A normal signed-in
-    // visitor is sent straight on.
-    if (!resolving && isAuthenticated && !convertingGuest) {
+    // visitor is sent straight on. Only the first step redirects: once the page
+    // is mid-flow (choosing the password, say) the student has become signed in
+    // by design, and the flow finishes here rather than being cut short.
+    if (!resolving && isAuthenticated && !convertingGuest && step.kind === "email") {
       navigate(redirect);
     }
-  }, [resolving, isAuthenticated, convertingGuest, navigate, redirect]);
+  }, [resolving, isAuthenticated, convertingGuest, navigate, redirect, step.kind]);
 
   /** Sends a code and records when, so the resend cooldown is honest. */
   const sendCode = async (email: string): Promise<boolean> => {
@@ -104,7 +127,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       setSentTo(email);
       setFailures(0);
       setLastSent({ email: email.trim().toLowerCase(), at: Date.now() });
-      setStep({ email });
+      setStep({ kind: "code", email });
       setError(null);
       return true;
     } catch (signInError) {
@@ -132,6 +155,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       return;
     }
     setIsLoading(true);
+    // A returning student who set a password is asked for it instead of being
+    // sent another code. Everyone else gets the code, which is what creates the
+    // account on a first visit.
+    if (await addressHasPassword(email)) {
+      setStep({ kind: "password", email });
+      setIsLoading(false);
+      return;
+    }
     // The send path enforces the cooldown and the hourly cap on the server. A
     // refused send comes back as the provider's readable error.
     await sendCode(email);
@@ -165,6 +196,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setIsLoading(true);
     try {
       await signIn("email-otp", formData);
+      // First sign-in on this account: offer the password that makes the next
+      // one a single field. Skipping costs nothing, and the code keeps working.
+      if (step.kind === "code" && !(await addressHasPassword(step.email))) {
+        setStep({ kind: "newPassword", email: step.email });
+        setIsLoading(false);
+        return;
+      }
       navigate(redirect);
     } catch (verifyError) {
       setOtp("");
@@ -196,6 +234,69 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     if (sent) {
       toast.success("A new code is on its way.");
     }
+  };
+
+  /**
+   * Whether this address already has a password, which decides the form the
+   * first step shows. A failure is treated as "no password": the emailed code
+   * always works, so that is the safe answer.
+   */
+  const addressHasPassword = async (email: string): Promise<boolean> => {
+    try {
+      return await convex.query(api.passwordSignIn.hasPassword, { email });
+    } catch {
+      return false;
+    }
+  };
+
+  const handlePasswordSubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    setError(null);
+    setIsLoading(true);
+    try {
+      await signIn("password", new FormData(event.currentTarget));
+      navigate(redirect);
+    } catch (passwordError) {
+      setError(
+        readableError(
+          passwordError,
+          "That email and password don't match an account. Check them, or email yourself a code.",
+        ),
+      );
+      setIsLoading(false);
+    }
+  };
+
+  const handleNewPasswordSubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    setError(null);
+    setIsLoading(true);
+    try {
+      // `signUp` is how the provider attaches a password. The address was
+      // verified by the code that just signed in, and the server refuses a
+      // password for any address that has not been verified.
+      await signIn("password", new FormData(event.currentTarget));
+      navigate(redirect);
+    } catch (passwordError) {
+      setError(
+        readableError(
+          passwordError,
+          "We couldn't save that password. You can skip it for now and set one another time.",
+        ),
+      );
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendCodeInstead = async (email: string) => {
+    setError(null);
+    setIsLoading(true);
+    await sendCode(email);
+    setIsLoading(false);
   };
 
   const handleGuestLogin = async () => {
@@ -258,7 +359,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         </div>
 
         <motion.p className="auth-aside-foot" {...enter(0.44)}>
-          Private by default · No password to remember
+          Private by default · A code, or a password you choose
         </motion.p>
       </aside>
 
@@ -286,7 +387,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           >
             {/* Each step fades in from its side. Swapping in place (rather than
                 waiting for an exit) keeps the card's height honest. */}
-            {step === "signIn" ? (
+            {step.kind === "email" ? (
               <motion.div
                 key="sign-in"
                 initial={{ opacity: 0, x: -14 }}
@@ -301,7 +402,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
                   {convertingGuest
                     ? "We'll email a six-digit code to confirm the address. Your guest sets and progress stay attached to this account."
-                    : "We'll email you a six-digit code. New here? The same form creates your account."}
+                    : "If you've set a password, we'll ask for it. Otherwise we'll email you a six-digit code — and if you're new, this same form creates your account."}
                   </p>
 
                 <form onSubmit={handleEmailSubmit} className="mt-6" noValidate>
@@ -345,7 +446,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       <>Send another in {typedResendIn}s</>
                     ) : (
                       <>
-                        Send code
+                        Continue
                         <ArrowRight className="size-4" />
                       </>
                     )}
@@ -381,6 +482,167 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   )}
                 </form>
               </motion.div>
+            ) : step.kind === "password" ? (
+              <motion.div
+                key="password"
+                initial={{ opacity: 0, x: 14 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep({ kind: "email" });
+                    setError(null);
+                  }}
+                  className="mb-4 inline-flex items-center gap-1.5 rounded-full text-[0.85rem] font-semibold text-muted-foreground hover:text-brand-ink"
+                >
+                  <ArrowLeft className="size-3.5" /> Use a different email
+                </button>
+
+                <h2 className="text-[1.55rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
+                  Welcome back
+                </h2>
+                <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
+                  Enter the password for{" "}
+                  <span className="font-semibold text-brand-ink">
+                    {step.email}
+                  </span>
+                  .
+                </p>
+
+                <form onSubmit={handlePasswordSubmit} className="mt-6" noValidate>
+                  <input type="hidden" name="email" value={step.email} />
+                  <input type="hidden" name="flow" value="signIn" />
+
+                  <label
+                    htmlFor="password"
+                    className="text-[0.82rem] font-semibold text-brand-ink"
+                  >
+                    Password
+                  </label>
+                  <div className="relative mt-2">
+                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="Your password"
+                      className="auth-input pl-10"
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+
+                  {error && (
+                    <p className="mt-3 flex items-start gap-2 rounded-2xl bg-[#FFF1F3] px-3 py-2.5 text-[0.85rem] text-destructive">
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                      {error}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="auth-submit mt-4 w-full"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <>
+                        Sign in
+                        <ArrowRight className="size-4" />
+                      </>
+                    )}
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleSendCodeInstead(step.email)}
+                    disabled={isLoading}
+                    className="mx-auto mt-4 block text-[0.82rem] font-semibold text-brand-ink/70 underline-offset-4 hover:text-brand-ink hover:underline disabled:opacity-50"
+                  >
+                    Email me a code instead
+                  </button>
+                </form>
+              </motion.div>
+            ) : step.kind === "newPassword" ? (
+              <motion.div
+                key="new-password"
+                initial={{ opacity: 0, x: 14 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+              >
+                <h2 className="text-[1.55rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
+                  Set a password
+                </h2>
+                <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
+                  Your email is confirmed. Next time, signing in is one field and
+                  one click — or keep using codes, if you'd rather.
+                </p>
+
+                <form
+                  onSubmit={handleNewPasswordSubmit}
+                  className="mt-6"
+                  noValidate
+                >
+                  <input type="hidden" name="email" value={step.email} />
+                  <input type="hidden" name="flow" value="signUp" />
+
+                  <label
+                    htmlFor="new-password"
+                    className="text-[0.82rem] font-semibold text-brand-ink"
+                  >
+                    Password
+                  </label>
+                  <div className="relative mt-2">
+                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="new-password"
+                      name="password"
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                      className="auth-input pl-10"
+                      disabled={isLoading}
+                      required
+                      minLength={MIN_PASSWORD_LENGTH}
+                    />
+                  </div>
+
+                  {error && (
+                    <p className="mt-3 flex items-start gap-2 rounded-2xl bg-[#FFF1F3] px-3 py-2.5 text-[0.85rem] text-destructive">
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                      {error}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="auth-submit mt-4 w-full"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <>
+                        Save password
+                        <ArrowRight className="size-4" />
+                      </>
+                    )}
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigate(redirect)}
+                    disabled={isLoading}
+                    className="mx-auto mt-4 block text-[0.82rem] font-semibold text-brand-ink/70 underline-offset-4 hover:text-brand-ink hover:underline disabled:opacity-50"
+                  >
+                    Skip for now
+                  </button>
+                </form>
+              </motion.div>
             ) : (
               <motion.div
                 key="code"
@@ -391,7 +653,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 <button
                   type="button"
                   onClick={() => {
-                    setStep("signIn");
+                    setStep({ kind: "email" });
                     setError(null);
                     setOtp("");
                   }}

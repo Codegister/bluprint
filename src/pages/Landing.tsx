@@ -8,6 +8,8 @@ import { Link, useNavigate } from "react-router";
 
 const MIN_NOTES = 40;
 const HOME_DRAFT_KEY = "bluprint:home-draft";
+/** Where "Continue" lands once the visitor is signed in. */
+const HOME_HREF = "/tutor";
 
 /** The static hero writes this key before React arrives; read it once here. */
 function readHomeDraft(): string {
@@ -42,17 +44,15 @@ export default function Landing() {
   const trimmed = notes.trim();
   const tooShort = trimmed.length > 0 && trimmed.length < MIN_NOTES;
   const startHref = isAuthenticated
-    ? "/tutor?new=1"
-    : `/auth?returnTo=${encodeURIComponent("/tutor?new=1")}`;
+    ? HOME_HREF
+    : `/auth?returnTo=${encodeURIComponent(HOME_HREF)}`;
 
   function startFromHero() {
     if (tooShort) return;
     if (trimmed) savePendingNotes(trimmed);
     clearHomeDraft();
-    if (isAuthenticated) {
-      navigate("/tutor?new=1");
-      return;
-    }
+    // Sign in first, then Home. The notes wait in session storage for the
+    // create dialog; nothing opens by itself.
     navigate(startHref);
   }
 

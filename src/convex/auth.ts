@@ -1,5 +1,6 @@
 import { convexAuth, getAuthSessionId } from "@convex-dev/auth/server";
 import { Anonymous } from "@convex-dev/auth/providers/Anonymous";
+import { Password } from "@convex-dev/auth/providers/Password";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import {
@@ -22,8 +23,43 @@ import { sendRefusalMessage } from "./lib/otpLimits";
  *   calling the generated action under another name because the original
  *   builder is not exported.
  */
+/** Must match the hint on the sign-in page, so the rule is never a surprise. */
+const MIN_PASSWORD_LENGTH = 8;
+
+/** The same address check the sign-in page makes before it sends anything. */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/**
+ * Email and password, for the second visit onwards.
+ *
+ * The first sign-in stays the emailed code, because that is what proves the
+ * address is the student's. Once an account is verified the page offers to set
+ * a password, and every later visit is one field and one click.
+ *
+ * Sign-up here therefore only ever *attaches* a password to an account that
+ * already exists and is verified (see `createOrUpdateUser` below). A password
+ * can never create an account for an address nobody has proved they own.
+ */
+const password = Password({
+  profile(params) {
+    const email =
+      typeof params.email === "string" ? params.email.trim().toLowerCase() : "";
+    if (!EMAIL_PATTERN.test(email)) {
+      throw new ConvexError("Enter a valid email address, like you@school.uk.");
+    }
+    return { email };
+  },
+  validatePasswordRequirements(value) {
+    if (typeof value !== "string" || value.length < MIN_PASSWORD_LENGTH) {
+      throw new ConvexError(
+        `Choose a password with at least ${MIN_PASSWORD_LENGTH} characters.`,
+      );
+    }
+  },
+});
+
 const authConfig = convexAuth({
-  providers: [emailOtp, Anonymous],
+  providers: [emailOtp, password, Anonymous],
   // Convex Auth records every failed verification on the server, keyed by the
   // email being verified, and this is the limit that stops sustained guessing.
   // It is the same threshold as MAX_HOURLY_ATTEMPTS, so the page and the server
@@ -52,6 +88,26 @@ const authConfig = convexAuth({
           : undefined;
       const verified =
         type === "verification" || profile.emailVerified === true;
+
+      // A password may only be added to an address that a code has already
+      // verified. Without this, anyone could invent an account for somebody
+      // else's address just by choosing a password for it, and a later code
+      // sign-in would fork the account.
+      if (type === "credentials") {
+        const verifiedAddress = email
+          ? (
+              await db
+                .query("users")
+                .withIndex("email", (q) => q.eq("email", email))
+                .collect()
+            ).some((user) => user.emailVerificationTime !== undefined)
+          : false;
+        if (!verifiedAddress) {
+          throw new ConvexError(
+            "Verify your email with a code before setting a password.",
+          );
+        }
+      }
 
       // A returning student: the account that already exists is the one to
       // open. Never move it onto the guest.
@@ -282,6 +338,33 @@ export const signIn = action({
     const original = originalSignIn as unknown as {
       _handler: (ctx: ActionCtx, args: SignInArgs) => Promise<AuthSignInResult>;
     };
-    return await original._handler(ctx, args as SignInArgs);
+    try {
+      return await original._handler(ctx, args as SignInArgs);
+    } catch (error) {
+      // The library answers a bad password with "Invalid credentials" and a
+      // locked account with "TooManyFailedAttempts", all of which Convex
+      // redacts to "Server Error" before the browser sees them. Translate them
+      // into the sentences the page can show; its own five-tries-an-hour limit
+      // is still what does the counting.
+      if (args.provider !== "password" || error instanceof ConvexError) {
+        throw error;
+      }
+      throw new ConvexError(passwordRefusal(error));
+    }
   },
 });
+
+/** A password refusal the sign-in page can show, from the library's error. */
+function passwordRefusal(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/TooManyFailedAttempts/i.test(message)) {
+    return "Too many password tries. Wait a few minutes, or email yourself a code.";
+  }
+  if (/already exists/i.test(message)) {
+    return "This account already has a password. Sign in with it instead.";
+  }
+  if (/InvalidAccountId|InvalidSecret|Invalid credentials|Invalid password/i.test(message)) {
+    return "That email and password don't match an account. Check them, or email yourself a code.";
+  }
+  return "The password could not be checked. Email yourself a code instead.";
+}

@@ -153,24 +153,15 @@ export default function TutorPage() {
     if (!open) setHeroNotes(null);
   };
 
-  // Notes pasted on the landing hero before signing in. They are handed to the
-  // create dialog once, so the visitor's words become their first set.
+  // Notes pasted on the landing hero before signing in. They wait in session
+  // storage until the student opens the create dialog, so arriving on Home
+  // never throws the dialog open for them.
   const [heroNotes, setHeroNotes] = useState<string | null>(null);
   useEffect(() => {
+    if (!newSetOpen || heroNotes) return;
     const pending = takePendingNotes();
-    if (!pending) return;
-    setHeroNotes(pending);
-    setSearchParams(
-      (current) => {
-        const next = new URLSearchParams(current);
-        next.set("new", "1");
-        return next;
-      },
-      { replace: true },
-    );
-    // Runs once on arrival: the saved notes are cleared as they are read.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (pending) setHeroNotes(pending);
+  }, [newSetOpen, heroNotes]);
 
   const askTutor = useAction(api.ai.askTutor);
   const askCourseTutor = useAction(api.ai.askCourseTutor);
