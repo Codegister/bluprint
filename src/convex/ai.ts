@@ -178,7 +178,8 @@ import {
   NVIDIA_VISION_MODEL,
   generationModelChain,
   keyChain,
-  preferredApiKey,
+  KEY_COOLDOWN_MS,
+  KeyRotation,
   readNvidiaKeys,
   readTutorTier,
   textModelCandidates,
@@ -347,14 +348,10 @@ async function resolveNvidiaKeys(
 // Key rotation
 // ---------------------------------------------------------------------------
 
-/** Keep a rate-limited key out of rotation briefly before trying it again. */
-const KEY_COOLDOWN_MS = 45_000;
-
-// These live in the action's process only. They hold key values, so never log
-// or return them; they exist purely so bad or throttled keys are skipped.
-const rejectedKeys = new Set<string>();
-const coolingKeys = new Map<string, number>();
-let keyCursor = 0;
+// This lives in the action's process only. It holds key values, so never log or
+// return them; it exists purely so refused or throttled keys are skipped for a
+// while.
+const keyRotation = new KeyRotation();
 
 /**
  * Records that NVIDIA refused or throttled the personal key, when that is the
@@ -380,30 +377,22 @@ async function notePreferredKeyState(
  * Picks the next usable key.
  *
  * A user's own key is used on its own for every request while NVIDIA accepts
- * it. Only once it has been rejected or is cooling down after a 429 does the
- * shared pool fill in, and the own key is tried again the moment it is usable.
- * Requests with no own key rotate round-robin across the pool as before.
+ * it. Only once it has been parked after a refusal, or is cooling down after a
+ * 429, does the shared pool fill in, and the own key is tried again the moment
+ * its window has passed. Requests with no own key rotate round-robin across the
+ * pool as before.
  */
-function nextApiKey(keys: string[] & { preferred?: string }): string {
-  const active = keys.filter((key) => !rejectedKeys.has(key));
-  if (active.length === 0) {
-    console.error("[ai] every NVIDIA_API_KEY on this deployment was rejected");
+function nextApiKey(keys: string[]): string {
+  const key = keyRotation.next(keys as ApiKeyChain, Date.now());
+  if (!key) {
+    // Every key is parked after a refusal. This request fails fast; the next
+    // attempt, after the window, tries them again instead of losing the key for
+    // the life of the process.
+    console.error(
+      "[ai] every NVIDIA_API_KEY on this deployment was refused; the next attempt tries them again",
+    );
     throw new Error(AI_UNAVAILABLE_MESSAGE);
   }
-
-  const now = Date.now();
-  const own = preferredApiKey(
-    keys,
-    (key) =>
-      !rejectedKeys.has(key) && (coolingKeys.get(key) ?? 0) <= Date.now(),
-  );
-  if (own) return own;
-
-  const ready = active.filter((key) => (coolingKeys.get(key) ?? 0) <= now);
-  // If every key is cooling down, try the pool again rather than fail early.
-  const pool = ready.length > 0 ? ready : active;
-  const key = pool[keyCursor % pool.length]!;
-  keyCursor = (keyCursor + 1) % 10_000;
   return key;
 }
 
@@ -564,9 +553,9 @@ function modelChain(primary: string, candidates: string[]): string[] {
 /**
  * Small OpenAI-compatible wrapper around NVIDIA's chat completions endpoint.
  * Each attempt takes the next key from the pool. A 429 cools that key down and
- * moves on immediately; rejected keys are removed from rotation. Server and
- * network errors get a short backoff, and every failure becomes a message that
- * is safe and useful to show in the UI.
+ * moves on immediately; a refused key is parked and tried again once its window
+ * has passed. Server and network errors get a short backoff, and every failure
+ * becomes a message that is safe and useful to show in the UI.
  *
  * If the requested model answers 404 or 410 — retired, or not installed on
  * this account — the same request is sent to the next checked model instead of
@@ -719,7 +708,7 @@ async function nvidiaChat(
 
     if (response.status === 429) {
       // Throttled: park this key briefly and try the next one straight away.
-      coolingKeys.set(apiKey, Date.now() + KEY_COOLDOWN_MS);
+      keyRotation.cool(apiKey, Date.now());
       await notePreferredKeyState(
         apiKeys,
         apiKey,
@@ -731,8 +720,9 @@ async function nvidiaChat(
         continue;
       }
     } else if (response.status === 401 || response.status === 403) {
-      // Rejected: never use this key again in this process.
-      rejectedKeys.add(apiKey);
+      // Refused: park the key and try it again after the window, so one bad
+      // response does not take the key out of rotation for good.
+      keyRotation.refuse(apiKey, Date.now());
       await notePreferredKeyState(apiKeys, apiKey, "rejected");
       if (attempt < maxAttempts - 1) continue;
     } else if (response.status >= 500) {
@@ -8598,7 +8588,7 @@ async function streamNvidiaAnswer(
           continue;
         }
       } else if (response.status === 429) {
-        coolingKeys.set(apiKey, Date.now() + KEY_COOLDOWN_MS);
+        keyRotation.cool(apiKey, Date.now());
         await notePreferredKeyState(
           apiKeys,
           apiKey,
@@ -8610,7 +8600,7 @@ async function streamNvidiaAnswer(
           continue;
         }
       } else if (response.status === 401 || response.status === 403) {
-        rejectedKeys.add(apiKey);
+        keyRotation.refuse(apiKey, Date.now());
         await notePreferredKeyState(apiKeys, apiKey, "rejected");
         if (attempt < maxAttempts - 1) continue;
       } else if (response.status >= 500) {

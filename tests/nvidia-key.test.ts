@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { internal } from "../src/convex/_generated/api";
 import { encryptKey, decryptKey, vaultReady } from "../src/convex/lib/keyVault";
-import { keyChain, preferredApiKey } from "../src/convex/lib/nvidiaConfig";
+import {
+  KEY_COOLDOWN_MS,
+  KEY_REJECTION_COOLDOWN_MS,
+  KeyRotation,
+  keyChain,
+  preferredApiKey,
+} from "../src/convex/lib/nvidiaConfig";
 import { connect } from "../src/convex/nvidiaKeys";
 import { forget, getStored, markHealth, save, status } from "../src/convex/userKeys";
 
@@ -166,6 +172,61 @@ describe("per-request key order", () => {
       "nvapi-a",
       "nvapi-b",
     ]);
+  });
+});
+
+describe("key rotation after a refusal", () => {
+  const now = 1_800_000_000_000;
+
+  test("a refused key is parked, then tried again once its window has passed", () => {
+    const rotation = new KeyRotation();
+    const chain = keyChain(undefined, ["nvapi-a"]);
+    rotation.refuse("nvapi-a", now);
+
+    // Parked: the request fails fast instead of hammering the key.
+    expect(rotation.next(chain, now + 1_000)).toBeUndefined();
+    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS - 1)).toBeUndefined();
+    // And back in rotation afterwards, so the process is never wedged for good.
+    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toBe("nvapi-a");
+  });
+
+  test("a refusal parks longer than a throttle, so the window is not the 429 one", () => {
+    expect(KEY_REJECTION_COOLDOWN_MS).toBeGreaterThan(KEY_COOLDOWN_MS);
+
+    const rotation = new KeyRotation();
+    const chain = keyChain(undefined, ["nvapi-a"]);
+    rotation.refuse("nvapi-a", now);
+    expect(rotation.next(chain, now + KEY_COOLDOWN_MS + 1)).toBeUndefined();
+  });
+
+  test("a refused own key hands the request to the pool and comes back later", () => {
+    const rotation = new KeyRotation();
+    const chain = keyChain("nvapi-mine", ["nvapi-a"]);
+    rotation.refuse("nvapi-mine", now);
+
+    expect(rotation.next(chain, now)).toBe("nvapi-a");
+    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toBe("nvapi-mine");
+  });
+
+  test("a 429 still cools a key briefly and is still tried when the pool is cooling", () => {
+    const rotation = new KeyRotation();
+    const chain = keyChain(undefined, ["nvapi-a"]);
+    rotation.cool("nvapi-a", now);
+
+    // Throttled keys are never parked out of a request: waiting is worse than a
+    // possible second 429, and this is the behaviour a 429 already had.
+    expect(rotation.next(chain, now + 1_000)).toBe("nvapi-a");
+    expect(rotation.next(chain, now + KEY_COOLDOWN_MS)).toBe("nvapi-a");
+  });
+
+  test("every key refused means no key, not the retired one", () => {
+    const rotation = new KeyRotation();
+    const chain = keyChain(undefined, ["nvapi-a", "nvapi-b"]);
+    rotation.refuse("nvapi-a", now);
+    rotation.refuse("nvapi-b", now);
+
+    expect(rotation.next(chain, now)).toBeUndefined();
+    expect(rotation.next(chain, now + KEY_REJECTION_COOLDOWN_MS)).toBeDefined();
   });
 });
 

@@ -389,5 +389,89 @@ export function preferredApiKey(
   return usable(preferred) ? preferred : undefined;
 }
 
+/** How long a rate-limited key (429) is left out of rotation. */
+export const KEY_COOLDOWN_MS = 45_000;
+
+/**
+ * How long a key NVIDIA refused (401/403) is left out of rotation.
+ *
+ * A refusal used to retire the key for the life of the process. A 401 is often
+ * a transient upstream answer — a rotated token, a gateway blip — so one bad
+ * response could end every later request in that process, which is how a build
+ * wedged halfway through instead of retrying. The key is parked instead, and
+ * tried again once this window has passed.
+ *
+ * Ninety seconds is longer than the transport's own retry cadence, so a burst
+ * of attempts does not hammer a key that just refused, and shorter than the
+ * next automatic rebuild, so a one-off refusal does not end a build.
+ */
+export const KEY_REJECTION_COOLDOWN_MS = 90_000;
+
+/**
+ * Which key one request should use, and which keys are currently parked.
+ *
+ * A refused key is left out until its window passes; a throttled key is
+ * skipped while it cools, but is still tried when the whole pool is cooling,
+ * because a possible 429 beats failing the stage outright.
+ */
+export class KeyRotation {
+  private readonly refusedUntil = new Map<string, number>();
+  private readonly coolingUntil = new Map<string, number>();
+  private cursor = 0;
+
+  /** NVIDIA refused this key (401/403): park it and try it again later. */
+  refuse(key: string, now: number): void {
+    this.refusedUntil.set(key, now + KEY_REJECTION_COOLDOWN_MS);
+  }
+
+  /** NVIDIA throttled this key (429): keep it out of rotation briefly. */
+  cool(key: string, now: number): void {
+    this.coolingUntil.set(key, now + KEY_COOLDOWN_MS);
+  }
+
+  /** True while the key is parked after a refusal. */
+  private refused(key: string, now: number): boolean {
+    const until = this.refusedUntil.get(key);
+    if (until === undefined) return false;
+    if (until > now) return true;
+    // The window has passed, so the key is worth another try.
+    this.refusedUntil.delete(key);
+    return false;
+  }
+
+  /** True while the key is cooling down after a 429. */
+  private cooling(key: string, now: number): boolean {
+    const until = this.coolingUntil.get(key);
+    if (until === undefined) return false;
+    if (until <= now) {
+      this.coolingUntil.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * The next key to try, or undefined when every key is parked after a refusal.
+   * The preferred key wins whenever it is usable.
+   */
+  next(chain: ApiKeyChain, now: number): string | undefined {
+    const usable = chain.filter((key) => !this.refused(key, now));
+    if (usable.length === 0) return undefined;
+
+    const own = preferredApiKey(
+      chain,
+      (key) => !this.refused(key, now) && !this.cooling(key, now),
+    );
+    if (own) return own;
+
+    const ready = usable.filter((key) => !this.cooling(key, now));
+    // If every key is cooling down, try the pool again rather than fail early.
+    const pool = ready.length > 0 ? ready : usable;
+    const key = pool[this.cursor % pool.length]!;
+    this.cursor = (this.cursor + 1) % 10_000;
+    return key;
+  }
+}
+
 /** Keep prompts bounded so a giant PDF paste does not blow the context window. */
 export const MAX_NOTES_CHARS = 12_000;
