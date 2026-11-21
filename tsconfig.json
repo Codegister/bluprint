@@ -7,7 +7,11 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // `convex-test` imports the `convex` package root, and Bun resolves the
+      // bare name to this project's `convex.json` when that file exists. Point
+      // it at the package's entry so the convex-test integration tests load.
+      "convex": ["./node_modules/convex/dist/esm/index.js"]
     }
   }
 }
