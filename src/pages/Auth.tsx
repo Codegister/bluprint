@@ -68,6 +68,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     | { kind: "password"; email: string }
     | { kind: "code"; email: string }
     | { kind: "newPassword"; email: string }
+    | { kind: "reset"; email: string }
   >({ kind: "email" });
   const [otp, setOtp] = useState("");
   const [typedEmail, setTypedEmail] = useState("");
@@ -93,10 +94,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   // real five-tries-per-hour limit on every verification.
   const [failures, setFailures] = useState(0);
   const attemptsLeft = Math.max(0, 5 - failures);
+  // Both code screens share the one cooldown: it belongs to the address, and
+  // the server counts sign-in and reset codes against the same budget.
+  const codeStepEmail =
+    step.kind === "code" || step.kind === "reset"
+      ? step.email.trim().toLowerCase()
+      : "";
   const resendIn =
-    lastSent &&
-    step.kind === "code" &&
-    lastSent.email === step.email.trim().toLowerCase()
+    lastSent && codeStepEmail && lastSent.email === codeStepEmail
       ? Math.max(
           0,
           Math.ceil((lastSent.at + RESEND_SECONDS * 1000 - now) / 1000),
@@ -159,7 +164,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     // sent another code. Everyone else gets the code, which is what creates the
     // account on a first visit.
     if (await addressHasPassword(email)) {
-      setStep({ kind: "password", email });
+      // The password account is stored under the lowercased address (the
+      // server's profile does that), and Convex Auth's reset code is only
+      // accepted for the address it was issued to. Carrying the same form here
+      // means a capital letter typed today cannot break a reset later.
+      setStep({ kind: "password", email: email.trim().toLowerCase() });
       setIsLoading(false);
       return;
     }
@@ -227,7 +236,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const handleResend = async () => {
     if (!sentTo || resendIn > 0) return;
     setIsLoading(true);
-    const sent = await sendCode(sentTo);
+    // On the reset screen the new code must be a reset code, not a sign-in one.
+    const sent =
+      step.kind === "reset"
+        ? await requestResetCode(sentTo)
+        : await sendCode(sentTo);
     setIsLoading(false);
     setOtp("");
     setFailures(0);
@@ -297,6 +310,82 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setIsLoading(true);
     await sendCode(email);
     setIsLoading(false);
+  };
+
+  /**
+   * Asks the server to email a password-reset code. This is Convex Auth's own
+   * reset flow, so the code is tied to the address on the account and only a
+   * correct code can replace the password: forgetting it does not mean losing
+   * the account, and nobody else can take it over.
+   */
+  const requestResetCode = async (email: string): Promise<boolean> => {
+    const formData = new FormData();
+    formData.set("email", email);
+    formData.set("flow", "reset");
+    try {
+      await signIn("password", formData);
+      setSentTo(email);
+      setFailures(0);
+      setLastSent({ email: email.trim().toLowerCase(), at: Date.now() });
+      setOtp("");
+      setStep({ kind: "reset", email });
+      setError(null);
+      return true;
+    } catch (resetError) {
+      setError(
+        readableError(
+          resetError,
+          "We couldn't send a reset code. Try again in a minute, or email yourself a sign-in code.",
+        ),
+      );
+      return false;
+    }
+  };
+
+  const handleForgotPassword = async (email: string) => {
+    setError(null);
+    setIsLoading(true);
+    await requestResetCode(email);
+    setIsLoading(false);
+  };
+
+  const handleResetSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+
+    if (attemptsLeft === 0) {
+      setError("Request a new reset code below to keep trying.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // One call checks the code, replaces the password and signs the student
+      // in. The old password stops working the moment the new one is saved.
+      await signIn("password", new FormData(event.currentTarget));
+      navigate(redirect);
+    } catch (resetError) {
+      setOtp("");
+      // A dropped connection is not a wrong code, and must not spend a try.
+      const message =
+        resetError instanceof Error ? resetError.message : String(resetError);
+      if (/network|fetch|disconnect|timed? ?out|offline/i.test(message)) {
+        setError(
+          "We couldn't reach the server. Check your connection and try again — that attempt was not counted.",
+        );
+        setIsLoading(false);
+        return;
+      }
+
+      setFailures((count) => count + 1);
+      setError(
+        readableError(
+          resetError,
+          "That code didn't work. Check it, or request a new one.",
+        ),
+      );
+      setIsLoading(false);
+    }
   };
 
   const handleGuestLogin = async () => {
@@ -565,6 +654,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   >
                     Email me a code instead
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleForgotPassword(step.email)}
+                    disabled={isLoading}
+                    className="mx-auto mt-2 block text-[0.82rem] font-semibold text-brand-ink/70 underline-offset-4 hover:text-brand-ink hover:underline disabled:opacity-50"
+                  >
+                    Forgot your password?
+                  </button>
                 </form>
               </motion.div>
             ) : step.kind === "newPassword" ? (
@@ -641,6 +738,155 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   >
                     Skip for now
                   </button>
+                </form>
+              </motion.div>
+            ) : step.kind === "reset" ? (
+              <motion.div
+                key="reset"
+                initial={{ opacity: 0, x: 14 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep({ kind: "password", email: step.email });
+                    setError(null);
+                    setOtp("");
+                  }}
+                  className="mb-4 inline-flex items-center gap-1.5 rounded-full text-[0.85rem] font-semibold text-muted-foreground hover:text-brand-ink"
+                >
+                  <ArrowLeft className="size-3.5" /> Back
+                </button>
+
+                <h2 className="text-[1.55rem] font-extrabold leading-tight tracking-[-0.03em] text-brand-ink">
+                  Choose a new password
+                </h2>
+                <p className="mt-1.5 text-[0.9rem] leading-relaxed text-muted-foreground">
+                  Enter the six-digit code sent to{" "}
+                  <span className="font-semibold text-brand-ink">
+                    {step.email}
+                  </span>{" "}
+                  and pick the password you want. Saving it signs you in, and the
+                  old password stops working.
+                </p>
+
+                <form onSubmit={handleResetSubmit} className="mt-6">
+                  <input type="hidden" name="email" value={step.email} />
+                  <input type="hidden" name="code" value={otp} />
+                  <input
+                    type="hidden"
+                    name="flow"
+                    value="reset-verification"
+                  />
+
+                  <div className="flex justify-center">
+                    <InputOTP
+                      value={otp}
+                      onChange={setOtp}
+                      maxLength={6}
+                      disabled={isLoading}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && otp.length === 6 && !isLoading) {
+                          const form = (event.target as HTMLElement).closest("form");
+                          form?.requestSubmit();
+                        }
+                      }}
+                    >
+                      <InputOTPGroup className="gap-1.5">
+                        {Array.from({ length: 6 }).map((_, index) => (
+                          <InputOTPSlot
+                            key={index}
+                            index={index}
+                            className="size-11 rounded-xl border border-border bg-white text-lg font-semibold text-brand-ink first:rounded-xl last:rounded-xl"
+                          />
+                        ))}
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+
+                  {/* The server owns the limit; this is the page's own count of
+                      the misses it has seen. */}
+                  <p
+                    className={cn(
+                      "mt-3 text-center text-[0.78rem] font-medium",
+                      attemptsLeft > 0
+                        ? "text-muted-foreground"
+                        : "text-[#A81F28]",
+                    )}
+                    aria-live="polite"
+                  >
+                    {attemptsLeft > 0
+                      ? `${attemptsLeft} of 5 tries left for this code`
+                      : "Request a new code below."}
+                  </p>
+
+                  <label
+                    htmlFor="reset-password"
+                    className="mt-4 block text-[0.82rem] font-semibold text-brand-ink"
+                  >
+                    New password
+                  </label>
+                  <div className="relative mt-2">
+                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="reset-password"
+                      name="newPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+                      className="auth-input pl-10"
+                      disabled={isLoading}
+                      required
+                      minLength={MIN_PASSWORD_LENGTH}
+                    />
+                  </div>
+
+                  {error && (
+                    <p className="mt-3 flex items-start gap-2 rounded-2xl bg-[#FFF1F3] px-3 py-2.5 text-[0.85rem] text-destructive">
+                      <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                      {error}
+                    </p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading || otp.length !== 6}
+                    className="auth-submit mt-5 w-full"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        Saving…
+                      </>
+                    ) : (
+                      <>
+                        Save new password
+                        <ArrowRight className="ml-1 size-4" />
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleResend()}
+                      disabled={isLoading || resendIn > 0}
+                      className="rounded-full px-3 py-1.5 text-[0.82rem] font-semibold text-brand-ink/75 underline-offset-4 hover:text-brand-ink hover:underline disabled:text-muted-foreground disabled:no-underline"
+                    >
+                      {resendIn > 0
+                        ? `Resend reset code in ${resendIn}s`
+                        : "Resend reset code"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSendCodeInstead(step.email)}
+                      disabled={isLoading}
+                      className="text-[0.82rem] font-semibold text-brand-ink/70 underline-offset-4 hover:text-brand-ink hover:underline disabled:opacity-50"
+                    >
+                      Email me a sign-in code instead
+                    </button>
+                  </div>
                 </form>
               </motion.div>
             ) : (

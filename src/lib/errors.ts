@@ -61,6 +61,15 @@ const STUDENT_MESSAGES = [
   "Too many password tries",
   "This account already has a password",
   "The password could not be checked",
+  // Resetting a forgotten password. The reset needs its own words, because
+  // "email and password don't match" is the wrong sentence for a reset code
+  // that did not work.
+  "That address doesn't have a password to reset",
+  "We couldn't send the reset code",
+  "We couldn't send a reset code",
+  "We couldn't set that password",
+  "Too many tries",
+  "That code didn't work",
   "Verify your email with a code before setting a password",
   "Choose a password with at least",
   "Enter a valid email address",

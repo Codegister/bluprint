@@ -9,8 +9,10 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { emailOtp } from "./auth/emailOtp";
+import { passwordResetOtp } from "./auth/passwordResetEmail";
 import { randomAvatarId } from "../lib/avatars";
 import { sendRefusalMessage } from "./lib/otpLimits";
+import { passwordRefusal } from "./lib/passwordRefusal";
 
 /**
  * The auth configuration also owns the two server-side protections that cannot
@@ -39,6 +41,11 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  * Sign-up here therefore only ever *attaches* a password to an account that
  * already exists and is verified (see `createOrUpdateUser` below). A password
  * can never create an account for an address nobody has proved they own.
+ *
+ * `reset` is Convex Auth's own reset flow: it emails a code to the address on
+ * the account, and only that code can replace the password. So a student who
+ * has forgotten their password is never stuck — and nobody can change the
+ * password of an address they cannot receive mail at.
  */
 const password = Password({
   profile(params) {
@@ -56,6 +63,7 @@ const password = Password({
       );
     }
   },
+  reset: passwordResetOtp,
 });
 
 const authConfig = convexAuth({
@@ -296,6 +304,21 @@ export const signIn = action({
       }
     }
 
+    // A password-reset request is gated for the same reason. Convex Auth writes
+    // the new reset code before it asks the provider to mail it, so a send
+    // refused inside the provider would throw away the code already sitting in
+    // the student's inbox while failing to send a replacement.
+    const requestingReset =
+      args.provider === "password" && args.params?.flow === "reset";
+    if (requestingReset && sendEmail) {
+      const gate = await ctx.runQuery(internal.otpGuard.sendGate, {
+        email: sendEmail,
+      });
+      if (!gate.allowed) {
+        throw new ConvexError(sendRefusalMessage(gate.retryAt, Date.now()));
+      }
+    }
+
     const verifyingEmailCode =
       args.params?.code !== undefined &&
       (args.provider === undefined || args.provider === "email-otp");
@@ -349,22 +372,10 @@ export const signIn = action({
       if (args.provider !== "password" || error instanceof ConvexError) {
         throw error;
       }
-      throw new ConvexError(passwordRefusal(error));
+      const flow =
+        typeof args.params?.flow === "string" ? args.params.flow : undefined;
+      // The flow picks the words: a refused reset is not a refused sign-in.
+      throw new ConvexError(passwordRefusal(error, flow));
     }
   },
 });
-
-/** A password refusal the sign-in page can show, from the library's error. */
-function passwordRefusal(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  if (/TooManyFailedAttempts/i.test(message)) {
-    return "Too many password tries. Wait a few minutes, or email yourself a code.";
-  }
-  if (/already exists/i.test(message)) {
-    return "This account already has a password. Sign in with it instead.";
-  }
-  if (/InvalidAccountId|InvalidSecret|Invalid credentials|Invalid password/i.test(message)) {
-    return "That email and password don't match an account. Check them, or email yourself a code.";
-  }
-  return "The password could not be checked. Email yourself a code instead.";
-}
