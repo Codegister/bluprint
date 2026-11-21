@@ -3,11 +3,13 @@ import { describe, expect, test } from "bun:test";
 import { prepareCards } from "../src/convex/lib/studySetQuality";
 import { SYLLABUS_SCOPE_HEADER } from "../src/convex/lib/syllabusOutline";
 import {
+  SUMMARY_SCOPE_RETRY,
   SYLLABUS_CONTENT_SOURCE,
   cardSourceRule,
   contentNotSpecRule,
   examSourceRule,
   quizSourceRule,
+  syllabusSummaryRules,
   summaryFidelityRule,
 } from "../src/convex/lib/syllabusPrompt";
 
@@ -36,6 +38,18 @@ describe("course-set generation prompts", () => {
     expect(quizSourceRule(true)).toMatch(/subject content/i);
     expect(examSourceRule(true)).toMatch(/subject knowledge/i);
     expect(summaryFidelityRule(true)).toMatch(/subject content/i);
+  });
+
+  test("the summary teaches the content instead of listing what the set covers", () => {
+    const rules = syllabusSummaryRules(true, 2);
+    expect(rules).toMatch(/table of contents/i);
+    expect(rules).toMatch(/never say what a topic or section covers/i);
+    // The old instruction said to "name each topic area ... and say what it
+    // covers", which is exactly the non-summary students complained about.
+    expect(rules).not.toMatch(/name each topic area/i);
+    expect(rules).toMatch(/Bad key point: "Macbeth: Overview"/);
+    expect(rules).toMatch(/all 2 topics/);
+    expect(SUMMARY_SCOPE_RETRY).toMatch(/previous attempt repeated the scope/i);
   });
 
   test("uploads keep the grounding instructions", () => {

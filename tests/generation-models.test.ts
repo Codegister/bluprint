@@ -7,9 +7,11 @@ import {
 import { generationModelChain } from "../src/convex/lib/nvidiaConfig";
 
 describe("generation model routing", () => {
-  test("uses a fast writer for the summary and deck and a larger writer for retrieval", () => {
+  test("uses a larger writer for the summary and retrieval and a fast writer for the deck", () => {
+    // A course set asks the summary to teach a subject from a table of
+    // contents; the fast model listed the contents instead.
     expect(generationModelChain("summary")[0]).toBe(
-      "nvidia/nemotron-3.5-bolt-e4b",
+      "nvidia/nemotron-3.5-super-vl-120b-a12b",
     );
     expect(generationModelChain("cards")[0]).toBe(
       "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -20,10 +22,15 @@ describe("generation model routing", () => {
     expect(generationModelChain("exam")[0]).toBe(
       "nvidia/nemotron-3.5-super-vl-120b-a12b",
     );
+    // Fact-checking the deck is a reading task, so it gets the larger writer
+    // rather than the fast model that wrote the cards.
+    expect(generationModelChain("review")[0]).toBe(
+      "nvidia/nemotron-3.5-super-vl-120b-a12b",
+    );
   });
 
   test("keeps a checked fallback and never routes bulk work to the slow Ultra endpoint", () => {
-    for (const task of ["summary", "cards", "quiz", "exam"] as const) {
+    for (const task of ["summary", "cards", "quiz", "exam", "review"] as const) {
       const chain = generationModelChain(task);
       expect(chain.length).toBeGreaterThan(1);
       expect(new Set(chain).size).toBe(chain.length);

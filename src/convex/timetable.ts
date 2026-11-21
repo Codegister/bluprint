@@ -7,6 +7,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { requireUserId } from "./lib/requireUser";
+import { literaturePaperSplit, topicsInPaper } from "./lib/paperScope";
 
 /**
  * Revision timetables.
@@ -48,11 +49,12 @@ type StudyMethod = (typeof STUDY_METHODS)[number];
 const PAPER_MINUTES = 60;
 /**
  * Shape of a generated day. Older plans (no version) were filled with uniform
- * session lengths, version 2 days could leave the tail of a day unused, and
- * version 3 starts could land on odd minutes after a break, so saved days are
- * rebuilt once when next opened.
+ * session lengths, version 2 days could leave the tail of a day unused,
+ * version 3 starts could land on odd minutes after a break, and version 4
+ * ignored the course's paper split, so saved days are rebuilt once when next
+ * opened.
  */
-const PLANNER_VERSION = 4;
+const PLANNER_VERSION = 5;
 
 /**
  * Revision stops at 8pm. Evenings after that are for the rest of a student's
@@ -795,9 +797,13 @@ function planDayItems(
   return items;
 }
 
-/** Pathway topics for one course, flattened with their unit. */
-function topicsFor(course: Doc<"courses">): TopicEntry[] {
-  return (course.pathway?.units ?? []).flatMap((unit) =>
+/**
+ * Pathway topics for one course, flattened with their unit and narrowed to the
+ * paper the plan studies. Without `paper` (or for "Both") the whole pathway is
+ * returned.
+ */
+function topicsFor(course: Doc<"courses">, paper?: string): TopicEntry[] {
+  const topics = (course.pathway?.units ?? []).flatMap((unit) =>
     unit.topics.map((topic) => ({
       courseId: course._id,
       course: course.subject,
@@ -808,6 +814,12 @@ function topicsFor(course: Doc<"courses">): TopicEntry[] {
       keyPoints: topic.keyPoints,
     })),
   );
+  // Literature pathways carry no stored split, so their paper comes from the
+  // set-text units instead.
+  const split =
+    course.pathway?.papers ??
+    literaturePaperSplit(course, course.pathway?.units ?? []);
+  return topicsInPaper(topics, split, paper);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -913,12 +925,11 @@ async function coursePlans(
   for (let index = 0; index < settings.length; index += 1) {
     const setting = settings[index]!;
     const course = courses[index];
-    if (
-      !course ||
-      course.userId !== userId ||
-      course.status !== "ready" ||
-      topicsFor(course).length === 0
-    ) {
+    const topics =
+      course && course.userId === userId && course.status === "ready"
+        ? topicsFor(course, setting.paper)
+        : [];
+    if (!course || topics.length === 0) {
       continue;
     }
     const saved = await ctx.db
@@ -938,7 +949,7 @@ async function coursePlans(
       courseId: course._id,
       subject: course.subject,
       paper: setting.paper,
-      topics: topicsFor(course),
+      topics,
       papers: papers.length > 0 ? papers : [{ title: "Past paper practice" }],
     });
   }
@@ -1741,7 +1752,7 @@ export const build = mutation({
           course &&
             course.userId === userId &&
             course.status === "ready" &&
-            topicsFor(course).length > 0,
+            topicsFor(course, settings.get(course._id)?.paper).length > 0,
         ),
     );
     if (courses.length !== courseIds.length) {
@@ -1754,8 +1765,11 @@ export const build = mutation({
       .map((id) => courses.find((course) => course._id === id))
       .filter((course): course is Doc<"courses"> => Boolean(course));
 
+    // Only the topics the chosen paper examines need a session, so the total
+    // the plan is measured against is the filtered one.
     const topicTotal = ordered.reduce(
-      (sum, course) => sum + topicsFor(course).length,
+      (sum, course) =>
+        sum + topicsFor(course, settings.get(course._id)!.paper).length,
       0,
     );
     if (topicTotal === 0) {

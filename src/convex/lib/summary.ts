@@ -11,6 +11,7 @@
  */
 
 import { v } from "convex/values";
+import { isSyllabusOutline } from "./syllabusOutline";
 import { cleanTopicTitle, dominantNounPhrase, shortTitle } from "./titles";
 
 export type Summary = {
@@ -236,6 +237,33 @@ export function parseSummary(raw: string, fallbackLabel?: string | null): Summar
     );
   }
   return { title, overview, keyPoints, examFocus };
+}
+
+/**
+ * Whether a summary simply repeated the scope brief it was given.
+ *
+ * A course set's material is a table of contents, so a model that copies it
+ * looks like it succeeded: valid JSON, a full overview, several key points.
+ * The student then gets "Section 1: Macbeth ... Covers" instead of a revision
+ * aid. A copied summary is rejected so it can be retried, and is never saved.
+ * Uploads are judged by the ordinary parser; only a syllabus outline can be
+ * copied this way.
+ */
+export function summaryCopiesScope(material: string, summary: Summary): boolean {
+  if (!isSyllabusOutline(material)) return false;
+  const text = `${summary.overview}\n${summary.keyPoints.join("\n")}`.toLowerCase();
+  if (
+    ["syllabus scope for this set:", "exam board:", "course options:", "unit:"].some(
+      (marker) => text.includes(marker),
+    )
+  ) {
+    return true;
+  }
+  return (
+    /(^|\n)\s*course:/.test(text) ||
+    /\bsection \d+\s*:/.test(text) ||
+    /^\s*covers\b/.test(text)
+  );
 }
 
 /**

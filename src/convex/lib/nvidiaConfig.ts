@@ -103,21 +103,26 @@ function modelList(envName: string, fallback: string[]): string[] {
 }
 
 /** A generation task whose model is chosen separately from the tutor. */
-export type GenerationTask = "summary" | "cards" | "quiz" | "exam";
+export type GenerationTask = "summary" | "cards" | "quiz" | "exam" | "review";
 
 /**
  * The primary model for each generation task, then its fallbacks.
  *
- * The task split is deliberately conservative: a fast model writes the
- * summary and deck, a larger model writes the quiz and exam questions, and the
- * same checked fallback chain protects every task. A model that is not
- * installed (or is too slow) belongs nowhere in this table.
+ * The task split is deliberately conservative: the deck uses the faster
+ * models, a larger model writes the quiz, the exam questions, the summary and
+ * fact-checks the deck, and the same checked fallback chain protects every
+ * task. The
+ * summary uses the larger writer because a course set hands it a table of
+ * contents and asks it to teach the subject; the fast model kept listing the
+ * topics instead of summarising their content. A model that is not installed
+ * (or is too slow) belongs nowhere in this table.
  */
 export function generationModelChain(task: GenerationTask): string[] {
   const defaults: Record<GenerationTask, string[]> = {
     summary: [
-      "nvidia/nemotron-3.5-bolt-e4b",
+      "nvidia/nemotron-3.5-super-vl-120b-a12b",
       "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "nvidia/nemotron-3.5-bolt-e4b",
     ],
     cards: [
       "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -130,6 +135,14 @@ export function generationModelChain(task: GenerationTask): string[] {
       "nvidia/nemotron-3.5-bolt-e4b",
     ],
     exam: [
+      "nvidia/nemotron-3.5-super-vl-120b-a12b",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "nvidia/nemotron-3.5-bolt-e4b",
+    ],
+    // The reviewer reads the material back against the cards. Catching an
+    // invented scene is harder than writing a plausible one, so this is the
+    // larger writer rather than the fast deck model that produced the cards.
+    review: [
       "nvidia/nemotron-3.5-super-vl-120b-a12b",
       "nvidia/nemotron-3.5-lightning-30b-a3b",
       "nvidia/nemotron-3.5-bolt-e4b",

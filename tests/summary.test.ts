@@ -3,10 +3,12 @@ import { describe, expect, test } from "bun:test";
 import {
   SUMMARY_FIELDS,
   parseSummary,
+  summaryCopiesScope,
   summaryMaterialScope,
   summaryValidator,
   toSummaryArgs,
 } from "../src/convex/lib/summary";
+import { SYLLABUS_SCOPE_HEADER } from "../src/convex/lib/syllabusOutline";
 
 /**
  * A captured response from the summary call, including the `title` field whose
@@ -75,6 +77,56 @@ describe("summary generation → validation", () => {
   test("a missing title falls back to a clean label", () => {
     const noTitle = FIXTURE.replace(/\s*"title":\s*"[^"]*",/, "");
     expect(parseSummary(noTitle, "Cell Biology").title).toBe("Cell Biology");
+  });
+});
+
+describe("a summary that copies the scope", () => {
+  const brief = [
+    "Course: GCSE English Literature",
+    "Exam board: AQA",
+    "Course options: Shakespeare: Macbeth · Modern text: An Inspector Calls",
+    "",
+    SYLLABUS_SCOPE_HEADER,
+    "",
+    "Section 1: Macbeth",
+    "Unit: Shakespeare",
+    "Covers Macbeth: Overview, Plot Summary, Themes and the rest of this topic.",
+    "Covers:",
+    "- Macbeth: Overview",
+  ].join("\n");
+  const copied = {
+    title: "Macbeth and An Inspector Calls",
+    overview:
+      "Course: GCSE English Literature. Syllabus scope for this set: Section 1: Macbeth, Unit: Shakespeare, covers Macbeth: Overview, Plot Summary and Themes.",
+    keyPoints: ["Macbeth: Overview", "Macbeth: Plot Summary"],
+    examFocus: [],
+  };
+  const taught = {
+    title: "Macbeth and An Inspector Calls",
+    overview:
+      "Macbeth is a Scottish general whose ambition drives him to murder King Duncan after the witches hail him as future king. Lady Macbeth pushes him towards the killing, then guilt and paranoia destroy them both.",
+    keyPoints: [
+      "The witches greet Macbeth as thane of Cawdor and king hereafter.",
+      "Lady Macbeth calls on the spirits to unsex her before Duncan's murder.",
+      "Macduff kills Macbeth after Birnam Wood appears to move.",
+    ],
+    examFocus: ["How ambition and guilt are presented in Macbeth"],
+  };
+
+  test("the copied scope is caught and rejected", () => {
+    expect(summaryCopiesScope(brief, copied)).toBe(true);
+  });
+
+  test("a real revision summary is kept", () => {
+    expect(summaryCopiesScope(brief, taught)).toBe(false);
+  });
+
+  test("ordinary notes are never judged this way", () => {
+    // An upload may legitimately quote its own material, including a line that
+    // happens to read "Unit:".
+    expect(summaryCopiesScope("Unit: 3. Cells\nCells are the unit of life.", taught)).toBe(
+      false,
+    );
   });
 });
 

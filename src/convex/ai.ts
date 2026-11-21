@@ -38,6 +38,12 @@ import {
 } from "./lib/tutorBuildNotes";
 import { materialLimits } from "./lib/buildCapacity";
 import { toCardArgs } from "./lib/cardArgs";
+import {
+  CARD_REVIEW_SYSTEM_PROMPT,
+  applyCardReview,
+  cardReviewPrompt,
+  parseCardReview,
+} from "./lib/cardReview";
 import { toExamArgs } from "./lib/examArgs";
 import {
   buildFailureCopy,
@@ -75,17 +81,21 @@ import {
 } from "./lib/studySetQuality";
 import {
   parseSummary,
+  summaryCopiesScope,
   summaryMaterialScope,
   type Summary,
 } from "./lib/summary";
 import {
+  SUMMARY_SCOPE_RETRY,
   SYLLABUS_CONTENT_SOURCE,
   cardSourceRule,
   contentNotSpecRule,
   examSourceRule,
   quizSourceRule,
+  syllabusSummaryRules,
   summaryFidelityRule,
 } from "./lib/syllabusPrompt";
+import { isSyllabusOutline } from "./lib/syllabusOutline";
 import { dominantNounPhrase } from "./lib/titles";
 import {
   parseTopicNotes,
@@ -1391,43 +1401,54 @@ async function summariseNotes(
     ? summaryMaterialScope(notes, MAX_NOTES_CHARS)
     : { material: notes, sections: 1, shortened: false };
   const multiTopic = syllabus && scope.sections > 1;
-  const raw = await generationChat(apiKeys, "summary", {
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content:
-          `${materialBlock(scope.material)}\n\n` +
-          (qualification
-            ? `This material is for ${qualification}. Angle the exam focus at that qualification and use its command words.\n`
-            : "") +
-          (syllabus
-            ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n`
-            : "") +
-          (multiTopic
-            ? `Create a revision summary of the subject content all ${scope.sections} topics in this selection cover. ` +
-              "The overview must span the whole selection: name each topic area in the order it appears and say what it covers, instead of describing only the first topic. " +
-              "Draw the key points and exam focus from different topics rather than one part of the course. Return JSON shaped exactly like:\n"
-            : syllabus
-              ? "Create a revision summary of the subject content these topics cover. Return JSON shaped exactly like:\n"
-              : "Create a revision summary of the material. Return JSON shaped exactly like:\n") +
-          (multiTopic
-            ? '{"title":"2-5 word name for the whole selection","overview":"6-8 sentence overview covering every topic in the selection","keyPoints":["6-10 specific points worth remembering, drawn from across the topics"],"examFocus":["3-5 likely exam angles or things to memorise, drawn from across the topics"]}\n'
-            : '{"title":"2-5 word topic name","overview":"3-5 sentence overview","keyPoints":["6-10 specific points worth remembering"],"examFocus":["3-5 likely exam angles or things to memorise"]}\n') +
-          (multiTopic
-            ? "The title names the whole selection (the course and level), the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. "
-            : "The title names the topic, the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. ") +
-          `${summaryFidelityRule(syllabus)} No markdown inside values.`,
-      },
-    ],
-    maxTokens: multiTopic ? 2600 : 2200,
-    temperature: 0.15,
-    topP: 1.0,
-    disableThinking: true,
-  });
-  // The title falls back to the notes' dominant noun phrase, never to the first
-  // sentence and never to the generic "Study notes".
-  return parseSummary(raw, context?.course || dominantNounPhrase(notes));
+  const shape = multiTopic
+    ? '{"title":"2-5 word name for the whole selection","overview":"6-8 sentence overview of the actual subject content across the selection","keyPoints":["6-10 concrete facts, quotations or definitions from across the topics"],"examFocus":["3-5 likely exam angles or things to memorise, drawn from the content"]}\n'
+    : '{"title":"2-5 word topic name","overview":"3-5 sentence overview of the actual subject content","keyPoints":["6-10 concrete facts, quotations or definitions"],"examFocus":["3-5 likely exam angles or things to memorise, drawn from the content"]}\n';
+  const instruction = (extra: string) => [
+    { role: "system" as const, content: SYSTEM_PROMPT },
+    {
+      role: "user" as const,
+      content:
+        `${materialBlock(scope.material)}\n\n` +
+        (qualification
+          ? `This material is for ${qualification}. Angle the exam focus at that qualification and use its command words.\n`
+          : "") +
+        (syllabus
+          ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n${syllabusSummaryRules(multiTopic, scope.sections)}\n`
+          : "Create a revision summary of the material.\n") +
+        (extra ? `${extra}\n` : "") +
+        `Return JSON shaped exactly like:\n${shape}` +
+        (multiTopic
+          ? "The title names the whole selection (the course and level), the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. "
+          : "The title names the topic, the way a student would write it on the front of a folder: two to five words, no sentence, no full stop. ") +
+        `${summaryFidelityRule(syllabus)} No markdown inside values.`,
+    },
+  ];
+  const ask = async (extra = ""): Promise<Summary> => {
+    const raw = await generationChat(apiKeys, "summary", {
+      messages: instruction(extra),
+      maxTokens: multiTopic ? 2600 : 2200,
+      temperature: 0.15,
+      topP: 1.0,
+      disableThinking: true,
+    });
+    // The title falls back to the notes' dominant noun phrase, never to the
+    // first sentence and never to the generic "Study notes".
+    return parseSummary(raw, context?.course || dominantNounPhrase(notes));
+  };
+
+  const summary = await ask();
+  if (!syllabus || !summaryCopiesScope(scope.material, summary)) return summary;
+  // The model handed the scope back instead of teaching it. One stricter
+  // attempt; if that copies it too the build keeps an honest placeholder rather
+  // than saving the table of contents as a revision summary.
+  const retried = await ask(SUMMARY_SCOPE_RETRY);
+  if (summaryCopiesScope(scope.material, retried)) {
+    throw new Error(
+      "Bluprint could not write a content summary for this set. Rebuild it to try again.",
+    );
+  }
+  return retried;
 }
 
 // Batches keep each JSON response short enough to finish. A 20-question quiz
@@ -1577,6 +1598,19 @@ function examsForWrite(rows: Array<Doc<"examQuestions">>) {
 
 /** A usable summary assembled from the notes when the summary call fails. */
 function summaryFromNotes(notes: string, subject?: string): Summary {
+  // A course brief is scope, not notes. Copying it produced a "summary" that
+  // read "Course: ... Syllabus scope for this set: Section 1: Macbeth ..." and
+  // taught nothing; the student already has that list. Nobody should see the
+  // brief pretending to be a revision aid.
+  if (isSyllabusOutline(notes)) {
+    return {
+      title: cleanTopicTitle("", subject ?? "Study topic"),
+      overview:
+        "Bluprint could not write this set's summary. Rebuild the set to try again.",
+      keyPoints: [],
+      examFocus: [],
+    };
+  }
   const clean = notes.replace(/\s+/g, " ").trim();
   const sentences = clean
     .split(/(?<=[.!?])\s+/)
@@ -1595,6 +1629,59 @@ function summaryFromNotes(notes: string, subject?: string): Summary {
     keyPoints,
     examFocus: [],
   };
+}
+
+/**
+ * Reads a prepared batch back against the material before any of it is saved.
+ *
+ * The grounding filter above approves a card whose words appear in the notes.
+ * That is why an invented scene can survive it: "Scrooge asks whether Tiny Tim
+ * will live" reuses the extract's names while asserting a conversation that
+ * never happens. A second model, given the material and the numbered cards, is
+ * asked for an explicit wrong/keep verdict on each one, and only the cards it
+ * calls wrong are dropped.
+ *
+ * The review is fail-open. A provider error, a timeout or an unreadable reply
+ * keeps the batch the grounding filters already accepted: a reviewer outage
+ * must not cost a student their build.
+ */
+async function factCheckCards(
+  apiKeys: string[],
+  notes: string,
+  cards: readonly GeneratedCard[],
+  syllabus: boolean,
+  deadline: number,
+): Promise<GeneratedCard[]> {
+  if (cards.length === 0) return [];
+  let raw: string;
+  try {
+    raw = await generationChat(apiKeys, "review", {
+      messages: [
+        { role: "system", content: CARD_REVIEW_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: cardReviewPrompt({ material: notes, cards, syllabus }),
+        },
+      ],
+      deadline,
+      maxTokens: 2400,
+      temperature: 0,
+      topP: 1,
+      disableThinking: true,
+    });
+  } catch (error) {
+    console.error("Flashcard fact-check failed; keeping the grounded batch", error);
+    return [...cards];
+  }
+
+  const { cards: kept, dropped } = applyCardReview(
+    cards,
+    parseCardReview(raw, cards.length),
+  );
+  if (dropped > 0) {
+    console.warn(`Fact-check dropped ${dropped} unsupported flashcard(s)`);
+  }
+  return kept;
 }
 
 async function generateCards(
@@ -1692,7 +1779,17 @@ async function generateCards(
     // drop paraphrased repeats across batches, so a card cannot assert a fact
     // the notes never gave or fill the deck with the same answer twice.
     const { cards: preparedBatch } = prepareCards(batch, notes);
-    for (const card of preparedBatch) {
+    // Read the batch back against the material, then accept only the cards the
+    // reviewer did not call wrong. A dropped batch falls through to the next
+    // attempt, which asks for the cards still missing.
+    const reviewedBatch = await factCheckCards(
+      apiKeys,
+      notes,
+      preparedBatch,
+      syllabus,
+      deadline,
+    );
+    for (const card of reviewedBatch) {
       const key = card.front.toLowerCase();
       if (
         seen.has(key) ||
@@ -1721,8 +1818,9 @@ async function generateCards(
         // A progress write must never lose generated cards.
       }
     }
-    // A batch can be entirely rejected by grounding or the quality filters.
-    // Try the next bounded attempt instead of ending the stage short.
+    // A batch can be entirely rejected by grounding, the quality filters or
+    // the fact-check. Try the next bounded attempt instead of ending the stage
+    // short.
     if (added === 0) continue;
   }
 

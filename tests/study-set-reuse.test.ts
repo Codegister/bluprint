@@ -103,6 +103,26 @@ function fakeContext(tables: Tables) {
   return { ctx: { db } as unknown as MutationCtx, tables, db };
 }
 
+/**
+ * Answers the flashcard fact-check request with "keep every card". These tests
+ * script the card, quiz and exam prompts they care about; the reviewer is a
+ * separate call, so it gets a fixed approval instead of another script branch.
+ */
+function cardReviewResponse(prompt: string): Response {
+  const count = (prompt.match(/^\d+\. Q: /gm) ?? []).length;
+  const verdicts = Array.from({ length: count }, (_, index) => ({
+    card: index + 1,
+    verdict: "keep",
+    reason: "",
+  }));
+  return new Response(
+    JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ verdicts }) } }],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 const NOTES =
   "Course: GCSE Biology\nExam board: AQA\nTopic: Cell structure\nCells contain organelles.";
 
@@ -1895,18 +1915,19 @@ describe("study set reuse", () => {
     const originalGateway = process.env.RESPAN_GATEWAY_URL;
     process.env.NVIDIA_API_KEY = "test-nvidia-key";
     delete process.env.RESPAN_GATEWAY_URL;
-    let calls = 0;
+    let cardCalls = 0;
     let cardsVisibleOnSecondRequest = -1;
     globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body ?? "{}")) as {
         messages?: Array<{ content?: string }>;
       };
       const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      if (prompt.includes("<candidate_flashcards>")) return cardReviewResponse(prompt);
       if (!/Create \d+ revision flashcards/.test(prompt)) {
         throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
       }
-      calls += 1;
-      if (calls > 1) {
+      cardCalls += 1;
+      if (cardCalls > 1) {
         // The first batch has been shown as built. It must already be in the
         // database before this second request is allowed to start.
         cardsVisibleOnSecondRequest = tables.flashcards.filter(
@@ -1949,7 +1970,7 @@ describe("study set reuse", () => {
       else process.env.RESPAN_GATEWAY_URL = originalGateway;
     }
 
-    expect(calls).toBeGreaterThan(1);
+    expect(cardCalls).toBeGreaterThan(1);
     expect(cardsVisibleOnSecondRequest).toBe(2);
     const cards = tables.flashcards.filter((row) => row.setId === "set:incremental");
     expect(cards.map((card) => card.front)).toEqual([
@@ -1957,6 +1978,126 @@ describe("study set reuse", () => {
       "What does the nucleus store?",
     ]);
     expect(set.cardCount).toBe(2);
+  });
+
+  test("drops a card the fact-checker calls wrong before saving it", async () => {
+    const tables = rowsForSource("set:fact-check");
+    const set = tables.studySets[0]!;
+    set.notes = [
+      "Scrooge is a miser who refuses to spend money on Christmas.",
+      "Bob Cratchit is Scrooge's clerk.",
+      "The Ghost of Christmas Present shows Scrooge the Cratchit family.",
+      "At the end Scrooge will send the Cratchits a turkey.",
+    ].join(" ");
+    set.status = "processing";
+    set.processingStartedAt = 1;
+    set.cardCount = 0;
+    set.quizCount = 0;
+    set.examCount = 0;
+    set.targetCardCount = 2;
+    set.targetQuizCount = 0;
+    set.targetExamCount = 0;
+    set.courseId = undefined;
+    set.topicId = undefined;
+    set.topicIds = undefined;
+    tables.flashcards = [];
+    tables.quizQuestions = [];
+    tables.examQuestions = [];
+
+    const originalFetch = globalThis.fetch;
+    const originalKey = process.env.NVIDIA_API_KEY;
+    const originalGateway = process.env.RESPAN_GATEWAY_URL;
+    process.env.NVIDIA_API_KEY = "test-nvidia-key";
+    delete process.env.RESPAN_GATEWAY_URL;
+    let cardCalls = 0;
+    const reviewPrompts: string[] = [];
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        messages?: Array<{ content?: string }>;
+      };
+      const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      if (prompt.includes("<candidate_flashcards>")) {
+        reviewPrompts.push(prompt);
+        const verdicts = Array.from(prompt.matchAll(/^\d+\. Q: (.+)$/gm)).map(
+          (match, index) => ({
+            card: index + 1,
+            verdict: match[1]!.includes("Ghost of Christmas Present")
+              ? "wrong"
+              : "keep",
+            reason: match[1]!.includes("Ghost of Christmas Present")
+              ? "The extract says the Ghost shows the Cratchit family; the turkey comes at the end."
+              : "",
+          }),
+        );
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({ verdicts }) } }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      if (!/Create \d+ revision flashcards/.test(prompt)) {
+        throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
+      }
+      cardCalls += 1;
+      const cards =
+        cardCalls === 1
+          ? [
+              {
+                front: "Who is Scrooge's clerk?",
+                back: "Bob Cratchit.",
+                keyPoint: "Scrooge's clerk is Bob Cratchit.",
+              },
+              {
+                front: "What does the Ghost of Christmas Present show Scrooge?",
+                back: "A turkey.",
+                keyPoint: "The Ghost of Christmas Present shows Scrooge a turkey.",
+              },
+            ]
+          : [
+              {
+                front: "What does Scrooge send the Cratchits?",
+                back: "A turkey.",
+                keyPoint: "Scrooge sends the Cratchits a turkey.",
+              },
+            ];
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: JSON.stringify({ cards }) } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as typeof fetch;
+
+    try {
+      const action = actionContext(tables, { captureSchedule: true });
+      const handler = (continueStudySetCards as unknown as {
+        _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<any>;
+      })._handler;
+      await handler(action, {
+        setId: "set:fact-check",
+        userId: "user:source",
+        runStartedAt: 1,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalKey === undefined) delete process.env.NVIDIA_API_KEY;
+      else process.env.NVIDIA_API_KEY = originalKey;
+      if (originalGateway === undefined) delete process.env.RESPAN_GATEWAY_URL;
+      else process.env.RESPAN_GATEWAY_URL = originalGateway;
+    }
+
+    // The reviewer saw the material and the batch, and its wrong verdict kept
+    // the misattributed card out of the deck while the next batch filled the
+    // count.
+    expect(cardCalls).toBeGreaterThan(1);
+    expect(reviewPrompts[0]).toContain("Ghost of Christmas Present");
+    expect(reviewPrompts[0]).toContain("Scrooge is a miser");
+    const fronts = tables.flashcards
+      .filter((row) => row.setId === "set:fact-check")
+      .map((row) => row.front);
+    expect(fronts).toEqual([
+      "Who is Scrooge's clerk?",
+      "What does Scrooge send the Cratchits?",
+    ]);
   });
 
   test("a pathway build writes cards for every section, not just the first", async () => {
@@ -2022,6 +2163,7 @@ describe("study set reuse", () => {
         messages?: Array<{ content?: string }>;
       };
       const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
+      if (prompt.includes("<candidate_flashcards>")) return cardReviewResponse(prompt);
       if (!/Create \d+ revision flashcards/.test(prompt)) {
         throw new Error(`Unexpected AI request: ${prompt.slice(0, 120)}`);
       }
@@ -2156,6 +2298,7 @@ describe("study set reuse", () => {
         };
         const prompt = body.messages?.map((message) => message.content ?? "").join("\n") ?? "";
         prompts.push(prompt);
+        if (prompt.includes("<candidate_flashcards>")) return cardReviewResponse(prompt);
         await new Promise((resolve) => setTimeout(resolve, 10));
         let content: string;
         if (prompt.includes("Create ") && prompt.includes("revision flashcards")) {

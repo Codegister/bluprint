@@ -1145,6 +1145,51 @@ export const setExamDate = mutation({
   },
 });
 
+/**
+ * Saves the rebuild targets from the edit-set dialog.
+ *
+ * Kept apart from `updateDetails`, which also renames the set and re-validates
+ * its course: a counts-only save must not mark the title as hand-written or
+ * touch the qualification. The values use the builder's own clamp, so a stale
+ * client cannot store a target the rebuild will not honour.
+ */
+export const setBuildCounts = mutation({
+  args: {
+    setId: v.id("studySets"),
+    targetCardCount: v.number(),
+    targetQuizCount: v.number(),
+    targetExamCount: v.number(),
+  },
+  handler: async (
+    ctx,
+    { setId, targetCardCount, targetQuizCount, targetExamCount },
+  ) => {
+    const userId = await requireUserId(ctx);
+    const set = await requireOwner(await ctx.db.get(setId), userId);
+    await ctx.db.patch(setId, {
+      targetCardCount: targetCount(
+        targetCardCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        set.targetCardCount ?? BUILD_DEFAULTS.cards,
+      ),
+      targetQuizCount: targetCount(
+        targetQuizCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        set.targetQuizCount ?? BUILD_DEFAULTS.quiz,
+      ),
+      targetExamCount: targetCount(
+        targetExamCount,
+        BUILD_MIN,
+        BUILD_MAX,
+        set.targetExamCount ?? BUILD_DEFAULTS.exam,
+      ),
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const remove = mutation({
   args: { setId: v.id("studySets") },
   handler: async (ctx, { setId }) => {
