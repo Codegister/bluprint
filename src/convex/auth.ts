@@ -13,6 +13,7 @@ import { passwordResetOtp } from "./auth/passwordResetEmail";
 import { randomAvatarId } from "../lib/avatars";
 import { sendRefusalMessage } from "./lib/otpLimits";
 import { passwordRefusal } from "./lib/passwordRefusal";
+import { MIN_PASSWORD_LENGTH } from "./lib/passwordRules";
 
 /**
  * The auth configuration also owns the two server-side protections that cannot
@@ -25,9 +26,6 @@ import { passwordRefusal } from "./lib/passwordRefusal";
  *   calling the generated action under another name because the original
  *   builder is not exported.
  */
-/** Must match the hint on the sign-in page, so the rule is never a surprise. */
-const MIN_PASSWORD_LENGTH = 8;
-
 /** The same address check the sign-in page makes before it sends anything. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 

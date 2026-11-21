@@ -70,6 +70,14 @@ const STUDENT_MESSAGES = [
   "We couldn't set that password",
   "Too many tries",
   "That code didn't work",
+  // Changing a password from a signed-in session. The screen names the field
+  // that needs attention rather than reusing a sign-in sentence.
+  "That current password doesn't match",
+  "This account doesn't have a password to change yet",
+  "Choose a password different from your current one",
+  "We couldn't save that password",
+  "We couldn't change that password",
+  "Your account has no email address to change a password for",
   "Verify your email with a code before setting a password",
   "Choose a password with at least",
   "Enter a valid email address",

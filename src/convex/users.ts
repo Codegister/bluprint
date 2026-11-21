@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { isAvatarId } from "../lib/avatars";
 import { deleteStudySetCascade } from "./lib/deleteStudySet";
 
@@ -15,6 +15,19 @@ export const currentUser = query({
     const userId = await getAuthUserId(ctx);
     if (userId === null) return null;
     return await ctx.db.get(userId);
+  },
+});
+
+/**
+ * The address one account signs in with, by id, for server-side work that has
+ * already established which account it is acting on. Internal, so it cannot be
+ * called from a browser at all, and it returns nothing but the address.
+ */
+export const emailForAccount = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
+    return user?.email ?? null;
   },
 });
 

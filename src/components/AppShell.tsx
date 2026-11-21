@@ -25,12 +25,13 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import { AccountExportButton } from "@/components/study/ShareAndExport";
 import { useAuth } from "@/hooks/use-auth";
-import { notifyError } from "@/lib/errors";
+import { notifyError, readableError } from "@/lib/errors";
 import { displayName } from "@/lib/format";
 import { guestKeepWorkHref } from "@/lib/authRedirect";
+import { MIN_PASSWORD_LENGTH } from "@/convex/lib/passwordRules";
 import type { AvatarId } from "@/lib/avatars";
 import { cn } from "@/lib/utils";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { motion, useScroll } from "framer-motion";
 import {
   CalendarDays,
@@ -165,9 +166,20 @@ function Sidebar({
   const [savingName, setSavingName] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [nvidiaOpen, setNvidiaOpen] = useState(false);
   const updateDisplayName = useMutation(api.users.updateDisplayName);
   const updateAvatar = useMutation(api.users.updateAvatar);
+  const changePassword = useAction(api.changePassword.changePassword);
+  // Only an account that has a password can change one. An address that signs
+  // in with codes gets its first password right after a code verifies it, on
+  // the sign-in page.
+  const hasPassword = useQuery(
+    api.passwordSignIn.hasPassword,
+    user?.email && !user.isAnonymous ? { email: user.email } : "skip",
+  );
   const avatarSeed = user?._id ?? user?.email ?? "guest";
 
   const decks = useMemo(
@@ -210,6 +222,35 @@ function Sidebar({
       notifyError(error, "Could not update your profile picture.");
     } finally {
       setSavingAvatar(false);
+    }
+  };
+
+  const handleChangePassword = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    if (changingPassword) return;
+    const data = new FormData(event.currentTarget);
+    setPasswordError(null);
+    setChangingPassword(true);
+    try {
+      // The server checks the current password against the stored hash, so the
+      // new one is only saved by someone who knows the old one.
+      await changePassword({
+        currentPassword: String(data.get("currentPassword") ?? ""),
+        newPassword: String(data.get("newPassword") ?? ""),
+      });
+      toast.success("Password changed. Your other devices were signed out.");
+      setPasswordOpen(false);
+    } catch (error) {
+      setPasswordError(
+        readableError(
+          error,
+          "Could not change your password. Check your current password, then try again.",
+        ),
+      );
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -433,6 +474,15 @@ function Sidebar({
               >
                 NVIDIA key
               </button>
+              {user && !user.isAnonymous && hasPassword === true && (
+                <button
+                  type="button"
+                  onClick={() => setPasswordOpen(true)}
+                  className="text-[0.76rem] font-semibold text-muted-foreground underline-offset-2 hover:text-brand-ink hover:underline"
+                >
+                  Change password
+                </button>
+              )}
               {user && !user.isAnonymous && (
                 <button
                   type="button"
@@ -552,6 +602,82 @@ function Sidebar({
                 className="inline-flex h-10 items-center justify-center rounded-full bg-brand-sky px-4 text-[0.82rem] font-semibold text-[var(--signal-ink)] disabled:opacity-60"
               >
                 {savingName ? "Saving…" : "Save name"}
+              </button>
+            </AlertDialogFooter>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={passwordOpen}
+        onOpenChange={(open) => {
+          setPasswordOpen(open);
+          if (!open) setPasswordError(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-3xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">
+              Change your password
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Enter the password you use now, then choose the one you want from
+              now on. Your other devices will be signed out; this one stays
+              signed in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <form onSubmit={(event) => void handleChangePassword(event)}>
+            <label
+              htmlFor="current-password"
+              className="text-[0.8rem] font-semibold text-brand-ink"
+            >
+              Current password
+            </label>
+            <Input
+              id="current-password"
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              className="mt-2 h-11 rounded-2xl"
+              required
+            />
+
+            <label
+              htmlFor="new-password"
+              className="mt-4 block text-[0.8rem] font-semibold text-brand-ink"
+            >
+              New password
+            </label>
+            <Input
+              id="new-password"
+              name="newPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+              className="mt-2 h-11 rounded-2xl"
+              required
+            />
+
+            {passwordError && (
+              <p
+                className="mt-3 rounded-2xl bg-[#FFF1F3] px-3 py-2 text-[0.82rem] text-destructive"
+                role="alert"
+              >
+                {passwordError}
+              </p>
+            )}
+
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel className="rounded-full">
+                Cancel
+              </AlertDialogCancel>
+              <button
+                type="submit"
+                disabled={changingPassword}
+                className="inline-flex h-10 items-center justify-center rounded-full bg-brand-sky px-4 text-[0.82rem] font-semibold text-[var(--signal-ink)] disabled:opacity-60"
+              >
+                {changingPassword ? "Saving…" : "Change password"}
               </button>
             </AlertDialogFooter>
           </form>

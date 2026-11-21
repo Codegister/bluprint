@@ -9,6 +9,7 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { api } from "@/convex/_generated/api";
+import { MIN_PASSWORD_LENGTH } from "@/convex/lib/passwordRules";
 import { useAuth } from "@/hooks/use-auth";
 import { readableError } from "@/lib/errors";
 import { safeReturnTo } from "@/lib/authRedirect";
@@ -31,8 +32,7 @@ import { toast } from "sonner";
 /** How long the page waits before offering another code. */
 const RESEND_SECONDS = 60;
 
-/** The same minimum the server enforces, so the hint never promises a rule. */
-const MIN_PASSWORD_LENGTH = 8;
+
 
 /** Seconds remaining until a timestamp, for the page's own countdown. */
 function secondsUntil(at: number | undefined, now: number): number {

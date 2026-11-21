@@ -25,9 +25,22 @@ export function passwordRefusal(error: unknown, flow?: string): string {
   }
 
   if (/TooManyFailedAttempts|too many attempts/i.test(message)) {
+    if (flow === "change") {
+      return "Too many tries. Wait a few minutes, then try again.";
+    }
     return flow === "reset" || flow === "reset-verification"
       ? "Too many tries. Wait a few minutes, then request a new reset code."
       : "Too many password tries. Wait a few minutes, or email yourself a code.";
+  }
+
+  if (flow === "change") {
+    if (/InvalidAccountId/i.test(message)) {
+      return "This account doesn't have a password to change yet.";
+    }
+    if (/InvalidSecret|Invalid credentials|Invalid password/i.test(message)) {
+      return "That current password doesn't match. Check it, or use \"Forgot your password?\" on the sign-in page.";
+    }
+    return "We couldn't change that password. Try again in a moment.";
   }
 
   if (flow === "reset") {
