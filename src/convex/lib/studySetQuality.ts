@@ -22,6 +22,8 @@ export type CardLike = {
   _id?: string;
   front: string;
   back: string;
+  /** The claim the card generator wrote beside the card, when it wrote one. */
+  keyPoint?: string;
 };
 
 export type QuizLike = {
@@ -226,6 +228,27 @@ export function isNearDuplicateStudyItem(
   return (
     promptOverlap >= 0.75 ||
     (answerOverlap >= 0.8 && promptOverlap >= 0.25)
+  );
+}
+
+/**
+ * Whether a newly generated card repeats a card the set already stored.
+ *
+ * Batch-local deduplication only sees the cards this action call produced. A
+ * continuation or retry that is handed the saved deck as prompt text alone can
+ * still return the same fact again when the model ignores the instruction; the
+ * live set ended up with two word-equation and two symbol-equation cards. The
+ * saved deck is therefore passed as structured data and checked here.
+ */
+export function duplicatesExistingCard(
+  card: { front: string; back: string },
+  existing: ReadonlyArray<{ front: string; back: string }>,
+): boolean {
+  return existing.some((previous) =>
+    isNearDuplicateStudyItem(
+      { prompt: previous.front, answer: previous.back },
+      { prompt: card.front, answer: card.back },
+    ),
   );
 }
 
@@ -728,6 +751,90 @@ export function cardNeedsRepair(
   );
 }
 
+/**
+ * Words that cannot end a claim: a label cut at one of these is a fragment
+ * ("Happens to the rate of"), not a statement a student can revise.
+ */
+const LABEL_TAIL = new Set([
+  "of",
+  "to",
+  "in",
+  "the",
+  "a",
+  "an",
+  "and",
+  "for",
+  "with",
+  "by",
+  "on",
+  "at",
+  "from",
+  "down",
+]);
+
+/**
+ * Verbs that make a stripped question read as a bare verb phrase
+ * ("Increases the rate of"). A label starting with one of these is not a
+ * claim either.
+ */
+const LABEL_VERBS = new Set([
+  "happens",
+  "occurs",
+  "increases",
+  "decreases",
+  "makes",
+  "breaks",
+  "causes",
+  "produces",
+  "forms",
+  "gives",
+  "takes",
+  "uses",
+  "allows",
+  "moves",
+  "changes",
+  "means",
+  "shows",
+  "contains",
+  "involves",
+  "affects",
+  "releases",
+  "absorbs",
+  "reflects",
+  "transmits",
+  "needs",
+  "requires",
+  "prevents",
+  "controls",
+  "regulates",
+  "carries",
+  "travels",
+  "reaches",
+  "becomes",
+  "remains",
+  "depends",
+]);
+
+function lastWord(text: string): string {
+  const words = normalizeAnswer(text).split(" ").filter(Boolean);
+  return words[words.length - 1] ?? "";
+}
+
+function firstWord(text: string): string {
+  return normalizeAnswer(text).split(" ").filter(Boolean)[0] ?? "";
+}
+
+/** Whether a generated key point is a complete claim, not a cut-off label. */
+function usableKeyPoint(value: string | undefined): string | null {
+  if (!value) return null;
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (clean.length < 12) return null;
+  if (clean.split(" ").filter(Boolean).length < 2) return null;
+  if (LABEL_TAIL.has(lastWord(clean))) return null;
+  if (LABEL_VERBS.has(firstWord(clean))) return null;
+  return clean;
+}
+
 /** A short, revision-ready label from a question, used for a key point. */
 function claimLabel(front: string): string {
   let text = front.replace(/\?+\s*$/, "").trim();
@@ -747,25 +854,36 @@ function claimLabel(front: string): string {
     .slice(0, 5);
   if (words.length === 0) return "";
   const phrase = words.join(" ");
+  // A label ending in a function word ("…the rate of") or opening with a bare
+  // third-person verb ("Happens to the rate") is a fragment. The caller then
+  // falls back to the answer alone, which is a readable claim.
+  if (LABEL_TAIL.has(lastWord(phrase))) return "";
+  if (LABEL_VERBS.has(firstWord(phrase))) return "";
   return phrase.charAt(0).toUpperCase() + phrase.slice(1);
 }
 
 /**
- * One key point per card, in card order. The label comes from the question and
- * the claim from the answer, so the summary is not a copy of a source sentence
- * and cannot drift out of sync with the deck.
+ * One key point per card, in card order. The card generator is asked for a
+ * `keyPoint` beside every card, and that claim is used when it exists: it was
+ * written from the card's own content, whereas a label rebuilt from the
+ * question used to cut the claim into a fragment. A missing or fragmentary
+ * key point falls back to a label plus the answer, and then to the answer
+ * alone.
  */
-export function keyPointForCard(card: Pick<CardLike, "front" | "back">): string {
-  const label = claimLabel(card.front);
+export function keyPointForCard(
+  card: Pick<CardLike, "front" | "back" | "keyPoint">,
+): string {
   const answer = repairCardAnswer(card.back, 220);
-  const point = label ? `${label}: ${answer}` : answer;
+  const generated = usableKeyPoint(card.keyPoint);
+  const label = generated ? "" : claimLabel(card.front);
+  const point = generated ?? (label ? `${label}: ${answer}` : answer);
   return point.length <= MAX_KEY_POINT_CHARS
     ? point
     : repairCardAnswer(point, MAX_KEY_POINT_CHARS);
 }
 
 export function keyPointsForCards(
-  cards: ReadonlyArray<Pick<CardLike, "front" | "back">>,
+  cards: ReadonlyArray<Pick<CardLike, "front" | "back" | "keyPoint">>,
 ): string[] {
   return cards.map(keyPointForCard);
 }
@@ -846,10 +964,12 @@ export function prepareCards<T extends CardLike & { beyondNotes?: boolean }>(
       dropped += 1;
       continue;
     }
-    const keyPoint = keyPointForCard({ front, back });
+    let keyPoint = keyPointForCard({ front, back, keyPoint: card.keyPoint });
     if (ground && !isClaimSupportedByNotes(notes, keyPoint)) {
-      dropped += 1;
-      continue;
+      // The card's own answer already passed grounding. A generated claim that
+      // paraphrases it ("sends" for "will send") must not drop a good card, so
+      // fall back to the answer rather than discarding the fact.
+      keyPoint = keyPointForCard({ front, back });
     }
     kept.push({
       front,
@@ -898,11 +1018,72 @@ export function isSubjectDeletionCloze(
   return sentences.some((sentence) => wordOverlap(tail, sentence) >= 0.7);
 }
 
-/** Options start with a capital and do not carry a stray full stop. */
+/**
+ * The leading label a model sometimes prints inside the option text: "B.",
+ * "(c)", "D:" or "A -". The quiz screen prints its own positional letters, so
+ * a stored label is the live bug where the correct option sat in position C
+ * but read "B.", and the explanation then called position C wrong.
+ */
+const OPTION_LABEL = /^\s*(?:\(([A-Da-d])\)|([A-Da-d])\s*(?:[).:–—]|-(?=\s)))\s*/;
+
+/** The letter an option carries, or null when it has no label. */
+export function optionLabel(option: string): string | null {
+  const match = OPTION_LABEL.exec(option);
+  const letter = match?.[1] ?? match?.[2];
+  return letter ? letter.toUpperCase() : null;
+}
+
+/** Options start with a capital and do not carry a label or a stray full stop. */
 export function formatOption(option: string): string {
-  const clean = option.replace(/\s+/g, " ").trim().replace(/[.;]+$/, "");
+  const clean = option
+    .replace(OPTION_LABEL, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.;]+$/, "");
   if (!clean) return "";
   return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+/**
+ * Removes option labels and makes every letter reference mean a position.
+ *
+ * A model that numbers its options can also number the correct answer by the
+ * printed letter rather than by position, and its explanation names the letters
+ * it wrote. Both are translated to positions here, before any label is removed
+ * and before the correct option is moved by `spreadCorrectPositions`.
+ */
+export function reletterQuizItem<T extends QuizLike>(item: T): T {
+  if (item.options.length === 0) return item;
+  const labels = item.options.map(optionLabel);
+  if (labels.every((label) => label === null)) {
+    return { ...item, options: item.options.map(formatOption) };
+  }
+
+  // The stored correctIndex is a position in the options array, which is what
+  // the option text at that index carries. Stripping a printed label therefore
+  // keeps the correct option correct; only the explanation's references need
+  // translating, from the letters the model printed to the positions they sit
+  // in now.
+  const labelToIndex = new Map<string, number>();
+  labels.forEach((label, index) => {
+    if (label && !labelToIndex.has(label)) labelToIndex.set(label, index);
+  });
+
+  const explanation = item.explanation.replace(
+    /\b(option|answer|choice)\s+([A-D])\b/gi,
+    (match, word: string, letter: string) => {
+      const index =
+        labelToIndex.get(letter.toUpperCase()) ?? letter.toUpperCase().charCodeAt(0) - 65;
+      if (index < 0 || index >= item.options.length) return match;
+      return `${word} ${String.fromCharCode(65 + index)}`;
+    },
+  );
+
+  return {
+    ...item,
+    options: item.options.map(formatOption),
+    explanation,
+  };
 }
 
 function optionClauses(option: string): number {
@@ -934,6 +1115,9 @@ export function mcqOptionIssue(item: QuizLike): string | null {
     item.correctIndex >= item.options.length
   ) {
     return "has an invalid correct answer";
+  }
+  if (item.options.some((option) => optionLabel(option) !== null)) {
+    return "option begins with a letter label";
   }
   const options = item.options.map(formatOption);
   if (options.some((option) => !option)) return "has an empty option";
@@ -1196,15 +1380,33 @@ function seededNumber(text: string): number {
 
 function rotateCorrectAnswer<T extends QuizLike>(item: T, target: number): T {
   if (item.options.length !== 4) return item;
-  const correct = item.options[item.correctIndex];
-  if (correct === undefined) return item;
-  const others = item.options.filter((_, index) => index !== item.correctIndex);
-  const options: string[] = [];
+  if (item.options[item.correctIndex] === undefined) return item;
+  const others = item.options
+    .map((_, index) => index)
+    .filter((index) => index !== item.correctIndex);
+  const sources: number[] = [];
   let cursor = 0;
   for (let index = 0; index < 4; index += 1) {
-    options[index] = index === target ? correct : others[cursor++]!;
+    sources[index] = index === target ? item.correctIndex : others[cursor++]!;
   }
-  return { ...item, options, correctIndex: target };
+  const options = sources.map((source) => item.options[source]!);
+  // The explanation's letter references were positions before this rotation.
+  // Carry them with the options, so "Option C is wrong" still names the option
+  // the explanation was written about.
+  const oldToNew: number[] = [];
+  sources.forEach((source, index) => {
+    oldToNew[source] = index;
+  });
+  const explanation = item.explanation.replace(
+    /\b(option|answer|choice)\s+([A-D])\b/gi,
+    (match, word: string, letter: string) => {
+      const oldIndex = letter.toUpperCase().charCodeAt(0) - 65;
+      const newIndex = oldToNew[oldIndex];
+      if (newIndex === undefined) return match;
+      return `${word} ${String.fromCharCode(65 + newIndex)}`;
+    },
+  );
+  return { ...item, options, correctIndex: target, explanation };
 }
 
 /**
@@ -1252,7 +1454,10 @@ export function prepareQuiz<T extends QuizLike>(
   const ground = !isSyllabusOutline(notes);
   let kept: Array<PreparedQuiz<T>> = [];
 
-  for (const item of items) {
+  for (const raw of items) {
+    // Strip option labels and translate the model's letter references into
+    // positions before any check or rotation uses the item.
+    const item = reletterQuizItem(raw);
     const answer = correctAnswerFor(item);
     const explanation = repairQuizExplanation(item.explanation, item);
     if (

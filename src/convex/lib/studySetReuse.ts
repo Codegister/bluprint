@@ -863,6 +863,7 @@ export async function copyStudySetContent(
       front: card.front,
       back: card.back,
       order: index,
+      ...(card.keyPoint ? { keyPoint: card.keyPoint } : {}),
       ...(card.beyondNotes !== undefined
         ? { beyondNotes: card.beyondNotes }
         : {}),

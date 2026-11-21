@@ -246,6 +246,28 @@ export const PACE_LABELS: Record<PaceStatus, string> = {
  * not yet attempted; a student two weeks from a real paper should be answering
  * more than one three months out.
  */
+/**
+ * Written answers that lost marks, worst gap first.
+ *
+ * Weak spots used to read only flashcards and quiz rows, so a written answer
+ * that scored 2/6 never surfaced anywhere. The stored mark and the student's
+ * answer are already on the row; this is the rule that ranks them.
+ */
+export function weakExamQuestions<T extends { marks: number; awardedMarks?: number }>(
+  exams: readonly T[],
+): T[] {
+  return exams
+    .filter(
+      (exam) =>
+        exam.awardedMarks !== undefined && exam.awardedMarks < exam.marks,
+    )
+    .sort(
+      (a, b) =>
+        b.marks - (b.awardedMarks ?? 0) - (a.marks - (a.awardedMarks ?? 0)) ||
+        a.marks - b.marks,
+    );
+}
+
 export function goalFromExam(
   remaining: number,
   daysLeft: number | null,

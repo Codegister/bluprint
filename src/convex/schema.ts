@@ -794,6 +794,10 @@ const schema = defineSchema(
       userId: v.id("users"),
       front: v.string(),
       back: v.string(),
+      // The revision-ready claim the card was generated with. The summary reads
+      // it instead of rebuilding a label from the question, which used to cut
+      // claims into fragments. Missing on cards saved before it existed.
+      keyPoint: v.optional(v.string()),
       order: v.number(),
       // True when the card uses a fact the student's notes do not contain. The
       // review screen labels those "Beyond your notes" so enrichment is visible

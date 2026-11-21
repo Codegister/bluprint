@@ -3,6 +3,8 @@
  * the one-day-at-a-time timetable screen.
  */
 
+import { dateInputValue } from "./format";
+
 /**
  * Subject colours are assigned by course order, so a subject keeps the same
  * colour on its builder tile, its session cards and in the legend. The hues
@@ -79,6 +81,49 @@ export function colorForCourses(
       SUBJECT_COLORS[index % SUBJECT_COLORS.length]!,
     ]),
   );
+}
+
+/**
+ * The dates a new plan starts with. The start is today: it used to be tomorrow,
+ * so a plan built on the 21st began on the 22nd while the header counted down
+ * from the 21st, and the strip opened on a day the plan had not reached.
+ */
+export function defaultPlanDates(today = new Date()): {
+  startDate: string;
+  examDate: string;
+} {
+  const exam = new Date(today.getTime());
+  exam.setDate(exam.getDate() + 29);
+  return {
+    startDate: dateInputValue(today),
+    examDate: dateInputValue(exam),
+  };
+}
+
+/** Whole days from one calendar key to another (negative when `to` is first). */
+export function daysBetweenKeys(from: string, to: string): number {
+  const start = Date.parse(`${from}T00:00:00.000Z`);
+  const end = Date.parse(`${to}T00:00:00.000Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  return Math.round((end - start) / 86_400_000);
+}
+
+/** The day the countdown runs from: the plan start, or today once it has begun. */
+export function countdownAnchor(startDate: string, today: string): string {
+  return startDate > today ? startDate : today;
+}
+
+/**
+ * How many sessions a revision day's budget can hold. Used before a day has
+ * been opened, so the week strip shows the plan's real count instead of
+ * "Not planned" for every day the student has not visited.
+ */
+export function plannedSessionCount(
+  budgetMinutes: number,
+  sessionMinutes: number,
+): number {
+  if (!(budgetMinutes > 0) || !(sessionMinutes > 0)) return 0;
+  return Math.max(0, Math.floor(budgetMinutes / sessionMinutes));
 }
 
 export function addDaysKey(value: string, days: number): string {

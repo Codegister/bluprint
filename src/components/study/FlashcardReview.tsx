@@ -142,6 +142,8 @@ export function FlashcardReview({
     score: number;
     /** The check's one-line explanation, or why it was not used. */
     note?: string;
+    /** True when the answer denied the fact on the card. */
+    contradicts?: boolean;
     coveredUnits: string[];
     missedUnits: string[];
   } | null>(null);
@@ -231,6 +233,7 @@ export function FlashcardReview({
         correct: true,
         score: 1,
         note: "Matched the card answer.",
+        contradicts: false,
         coveredUnits: vocabulary.coveredUnits ?? [],
         missedUnits: [],
       });
@@ -245,6 +248,7 @@ export function FlashcardReview({
         correct: true,
         score: 1,
         note: "Matches the model answer.",
+        contradicts: false,
         coveredUnits: local.coveredUnits ?? card.recallUnits ?? [],
         missedUnits: [],
       });
@@ -257,7 +261,10 @@ export function FlashcardReview({
       setGrade({
         correct: local.correct,
         score: local.score,
-        note: "Checked on key points — AI checking isn't connected in this workspace.",
+        note: local.contradicts
+          ? "You said the opposite of the card. Negation reverses the fact, so no key point is credited."
+          : "Checked on key points — AI checking isn't connected in this workspace.",
+        contradicts: local.contradicts,
         coveredUnits: local.coveredUnits ?? [],
         missedUnits: local.missedUnits ?? [],
       });
@@ -271,6 +278,7 @@ export function FlashcardReview({
         correct: result.correct,
         score: result.score,
         note: result.note,
+        contradicts: result.contradicts,
         coveredUnits: result.coveredUnits,
         missedUnits: result.missedUnits,
       });
@@ -281,9 +289,12 @@ export function FlashcardReview({
       setGrade({
         correct: local.correct,
         score: local.score,
-        note: `Checked on key points — ${
-          (reason || "the automatic check could not be reached.").slice(0, 140)
-        }`,
+        note: local.contradicts
+          ? "You said the opposite of the card. Negation reverses the fact, so no key point is credited."
+          : `Checked on key points — ${
+              (reason || "the automatic check could not be reached.").slice(0, 140)
+            }`,
+        contradicts: local.contradicts,
         coveredUnits: local.coveredUnits ?? [],
         missedUnits: local.missedUnits ?? [],
       });
@@ -681,7 +692,11 @@ export function FlashcardReview({
                 )}
                 <div>
                   <p className="font-semibold">
-                    {grade.correct ? "Key points credited" : "Not quite"}
+                    {grade.correct
+                      ? "Key points credited"
+                      : grade.contradicts
+                        ? "You said the opposite of the card"
+                        : "Not quite"}
                   </p>
                   <p className="mt-0.5">
                     {grade.note?.trim() ||
@@ -692,7 +707,7 @@ export function FlashcardReview({
                       Credited: {grade.coveredUnits.join(", ")}
                     </p>
                   )}
-                  {grade.missedUnits.length > 0 && (
+                  {grade.missedUnits.length > 0 && !grade.contradicts && (
                     <p className="mt-1 text-[0.72rem] font-semibold opacity-80">
                       Missed: {grade.missedUnits.join(", ")}
                     </p>
@@ -708,7 +723,9 @@ export function FlashcardReview({
                   : grade
                     ? grade.correct
                       ? "Bluprint suggests Good. Rate how it actually felt."
-                      : "Rate how it felt, then the model answer comes back sooner."
+                      : grade.contradicts
+                        ? "Rate Again: a reversed fact needs another pass."
+                        : "Rate how it felt, then the model answer comes back sooner."
                     : "Compare with the answer, then rate yourself."}
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">

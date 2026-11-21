@@ -64,7 +64,8 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
             </h2>
             <p className="mt-1 max-w-md text-[0.85rem] leading-relaxed text-muted-foreground">
               Cards you rated Again, or that have never reached a stable memory,
-              plus the quiz questions you keep getting wrong.
+              the quiz questions you keep getting wrong, and written answers that
+              lost marks.
             </p>
           </div>
           <div className="flex gap-2">
@@ -79,6 +80,12 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
                 {data.weakQuizCount}
               </p>
               <p className="text-[0.64rem] font-medium text-[#96650A]/80">quiz</p>
+            </div>
+            <div className="rounded-2xl bg-[#EEF4FF] px-3 py-2 text-center">
+              <p className="font-display text-xl font-bold tabular-nums text-[#2E4A86]">
+                {data.weakExamCount}
+              </p>
+              <p className="text-[0.64rem] font-medium text-[#2E4A86]/80">written</p>
             </div>
           </div>
         </div>
@@ -103,6 +110,15 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
               <Link to={`/sets/${setId}/quiz`}>Retry the quiz</Link>
             </Button>
           )}
+          {data.weakExamCount > 0 && (
+            <Button
+              asChild
+              variant="outline"
+              className="h-11 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-ink shadow-none hover:bg-brand-panel"
+            >
+              <Link to={`/sets/${setId}/exam`}>Retry written answers</Link>
+            </Button>
+          )}
         </div>
 
         {data.cards.length === 0 && (
@@ -112,6 +128,37 @@ export function WeakSpots({ setId }: { setId: Id<"studySets"> }) {
           </p>
         )}
       </motion.div>
+
+      {data.exams.length > 0 && (
+        <section className="mt-4 overflow-hidden rounded-[1.6rem] border border-border bg-white">
+          <div className="flex items-center gap-2 border-b border-border px-5 py-3.5">
+            <TriangleAlert className="size-4 text-[#2E4A86]" aria-hidden />
+            <h3 className="font-display text-[0.98rem] font-bold text-brand-ink">
+              Written answers that lost marks
+            </h3>
+          </div>
+          <ul>
+            {data.exams.map((exam) => (
+              <li
+                key={exam._id}
+                className="border-b border-border/70 px-5 py-3.5 last:border-b-0"
+              >
+                <p className="text-[0.85rem] font-medium leading-snug text-brand-ink">
+                  {exam.question}
+                </p>
+                <p className="mt-1 text-[0.76rem] leading-relaxed text-muted-foreground">
+                  Scored {exam.awardedMarks ?? 0}/{exam.marks}.{" "}
+                  {exam.feedback?.trim() || "Re-read the mark scheme and try it again."}
+                </p>
+                <p className="mt-1.5 text-[0.68rem] font-semibold text-[#2E4A86]">
+                  Missing {exam.marks - (exam.awardedMarks ?? 0)} mark
+                  {exam.marks - (exam.awardedMarks ?? 0) === 1 ? "" : "s"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {data.quiz.length > 0 && (
         <section className="mt-4 overflow-hidden rounded-[1.6rem] border border-border bg-white">

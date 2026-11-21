@@ -9,7 +9,12 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
 import { dateInputValue, daysUntilInput, plural } from "@/lib/format";
 import { courseSubtitle } from "@/lib/subjects";
-import { formatLongDate, formatTime, SUBJECT_COLORS } from "@/lib/timetable";
+import {
+  defaultPlanDates,
+  formatLongDate,
+  formatTime,
+  SUBJECT_COLORS,
+} from "@/lib/timetable";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
@@ -130,16 +135,6 @@ function readDraft(): Partial<StoredDraft> {
   }
 }
 
-function defaults() {
-  const start = new Date();
-  start.setDate(start.getDate() + 1);
-  const exam = new Date();
-  exam.setDate(exam.getDate() + 29);
-  return {
-    startDate: dateInputValue(start),
-    examDate: dateInputValue(exam),
-  };
-}
 
 function paperLabel(value: string) {
   return value === "Both" ? "Papers 1 and 2" : value;
@@ -165,7 +160,7 @@ export default function TimetableBuilder() {
   const existing = useQuery(api.timetable.getMine);
   const buildPlan = useMutation(api.timetable.build);
 
-  const initial = defaults();
+  const initial = defaultPlanDates();
   // `useState` with a function keeps the storage read to the first render.
   const [stored] = useState(readDraft);
   // A tab left open overnight can hold dates that have already passed. Ignoring

@@ -166,12 +166,26 @@ export function ExamPractice({
       {exams.map((exam, index) => {
         const answer = answers[exam._id] ?? "";
         const isGrading = gradingId === exam._id;
-        const graded = exam.awardedMarks !== undefined && exam.feedback;
+        // A stored mark is what "graded" means. The old test also required a
+        // non-empty feedback string, which the current checklist-only feedback
+        // can leave empty — that is why the model answer stayed hidden after a
+        // correct 0-mark judgement.
+        const graded = exam.awardedMarks !== undefined;
         const score = exam.awardedMarks ?? 0;
         const scorePercent = exam.marks ? Math.round((score / exam.marks) * 100) : 0;
         // One row per mark-scheme criterion, in the guide's order. The
-        // checklist carries the verdict and the quote for each row.
+        // checklist carries the verdict and the quote for each row. An old
+        // question whose stored criteria do not add up has no criteria; its
+        // saved checklist is still shown row by row rather than as one line.
         const criteria = criteriaFor(exam);
+        const checklistRows =
+          criteria.length > 0
+            ? criteria
+            : (exam.checklist ?? []).map((check) => ({
+                id: check.point,
+                marks: check.marks,
+                text: criterionText(check.point),
+              }));
 
         return (
           <article key={exam._id} className="surface-card p-5 sm:p-7">
@@ -335,13 +349,13 @@ export function ExamPractice({
 
                 {/* The mark as a checklist against the guide: one row per
                     criterion, its full text, and the student's quoted words. */}
-                {criteria.length > 0 && (exam.checklist?.length ?? 0) > 0 && (
+                {(exam.checklist?.length ?? 0) > 0 && (
                   <div className="mt-4">
                     <p className="text-xs font-semibold text-brand-ink">
                       Awarded marks, criterion by criterion
                     </p>
                     <div className="mt-2 space-y-1.5">
-                      {criteria.map((criterion, index) => {
+                      {checklistRows.map((criterion, index) => {
                         const check = exam.checklist?.[index];
                         const awarded = check?.awarded ?? 0;
                         const evidence = check?.evidence;
@@ -403,14 +417,14 @@ export function ExamPractice({
                     </p>
                   </details>
 
-                  {(exam.checklist?.length ?? 0) === 0 && (
+                  {(exam.checklist?.length ?? 0) === 0 && checklistRows.length > 0 && (
                     <details className="group rounded-2xl bg-white p-3.5">
                       <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-semibold text-brand-ink">
                         Marking guide
                         <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
                       </summary>
                       <ul className="mt-2 space-y-1.5">
-                        {criteria.map((criterion) => (
+                        {checklistRows.map((criterion) => (
                           <li
                             key={criterion.id}
                             className="flex items-start gap-2 text-sm leading-relaxed text-brand-ink/70"

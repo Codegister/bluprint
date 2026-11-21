@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   applyAlternativeCredits,
   awardCriterion,
+  creditTermsFor,
   criteriaFor,
   distinctiveCoverage,
   distinctiveTermsFor,
@@ -26,7 +27,10 @@ function credit(
   criteria: Array<{ text: string; marks: number }>,
   answer: string,
 ): number[] {
-  const terms = distinctiveTermsFor(criteria.map((criterion) => criterion.text));
+  const terms = creditTermsFor(
+    criteria.map((criterion) => criterion.text),
+    answer,
+  );
   return criteria.map((criterion, index) =>
     // The model tries to award the whole criterion; the guard decides.
     awardCriterion(criterion.marks, criterion.marks, terms[index] ?? [], answer),
@@ -50,7 +54,10 @@ function creditWithMeaningPass(
   criteria: Array<{ text: string; marks: number }>,
   answer: string,
 ): number[] {
-  const terms = distinctiveTermsFor(criteria.map((criterion) => criterion.text));
+  const terms = creditTermsFor(
+    criteria.map((criterion) => criterion.text),
+    answer,
+  );
   return criteria.map((criterion, index) => {
     const guarded = awardCriterion(
       criterion.marks,
@@ -316,17 +323,91 @@ describe("partial marks", () => {
 });
 
 
+describe("legitimate paraphrases are not refused", () => {
+  test("temperature: a paraphrase without the guide's subject words scores", () => {
+    // Every temperature row shares "temperature increases", so those words are
+    // not distinctive. The subject guard must not require them when the row's
+    // own ideas (kinetic energy, collisions) are present.
+    const criteria = criteriaFor({ markingGuide: SIX_POINTS, marks: 6 });
+    const paraphrase =
+      "As it gets hotter, particles have more kinetic energy and collide more often.";
+
+    const credits = credit(criteria, paraphrase);
+    expect(credits[0]).toBe(1);
+    expect(credits[1]).toBe(1);
+    expect(credits.reduce((sum, value) => sum + value, 0)).toBe(2);
+  });
+
+  test("pH: an answer about acidity that never says pH still earns its points", () => {
+    const guide = [
+      "1 mark: pH measures hydrogen ion concentration",
+      "1 mark: a pH of 7 is neutral",
+      "1 mark: changing pH changes the shape of the active site",
+    ];
+    const criteria = criteriaFor({ markingGuide: guide, marks: 3 });
+    const paraphrase =
+      "It measures how much hydrogen ion there is. A value of seven is neutral. Moving away from it alters the active site's shape.";
+
+    expect(credit(criteria, paraphrase)).toEqual([1, 1, 1]);
+  });
+
+  test("beliefs: a pronoun answer keeps the criterion it restates", () => {
+    const guide = [
+      "1 mark: God is omnipotent",
+      "1 mark: God is omniscient",
+      "1 mark: God is eternal",
+    ];
+    const criteria = criteriaFor({ markingGuide: guide, marks: 3 });
+
+    const credits = credit(criteria, "The eternal one is all-powerful and all-knowing.");
+    expect(credits[2]).toBe(1);
+    expect(credits.reduce((sum, value) => sum + value, 0)).toBe(1);
+  });
+
+  test("a row loses nothing unless the answer names another row's subject", () => {
+    const answer = "As it gets hotter, particles collide more often.";
+    const terms = creditTermsFor(SIX_POINTS, answer);
+    const plain = distinctiveTermsFor(SIX_POINTS);
+
+    // The temperature rows are about the answer's own subject, so their terms
+    // are untouched; the pH rows are about a subject the answer never names and
+    // keep nothing the answer contains.
+    expect(terms.slice(0, 3)).toEqual(plain.slice(0, 3));
+    for (const row of terms.slice(3)) {
+      expect(distinctiveCoverage(row, answer)).toBe(0);
+    }
+  });
+
+  test("a row's own term is never filtered when the term is unique to it", () => {
+    const guide = [
+      "1 mark: protease breaks down protein into amino acids",
+      "1 mark: lipase breaks down lipids into fatty acids",
+    ];
+    const criteria = criteriaFor({ markingGuide: guide, marks: 2 });
+
+    expect(credit(criteria, "Lipase breaks lipids into fatty acids.")).toEqual([0, 1]);
+  });
+});
+
 describe("alternative correct points", () => {
+  const BELIEFS = [
+    { id: "c1", text: "God is omnipotent" },
+    { id: "c2", text: "God is omniscient" },
+    { id: "c3", text: "God is eternal" },
+  ];
+
   test("a correct point omitted from the guide can fill the last one-mark row", () => {
     const checks = [
-      { point: "God is omnipotent", marks: 1, awarded: 1, evidence: "God is omnipotent" },
-      { point: "God is omniscient", marks: 1, awarded: 1, evidence: "God is omniscient" },
-      { point: "God is eternal", marks: 1, awarded: 0, evidence: "absent" },
+      { criterionId: "c1", point: "God is omnipotent", marks: 1, awarded: 1, evidence: "God is omnipotent" },
+      { criterionId: "c2", point: "God is omniscient", marks: 1, awarded: 1, evidence: "God is omniscient" },
+      { criterionId: "c3", point: "God is eternal", marks: 1, awarded: 0, evidence: "absent" },
     ];
 
-    const result = applyAlternativeCredits(checks, [
-      { point: "God is benevolent", evidence: "God is benevolent" },
-    ]);
+    const result = applyAlternativeCredits(
+      checks,
+      [{ criterionId: "c3", point: "God is benevolent", evidence: "God is benevolent" }],
+      BELIEFS,
+    );
 
     expect(result[2]?.awarded).toBe(1);
     expect(result[2]?.point).toContain("accepted alternative: God is benevolent");
@@ -335,18 +416,27 @@ describe("alternative correct points", () => {
   });
 
   test("an alternative cannot take a multi-mark row or an already-awarded row", () => {
+    const criteria = [
+      { id: "c1", text: "Point one" },
+      { id: "c2", text: "Point two" },
+      { id: "c3", text: "Point three" },
+    ];
     const checks = [
-      { point: "Point one", marks: 2, awarded: 0, evidence: "absent" },
-      { point: "Point two", marks: 1, awarded: 1, evidence: "quoted" },
-      { point: "Point three", marks: 1, awarded: 0, evidence: "absent" },
+      { criterionId: "c1", point: "Point one", marks: 2, awarded: 0, evidence: "absent" },
+      { criterionId: "c2", point: "Point two", marks: 1, awarded: 1, evidence: "quoted" },
+      { criterionId: "c3", point: "Point three", marks: 1, awarded: 0, evidence: "absent" },
     ];
 
-    const result = applyAlternativeCredits(checks, [
-      { point: "A correct alternative", evidence: "A correct alternative" },
-    ]);
+    const result = applyAlternativeCredits(
+      checks,
+      [{ criterionId: "c3", point: "A correct alternative", evidence: "A correct alternative" }],
+      criteria,
+    );
 
     expect(result[0]?.awarded).toBe(0);
     expect(result[1]?.awarded).toBe(1);
     expect(result[2]?.awarded).toBe(1);
   });
+
+
 });

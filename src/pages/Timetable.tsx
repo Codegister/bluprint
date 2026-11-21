@@ -19,10 +19,11 @@ import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { readableError } from "@/lib/errors";
 import { retryTransient } from "@/lib/retry";
 import { useAiAvailability } from "@/lib/useAiAvailability";
-import { daysUntilInput } from "@/lib/format";
 import {
   addDaysKey,
   colorForCourses,
+  countdownAnchor,
+  daysBetweenKeys,
   formatDayLabel,
   formatLongDate,
   formatTime24,
@@ -112,6 +113,7 @@ function DayChip({
   daysPerWeek,
   selected,
   summary,
+  planned,
   onSelect,
   index,
 }: {
@@ -121,6 +123,8 @@ function DayChip({
   daysPerWeek: number;
   selected: boolean;
   summary: DayView["days"][number] | undefined;
+  /** Sessions the plan holds for this day before it has been opened. */
+  planned: number;
   onSelect: () => void;
   index: number;
 }) {
@@ -145,7 +149,9 @@ function DayChip({
         : `${summary.done}/${summary.count} done`
       : isRest
         ? "Rest"
-        : "Not planned";
+        : planned > 0
+          ? `${planned} planned`
+          : "Not planned";
 
   return (
     <motion.button
@@ -794,7 +800,13 @@ export default function Timetable() {
   }
 
   const isToday = activeDate === today;
-  const daysLeft = daysUntilInput(view.plan.examDate);
+  // Count down from the plan's own start, not from today: a plan built for a
+  // future start used to say "29 days to go" while the strip opened on the
+  // start date, two different anchors for the same exam.
+  const daysLeft = daysBetweenKeys(
+    countdownAnchor(view.plan.startDate, today),
+    view.plan.examDate,
+  );
   const isPast = activeDate < today;
   const canGenerate = !isPast && !view.reason && !view.day && !dayError;
   const nextSession =
@@ -868,6 +880,7 @@ export default function Timetable() {
             daysPerWeek={view.plan.daysPerWeek}
             selected={date === activeDate}
             summary={view.days.find((entry) => entry.date === date)}
+            planned={view.schedule.find((entry) => entry.date === date)?.planned ?? 0}
             onSelect={() => {
               setSelected(date);
               setDayError(null);
@@ -1115,9 +1128,11 @@ export default function Timetable() {
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-muted-foreground">Study time</dt>
                 <dd className="font-semibold text-brand-ink">
-                  {view.isDayOff
-                    ? `${view.plan.dayOffMinutes} min today`
-                    : `${view.plan.dailyMinutes} min on school days`}
+                  {view.isDayOff && view.reason === "rest"
+                    ? "Rest day"
+                    : view.isDayOff
+                      ? `${view.plan.dayOffMinutes} min today`
+                      : `${view.plan.dailyMinutes} min on school days`}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3">

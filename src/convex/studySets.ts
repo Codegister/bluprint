@@ -36,9 +36,14 @@ import {
   examReadiness,
   examTimestamp,
   goalFromExam,
+  weakExamQuestions,
 } from "./lib/studyMetrics";
 import { deriveRecallUnits, gradeShortAnswer } from "./lib/recall";
-import { alignCriteria, toCriteria } from "./lib/markingCriteria";
+import {
+  alignCriteria,
+  markSchemeMatchesMarks,
+  toCriteria,
+} from "./lib/markingCriteria";
 import { summaryValidator } from "./lib/summary";
 import { validateStudySelection } from "./lib/catalogue";
 import {
@@ -97,6 +102,10 @@ const sourceType = v.union(
 const cardInput = v.object({
   front: v.string(),
   back: v.string(),
+  // The revision-ready claim the card generator wrote. It is stored with the
+  // card so the summary uses the generated claim rather than rebuilding a
+  // label from the question, which used to cut it into fragments.
+  keyPoint: v.optional(v.string()),
   // True when the item uses a fact the student's notes do not contain. Shown as
   // "Beyond your notes" so enrichment is visible instead of indistinguishable.
   beyondNotes: v.optional(v.boolean()),
@@ -471,9 +480,12 @@ export const studyStats = query({
      * answered correctly. The three parts are returned with it, so the number
      * can always be explained on screen.
      */
+    // The three parts keep their own meaning and are shown separately. They are
+    // not summed into one "correct": mastery (a known card), accuracy (a quiz
+    // answer) and a half-marks threshold (an exam answer) are different units,
+    // and adding them produced one number that labelled three things.
     const items = {
       total: 0,
-      correct: 0,
       cards: { total: 0, correct: 0 },
       quiz: { total: 0, correct: 0 },
       exam: { total: 0, correct: 0 },
@@ -538,8 +550,6 @@ export const studyStats = query({
     const goal = goalFromExam(remaining, nearestExam?.daysLeft ?? null);
     items.total =
       items.cards.total + items.quiz.total + items.exam.total;
-    items.correct =
-      items.cards.correct + items.quiz.correct + items.exam.correct;
 
     // A daily goal larger than the whole workspace is not a goal. It is capped
     // at the items that exist, and the page labels it against that total.
@@ -707,13 +717,17 @@ export const weakSpots = query({
     const set = await ctx.db.get(setId);
     if (!set || set.userId !== userId) return null;
 
-    const [cards, quiz] = await Promise.all([
+    const [cards, quiz, exams] = await Promise.all([
       ctx.db
         .query("flashcards")
         .withIndex("by_set", (q) => q.eq("setId", setId))
         .collect(),
       ctx.db
         .query("quizQuestions")
+        .withIndex("by_set", (q) => q.eq("setId", setId))
+        .collect(),
+      ctx.db
+        .query("examQuestions")
         .withIndex("by_set", (q) => q.eq("setId", setId))
         .collect(),
     ]);
@@ -736,12 +750,19 @@ export const weakSpots = query({
       )
       .slice(0, 12);
 
+    // A written answer that scored below full marks is a weak spot too. It is
+    // ranked by the size of the gap, so the 2/6 answer comes before the 5/6,
+    // and the row still carries the student's answer and checklist for retrying.
+    const allWeakExams = weakExamQuestions(exams);
+
     return {
       setTitle: set.title,
       cards: weakCards,
       quiz: missedQuiz,
+      exams: allWeakExams.slice(0, 10),
       weakCardCount: cards.filter(isWeakCard).length,
       weakQuizCount: quiz.filter((question) => (question.missCount ?? 0) > 0).length,
+      weakExamCount: allWeakExams.length,
     };
   },
 });
@@ -1723,10 +1744,11 @@ export const appendReviewedContent = internalMutation({
       0,
       Math.max(0, BUILD_MAX - set.quizCount),
     );
-    const examsToAdd = exams.slice(
-      0,
-      Math.max(0, BUILD_MAX - set.examCount),
-    );
+    // A stored scheme must add up to its own tariff. Anything that does not is
+    // not written, so a question can never be shown with marks it cannot award.
+    const examsToAdd = exams
+      .filter((question) => markSchemeMatchesMarks(question.markingGuide, question.marks))
+      .slice(0, Math.max(0, BUILD_MAX - set.examCount));
     if (
       cardsToAdd.length === 0 &&
       quizToAdd.length === 0 &&
@@ -1749,6 +1771,7 @@ export const appendReviewedContent = internalMutation({
         front: card.front,
         back: card.back,
         order: set.cardCount + index,
+        ...(card.keyPoint ? { keyPoint: card.keyPoint } : {}),
         ...(card.beyondNotes !== undefined
           ? { beyondNotes: card.beyondNotes }
           : {}),
@@ -1960,6 +1983,7 @@ export const appendCards = internalMutation({
         front: card.front,
         back: card.back,
         order: offset + added,
+        ...(card.keyPoint ? { keyPoint: card.keyPoint } : {}),
         beyondNotes: card.beyondNotes,
         specRef:
           specPoints.length > 0
@@ -2085,6 +2109,7 @@ export const completeGeneration = internalMutation({
           front: card.front,
           back: card.back,
           order: index,
+          ...(card.keyPoint ? { keyPoint: card.keyPoint } : {}),
           beyondNotes: card.beyondNotes,
           specRef: tagFor(`${card.front} ${card.back}`),
           recallThreshold: 0.75,
@@ -2195,7 +2220,11 @@ export const completeGeneration = internalMutation({
       for (const row of excessQuiz) await ctx.db.delete(row._id);
       const quizTotal = quizRows.length - excessQuiz.length;
       const storedExams = dedupeExamQuestions(
-        exams.map((question) => cleanGeneratedText(question, set.level, set.course)),
+        exams
+          .map((question) => cleanGeneratedText(question, set.level, set.course))
+          .filter((question) =>
+            markSchemeMatchesMarks(question.markingGuide, question.marks),
+          ),
       ).slice(0, requested.exams);
       for (const [index, question] of storedExams.entries()) {
         await ctx.db.insert("examQuestions", {
@@ -2330,7 +2359,13 @@ export const completeGeneration = internalMutation({
       cleanGeneratedText(question, level, subject),
     );
     const storedExams = dedupeExamQuestions(
-      exams.map((question) => cleanGeneratedText(question, level, subject)),
+      exams
+        .map((question) => cleanGeneratedText(question, level, subject))
+        // Never store a question whose guide cannot meet its own marks; it
+        // would be rendered and then found ungradeable at marking time.
+        .filter((question) =>
+          markSchemeMatchesMarks(question.markingGuide, question.marks),
+        ),
       preservedExams,
     );
 
@@ -2387,6 +2422,7 @@ export const completeGeneration = internalMutation({
         front: card.front,
         back: card.back,
         order: cardOffset + index,
+        ...(card.keyPoint ? { keyPoint: card.keyPoint } : {}),
         beyondNotes: card.beyondNotes,
         specRef: tag(`${card.front} ${card.back}`),
         // Stored at generation, never derived from the answer's length at

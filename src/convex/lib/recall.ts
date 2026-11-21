@@ -46,6 +46,126 @@ const STOP_WORDS = new Set([
   "it",
   "as",
   "from",
+  // Function words that used to survive as "concept units": an answer could
+  // score 1.0 on "it breaks down into their" because every one of those words
+  // counted as a key point. They carry no subject content, so they are never
+  // units and never requirements.
+  "not",
+  "no",
+  "never",
+  "cannot",
+  "without",
+  "into",
+  "down",
+  "their",
+  "they",
+  "them",
+  "its",
+  "can",
+  "could",
+  "would",
+  "should",
+  "will",
+  "do",
+  "does",
+  "did",
+  "has",
+  "have",
+  "had",
+  "than",
+  "so",
+  "if",
+  "but",
+  "about",
+  "over",
+  "under",
+  "between",
+  "within",
+  "through",
+  "during",
+  "before",
+  "after",
+  "above",
+  "below",
+  "off",
+  "out",
+  "up",
+  "again",
+  "also",
+  "just",
+  "only",
+  "very",
+  "whereas",
+  "although",
+  "however",
+  "while",
+  "because",
+  "n't",
+]);
+
+/**
+ * Verbs that only connect the subject terms. "Amylase breaks down starch"
+ * asks the student for amylase and starch, not for the words "breaks" and
+ * "down"; crediting a bare verb let an answer score without a fact in it.
+ */
+const RECALL_FILLER = new Set([
+  "break",
+  "breaks",
+  "breaking",
+  "broke",
+  "broken",
+  "work",
+  "works",
+  "working",
+  "make",
+  "makes",
+  "making",
+  "made",
+  "give",
+  "gives",
+  "giving",
+  "gave",
+  "cause",
+  "causes",
+  "causing",
+  "caused",
+  "help",
+  "helps",
+  "helping",
+  "use",
+  "uses",
+  "using",
+  "used",
+  "show",
+  "shows",
+  "showing",
+  "shown",
+  "form",
+  "forms",
+  "forming",
+  "produce",
+  "produces",
+  "producing",
+  "produced",
+  "get",
+  "gets",
+  "getting",
+  "take",
+  "takes",
+  "taking",
+  "taken",
+  "allow",
+  "allows",
+  "allowing",
+  "mean",
+  "means",
+  "meaning",
+  "happen",
+  "happens",
+  "happening",
+  "occur",
+  "occurs",
+  "occurring",
 ]);
 
 const NUMBER_UNITS: Record<string, number> = {
@@ -314,6 +434,13 @@ export type ShortAnswerGrade = {
   coveredUnits?: string[];
   /** Required units the student missed. */
   missedUnits?: string[];
+  /**
+   * True when the answer stated the opposite of an affirmative card: the
+   * required idea was present but negated ("amylase is not produced …").
+   * The card screen says so instead of pretending the answer never mentioned
+   * the point.
+   */
+  contradicts?: boolean;
   /** Why the answer passed or failed, for the card screen. */
   method?: "exact" | "units" | "numeric" | "none";
 };
@@ -681,6 +808,7 @@ export function deriveRecallUnits(answer: string): string[] {
   const seen = new Set<string>();
   const units: string[] = [];
   for (const word of contentWords(answer)) {
+    if (RECALL_FILLER.has(word)) continue;
     const stem = word.length > 6 ? word.slice(0, 6) : word;
     if (seen.has(stem)) continue;
     seen.add(stem);
@@ -689,21 +817,82 @@ export function deriveRecallUnits(answer: string): string[] {
   return units;
 }
 
+/**
+ * Words that reverse the clause they appear in. The bag-of-words marker never
+ * read these, so "Amylase is not produced in the salivary glands or the
+ * pancreas" contained every required unit and scored 1.0.
+ */
+const NEGATION_CUE =
+  /\b(?:not|no|never|cannot|can't|isn't|aren't|wasn't|weren't|doesn't|don't|didn't|won't|wouldn't|shouldn't|couldn't|hasn't|haven't|hadn't|without|fails?|failed|unable|nor|neither|none|lacks?|lacking)\b/i;
+
+type RecallClause = { text: string; negated: boolean };
+
+/**
+ * Splits an answer into the clauses its polarity applies to. Sentence breaks,
+ * semicolons and contrast conjunctions end a clause; so does a comma before a
+ * negation ("… in the salivary glands, not the pancreas"), because the second
+ * half reverses only itself.
+ */
+function recallClauses(value: string): RecallClause[] {
+  const text = value.replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
+  if (!text) return [];
+  return text
+    .split(
+      // The conjunction stays with the clause it introduces, so no word is lost
+      // between clauses ("whereas" used to vanish from a full-mark answer).
+      /(?<=[.!?;])\s+|\s*;\s*|\s*,\s*(?=(?:but|not|rather|instead|never|no)\b)|\s+(?=(?:but|whereas|although|however)\b)/i,
+    )
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => ({ text: part, negated: NEGATION_CUE.test(part) }));
+}
+
+function stemOf(word: string): string {
+  return word.length > 6 ? word.slice(0, 6) : word;
+}
+
+function clauseStems(text: string): Set<string> {
+  return new Set(contentWords(text).map(stemOf));
+}
+
+/**
+ * The units an answer carries, split by whether the clause that carries them
+ * asserts or denies them. `guard` is false when the model answer is itself
+ * negative, because then a negative reply is the correct one.
+ */
 function unitsCovered(
   required: readonly string[],
   response: string,
-): { covered: string[]; missed: string[] } {
-  const offered = new Set(
-    contentWords(response).map((word) => (word.length > 6 ? word.slice(0, 6) : word)),
+  guard = true,
+): { covered: string[]; missed: string[]; contradicted: string[]; wholeNegated: boolean } {
+  const clauses = recallClauses(response);
+  const affirmative = guard ? clauses.filter((clause) => !clause.negated) : clauses;
+  const negated = guard ? clauses.filter((clause) => clause.negated) : [];
+  const affirmativeStems = new Set(
+    affirmative.flatMap((clause) => [...clauseStems(clause.text)]),
   );
+  const negatedStems = new Set(
+    negated.flatMap((clause) => [...clauseStems(clause.text)]),
+  );
+  const wholeNegated =
+    guard &&
+    clauses.length > 0 &&
+    clauses.every(
+      (clause) => clause.negated || contentWords(clause.text).length === 0,
+    );
+
   const covered: string[] = [];
   const missed: string[] = [];
+  const contradicted: string[] = [];
   for (const unit of required) {
-    const stem = unit.length > 6 ? unit.slice(0, 6) : unit;
-    if (offered.has(stem)) covered.push(unit);
-    else missed.push(unit);
+    const stem = stemOf(unit);
+    if (affirmativeStems.has(stem)) covered.push(unit);
+    else {
+      missed.push(unit);
+      if (negatedStems.has(stem)) contradicted.push(unit);
+    }
   }
-  return { covered, missed };
+  return { covered, missed, contradicted, wholeNegated };
 }
 
 /**
@@ -737,43 +926,64 @@ export function gradeRecall(
       score: exact ? 1 : 0,
       coveredUnits: exact ? required : [],
       missedUnits: exact ? [] : required,
+      contradicts: false,
       method: exact ? "exact" : "none",
     };
   }
 
-  const structured = structuredAnswerMatch(expected, response);
-  if (structured !== null) {
-    return {
-      correct: structured,
-      score: structured ? 1 : 0,
-      coveredUnits: structured ? required : [],
-      missedUnits: structured ? [] : required,
-      method: structured ? "exact" : "none",
-    };
+  // A closed answer (a formula, a number, a one-word term) is only accepted
+  // when the response does not reverse it: "not 2" is not the answer 2.
+  const expectedNegated = recallClauses(expected).some((clause) => clause.negated);
+  const responseNegated = recallClauses(response).some((clause) => clause.negated);
+  if (!responseNegated) {
+    const structured = structuredAnswerMatch(expected, response);
+    if (structured !== null) {
+      return {
+        correct: structured,
+        score: structured ? 1 : 0,
+        coveredUnits: structured ? required : [],
+        missedUnits: structured ? [] : required,
+        contradicts: false,
+        method: structured ? "exact" : "none",
+      };
+    }
+
+    if (numericEquivalent(expected, response)) {
+      return {
+        correct: true,
+        score: 1,
+        coveredUnits: required,
+        missedUnits: [],
+        contradicts: false,
+        method: "numeric",
+      };
+    }
   }
 
-  if (numericEquivalent(expected, response)) {
-    return {
-      correct: true,
-      score: 1,
-      coveredUnits: required,
-      missedUnits: [],
-      method: "numeric",
-    };
-  }
-
-  const { covered, missed } = unitsCovered(required, response);
+  // A negated clause does not credit its units: the idea is present in words
+  // only, and the fact it states is the opposite of the card. An affirmative
+  // model answer is the premise; one that is itself negative keeps the old
+  // bag-of-words rule, because a negated reply is then the correct one.
+  const { covered, missed, contradicted, wholeNegated } = unitsCovered(
+    required,
+    response,
+    !expectedNegated,
+  );
   const score = covered.length / required.length;
   const minWords = Math.max(2, Math.ceil(contentWords(expected).length * 0.25));
   const enough = contentWords(response).length >= minWords;
   // Below the minimum content floor no unit is credited. This is what makes a
   // two-word answer against a sentence card report zero credited units instead
   // of two lucky words.
+  const correct = enough && score >= threshold && !wholeNegated;
   return {
-    correct: enough && score >= threshold,
-    score,
+    correct,
+    score: wholeNegated ? 0 : score,
     coveredUnits: enough ? covered : [],
     missedUnits: enough ? missed : required,
+    // Only a failed answer that denied the card is a contradiction; a passing
+    // answer may contain a correct "not" without being wrong.
+    contradicts: !correct && contradicted.length > 0,
     method: "units",
   };
 }

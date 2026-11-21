@@ -74,6 +74,7 @@ import {
 import { cleanGeneratedText } from "./lib/register";
 import {
   dedupeExamQuestions,
+  duplicatesExistingCard,
   isNearDuplicateStudyItem,
   keyPointsForCards,
   prepareCards,
@@ -104,16 +105,18 @@ import {
 } from "./lib/topicNotes";
 import { cleanTopicTitle } from "./lib/titles";
 import {
+  MARK_SCHEME_MISMATCH_MESSAGE,
   applyAlternativeCredits,
   awardCriterion,
   criteriaFor,
   criterionText,
+  creditTermsFor,
   distinctiveCoverage,
-  distinctiveTermsFor,
   guideFromCriteria,
   meaningAward,
   reconcilePasses,
   structuredCriterionMatch,
+  validateMarkingGuide,
   type AlternativeCredit,
   type MarkCheck,
 } from "./lib/markingCriteria";
@@ -175,6 +178,11 @@ import {
   MARKING_FAILED_MESSAGE,
   TUTOR_UNAVAILABLE_MESSAGE,
 } from "./lib/aiMessages";
+import {
+  TUTOR_CUT_SHORT_MESSAGE,
+  isLengthStop,
+  stripTutorMeta,
+} from "./lib/tutorReply";
 import { incidentKind } from "./lib/incidentRules";
 import {
   MAX_NOTE_CHARS,
@@ -1559,6 +1567,7 @@ function summaryForSet(set: Doc<"studySets">): Summary {
 function cardsForGeneration(rows: Array<Doc<"flashcards">>): GeneratedCard[] {
   return rows.map((card) => {
     const shaped: GeneratedCard = { front: card.front, back: card.back };
+    if (card.keyPoint) shaped.keyPoint = card.keyPoint;
     if (card.beyondNotes !== undefined) shaped.beyondNotes = card.beyondNotes;
     return shaped;
   });
@@ -1700,6 +1709,10 @@ async function generateCards(
   // A pathway batch names the one section it may cover, so a section-scoped
   // prompt stays inside that section.
   scopeLabel = "",
+  // The deck already saved for this set. The digest is context for the model;
+  // this is the structured copy the duplicate check needs, because a model
+  // that ignores "do not repeat these cards" is never filtered by prompt text.
+  existingCards: ReadonlyArray<{ front: string; back: string }> = [],
 ): Promise<GeneratedCard[]> {
   const cards: GeneratedCard[] = [];
   const seen = new Set<string>();
@@ -1798,7 +1811,8 @@ async function generateCards(
             { prompt: previous.front, answer: previous.back },
             { prompt: card.front, answer: card.back },
           ),
-        )
+        ) ||
+        duplicatesExistingCard(card, existingCards)
       ) {
         continue;
       }
@@ -1850,6 +1864,7 @@ async function generatePathwayCards(
   onProgress?: BatchProgress,
   reviewCards = "",
   onCardsAccepted?: (cards: GeneratedCard[]) => Promise<void> | void,
+  existingCards: ReadonlyArray<{ front: string; back: string }> = [],
 ): Promise<GeneratedCard[]> {
   const sections = pathwaySectionScopes(notes, target);
   if (sections.length === 0) return [];
@@ -1878,6 +1893,7 @@ async function generatePathwayCards(
         reviewCards,
         onCardsAccepted,
         scope.label,
+        existingCards,
       ),
     onProgress,
   });
@@ -2220,9 +2236,9 @@ async function generateExams(
             (syllabus
               ? `${PATHWAY_MATERIAL_RULES}\n${SYLLABUS_CONTENT_SOURCE}\n`
               : `${GROUNDING_RULES}\n`) +
-            "Write the marking guide the way a published past-paper mark scheme does: one bullet per mark, examiner phrasing such as '1 mark: states that …' or '2 marks: explains that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
+            "Write the marking guide the way a published past-paper mark scheme does: exactly one bullet per mark and every bullet worth exactly 1 mark, examiner phrasing such as '1 mark: states that …', an 'accept …' note where another wording earns the same mark, and no holistic or encouraging language. " +
             `Follow this board's published conventions: ${markSchemeStyle(context?.examBoard)} ` +
-            "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available. " +
+            "Every bullet must be a separable, creditable point and the bullets must add up exactly to the marks available: a 4-mark question gets four 1-mark bullets, never one 4-mark bullet. " +
             `${examSourceRule(syllabus)} ` +
             (syllabus && scopeLabel
               ? `This batch covers only the section "${scopeLabel}". Stay inside it. `
@@ -2287,7 +2303,24 @@ async function generateExams(
           })
           .filter((exam): exam is GeneratedExam => exam !== null);
 
-    const accepted = dedupeExamQuestions(supported, exams).slice(
+    // A scheme that does not add up to its own tariff cannot be met, and the
+    // live result was a one-mark question carrying four one-mark criteria that
+    // could never award a mark. Reject the question here, so the next bounded
+    // attempt asks for a replacement instead of storing an impossible scheme.
+    const valid = supported.filter((exam) => {
+      const validation = validateMarkingGuide(
+        "points",
+        exam.markingGuide,
+        exam.marks,
+      );
+      if (validation.ok) return true;
+      console.error(
+        "Exam mark scheme did not match its marks; regenerating that question",
+        { marks: exam.marks, reason: validation.reason },
+      );
+      return false;
+    });
+    const accepted = dedupeExamQuestions(valid, exams).slice(
       0,
       Math.max(0, target - exams.length),
     );
@@ -3017,6 +3050,18 @@ class TutorStopped extends Error {
   constructor() {
     super("Tutor reply stopped");
     this.name = "TutorStopped";
+  }
+}
+
+/**
+ * Raised when the provider stopped the stream at the token ceiling. The partial
+ * answer is discarded rather than stored: a student must not be shown half a
+ * reply as if it were complete. The action turns this into a retryable message.
+ */
+class TutorCutShort extends Error {
+  constructor() {
+    super(TUTOR_CUT_SHORT_MESSAGE);
+    this.name = "TutorCutShort";
   }
 }
 
@@ -4853,6 +4898,7 @@ async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationAr
                 undefined,
                 reuseCardDigest(snapshot.cards),
                 checkpointCards,
+                snapshot.cards,
               )
             : generateCards(
                 apiKeys,
@@ -4863,6 +4909,8 @@ async function continueStudySetCardsForUser(ctx: ActionCtx, args: ContinuationAr
                 false,
                 reuseCardDigest(snapshot.cards),
                 checkpointCards,
+                "",
+                snapshot.cards,
               ),
         [],
       );
@@ -6081,6 +6129,9 @@ export const reviewReusedStudySet = internalAction({
             undefined,
             plan.syllabus,
             reuseCardDigest(snapshot.cards),
+            undefined,
+            "",
+            snapshot.cards,
           );
           newCards = uniqueReviewedCards(generated, snapshot.cards).slice(
             0,
@@ -7453,7 +7504,7 @@ function buildChecks(
   referencePoints: string[] = guide,
 ): MarkCheck[] {
   const rows = Array.isArray(verdicts) ? verdicts : [];
-  const distinctive = distinctiveTermsFor(referencePoints);
+  const distinctive = creditTermsFor(referencePoints, answer);
   return guide.map((point, index) => {
     const marks = bulletMarks(point);
     const row = rows[index] as { awarded?: unknown; evidence?: unknown } | undefined;
@@ -7679,7 +7730,9 @@ async function alternativeCredits(
   exam: { question: string; marks: number; modelAnswer: string },
   response: string,
   qualification: string,
-  guide: string[],
+  // The criterion ids and their points. The model must say which criterion an
+  // alternative earns, so a point can never be attached to a row by position.
+  criteria: Array<{ id: string; point: string }>,
   awardedMarks: number,
   available: number,
 ): Promise<AlternativeCredit[]> {
@@ -7697,15 +7750,20 @@ async function alternativeCredits(
           `<question>${exam.question}</question>\n` +
           `<marks_available>${exam.marks}</marks_available>\n` +
           `<marks_already_awarded>${awardedMarks}</marks_already_awarded>\n` +
-          `<marking_guide>\n${guide.join("\n")}\n</marking_guide>\n` +
+          `<marking_guide>\n${criteria
+            .map((criterion) => `${criterion.id}: ${criterionText(criterion.point)}`)
+            .join("\n")}\n</marking_guide>\n` +
           `<model_answer_reference_only>${exam.modelAnswer}</model_answer_reference_only>\n` +
           `<student_answer>${response.slice(0, 5000)}</student_answer>\n\n` +
           `The marking guide is illustrative, not an exhaustive list. The answer is short of full marks. Identify up to ${max} correct points that answer this question but are not in the guide. ` +
           "Accept a belief, example, reason, feature or explanation that is correct for this qualification, even when it is worded differently from the model answer. " +
           "Do not accept a point that contradicts the guide, is outside the specification, repeats a credited point, or merely restates the question. " +
+          "Never credit a point about a different subject, process or entity from the criterion it is offered for: an amylase fact cannot earn a protease criterion. " +
           "Use this only for questions that ask for examples, beliefs, reasons, features or an outline; never use it for a closed calculation or a single right answer. " +
           "Each point must be short and the evidence must be copied verbatim from the answer. If there are none, return an empty alternatives array.\n" +
-          'Return JSON exactly like: {"alternatives":[{"point":"God is benevolent","evidence":"God is benevolent"}]}. ' +
+          'Return JSON exactly like: {"alternatives":[{"criterionId":"c3","point":"God is benevolent","evidence":"God is benevolent"}]}. ' +
+          "criterionId must be the id of the one unearned criterion this correct point should earn, copied from the guide above. " +
+          "If the point does not belong to any single criterion, omit it. " +
           "Give one entry per correct alternative, in the order they appear in the answer, and no more than the number requested.\n\n" +
           DATA_NOT_INSTRUCTIONS,
       },
@@ -7717,14 +7775,24 @@ async function alternativeCredits(
       const seen = new Set<string>();
       const rows: AlternativeCredit[] = [];
       for (const rawRow of parsed.alternatives) {
-        const row = rawRow as { point?: unknown; evidence?: unknown };
+        const row = rawRow as {
+          criterionId?: unknown;
+          point?: unknown;
+          evidence?: unknown;
+        };
+        const criterionId = asText(row.criterionId, 24);
         const point = asText(row.point, 300);
         const evidence = asText(row.evidence, 400);
+        // An alternative without a real criterion id, or with one the guide
+        // does not contain, is not attached to anything.
+        if (!criterionId || !criteria.some((entry) => entry.id === criterionId)) {
+          continue;
+        }
         if (!point || !quoteIsInAnswer(evidence, response)) continue;
-        const key = point.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        rows.push({ point, evidence });
+        const key = `${criterionId}:${point.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}`;
+        if (!seen.has(key)) seen.add(key);
+        else continue;
+        rows.push({ criterionId, point, evidence });
         if (rows.length >= max) break;
       }
       return rows;
@@ -7769,6 +7837,13 @@ async function markExamAnswer(
         : [`${exam.marks} marks: the answer states what the model answer states`],
     marks: exam.marks,
   });
+  // A scheme that does not add up to the tariff cannot be met or exhausted.
+  // Refuse to mark against it rather than showing the student a scheme that
+  // could never be satisfied (the live case was four criteria on a one-mark
+  // question, which capped the score at 0/1).
+  if (criteria.length === 0) {
+    throw new Error(MARK_SCHEME_MISMATCH_MESSAGE);
+  }
   const guide = guideFromCriteria(criteria);
 
   if (matchesModelAnswer(response, exam.modelAnswer)) {
@@ -7831,7 +7906,7 @@ async function markExamAnswer(
 
   // Criteria the answer's own words already cover, but which scored nothing,
   // go back for a second look.
-  const terms = distinctiveTermsFor(guide);
+  const terms = creditTermsFor(guide, response);
   const coverage = guide.map((point, index) =>
     distinctiveCoverage(terms[index] ?? [], response),
   );
@@ -7889,24 +7964,51 @@ async function markExamAnswer(
   // only for an unearned one-mark row. This is what lets "God is benevolent"
   // earn the third mark in an "outline three beliefs" question whose guide
   // happens to list "God is eternal" instead.
-  const beforeAlternatives = awardedFromChecks(checks, exam.marks);
-  const unearnedOneMarkRows = checks.filter(
+  //
+  // Every row now carries the id of its criterion. The alternative pass must
+  // name that id, and applyAlternativeCredits checks the point against the
+  // criterion's own vocabulary, so an amylase fact cannot take the protease or
+  // lipase row by position.
+  const rows: MarkCheck[] = checks.map((check, index) => ({
+    ...check,
+    ...(criteria[index] ? { criterionId: criteria[index]!.id } : {}),
+  }));
+  const alternativeCriteria = criteria.map((criterion) => ({
+    id: criterion.id,
+    text: criterionText(criterion.text),
+  }));
+  const beforeAlternatives = awardedFromChecks(rows, exam.marks);
+  const unearnedOneMarkRows = rows.filter(
     (check) => check.awarded === 0 && check.marks === 1,
   ).length;
+  let withAlternatives = rows;
   if (beforeAlternatives < exam.marks && unearnedOneMarkRows > 0) {
     const alternatives = await alternativeCredits(
       apiKeys,
       exam,
       response,
       qualification,
-      checks.map((check) => check.point),
+      rows.map((check) => ({
+        id: check.criterionId ?? "",
+        point: check.point,
+      })),
       beforeAlternatives,
       Math.min(exam.marks - beforeAlternatives, unearnedOneMarkRows),
     );
     if (alternatives.length > 0) {
-      checks = applyAlternativeCredits(checks, alternatives);
+      withAlternatives = applyAlternativeCredits(
+        rows,
+        alternatives,
+        alternativeCriteria,
+      );
     }
   }
+  // The criterion id is a server-side join key; the stored checklist keeps the
+  // shape the schema and the UI expect.
+  checks = withAlternatives.map(({ criterionId, ...check }) => {
+    void criterionId;
+    return check;
+  });
 
   // Closed answers are re-checked after the meaning and alternative passes:
   // a criterion such as `2.8.1` must match completely, not merely share its
@@ -8187,6 +8289,8 @@ export const gradeRecallAnswer = action({
     note: string;
     coveredUnits: string[];
     missedUnits: string[];
+    /** True when the answer denied the fact the card states. */
+    contradicts: boolean;
     method: string;
   }> => {
     const userId = await requireUserId(ctx);
@@ -8223,6 +8327,7 @@ export const gradeRecallAnswer = action({
             : `You said “${response.slice(0, 80)}”. The card says “${answer}”. A different word is a different fact.`,
           coveredUnits: local.correct ? [answer] : [],
           missedUnits: local.correct ? [] : [answer],
+          contradicts: false,
           method: local.method ?? "exact",
         };
       }
@@ -8236,6 +8341,7 @@ export const gradeRecallAnswer = action({
             : `You said “${response.slice(0, 80)}”. The card says “${card.back}”. A different word is a different fact.`,
           coveredUnits: fallback.correct ? [card.back] : [],
           missedUnits: fallback.correct ? [] : [card.back],
+          contradicts: false,
           method: "exact",
         };
       }
@@ -8250,21 +8356,26 @@ export const gradeRecallAnswer = action({
     });
     const covered = local.coveredUnits ?? [];
     const missed = local.missedUnits ?? [];
+    // A negated answer is not "missing a point": it states the opposite of the
+    // card, so the message must say that rather than "you matched the card".
     const note = local.correct
       ? `You included ${covered.length} of ${covered.length + missed.length} key units.`
-      : `You included ${covered.length} of ${
-          covered.length + missed.length
-        } key units. ${
-          missed.length > 0
-            ? `Missing: ${missed.slice(0, 5).join(", ")}.`
-            : "Add more of the model answer's key points."
-        }`;
+      : local.contradicts
+        ? `You said the opposite of the card. The card says “${card.back.slice(0, 160)}”.`
+        : `You included ${covered.length} of ${
+            covered.length + missed.length
+          } key units. ${
+            missed.length > 0
+              ? `Missing: ${missed.slice(0, 5).join(", ")}.`
+              : "Add more of the model answer's key points."
+          }`;
     return {
       correct: local.correct,
       score: local.score,
       note,
       coveredUnits: covered,
       missedUnits: missed,
+      contradicts: local.contradicts === true,
       method: local.method ?? "units",
     };
   },
@@ -8418,13 +8529,6 @@ function explainLevelRules(level: string | undefined, question: string): string 
   );
 }
 
-/**
- * The counter-instruction for a reply that is not marking anything. The marking
- * contract used to be in every prompt, and the model answered an ordinary
- * question with "Mark: 0/1" and "Not credited:" copied from it.
- */
-const NO_MARKING_RULES =
-  "NO MARKING IN THIS REPLY: the student is not answering a question you asked, so do not give a mark out of N, do not say 'Not credited:', and do not grade their message. Answer what they actually asked.";
 
 /** The question as the tutor's prompt, with the material and any web results. */
 function tutorPrompt(
@@ -8442,7 +8546,11 @@ function tutorPrompt(
   const system = [
     TUTOR_SYSTEM_PROMPT,
     TUTOR_THREAD_RULES,
-    context.marking ? tutorMarkingRules() : NO_MARKING_RULES,
+    // No counter-instruction for an ordinary reply. Naming the format it
+    // forbade ("do not say 'Not credited:'") made fast models print exactly
+    // that sentence at the top of the answer. Marking rules apply only when
+    // the student is actually answering a question the tutor asked.
+    context.marking ? tutorMarkingRules() : "",
     "Begin every reply with a complete sentence. Never start with a partial word, a hyphen, or a continuation of the study material.",
     materialBlock(context.material),
     `<material_title>${context.title}</material_title>`,
@@ -8494,6 +8602,8 @@ type StreamResult = {
   sources: StreamSource[];
   /** The model's own thinking, when the level produced any. */
   reasoning: string;
+  /** The provider's stop reason for the final chunk ("stop", "length", …). */
+  finishReason: string;
 };
 
 type Snapshot = (
@@ -8546,6 +8656,9 @@ async function readChatStream(
   // Reasoning models stream their thinking in a separate field. It is kept for
   // the reply's "Reasoning" disclosure, never mixed into the answer.
   let reasoning = "";
+  // The provider's stop reason. A `length` stop means the answer was cut off
+  // at the token ceiling; it used to be saved as if it were complete.
+  let finishReason = "";
   let lastEmit = 0;
 
   const addSource = (candidate: unknown) => {
@@ -8573,11 +8686,15 @@ async function readChatStream(
       try {
         const payload = JSON.parse(data) as {
           choices?: Array<{
+            finish_reason?: string | null;
             delta?: { content?: string; annotations?: unknown[] };
             message?: { annotations?: unknown[] };
           }>;
         };
         const choice = payload.choices?.[0];
+        if (typeof choice?.finish_reason === "string" && choice.finish_reason) {
+          finishReason = choice.finish_reason;
+        }
         const delta = choice?.delta as
           | { content?: string; reasoning_content?: string; reasoning?: string }
           | undefined;
@@ -8599,14 +8716,19 @@ async function readChatStream(
     const visible = visibleAnswer(answer);
     if ((visible || reasoning) && Date.now() - lastEmit > 120) {
       lastEmit = Date.now();
-      await onSnapshot(tidyTutorText(visible), sources, reasoning.trim());
+      await onSnapshot(
+        stripTutorMeta(tidyTutorText(visible)),
+        sources,
+        reasoning.trim(),
+      );
     }
   }
 
   return {
-    text: tidyTutorText(visibleAnswer(answer)).trim(),
+    text: stripTutorMeta(tidyTutorText(visibleAnswer(answer))).trim(),
     sources,
     reasoning: reasoning.trim(),
+    finishReason,
   };
 }
 
@@ -8738,11 +8860,18 @@ async function streamNvidiaAnswer(
     }
 
     const result = await readChatStream(response, onSnapshot);
+    // A stream that hit the ceiling is not an answer: surface it as a retry
+    // instead of storing the half sentence. Anything already written to the
+    // browser is discarded by the caller's error path.
+    if (isLengthStop(result.finishReason)) {
+      throw new TutorCutShort();
+    }
     if (result.text.length > 0) {
       return {
         text: stripReasoning(result.text).trim(),
         sources: result.sources,
         reasoning: result.reasoning,
+        finishReason: result.finishReason,
       };
     }
     // Nothing visible came back: the model may have spent the whole budget on
@@ -8811,6 +8940,9 @@ async function streamWebAnswer(
   }
 
   const result = await readChatStream(response, onSnapshot);
+  if (isLengthStop(result.finishReason)) {
+    throw new TutorCutShort();
+  }
   if (result.text.length === 0) {
     throw new Error("OpenRouter returned an empty answer.");
   }
@@ -8905,6 +9037,7 @@ async function streamTutorAnswer(
       text: grounded.text,
       sources: sourcesFrom(results),
       reasoning: grounded.reasoning,
+      finishReason: grounded.finishReason,
     };
   }
 
@@ -8915,8 +9048,11 @@ async function streamTutorAnswer(
       paced,
     );
   } catch (error) {
-    // A stopped reply is not a web failure: never retry it on another provider.
-    if (error instanceof TutorStopped) throw error;
+    // A stopped or cut-short reply is not a web failure: never retry it on
+    // another provider, and never present the partial text as complete.
+    if (error instanceof TutorStopped || error instanceof TutorCutShort) {
+      throw error;
+    }
     // The browsing provider is optional, so a web failure never costs the
     // answer: the tutor falls back to the student's own material and says it
     // found nothing outside it.
@@ -9283,6 +9419,11 @@ export const askTutor = action({
     } catch (error) {
       if (error instanceof TutorStopped) return { reply: "" };
       await ctx.runMutation(internal.tutor.discardTutorAnswer, { messageId });
+      // A length stop is the student's retry, not a provider incident: tell
+      // them the answer was cut short instead of saving half of it.
+      if (error instanceof TutorCutShort) {
+        throw new Error(TUTOR_CUT_SHORT_MESSAGE);
+      }
       await recordProviderIncident(ctx, "tutor", error);
       // The question was validated before this block, so anything caught here
       // is infrastructure. Log it and show one sentence: never a provider's
@@ -9422,6 +9563,9 @@ export const askCourseTutor = action({
     } catch (error) {
       if (error instanceof TutorStopped) return { reply: "" };
       await ctx.runMutation(internal.tutor.discardCourseTutorAnswer, { messageId });
+      if (error instanceof TutorCutShort) {
+        throw new Error(TUTOR_CUT_SHORT_MESSAGE);
+      }
       await recordProviderIncident(ctx, "tutor", error);
       if (!(error instanceof ProviderError)) console.error("Tutor answer failed", error);
       throw new Error(
@@ -9559,6 +9703,9 @@ export const askLibraryTutor = action({
       await ctx.runMutation(internal.tutor.discardLibraryTutorAnswer, {
         messageId,
       });
+      if (error instanceof TutorCutShort) {
+        throw new Error(TUTOR_CUT_SHORT_MESSAGE);
+      }
       await recordProviderIncident(ctx, "tutor", error);
       if (!(error instanceof ProviderError)) console.error("Tutor answer failed", error);
       throw new Error(

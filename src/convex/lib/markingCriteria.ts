@@ -255,9 +255,41 @@ export function alignCriteria(criteria: MarkingCriterion[]): MarkingCriterion[] 
   }));
 }
 
+export function criteriaTotal(
+  criteria: ReadonlyArray<{ marks: number }>,
+): number {
+  return criteria.reduce(
+    (sum, criterion) => sum + Math.max(0, Math.round(criterion.marks)),
+    0,
+  );
+}
+
+/**
+ * Whether a guide is a usable scheme for this tariff. A guide whose points add
+ * up to fewer or more marks than the question offers cannot be met or cannot
+ * be exhausted, so it is not a scheme the student can be marked against.
+ */
+export function markSchemeMatchesMarks(
+  guide: string[],
+  marksAvailable: number,
+): boolean {
+  const criteria = toCriteria(guide);
+  return (
+    criteria.length > 0 &&
+    criteriaTotal(criteria) === Math.max(0, Math.round(marksAvailable))
+  );
+}
+
 /**
  * The criteria for a point-marked question. Stored rows win; old rows without
  * criteria fall back to the guide. No mark is invented or rescaled.
+ *
+ * A stored scheme whose points do not add up to the question's marks is not
+ * used at all. The live failure this prevents: a one-mark pH question stored
+ * four one-mark criteria and could never award more than 0/1, because the
+ * student had to meet four points for a single mark. An empty list means the
+ * question is ungradeable and the callers say so instead of showing an
+ * impossible scheme.
  */
 export function criteriaFor(question: {
   criteria?: MarkingCriterion[];
@@ -266,10 +298,16 @@ export function criteriaFor(question: {
   marking?: "points" | "levels";
 }): MarkingCriterion[] {
   if (question.marking === "levels") return [];
+  const marks = question.marks;
+  const matches = (criteria: MarkingCriterion[]) =>
+    marks === undefined || criteriaTotal(criteria) === Math.max(0, Math.round(marks));
+
   if (question.criteria && question.criteria.length > 0) {
-    return alignCriteria(question.criteria);
+    const stored = alignCriteria(question.criteria);
+    if (matches(stored)) return stored;
   }
-  return toCriteria(question.markingGuide);
+  const guide = toCriteria(question.markingGuide);
+  return matches(guide) ? guide : [];
 }
 
 /**
@@ -435,6 +473,7 @@ function termAppears(
   keyword: string,
   answerWords: Set<string>,
   tokens: string[],
+  allowInitials = true,
 ): boolean {
   for (const word of answerWords) {
     const stem = word.length > 6 ? word.slice(0, 6) : word;
@@ -449,7 +488,16 @@ function termAppears(
       return true;
     }
   }
-  return initialsMatch(keyword, tokens);
+  return allowInitials && initialsMatch(keyword, tokens);
+}
+
+/**
+ * Whether the answer names a term as a word. The initials rule is deliberately
+ * off: in a subject check, "particles have" must not read as "pH".
+ */
+function mentionsWord(keyword: string, answer: string): boolean {
+  const tokens = answerTokens(answer);
+  return termAppears(keyword, new Set(tokens), tokens, false);
 }
 
 /** Share (0–1) of a set of terms that appear in the answer. */
@@ -481,7 +529,7 @@ export function evidenceCoverage(text: string, answer: string): number {
  * question's shared vocabulary and dropped, leaving the terms that carry each
  * criterion's own idea.
  */
-export function distinctiveTermsFor(texts: string[]): string[][] {
+export function distinctiveTermsFor(texts: readonly string[]): string[][] {
   const all = texts.map((text) => criterionKeywords(criterionText(text)));
   if (all.length <= 1) return all;
   const shared = new Set(
@@ -521,6 +569,49 @@ export function capAwarded(
   const safeClaim = Math.max(0, Math.min(marks, Math.floor(claimed)));
   const ceiling = Math.max(1, Math.ceil(marks * coverage));
   return Math.min(safeClaim, ceiling);
+}
+
+/**
+ * Per-row terms that may earn a mark.
+ *
+ * Distinctive terms alone let an amylase answer take the lipase row through
+ * "pancreas". The guard here is narrow: a row earns nothing when its own
+ * subject is absent from the answer but another row's subject is present. The
+ * answer is then evidently about the other criterion; the shared or incidental
+ * term cannot carry this one.
+ *
+ * A row whose subject is absent because the whole guide shares one subject
+ * (temperature, pH, "God") keeps its terms, so a correct paraphrase is never
+ * refused. A subject is the first word the row shares with another row, falling
+ * back to its first keyword.
+ */
+export function creditTermsFor(
+  points: readonly string[],
+  answer: string,
+): string[][] {
+  const distinctive = distinctiveTermsFor(points);
+  const keywords = points.map((point) => criterionKeywords(criterionText(point)));
+  const subjects = keywords.map((row, index) =>
+    row.find((term) =>
+      keywords.some((other, otherIndex) => otherIndex !== index && other.includes(term)),
+    ) ??
+    row[0] ??
+    "",
+  );
+  return distinctive.map((terms, index) => {
+    const subject = subjects[index]!;
+    if (!subject || mentionsWord(subject, answer)) return terms;
+    const aboutAnother = subjects.some(
+      (other, otherIndex) =>
+        otherIndex !== index &&
+        other !== "" &&
+        other !== subject &&
+        mentionsWord(other, answer),
+    );
+    // Keep only the subject the answer does not contain, so the row scores
+    // zero without changing the shape of the evidence guard.
+    return aboutAnother ? [subject] : terms;
+  });
 }
 
 /**
@@ -622,7 +713,16 @@ export function reconcilePasses(
   };
 }
 
+/** Shown when a question's stored scheme cannot match its own marks. */
+export const MARK_SCHEME_MISMATCH_MESSAGE =
+  "This question's mark scheme does not add up to the marks on offer, so it cannot be marked fairly. Rebuild the set to replace the question.";
+
 export type AlternativeCredit = {
+  /**
+   * The criterion this alternative is offered for. An alternative can only be
+   * credited to the criterion it names; position is not evidence.
+   */
+  criterionId: string;
   /** The correct point the answer made but the guide did not list. */
   point: string;
   /** The student's own words, checked against the answer before use. */
@@ -634,6 +734,8 @@ export type AlternativeCredit = {
  * student's own words that earned them ("absent" when it earned nothing).
  */
 export type MarkCheck = {
+  /** The stored criterion id this row belongs to, when known. */
+  criterionId?: string;
   point: string;
   marks: number;
   awarded: number;
@@ -641,25 +743,78 @@ export type MarkCheck = {
 };
 
 /**
+ * Whether an alternative point may be credited to this criterion.
+ *
+ * The old rule filled unearned rows with alternatives by position, so an answer
+ * about amylase took the protease and lipase rows: the alternative was never
+ * checked against the criterion it was assigned to. Two structural tests now
+ * apply. The alternative must be offered for this criterion id, and its own
+ * vocabulary must not fit a different criterion better. A point that shares no
+ * criterion's distinctive terms is genuinely unlisted ("God is benevolent" in
+ * an outline of beliefs), so it may fill the row it names; a point that names
+ * another criterion's idea cannot cross over.
+ */
+export function alternativeFitsCriterion(
+  criterionId: string,
+  point: string,
+  criteria: ReadonlyArray<{ id: string; text: string }>,
+): boolean {
+  if (criteria.length === 0) return false;
+  if (!criteria.some((criterion) => criterion.id === criterionId)) return false;
+  const shared = criteria.map(({ id }) => id);
+  if (new Set(shared).size !== shared.length) return false;
+
+  const terms = distinctiveTermsFor(criteria.map((criterion) => criterion.text));
+  let target = 0;
+  let best = 0;
+  let bestId = "";
+  criteria.forEach((criterion, index) => {
+    const coverage = distinctiveCoverage(terms[index] ?? [], point);
+    if (criterion.id === criterionId) target = coverage;
+    if (coverage > best) {
+      best = coverage;
+      bestId = criterion.id;
+    }
+  });
+
+  // It clearly belongs to another row: never let it cross.
+  if (best >= 0.5 && bestId !== criterionId) return false;
+  // It clearly belongs here.
+  if (target >= 0.5) return true;
+  // It names no criterion's vocabulary, so it is a genuinely new point.
+  return best < 0.5;
+}
+
+/**
  * Fills unearned one-mark criteria with correct alternatives the guide omitted.
  *
  * A mark scheme is illustrative in open questions such as "outline three
  * beliefs"; a student who gives a different correct belief should not lose a
  * mark because the model answer happened to list another one. The alternative
- * still has to be quoted from the answer, and it can only take the unearned
- * rows, so this can add credit but cannot invent it or exceed the paper total.
+ * still has to be quoted from the answer, must name the criterion it is offered
+ * for, and can only take that unearned row, so this can add credit but cannot
+ * invent it, cross a criterion or exceed the paper total.
  */
 export function applyAlternativeCredits(
   checks: MarkCheck[],
   alternatives: AlternativeCredit[],
+  criteria: ReadonlyArray<{ id: string; text: string }> = [],
 ): MarkCheck[] {
   if (alternatives.length === 0) return checks;
-  let next = 0;
+  const used = new Set<number>();
   return checks.map((check) => {
-    if (next >= alternatives.length || check.awarded > 0 || check.marks !== 1) {
+    if (check.awarded > 0 || check.marks !== 1 || !check.criterionId) {
       return check;
     }
-    const alternative = alternatives[next++]!;
+    const index = alternatives.findIndex(
+      (alternative, position) =>
+        !used.has(position) &&
+        alternative.criterionId === check.criterionId &&
+        alternativeFitsCriterion(check.criterionId!, alternative.point, criteria),
+    );
+    if (index < 0) return check;
+    used.add(index);
+    const alternative = alternatives[index]!;
     return {
       ...check,
       point: `${check.point} — accepted alternative: ${alternative.point}`,

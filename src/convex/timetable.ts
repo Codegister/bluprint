@@ -1353,6 +1353,33 @@ export const getDayView = query({
     const off = isDayOff(parseDateKey(date));
     const start = off ? settings.dayOffStartMinutes : settings.startMinutes;
 
+    // The visible week, computed from the plan rather than from stored days.
+    // The strip used to say "Not planned" for every day that had not been
+    // opened yet, because `days` only contains days that were already planned.
+    const stripStart = plan.startDate > today ? plan.startDate : today;
+    const schedule: Array<{
+      date: string;
+      planned: number;
+      revision: boolean;
+      dayOff: boolean;
+    }> = [];
+    for (let index = 0; index < 7; index += 1) {
+      const cursor = addDays(parseDateKey(stripStart), index);
+      const key = toDateKey(cursor);
+      if (key > plan.examDate) break;
+      const revision = isRevisionDay(key, plan);
+      const dayOff = isDayOff(cursor);
+      const budget = dayOff ? settings.dayOffMinutes : settings.dailyMinutes;
+      schedule.push({
+        date: key,
+        planned: revision
+          ? Math.floor(budget / Math.max(1, settings.sessionMinutes))
+          : 0,
+        revision,
+        dayOff,
+      });
+    }
+
     return {
       date,
       today,
@@ -1385,6 +1412,7 @@ export const getDayView = query({
           0,
         ),
       })),
+      schedule,
       blocked,
       // Meal times the planner kept free. Only meals with no session over them
       // are listed, so the day never claims a break that was actually used.

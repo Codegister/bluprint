@@ -186,26 +186,27 @@ export default function Today() {
   const buildingSets = (sets ?? []).filter(
     (set) => set.status === "queued" || set.status === "processing",
   );
-  // The strip counts the same items the set pages show: every card, quiz
-  // question and written question across the ready sets, and how many of them
-  // have been answered correctly. The three parts travel with the total so the
-  // number can always be explained on screen.
+  // One unit: answers given today. The three library parts keep their own
+  // meaning (cards known, quiz answers correct, written answers at half marks)
+  // and are shown separately; summing them into one "correct" mixed mastery,
+  // accuracy and a half-marks threshold under the label "questions".
   const items = study?.items ?? {
     total: 0,
-    correct: 0,
     cards: { total: 0, correct: 0 },
     quiz: { total: 0, correct: 0 },
     exam: { total: 0, correct: 0 },
   };
-  const progress = items.total
-    ? Math.min(100, Math.round((items.correct / items.total) * 100))
-    : 0;
+  const answeredToday = study?.todayCount ?? 0;
   // The server caps the goal at what exists; the page still names both numbers
   // so "20 of 5" can never appear and the target is never unexplained.
   const dailyGoal = Math.min(study?.goal ?? 0, items.total);
+  const progress =
+    dailyGoal > 0
+      ? Math.min(100, Math.round((answeredToday / dailyGoal) * 100))
+      : 0;
   const breakdown =
     items.total > 0
-      ? `${items.cards.correct}/${items.cards.total} cards · ${items.quiz.correct}/${items.quiz.total} quiz · ${items.exam.correct}/${items.exam.total} exam`
+      ? `${items.cards.correct}/${items.cards.total} cards known · ${items.quiz.correct}/${items.quiz.total} quiz correct · ${items.exam.correct}/${items.exam.total} written at half marks or better`
       : "No saved cards or questions yet";
 
   /**
@@ -365,14 +366,16 @@ export default function Today() {
       >
         <div className="flex min-w-[200px] flex-1 items-center gap-2.5">
           <p className="shrink-0 text-[0.76rem] font-semibold tabular-nums text-brand-ink">
-            {items.total > 0 ? `${items.correct}/${items.total} items correct` : "No items yet"}
+            {items.total > 0
+              ? `${answeredToday} answer${answeredToday === 1 ? "" : "s"} today`
+              : "No items yet"}
           </p>
           {items.total > 0 && (
             <Meter
               value={progress}
               className="h-1.5 max-w-[220px] flex-1 bg-brand-panel"
               barClassName="bg-brand-sky"
-              label={`${items.correct} of ${items.total} items answered correctly`}
+              label={`${answeredToday} of ${dailyGoal} answers toward today's goal`}
             />
           )}
           <p className="text-[0.7rem] font-medium tabular-nums text-muted-foreground">
@@ -386,7 +389,7 @@ export default function Today() {
         {study?.goalReason && (
           <p className="text-[0.72rem] text-muted-foreground sm:ml-auto">
             {items.total > 0
-              ? `Daily goal: ${dailyGoal} question${dailyGoal === 1 ? "" : "s"}. ${Math.min(items.correct, dailyGoal)} done, ${Math.max(0, dailyGoal - items.correct)} to go.`
+              ? `Daily goal: ${dailyGoal} answer${dailyGoal === 1 ? "" : "s"}. ${Math.min(answeredToday, dailyGoal)} done, ${Math.max(0, dailyGoal - answeredToday)} to go.`
               : "Your daily goal appears once a set has questions in it."}
           </p>
         )}
