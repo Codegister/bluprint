@@ -364,6 +364,35 @@ describe("legitimate paraphrases are not refused", () => {
     expect(credits.reduce((sum, value) => sum + value, 0)).toBe(1);
   });
 
+  test("a named example earns the general row in a mixed-subject guide", () => {
+    // The answer names the example instead of repeating the row's framing
+    // words, while the sibling rows are about the mechanisms of insulation.
+    const guide = [
+      "1 mark: a named example of an insulating material, e.g. fibreglass",
+      "1 mark: the insulation reduces conduction",
+      "1 mark: trapped air reduces convection",
+    ];
+    const criteria = criteriaFor({ markingGuide: guide, marks: 3 });
+    const answer =
+      "An example is fibreglass, which is an insulating material. It reduces conduction, and the trapped air reduces convection.";
+
+    expect(credit(criteria, answer)).toEqual([1, 1, 1]);
+  });
+
+  test("an example row does not exempt its siblings from the subject guard", () => {
+    // The answer's named example earns its own row, but "pancreas" must not
+    // carry the lipase row whose subject the answer never mentions.
+    const guide = [
+      "1 mark: a named example of an enzyme, e.g. amylase",
+      "1 mark: lipase is made in the pancreas and breaks down lipids",
+    ];
+    const criteria = criteriaFor({ markingGuide: guide, marks: 2 });
+
+    expect(
+      credit(criteria, "A named example is amylase. It is made in the pancreas."),
+    ).toEqual([1, 0]);
+  });
+
   test("a row loses nothing unless the answer names another row's subject", () => {
     const answer = "As it gets hotter, particles collide more often.";
     const terms = creditTermsFor(SIX_POINTS, answer);

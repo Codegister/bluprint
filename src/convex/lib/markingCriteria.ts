@@ -572,6 +572,18 @@ export function capAwarded(
 }
 
 /**
+ * Whether a criterion itself asks for a named example, so naming one is the
+ * credited answer. "a named example of an insulating material, e.g. fibreglass"
+ * is met by "fibreglass" even when the row's framing words ("named",
+ * "example") never appear in the answer.
+ */
+function acceptsNamedExample(text: string): boolean {
+  return /\bnamed\b[^.]*\bexamples?\b|\bfor example\b|\be\.g\.|\bsuch as\b/i.test(
+    text,
+  );
+}
+
+/**
  * Per-row terms that may earn a mark.
  *
  * Distinctive terms alone let an amylase answer take the lipase row through
@@ -582,8 +594,10 @@ export function capAwarded(
  *
  * A row whose subject is absent because the whole guide shares one subject
  * (temperature, pH, "God") keeps its terms, so a correct paraphrase is never
- * refused. A subject is the first word the row shares with another row, falling
- * back to its first keyword.
+ * refused. An example row is also exempt: the answer is allowed to name the
+ * example instead of repeating the row's framing, and its own distinctive terms
+ * still have to be covered before a mark is awarded. A subject is the first
+ * word the row shares with another row, falling back to its first keyword.
  */
 export function creditTermsFor(
   points: readonly string[],
@@ -600,7 +614,13 @@ export function creditTermsFor(
   );
   return distinctive.map((terms, index) => {
     const subject = subjects[index]!;
-    if (!subject || mentionsWord(subject, answer)) return terms;
+    if (
+      !subject ||
+      acceptsNamedExample(points[index]!) ||
+      mentionsWord(subject, answer)
+    ) {
+      return terms;
+    }
     const aboutAnother = subjects.some(
       (other, otherIndex) =>
         otherIndex !== index &&

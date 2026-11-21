@@ -4,9 +4,17 @@ import { readFileSync } from "node:fs";
 import { TUTOR_TIERS } from "../src/convex/lib/nvidiaConfig";
 import {
   TUTOR_CUT_SHORT_MESSAGE,
+  TutorCutShort,
+  acceptedTutorText,
   isLengthStop,
+  readTutorStream,
   stripTutorMeta,
 } from "../src/convex/lib/tutorReply";
+
+/** A provider stream built from the same SSE frames the endpoint sends. */
+function sse(...frames: string[]): Response {
+  return new Response(frames.map((frame) => `data: ${frame}\n\n`).join(""));
+}
 
 describe("tutor reply shape", () => {
   test("the live meta line is stripped before the answer is stored", () => {
@@ -48,6 +56,52 @@ describe("tutor reply shape", () => {
     expect(budgets[0]!).toBeLessThan(budgets[1]!);
     expect(budgets[1]!).toBeLessThan(budgets[2]!);
     for (const budget of budgets) expect(budget).toBeGreaterThan(200);
+  });
+
+  test("a mocked length-stopped stream is shown as it arrives, then discarded", async () => {
+    const snapshots: string[] = [];
+    const response = sse(
+      JSON.stringify({ choices: [{ delta: { content: "Amylase breaks starch" } }] }),
+      JSON.stringify({ choices: [{ delta: { content: " into maltose in the" } }] }),
+      JSON.stringify({ choices: [{ delta: {}, finish_reason: "length" }] }),
+      "[DONE]",
+    );
+
+    const result = await readTutorStream(response, async (text) => {
+      snapshots.push(text);
+    });
+
+    // The half answer reached the browser, so the retry must replace it.
+    expect(snapshots[0]).toContain("Amylase breaks starch");
+    expect(result.text).toBe("Amylase breaks starch into maltose in the");
+    expect(result.finishReason).toBe("length");
+
+    let stored: string | null = null;
+    expect(() => {
+      stored = acceptedTutorText(result);
+    }).toThrow(TutorCutShort);
+    expect(() => acceptedTutorText(result)).toThrow(TUTOR_CUT_SHORT_MESSAGE);
+    expect(stored).toBeNull();
+  });
+
+  test("a completed mocked stream is kept and its meta line is stripped", async () => {
+    const response = sse(
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              content:
+                "NO MARKING IN THIS REPLY: do not grade this message.\n\nPepsin works in the stomach.",
+            },
+          },
+        ],
+      }),
+      JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] }),
+      "[DONE]",
+    );
+
+    const result = await readTutorStream(response, async () => {});
+    expect(acceptedTutorText(result)).toBe("Pepsin works in the stomach.");
   });
 
   test("the prompt no longer contains the counter-instruction models repeated", () => {
