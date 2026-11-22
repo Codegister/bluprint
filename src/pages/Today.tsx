@@ -112,7 +112,7 @@ function FirstRunOptions() {
             {
               step: "2",
               title: "Build",
-              body: "NVIDIA writes the summary, flashcards, quiz and exam questions.",
+              body: "The AI writes the summary, flashcards, quiz and exam questions.",
               tone: "border-brand-violet/30 bg-brand-violet/15 text-brand-violet",
             },
             {

@@ -1,4 +1,5 @@
 import { query } from "./_generated/server";
+import { hasFallbackProvider } from "./lib/fallbackConfig";
 import { requireUserId } from "./lib/requireUser";
 import { deploymentKeyState } from "./lib/incidentRules";
 import {
@@ -43,7 +44,7 @@ export const aiStatus = query({
     // Course pathways are scraped, so they need no key. This status only
     // describes the AI used to build study sets, marking and tutoring.
     return {
-      configured: keys.length > 0 || ownKey !== null,
+      configured: keys.length > 0 || ownKey !== null || hasFallbackProvider(),
       // "ok", "missing" or "refused". No key values, no counts, no names: the
       // app only needs to know which sentence to show.
       deploymentKeys,

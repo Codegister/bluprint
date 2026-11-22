@@ -57,6 +57,11 @@ import {
 import { buildAqaBiologyPathway } from "./lib/specPathways";
 import { shouldMarkAnswer, tutorMarkingRules } from "./lib/tutorMarking";
 import { chatCompletionsUrl } from "./lib/gatewayConfig";
+import {
+  fallbackProviders,
+  hasFallbackProvider,
+  type FallbackProvider,
+} from "./lib/fallbackConfig";
 import { alignDataReference, dropUnusedData } from "./lib/paperData";
 import { criteriaToGuide } from "./lib/realPaper";
 import { filterGuideToNotes } from "./lib/noteSupport";
@@ -152,7 +157,6 @@ import { courseOptionsLine } from "./lib/courseScope";
 import { buildRsPathway } from "./lib/rsPathways";
 import {
   OPENROUTER_CHAT_URL,
-  OPENROUTER_GENERATION_MODEL,
   OPENROUTER_TUTOR_MODEL,
   readOpenRouterKey,
 } from "./lib/openrouterConfig";
@@ -357,13 +361,15 @@ async function resolveNvidiaKeys(
       });
     };
   }
-  if (keys.length === 0) {
+  if (keys.length === 0 && !hasFallbackProvider()) {
     // Internal detail stays in the log; the student gets a sentence.
     console.error(
-      "[ai] no NVIDIA key is available: none saved by this user and no NVIDIA_API_KEY on the deployment",
+      "[ai] no AI key is available: no NVIDIA key for this user, no NVIDIA_API_KEY, and no fallback provider configured",
     );
     throw new Error(AI_UNAVAILABLE_MESSAGE);
   }
+  // An empty NVIDIA chain is valid when a fallback provider is configured;
+  // resilientChat goes straight to it.
   return keys;
 }
 
@@ -780,37 +786,40 @@ async function nvidiaChat(
 }
 
 /**
- * Last-resort generation transport. NVIDIA remains the primary provider; this
- * uses OpenRouter's free Nemotron model only after the whole NVIDIA chain has
- * failed, so a 429 or a temporarily overloaded NVIDIA endpoint cannot discard a
- * stage that was already generating.
+ * One request to a configured fallback provider.
+ *
+ * These endpoints are OpenAI-compatible, so the request and response shapes
+ * are the same as NVIDIA's. The provider's own model id is used: a fallback
+ * only knows the model named in its configuration, never an NVIDIA id.
  */
-async function openRouterGenerationChat(options: {
-  messages: ChatMessage[];
-  maxTokens: number;
-  temperature?: number;
-  topP?: number;
-  timeoutMs?: number;
-  deadline?: number;
-}): Promise<string> {
-  const apiKey = readOpenRouterKey();
-  if (!apiKey) throw new Error("OpenRouter is not configured.");
+async function fallbackProviderChat(
+  provider: FallbackProvider,
+  options: {
+    messages: ChatMessage[];
+    maxTokens: number;
+    temperature?: number;
+    topP?: number;
+    timeoutMs?: number;
+    deadline?: number;
+  },
+): Promise<string> {
   const configuredTimeout = options.timeoutMs ?? 120_000;
   const remaining =
     options.deadline === undefined ? configuredTimeout : options.deadline - Date.now();
   const requestTimeout = Math.max(5_000, Math.min(configuredTimeout, remaining));
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${provider.apiKey}`,
+    "Content-Type": "application/json",
+    ...provider.headers,
+  };
+
   let response: Response;
   try {
-    response = await fetch(OPENROUTER_CHAT_URL, {
+    response = await fetch(provider.url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://bluprint.study",
-        "X-Title": "Bluprint",
-      },
+      headers,
       body: JSON.stringify({
-        model: OPENROUTER_GENERATION_MODEL,
+        model: provider.model,
         messages: options.messages,
         temperature: options.temperature ?? 0,
         top_p: options.topP ?? 1,
@@ -820,12 +829,15 @@ async function openRouterGenerationChat(options: {
       signal: AbortSignal.timeout(requestTimeout),
     });
   } catch (error) {
-    console.error("[ai] OpenRouter generation fallback could not be reached", error);
-    throw error;
+    // Never include the request object: it holds the Authorization header.
+    console.error(`[ai] ${provider.label} could not be reached`, error);
+    throw providerError(0, provider.model);
   }
+
   if (!response.ok) {
-    throw providerError(response.status, OPENROUTER_GENERATION_MODEL);
+    throw providerError(response.status, provider.model);
   }
+
   const payload = (await response.json()) as {
     choices?: Array<{
       message?: { content?: string; reasoning_content?: string; reasoning?: string };
@@ -834,15 +846,70 @@ async function openRouterGenerationChat(options: {
   const message = payload.choices?.[0]?.message;
   const content = typeof message?.content === "string" ? message.content : "";
   if (content.trim().length > 0) return content;
+
+  // Some models put the usable answer in the reasoning field when they run
+  // out of visible tokens. Accept it rather than failing a stage that finished.
   const fallback = [message?.reasoning_content, message?.reasoning].find(
     (value): value is string =>
       typeof value === "string" && value.trim().length > 0,
   );
   if (fallback) return fallback;
-  throw providerError(0, OPENROUTER_GENERATION_MODEL, "The AI sent back an empty answer. Please try again in a moment.");
+
+  throw providerError(
+    0,
+    provider.model,
+    "The AI sent back an empty answer. Please try again in a moment.",
+  );
 }
 
-/** Sends a generation prompt through the task model chain, then OpenRouter. */
+/**
+ * Runs one text call with the whole provider chain.
+ *
+ * NVIDIA is tried first when this request has any of its keys. If it fails —
+ * rejected key, rate limit, retired model, outage — each configured fallback
+ * gets the same prompt. The original NVIDIA failure is rethrown when every
+ * provider fails, so the health alert names the provider the deployment
+ * expects to be doing the work.
+ */
+async function resilientChat(
+  apiKeys: string[],
+  options: Parameters<typeof nvidiaChat>[1],
+): Promise<string> {
+  let nvidiaFailure: unknown;
+  if (apiKeys.length > 0) {
+    try {
+      return await nvidiaChat(apiKeys, options);
+    } catch (error) {
+      nvidiaFailure = error;
+    }
+  }
+
+  const providers = fallbackProviders();
+  if (providers.length === 0) {
+    if (nvidiaFailure) throw nvidiaFailure;
+    throw new Error(AI_UNAVAILABLE_MESSAGE);
+  }
+
+  let fallbackFailure: unknown;
+  for (const provider of providers) {
+    try {
+      return await fallbackProviderChat(provider, options);
+    } catch (error) {
+      fallbackFailure = error;
+      console.error(
+        `[ai] ${provider.label} fallback failed on ${provider.model}`,
+        error,
+      );
+    }
+  }
+
+  if (nvidiaFailure) throw nvidiaFailure;
+  throw fallbackFailure instanceof Error
+    ? fallbackFailure
+    : new Error(AI_UNAVAILABLE_MESSAGE);
+}
+
+/** Sends a generation prompt through the task model chain and fallbacks. */
 async function generationChat(
   apiKeys: string[],
   task: GenerationTask,
@@ -858,25 +925,12 @@ async function generationChat(
 ): Promise<string> {
   const chain = generationModelChain(task);
   const primary = chain[0] ?? NVIDIA_TEXT_MODEL;
-  try {
-    return await nvidiaChat(apiKeys, {
-      ...options,
-      model: primary,
-      candidates: chain.slice(1),
-      purpose: "text",
-    });
-  } catch (error) {
-    if (!readOpenRouterKey()) throw error;
-    try {
-      return await openRouterGenerationChat(options);
-    } catch (fallbackError) {
-      console.error(
-        `[ai] generation fallback failed on ${OPENROUTER_GENERATION_MODEL}`,
-        fallbackError,
-      );
-      throw error;
-    }
-  }
+  return resilientChat(apiKeys, {
+    ...options,
+    model: primary,
+    candidates: chain.slice(1),
+    purpose: "text",
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -2567,7 +2621,7 @@ export const buildPastPaper = internalAction({
             paperId,
             progress: `Writing question ${line.line} of ${plan.qs}…`,
           });
-          return nvidiaChat(apiKeys, {
+          return resilientChat(apiKeys, {
             model: NVIDIA_TEXT_MODEL,
             messages: [
               { role: "system", content: PAPER_SYSTEM_PROMPT },
@@ -4057,7 +4111,7 @@ async function generateTopicNotes(
   topic: TopicNoteSource,
   context: { qualification: string; unitTitle: string; reference?: string },
 ): Promise<TopicNoteSection[]> {
-  const raw = await nvidiaChat(apiKeys, {
+  const raw = await resilientChat(apiKeys, {
     model: NVIDIA_TEXT_MODEL,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
@@ -7211,7 +7265,7 @@ async function askExaminer<T>(
   };
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const raw = await nvidiaChat(apiKeys, {
+    const raw = await resilientChat(apiKeys, {
       model: NVIDIA_TEXT_MODEL,
       messages: attempt === 0 ? messages : [...messages, stricter],
       maxTokens,
@@ -9709,7 +9763,7 @@ export const explainQuestion = action({
     const tier = readTutorTier("Balanced");
     let raw: string;
     try {
-      raw = await nvidiaChat(apiKeys, {
+      raw = await resilientChat(apiKeys, {
         model: tier.model,
         messages,
         maxTokens: 1100,

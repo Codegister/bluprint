@@ -39,8 +39,8 @@ const COPY: Record<
         heading: "Where it is stored",
         body: [
           "In a Convex database and file storage operated for this deployment. Access is checked on the server for every query, so one account cannot read another account's sets.",
-          "When a set is generated or an answer is marked, the relevant notes or answer are sent to NVIDIA's API for processing. They are not used to train a public model by Bluprint, and Bluprint keeps no separate copy outside its database.",
-          "The NVIDIA_API_KEY used for those calls is stored in the deployment's server environment. It is never sent to the browser.",
+          "When a set is generated or an answer is marked, the relevant notes or answer are sent to the AI provider handling that request. NVIDIA is tried first; Groq, OpenRouter or Cloudflare Workers AI can handle the request if NVIDIA is unavailable and one of them is configured. Each provider's own terms govern how it processes the request. Bluprint keeps no separate copy outside its database.",
+          "The API keys used for those calls are stored in the deployment's server environment. They are never sent to the browser.",
           "Course pathways and topic notes are read from published exam-board specification pages, published revision notes, and published past-paper indexes. The course page says whether a pathway follows a specification or a notes-based route; a notes-based pathway is not presented as the board's specification.",
         ],
       },

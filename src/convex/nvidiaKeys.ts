@@ -11,8 +11,9 @@
  * 200 without any key at all, so it cannot tell a typo from a working key.
  *
  * Nothing here creates an NVIDIA account. The user signs in themselves and
- * copies their own key, which is what keeps this on the right side of NVIDIA's
- * trial terms.
+ * copies their own key, so Bluprint never handles their NVIDIA credentials.
+ * This does not turn trial access into a production licence; the key remains
+ * subject to NVIDIA's trial terms.
  */
 
 import { v } from "convex/values";

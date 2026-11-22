@@ -20,8 +20,9 @@ separately and gets their own tutor home containing only their courses and study
 - **Tailwind CSS v4 + shadcn/ui** — the interface
 - **Convex** — database, file storage, server actions, and authentication
 - **Convex Auth (email one-time code)** — separate accounts without password management
-- **NVIDIA API** — study-set and past-paper generation, vision, marking, and tutoring,
-  through the OpenAI-compatible endpoint at `integrate.api.nvidia.com`
+- **NVIDIA API, with Groq / OpenRouter / Cloudflare fallbacks** — study-set and
+  past-paper generation, vision, marking, and tutoring, through OpenAI-compatible
+  endpoints. NVIDIA is tried first; a fallback is used only when its key is configured.
 - **Published specification outlines, plus a checked AQA GCSE Biology map** — the official
   topic outline for each course. The pathway builder follows the published qualification →
   subject → exam board → tier route. AQA GCSE Biology (8461) is mapped directly to AQA's own
@@ -576,9 +577,9 @@ chat completion before it is saved, so a typo is reported immediately.
 at all.)
 
 - The user creates the NVIDIA account themselves. Bluprint never signs anyone up and
-  never asks for an email or password, which is what keeps the app inside NVIDIA's trial
-  terms — those terms are trial-only either way, so a personal key is a convenience, not
-  a production licence.
+  never asks for an email or password, so it never handles their NVIDIA credentials. A
+  personal key is a convenience, not a production licence: NVIDIA's trial terms still
+  apply to that key (see "NVIDIA's trial terms and production use" below).
 - The key is sealed with AES-256-GCM in the `nvidiaKeys.connect` action and stored on the
   user's `userNvidiaKeys` row. Only the last four characters are readable; the plaintext is
   never returned to the browser or written to a log.
@@ -593,6 +594,83 @@ stored key, after which those users fall back to the shared pool:
 ```bash
 npx convex env set NVIDIA_KEY_SECRET "$(openssl rand -hex 32)"
 ```
+
+### Fallback AI providers (optional)
+
+Every text call tries NVIDIA first. If NVIDIA is rate-limited, its key is rejected, a
+model is retired, or the endpoint is down, the same request is retried on the first
+configured fallback. A deployment with none of these variables behaves exactly as before.
+
+| Order | Provider | Environment variables | Free allowance | Why it is here |
+| ----- | -------- | --------------------- | -------------- | -------------- |
+| 1 | [Groq](https://console.groq.com/keys) | `GROQ_API_KEY` (model: `GROQ_GENERATION_MODEL`) | 30 RPM, 1,000 requests/day, 200K tokens/day on `openai/gpt-oss-120b` | Fast, OpenAI-compatible, and its services agreement says inputs and outputs are not used to train models. |
+| 2 | [OpenRouter](https://openrouter.ai/keys) | `OPENROUTER_API_KEY` (model: `OPENROUTER_GENERATION_MODEL`) | 20 RPM, 50 requests/day on free models | A large-context free model when Groq's tokens-per-minute ceiling is too small. |
+| 3 | [Cloudflare Workers AI](https://dash.cloudflare.com/profile/api-tokens) | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_API_TOKEN` (model: `CLOUDFLARE_GENERATION_MODEL`) | 10,000 Neurons/day | A last resort with its own infrastructure and no training on customer data. |
+
+The same fallbacks cover summarising, flashcards, quizzes, exams, past papers, topic
+notes, marking, explanations and the tutor. Photo/video transcription remains on NVIDIA's
+vision model because the free fallback models above are text-only.
+
+```bash
+npx convex env set GROQ_API_KEY "gsk_..."
+npx convex env set OPENROUTER_API_KEY "sk-or-..."
+npx convex env set CLOUDFLARE_ACCOUNT_ID "..."
+npx convex env set CLOUDFLARE_AI_API_TOKEN "..."
+```
+
+On Freebuff, add the same names in the project's **Keys** tab. Every key stays on the
+Convex server and is never returned to the browser. Configure one fallback, several, or
+none; presence of the key is the only switch.
+
+Each fallback has its own model id; an NVIDIA model id is never sent to another provider.
+If a provider retires its default, override it without a code change:
+
+```bash
+npx convex env set GROQ_GENERATION_MODEL "openai/gpt-oss-20b"
+npx convex env set OPENROUTER_GENERATION_MODEL "google/gemma-4-31b-it:free"
+npx convex env set CLOUDFLARE_GENERATION_MODEL "@cf/openai/gpt-oss-20b"
+```
+
+The default OpenRouter generation model is deliberately not a Nemotron variant:
+OpenRouter's free NVIDIA endpoints carry NVIDIA's trial-only condition, so using one
+would reintroduce the restriction the fallback is meant to avoid.
+
+#### Providers considered but not wired in
+
+| Provider | Free tier | Why it is not a default here |
+| -------- | --------- | ---------------------------- |
+| Google Gemini | Free tier, no card | Its terms require Paid Services when an API client is made available to users in the EEA, Switzerland or the UK, which covers this app's audience. Free-tier prompts may also be used to improve Google products. |
+| Cohere | 1,000 calls/month | The trial key is non-commercial use only. |
+| Z AI (Zhipu) | Free GLM Flash models | One concurrent request, and the free-platform data terms need review before student material is sent. |
+| AxForge | 3M tokens/30 days | A smaller allowance and a newer provider; it would be a later fallback rather than a first choice. |
+| LLM7.io / Kilo Code | Free gateways | Both are no-key or shared gateways that may log prompts; not appropriate for student notes. |
+| OVHcloud AI Endpoints | 2 RPM anonymous | Too low for real traffic, and the anonymous tier has no per-account isolation. |
+| Aion Labs | 20K tokens/day | Roleplay/storytelling models and a very small daily budget. |
+| ModelScope / SiliconFlow | Free inference | Mainland-China account binding and real-name verification; not practical for this deployment. |
+
+#### NVIDIA's trial terms and production use
+
+NVIDIA's [API Trial Terms](https://assets.ngc.nvidia.com/products/api-catalog/legal/NVIDIA%20API%20Trial%20Terms%20of%20Service.pdf)
+say access is for "limited trial purposes only and without use of the API Service or
+Generated Content in production" (§1.2), and that without a subscription you "may only
+use the API Service for internal testing and evaluation purposes, not in production"
+(§1.4). NVIDIA's [NIM FAQ](https://forums.developer.nvidia.com/t/nvidia-nim-faq/300317)
+defines production as any use other than development, testing, research or evaluation,
+including "activity serving real end-users", and says production requires an NVIDIA AI
+Enterprise licence.
+
+Letting each student connect their own free NVIDIA key does **not** make this compliant.
+The key is still a trial key, the student is still bound by the same terms, and the app
+is still serving real end-users. This is a contract/terms problem rather than a criminal
+one, but NVIDIA can terminate the access and the trial carries no availability or
+data-processing commitments. The trial also says not to submit personal or confidential
+data (§4.3) and uses content to improve NVIDIA's products and services (§3.3).
+
+For production, either licence NVIDIA AI Enterprise, or run on providers whose terms
+allow the use (for example Groq, Cloudflare Workers AI, or a paid OpenRouter model) and
+remove NVIDIA from the production chain. The fallbacks above reduce operational risk;
+they do not make NVIDIA trial usage compliant while NVIDIA is still handling live
+requests.
 
 ### Web access for the tutor
 
@@ -661,8 +739,8 @@ Startpage and Qwant forbid automated retrieval in their terms.
 ### Course pathways need no key
 
 Pathways are read from the published specification pages, so they build with no AI key at all.
-`NVIDIA_API_KEY` is used only to build study sets and past papers, mark written answers
-and answer tutor questions.
+`NVIDIA_API_KEY` (or a configured fallback provider) is used only to build study sets and
+past papers, mark written answers and answer tutor questions.
 
 ### Optional model overrides
 
@@ -674,7 +752,9 @@ endpoints:
 | Study-set summaries                | —                             | `nvidia/nemotron-3.5-bolt-e4b`                                      |
 | Study-set flashcards               | —                             | `nvidia/nemotron-3.5-lightning-30b-a3b`                             |
 | Study-set quizzes and exams        | —                             | `nvidia/nemotron-3.5-super-vl-120b-a12b`                            |
-| Study-set fallback                 | `OPENROUTER_GENERATION_MODEL` | `nvidia/nemotron-3.5-super-vl:free`                                 |
+| Fallback: Groq                     | `GROQ_GENERATION_MODEL`       | `openai/gpt-oss-120b`                                               |
+| Fallback: OpenRouter               | `OPENROUTER_GENERATION_MODEL` | `google/gemma-4-31b-it:free`                                        |
+| Fallback: Cloudflare Workers AI    | `CLOUDFLARE_GENERATION_MODEL` | `@cf/openai/gpt-oss-120b`                                           |
 | Reading photos / video frames      | `NVIDIA_VISION_MODEL`         | `nvidia/nemotron-3.5-super-vl-120b-a12b`                            |
 | Tutor tier: Fast                   | `NVIDIA_TUTOR_FAST_MODEL`     | `nvidia/nemotron-3.5-bolt-e4b`                                      |
 | Tutor tier: Balanced (default)     | `NVIDIA_TUTOR_BALANCED_MODEL` | `NVIDIA_TEXT_MODEL`'s model                                         |
@@ -711,10 +791,11 @@ is skipped before a request is made: `/src/convex/lib/nvidiaConfig.ts` keeps a s
 withdrawn ids and replaces them with a checked fallback. Study-set generation has its own
 chain per task: summaries use Bolt then Lightning, flashcards use Lightning then Bolt then
 Super VL, and quizzes and exams use Super VL then Lightning then Bolt. If every NVIDIA
-attempt fails and `OPENROUTER_API_KEY` is set, that stage makes one last attempt on
-`OPENROUTER_GENERATION_MODEL` (free by default). The timed-out Ultra endpoint is not in the
-generation chain. The student sees a friendly "the tutor is having trouble" message, never
-the provider's text.
+attempt fails, the same prompt is retried on each configured fallback in order: Groq,
+then OpenRouter, then Cloudflare Workers AI. Each provider uses its own model id, and
+only providers whose keys are set are tried. The timed-out Ultra endpoint is not in the
+generation chain. The student sees a friendly "the tutor is having trouble" message,
+never the provider's text.
 
 ### Run the AI calls through Respan Gateway (optional)
 

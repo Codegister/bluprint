@@ -21,15 +21,17 @@ export const OPENROUTER_TUTOR_MODEL =
   process.env.OPENROUTER_TUTOR_MODEL?.trim() || "meta-llama/llama-3.3-70b-instruct";
 
 /**
- * The free model used only when NVIDIA cannot complete a generation request.
- * It has a 1M context, accepts text and images, and is the strongest free
- * option in the current catalogue. The deployment can override it, but the
- * default is deliberately a free variant so a missing paid credit does not
- * turn a completed build into a failed one.
+ * The free model used only when NVIDIA and Groq cannot complete a request.
+ *
+ * Deliberately not a Nemotron variant: OpenRouter's free NVIDIA endpoints
+ * carry NVIDIA's trial-only condition, so routing there would reintroduce the
+ * restriction this fallback is meant to avoid. Gemma has a 262K context and a
+ * 32K output ceiling, which is enough for a full marking guide or exam answer.
+ * Override with OPENROUTER_GENERATION_MODEL when the catalogue changes.
  */
 export const OPENROUTER_GENERATION_MODEL =
   process.env.OPENROUTER_GENERATION_MODEL?.trim() ||
-  "nvidia/nemotron-3.5-super-vl:free";
+  "google/gemma-4-31b-it:free";
 
 /** Returns the configured key, or null when the deployment has none. */
 export function readOpenRouterKey(): string | null {
