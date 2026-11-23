@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   countsForTutorBuild,
+  isChatMaterialRequest,
   isConversationMaterialBuild,
+  isStudyMaterialOffer,
+  isStudyMaterialRequest,
   isTutorBuildRequest,
   numberTopics,
   planTutorBuild,
@@ -88,6 +91,53 @@ describe("tutor conversation builds", () => {
     ).toBe(true);
     expect(isConversationMaterialBuild("Build me a quiz on cell division")).toBe(false);
     expect(isConversationMaterialBuild("What is a study set?")).toBe(false);
+  });
+});
+
+describe("tutor study-material intent", () => {
+  test("recognises the ways a student asks for material, not just one phrase", () => {
+    for (const question of [
+      "Turn these notes into a set",
+      "turn some notes into a study set please",
+      "Summarise this page into revision notes",
+      "Give me the key points of cell division",
+      "Make flashcards from this",
+      "Ask me an exam question",
+      "What are the key points of mitosis?",
+      "notes on mitosis please",
+    ]) {
+      expect(isStudyMaterialRequest(question)).toBe(true);
+    }
+  });
+
+  test("leaves marking, feature questions and plain explanations alone", () => {
+    for (const question of [
+      "Why did I get this quiz question wrong?",
+      "Mark my answer",
+      "What is a study set?",
+      "I need help with this quiz",
+      "Don't build me a quiz",
+      "Explain this topic like I'm new to it",
+      "What am I most likely to lose marks on?",
+    ]) {
+      expect(isStudyMaterialRequest(question)).toBe(false);
+    }
+  });
+
+  test("material the student points at in the chat skips the course planner", () => {
+    expect(isChatMaterialRequest("Make a set from these notes")).toBe(true);
+    expect(isChatMaterialRequest("turn what I pasted into cards")).toBe(true);
+    expect(isChatMaterialRequest("Build me a Spanish quiz on topic 1")).toBe(false);
+    expect(isChatMaterialRequest("Build me a quiz on cell division")).toBe(false);
+  });
+
+  test("does not re-offer a set already built from the conversation", () => {
+    expect(
+      isStudyMaterialOffer(
+        "Actually, can you generate a set using all the quotes you've given me?",
+      ),
+    ).toBe(false);
+    expect(isStudyMaterialOffer("Turn these notes into a set")).toBe(true);
   });
 });
 

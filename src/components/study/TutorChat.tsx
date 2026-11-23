@@ -1,5 +1,6 @@
 import { Mascot } from "@/components/Mascot";
 import { TutorMessageContent } from "@/components/study/TutorMessageContent";
+import { TurnIntoSetButton } from "@/components/study/TurnIntoSetButton";
 import { SkeletonChat } from "@/components/Skeletons";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { EASE, TypingDots } from "@/components/motion/Motion";
@@ -7,6 +8,7 @@ import { api } from "@/convex/_generated/api";
 import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
+import { offersStudySet } from "@/lib/tutorMaterial";
 import {
   readTutorWebScope,
   saveTutorWebScope,
@@ -174,6 +176,10 @@ export function TutorChat({
   const stopTutorReply = useMutation(api.tutor.stopTutorReply);
   const stopCourseTutorReply = useMutation(api.tutor.stopCourseTutorReply);
   const stopLibraryTutorReply = useMutation(api.tutor.stopLibraryTutorReply);
+  // Turning a reply into a set links it back to that reply.
+  const attachReplySet = useMutation(api.tutor.attachTutorReplySet);
+  const attachCourseReplySet = useMutation(api.tutor.attachCourseTutorReplySet);
+  const attachLibraryReplySet = useMutation(api.tutor.attachLibraryTutorReplySet);
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
@@ -535,9 +541,12 @@ export function TutorChat({
                           : message.builtSetId
                             ? [message.builtSetId]
                             : [];
-                        if (built.length === 0) return null;
+                        // A reply that answers a request for study material can
+                        // become a real set without the student retyping it.
+                        const offer = offersStudySet(messages, index, built);
+                        if (built.length === 0 && !offer) return null;
                         return (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
                             {built.map((setId, setIndex) => (
                               <Link
                                 key={setId}
@@ -548,6 +557,29 @@ export function TutorChat({
                                 <ArrowRight className="size-3.5" aria-hidden />
                               </Link>
                             ))}
+                            {offer && (
+                              <TurnIntoSetButton
+                                notes={message.content}
+                                onBuilt={(setId) =>
+                                  scope.kind === "set"
+                                    ? attachReplySet({
+                                        messageId: message._id as Id<"tutorMessages">,
+                                        setId,
+                                      })
+                                    : scope.kind === "course"
+                                      ? attachCourseReplySet({
+                                          messageId:
+                                            message._id as Id<"courseTutorMessages">,
+                                          setId,
+                                        })
+                                      : attachLibraryReplySet({
+                                          messageId:
+                                            message._id as Id<"libraryTutorMessages">,
+                                          setId,
+                                        })
+                                }
+                              />
+                            )}
                           </div>
                         );
                       })()}

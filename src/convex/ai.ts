@@ -24,7 +24,9 @@ import {
 } from "./lib/buildDefaults";
 import {
   isBuildConfirmation,
+  isChatMaterialRequest,
   isConversationMaterialBuild,
+  isStudyMaterialOffer,
   isTutorBuildRequest,
   planTutorBuild,
   resolveProposedBuilds,
@@ -3364,6 +3366,11 @@ async function runTutorBuild(
     }
     return await startTutorConversationBuild(ctx, userId, options.conversation);
   }
+
+  // Notes the student points at in the chat ("make a set from these notes") are
+  // answered as study material and offered as a set. Resolving them against a
+  // course topic would build from the wrong material, or from none at all.
+  if (isChatMaterialRequest(question)) return null;
 
   // Avoid a database read on every ordinary tutor question.
   if (!isTutorBuildRequest(question)) return null;
@@ -8566,6 +8573,23 @@ function explainLevelRules(level: string | undefined, question: string): string 
 }
 
 
+/**
+ * The rules for a reply the chat will offer as a study set.
+ *
+ * The button turns this reply into a set, so the reply has to contain the
+ * material itself: complete, structured, and free of any claim that a set has
+ * already been made. The 250-word tutor limit is lifted only here.
+ */
+function tutorMaterialOfferRules(): string {
+  return (
+    "STUDY MATERIAL REQUEST: this reply is the study material itself. " +
+    "Write it in full as short labels ending with a colon and hyphen bullets, working only from the supplied material, the conversation and the student's own message. " +
+    "The student's message counts as supplied material, so never label its points \"Beyond your notes:\". " +
+    "Do not paste the source back unchanged or ask which course or topic they meant, and never claim a study set has been created: the app shows a \"Turn into a study set\" button under this reply. " +
+    "The 250-word limit does not apply to this reply."
+  );
+}
+
 /** The question as the tutor's prompt, with the material and any web results. */
 function tutorPrompt(
   context: TutorContext,
@@ -8573,6 +8597,7 @@ function tutorPrompt(
   web: WebResult[] = [],
   webState: TutorWebState = web.length > 0 ? "sources" : "off",
   agentNote?: string,
+  materialOffer = false,
 ): ChatMessage[] {
   const qualification = qualificationText(context);
 
@@ -8598,6 +8623,7 @@ function tutorPrompt(
       ? `Pitch the explanation at ${context.level} depth and use that qualification's command words when discussing exam technique.`
       : "",
     explainLevelRules(context.explainLevel, question),
+    materialOffer ? tutorMaterialOfferRules() : "",
     webRules(webState),
     web.length > 0 ? webResultsBlock(web) : "",
     agentNote
@@ -8890,6 +8916,7 @@ async function streamTutorAnswer(
   tier: TutorTier,
   onSnapshot: Snapshot,
   agentNote?: string,
+  materialOffer = false,
 ): Promise<StreamResult> {
   // Deep and Balanced hold the first words behind the thinking indicator; Fast
   // streams straight through.
@@ -8897,7 +8924,7 @@ async function streamTutorAnswer(
   if (!useWeb) {
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, [], "off", agentNote),
+      tutorPrompt(context, question, [], "off", agentNote, materialOffer),
       tier,
       paced,
     );
@@ -8910,7 +8937,7 @@ async function streamTutorAnswer(
   if (!query) {
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, [], "empty", agentNote),
+      tutorPrompt(context, question, [], "empty", agentNote, materialOffer),
       tier,
       paced,
     );
@@ -8922,7 +8949,7 @@ async function streamTutorAnswer(
   if (results.length > 0) {
     const grounded = await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, results, "sources", agentNote),
+      tutorPrompt(context, question, results, "sources", agentNote, materialOffer),
       tier,
       paced,
     );
@@ -8936,7 +8963,7 @@ async function streamTutorAnswer(
 
   try {
     return await streamWebAnswer(
-      tutorPrompt(context, question, [], "browsing", agentNote),
+      tutorPrompt(context, question, [], "browsing", agentNote, materialOffer),
       tier,
       paced,
     );
@@ -8951,7 +8978,7 @@ async function streamTutorAnswer(
     // found nothing outside it.
     return await streamNvidiaAnswer(
       apiKeys,
-      tutorPrompt(context, question, [], "empty", agentNote),
+      tutorPrompt(context, question, [], "empty", agentNote, materialOffer),
       tier,
       paced,
     );
@@ -9268,6 +9295,11 @@ export const askTutor = action({
         }
       }
 
+      // Material the tutor wrote is offered as a set only after the student
+      // clicks the button under the reply, so a reply that already links a set
+      // it built never offers a second one.
+      const materialOffer = builtSets.length === 0 && isStudyMaterialOffer(text);
+
       const tutorContext: TutorContext = {
         title: context.set.title,
         material: context.set.notes,
@@ -9294,7 +9326,8 @@ export const askTutor = action({
           });
           if (saved.stopped) throw new TutorStopped();
         },
-        build?.note,
+        materialOffer ? undefined : build?.note,
+        materialOffer,
       );
 
       // One last write carries the final text, every page cited and the set the
@@ -9422,6 +9455,7 @@ export const askCourseTutor = action({
         }
       }
 
+      const materialOffer = builtSets.length === 0 && isStudyMaterialOffer(text);
       const result = await streamTutorAnswer(
         apiKeys,
         { ...context, explainLevel, marking },
@@ -9438,7 +9472,8 @@ export const askCourseTutor = action({
           });
           if (saved.stopped) throw new TutorStopped();
         },
-        build?.note,
+        materialOffer ? undefined : build?.note,
+        materialOffer,
       );
 
       await ctx.runMutation(internal.tutor.appendCourseTutorAnswer, {
@@ -9555,6 +9590,7 @@ export const askLibraryTutor = action({
         }
       }
 
+      const materialOffer = builtSets.length === 0 && isStudyMaterialOffer(text);
       const result = await streamTutorAnswer(
         apiKeys,
         {
@@ -9576,7 +9612,8 @@ export const askLibraryTutor = action({
           });
           if (saved.stopped) throw new TutorStopped();
         },
-        build?.note,
+        materialOffer ? undefined : build?.note,
+        materialOffer,
       );
 
       await ctx.runMutation(internal.tutor.appendLibraryTutorAnswer, {

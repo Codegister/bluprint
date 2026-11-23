@@ -12,6 +12,7 @@ import { SetLibrary } from "@/components/study/SetLibrary";
 import { AiAllowance } from "@/components/AiAllowance";
 import { TutorChat, type TutorScope } from "@/components/study/TutorChat";
 import { TutorMessageContent } from "@/components/study/TutorMessageContent";
+import { TurnIntoSetButton } from "@/components/study/TurnIntoSetButton";
 import { PromptInput } from "@/components/ui/ai-chat-input";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -21,6 +22,7 @@ import { EASE, Meter, TypingDots, enter } from "@/components/motion/Motion";
 import { useAuth } from "@/hooks/use-auth";
 import { AI_NOT_CONFIGURED_MESSAGE } from "@/lib/aiAvailability";
 import { readableError } from "@/lib/errors";
+import { offersStudySet } from "@/lib/tutorMaterial";
 import { displayName, percent } from "@/lib/format";
 import { takePendingNotes } from "@/lib/pendingNotes";
 import { subjectMeta } from "@/lib/subjects";
@@ -167,6 +169,9 @@ export default function TutorPage() {
   const askCourseTutor = useAction(api.ai.askCourseTutor);
   const stopTutorReply = useMutation(api.tutor.stopTutorReply);
   const stopCourseTutorReply = useMutation(api.tutor.stopCourseTutorReply);
+  // Turning a reply into a set links it back to that reply.
+  const attachReplySet = useMutation(api.tutor.attachTutorReplySet);
+  const attachCourseReplySet = useMutation(api.tutor.attachCourseTutorReplySet);
   const generateUploadUrl = useMutation(api.studySets.generateUploadUrl);
   // Dictation is transcribed on the server, so speech keys stay off the client.
   const transcribe = useAction(api.ai.transcribeDictation);
@@ -850,9 +855,12 @@ export default function TutorPage() {
                           : message.builtSetId
                             ? [message.builtSetId]
                             : [];
-                        if (built.length === 0) return null;
+                        // A reply that answers a request for study material can
+                        // become a real set without the student retyping it.
+                        const offer = offersStudySet(messages, index, built);
+                        if (built.length === 0 && !offer) return null;
                         return (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
                             {built.map((setId, setIndex) => (
                               <Link
                                 key={setId}
@@ -863,6 +871,23 @@ export default function TutorPage() {
                                 <ArrowRight className="size-3.5" aria-hidden />
                               </Link>
                             ))}
+                            {offer && (
+                              <TurnIntoSetButton
+                                notes={message.content}
+                                onBuilt={(newSetId) =>
+                                  validSetId
+                                    ? attachReplySet({
+                                        messageId: message._id as Id<"tutorMessages">,
+                                        setId: newSetId,
+                                      })
+                                    : attachCourseReplySet({
+                                        messageId:
+                                          message._id as Id<"courseTutorMessages">,
+                                        setId: newSetId,
+                                      })
+                                }
+                              />
+                            )}
                           </div>
                         );
                       })()}

@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  type MutationCtx,
+} from "./_generated/server";
 import { safeExternalUrl } from "../lib/safeExternalUrl";
 import { requireUserId } from "./lib/requireUser";
 import { requireOwner } from "./lib/authorization";
@@ -756,6 +762,79 @@ export const stopLibraryTutorReply = mutation({
     const fields = stopReplyFields(row);
     if (!fields) return;
     await ctx.db.patch(messageId, fields);
+  },
+});
+
+/**
+ * The link a set made from a reply should be saved under, or null when the
+ * reply or the set is not the caller's. Shared by the three threads, which
+ * differ only in the table their message id belongs to.
+ */
+async function replySetLinkFields(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  row: {
+    userId: Id<"users">;
+    builtSetId?: Id<"studySets">;
+    builtSetIds?: Id<"studySets">[];
+  } | null,
+  setId: Id<"studySets">,
+) {
+  if (!row || row.userId !== userId) return null;
+  const set = await ctx.db.get(setId);
+  if (!set || set.userId !== userId) return null;
+  const ids = replySetIds(row);
+  if (ids.includes(setId)) return null;
+  return builtSetsFields([...ids, setId]);
+}
+
+/**
+ * Links the set a student made from a finished tutor reply.
+ *
+ * "Turn into a study set" is a click under one reply, not a new question, so
+ * the set it creates belongs to that reply. Saving the link turns the button
+ * into the set's link and is what stops the same reply being turned into a
+ * second, duplicate set after a reload.
+ */
+export const attachTutorReplySet = mutation({
+  args: { messageId: v.id("tutorMessages"), setId: v.id("studySets") },
+  handler: async (ctx, { messageId, setId }) => {
+    const userId = await requireUserId(ctx);
+    const fields = await replySetLinkFields(
+      ctx,
+      userId,
+      await ctx.db.get(messageId),
+      setId,
+    );
+    if (fields) await ctx.db.patch(messageId, fields);
+  },
+});
+
+export const attachCourseTutorReplySet = mutation({
+  args: { messageId: v.id("courseTutorMessages"), setId: v.id("studySets") },
+  handler: async (ctx, { messageId, setId }) => {
+    const userId = await requireUserId(ctx);
+    const fields = await replySetLinkFields(
+      ctx,
+      userId,
+      await ctx.db.get(messageId),
+      setId,
+    );
+    if (fields) await ctx.db.patch(messageId, fields);
+  },
+});
+
+export const attachLibraryTutorReplySet = mutation({
+  args: { messageId: v.id("libraryTutorMessages"), setId: v.id("studySets") },
+  handler: async (ctx, { messageId, setId }) => {
+    const userId = await requireUserId(ctx);
+    const fields = await replySetLinkFields(
+      ctx,
+      userId,
+      await ctx.db.get(messageId),
+      setId,
+    );
+    if (fields) await ctx.db.patch(messageId, fields);
   },
 });
 

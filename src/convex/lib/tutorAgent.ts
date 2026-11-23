@@ -116,6 +116,75 @@ export function isConversationMaterialBuild(question: string): boolean {
   return isTutorBuildRequest(question) && CONVERSATION_MATERIAL.test(question.trim());
 }
 
+/**
+ * Study material a student asks the tutor to produce, in their own words.
+ *
+ * Creating a set is only one way to ask for the same thing: "turn these notes
+ * into a set", "summarise this page", "give me the key points" and "make
+ * flashcards from this" all ask the tutor to produce material to revise from.
+ * The chat used to act only on the narrow build phrase, so every other wording
+ * got the notes copied back with nothing to do next. This is the intent a reply
+ * offers a "Turn into a study set" button for.
+ */
+const MATERIAL_OBJECT =
+  /\b(?:study sets?|sets?|revision notes?|study notes?|notes?|summar(?:y|ies)|key points?|key facts?|facts?|definitions?|key terms?|glossar(?:y|ies)|revision guides?|study guides?|crib sheets?|cheat sheets?|mind ?maps?|flash ?cards?|cards?|quiz(?:zes)?|(?:exam|test|practice) questions?|questions?|exercises?|timelines?)\b/i;
+
+const MATERIAL_ACTION =
+  /\b(?:summarise|summarize|condense|digest|distil|distill|outline|list|extract|organise|organize|arrange|turn|convert|transform|make|create|build|generate|produce|prepare|put together|write|compose|give me|show me|break (?:this|these|it|them) down|boil (?:this|these|it|them) down|quiz me|test me|ask me)\b/i;
+
+/** "notes on cells", "flashcards for mitosis": material with no verb at all. */
+const MATERIAL_TOPIC_FORM =
+  /\b(?:notes?|flash ?cards?|quiz(?:zes)?|questions?|summary)\s+(?:on|about|of|for)\b/i;
+
+const QUESTION_OPENING = /^\s*(?:what|which|why|how|where|when|who)\b/i;
+
+/** Feedback on an answer is marking, not a request to make material. */
+const MARKING_REQUEST =
+  /\b(?:mark|marked|marking|check|checked|grade|graded|correct|corrected|feedback|how did i do|what did i get)\b[^.!?]{0,40}\b(?:answer|answers|essay|response|work|question|questions)\b/i;
+
+export function isStudyMaterialRequest(question: string): boolean {
+  const text = question.trim();
+  if (!text || MARKING_REQUEST.test(text)) return false;
+  if (NEGATED_BUILD.test(text)) return false;
+  if (!MATERIAL_OBJECT.test(text)) return false;
+  if (MATERIAL_ACTION.test(text) || MATERIAL_TOPIC_FORM.test(text)) return true;
+  // "What are the key points of mitosis?" asks for material too, even though
+  // it opens with a question word, as long as it names what to produce.
+  return (
+    QUESTION_OPENING.test(text) &&
+    /\b(?:key points?|key facts?|definitions?|key terms?|summar(?:y|ies) of)\b/i.test(text)
+  );
+}
+
+/**
+ * Material the student points at inside the chat: "these notes", "the text
+ * below", "what I pasted".
+ *
+ * The course planner must not resolve those against a topic the message never
+ * named. The reply is written as material and offered as a set, so the pasted
+ * notes reach the build instead of a guessed topic or none at all.
+ */
+const CHAT_MATERIAL =
+  /\b(?:these|this|those|my|our|the)\s+(?:notes?|text|page|pages|material|stuff|paragraph|passage|extract|content|writing|list)\b|\b(?:notes?|text|material|pages?|stuff)\s+(?:below|above)\b|\b(?:what|everything|all)\s+(?:that\s+)?i\s+(?:just\s+)?(?:pasted|typed|sent|wrote|gave you|uploaded|shared)\b/i;
+
+const CHAT_MATERIAL_ACTION =
+  /\b(?:turn|convert|transform|make|create|build|generate|prepare|put together|organise|organize|condense|summarise|summarize|extract|sort|arrange|break)\b/i;
+
+export function isChatMaterialRequest(question: string): boolean {
+  const text = question.trim();
+  if (!text) return false;
+  return CHAT_MATERIAL.test(text) && CHAT_MATERIAL_ACTION.test(text);
+}
+
+/**
+ * True when a reply to this message should carry a "Turn into a study set"
+ * button. A request to build from the tutor's own earlier replies ("the quotes
+ * you've given me") already builds from that material, so it is excluded.
+ */
+export function isStudyMaterialOffer(question: string): boolean {
+  return isStudyMaterialRequest(question) && !isConversationMaterialBuild(question);
+}
+
 const TOPIC_WORDS: Record<string, number> = {
   one: 1,
   two: 2,
