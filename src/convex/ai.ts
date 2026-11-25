@@ -24,18 +24,12 @@ import {
 } from "./lib/buildDefaults";
 import {
   isBuildConfirmation,
-  isChatMaterialRequest,
-  isConversationMaterialBuild,
   isStudyMaterialOffer,
-  isTutorBuildRequest,
-  planTutorBuild,
   resolveProposedBuilds,
   type TutorBuildPlan,
 } from "./lib/tutorAgent";
 import {
-  NO_MATERIAL_IN_CHAT,
   multiBuildNote,
-  tutorBuildNote,
   type TutorBuildOutcome,
 } from "./lib/tutorBuildNotes";
 import { materialLimits } from "./lib/buildCapacity";
@@ -195,11 +189,7 @@ import {
   type StreamSource,
 } from "./lib/tutorReply";
 import { incidentKind } from "./lib/incidentRules";
-import {
-  MAX_NOTE_CHARS,
-  noteLimitMessage,
-  withinNoteLimit,
-} from "./lib/noteLimits";
+import { noteLimitMessage, withinNoteLimit } from "./lib/noteLimits";
 import {
   MAX_NOTES_CHARS,
   NVIDIA_CHAT_URL,
@@ -3164,117 +3154,6 @@ async function startTutorBuild(
   };
 }
 
-/**
- * Runs the build side of the tutor agent before the answer is generated.
- *
- * The planner is deterministic and reads only the user's own courses. The
- * mutation repeats every ownership, verification and allowance check, so this
- * function cannot widen what a student is allowed to build. A build failure is
- * turned into a note for the tutor rather than an exception, so the student
- * still gets an answer explaining what happened.
- */
-/**
- * The material the tutor itself put in the chat, newest turns last.
- *
- * Only assistant replies are used: the quotes, tables and worked points the
- * student is referring to live there, and the student's instructions are not
- * study material. The newest turns win when the thread is over the note limit.
- */
-function tutorConversationNotes(
-  messages: Array<{ role: string; content: string }>,
-  previousReply: string | undefined,
-  question: string,
-): string {
-  const replies = messages
-    .filter((message) => message.role === "assistant" && message.content.trim())
-    .map((message) => message.content.trim());
-  if (replies.length === 0 && previousReply?.trim()) replies.push(previousReply.trim());
-
-  // "The quotes you've given me" means the quoted material, not every aside in
-  // the thread. If replies with quoted lines exist, build from those only.
-  const quoted = /\bquotes?\b/i.test(question)
-    ? replies.filter((reply) => /["\u201c\u201d]/.test(reply))
-    : [];
-  const material = quoted.length > 0 ? quoted : replies;
-  const joined = material.slice(-8).join("\n\n");
-  return joined.length <= MAX_NOTE_CHARS
-    ? joined
-    : joined.slice(joined.length - MAX_NOTE_CHARS);
-}
-
-type TutorConversationMaterial = {
-  notes: string;
-  course?: string;
-  examBoard?: string;
-  level?: string;
-};
-
-/**
- * Turns the tutor's own quoted material into a set instead of guessing a topic.
- *
- * The set is a normal text set, so it builds, queues and links exactly like one
- * pasted from notes. It is deliberately not attached to a course topic: the
- * quotes may span two texts, and no single pathway topic owns them.
- */
-async function startTutorConversationBuild(
-  ctx: ActionCtx,
-  userId: Id<"users">,
-  conversation: TutorConversationMaterial,
-): Promise<TutorBuildAction> {
-  const counts = {
-    cards: BUILD_DEFAULTS.cards,
-    quiz: BUILD_DEFAULTS.quiz,
-    exam: BUILD_DEFAULTS.exam,
-  };
-  const plan: TutorBuildPlan = {
-    status: "build",
-    courseId: "",
-    subject: conversation.course ?? "your tutor chat",
-    topicIds: [],
-    firstTopicId: "",
-    label: "the quotes and notes from this conversation",
-    counts,
-  };
-
-  try {
-    const setId = await ctx.runMutation(
-      internal.studySets.createFromTutorConversation,
-      {
-        userId,
-        notes: conversation.notes,
-        title: "Quotes from the tutor",
-        ...(conversation.course ? { course: conversation.course } : {}),
-        ...(conversation.examBoard ? { examBoard: conversation.examBoard } : {}),
-        ...(conversation.level ? { level: conversation.level } : {}),
-        targetCardCount: counts.cards,
-        targetQuizCount: counts.quiz,
-        targetExamCount: counts.exam,
-      },
-    );
-    return {
-      builtSetId: setId,
-      note: tutorBuildNote({
-        plan,
-        setId,
-        created: true,
-        cached: false,
-        started: true,
-      }),
-    };
-  } catch (error) {
-    console.error("Tutor conversation build could not start", error);
-    return {
-      note: tutorBuildNote({
-        plan,
-        created: false,
-        cached: false,
-        started: false,
-        failure: safeTutorBuildError(error),
-      }),
-    };
-  }
-}
-
 /** The tutor's last reply: what a "proceed" is agreeing with. */
 function lastAssistantReply(
   messages: Array<{ role: string; content: string }>,
@@ -3331,92 +3210,25 @@ async function buildProposedSets(
   };
 }
 
+/**
+ * The only build the tutor still runs itself is one the student confirms.
+ *
+ * A new request for a set — "make a set", "build me a quiz", "turn the quotes
+ * you've given me into a set" — is answered with study material and the
+ * "Turn into a study set" button under the reply, so creating a set always
+ * takes the same deliberate click. The confirmation path stays because the
+ * student is agreeing to sets the tutor already offered by name.
+ */
 async function runTutorBuild(
   ctx: ActionCtx,
   userId: Id<"users">,
   question: string,
-  options: {
-    currentCourseId?: Id<"courses">;
-    unitTitle?: string;
-    /** The tutor's previous reply, which a confirmation agrees with. */
-    previousReply?: string;
-    /** The tutor's own material, for a request to turn it into a set. */
-    conversation?: TutorConversationMaterial;
-  },
+  previousReply: string | undefined,
 ): Promise<TutorBuildAction | null> {
-  // "Ok, then, proceed to set generation" names no verb or material of its
-  // own: it can only be acted on against the reply it is agreeing with.
-  if (isBuildConfirmation(question) && options.previousReply) {
-    const proposed = await buildProposedSets(ctx, userId, options.previousReply);
-    if (proposed) return proposed;
+  if (isBuildConfirmation(question) && previousReply) {
+    return await buildProposedSets(ctx, userId, previousReply);
   }
-
-  // A request to turn the tutor's own quotes into a set must not be resolved
-  // against a course topic: it has material of its own, and the topic planner
-  // can otherwise land on an unrelated poem or chapter.
-  if (isConversationMaterialBuild(question)) {
-    if (!options.conversation?.notes.trim()) {
-      return {
-        note:
-          "The student asked you to build a set from material in this conversation, but there is no material to draw on. " +
-          "Do not claim anything was built. " +
-          NO_MATERIAL_IN_CHAT +
-          " Ask them to paste the quotes or name the course topic they want instead.",
-      };
-    }
-    return await startTutorConversationBuild(ctx, userId, options.conversation);
-  }
-
-  // Notes the student points at in the chat ("make a set from these notes") are
-  // answered as study material and offered as a set. Resolving them against a
-  // course topic would build from the wrong material, or from none at all.
-  if (isChatMaterialRequest(question)) return null;
-
-  // Avoid a database read on every ordinary tutor question.
-  if (!isTutorBuildRequest(question)) return null;
-  const courses = await ctx.runQuery(internal.tutor.getTutorBuildCourses, { userId });
-  const decision = planTutorBuild(question, courses, options);
-  if (decision.status === "not-a-build") return null;
-
-  if (decision.status === "needs-course") {
-    return {
-      note:
-        "The student asked you to build material, but no course matched the request. " +
-        "Do not claim anything was built. " + NO_MATERIAL_IN_CHAT + " Ask them which course or subject to use. " +
-        (decision.subjects.length > 0
-          ? `Their ready courses are: ${decision.subjects.join(", ")}.`
-          : "They do not have a ready course yet."),
-    };
-  }
-
-  if (decision.status === "needs-topic") {
-    return {
-      note:
-        `The student asked you to build material for ${decision.subject}, but did not name one topic unambiguously. ` +
-        "Do not claim anything was built. " + NO_MATERIAL_IN_CHAT + " Ask for the topic number or title if it helps. " +
-        "Ask which topic they want, and mention that they can say the topic number or title.",
-    };
-  }
-
-  if (decision.status === "build-many") {
-    const outcomes: TutorBuildOutcome<Id<"studySets">>[] = [];
-    for (const plan of decision.plans) {
-      outcomes.push(await startTutorBuild(ctx, userId, plan));
-    }
-    const { note, builtSetIds } = multiBuildNote(outcomes);
-    return {
-      note,
-      ...(builtSetIds.length > 0
-        ? { builtSetIds, builtSetId: builtSetIds[0]! }
-        : {}),
-    };
-  }
-
-  const outcome = await startTutorBuild(ctx, userId, decision);
-  return {
-    ...(outcome.setId ? { builtSetId: outcome.setId } : {}),
-    note: tutorBuildNote(outcome),
-  };
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -9266,16 +9078,7 @@ export const askTutor = action({
     try {
       // Act before answering. A build request creates a real set and starts its
       // background generation; the answer then tells the student what happened.
-      const build = await runTutorBuild(ctx, userId, text, {
-        currentCourseId: context.set.courseId,
-        previousReply,
-        conversation: {
-          notes: tutorConversationNotes(context.messages, previousReply, text),
-          course: context.set.course,
-          examBoard: context.set.examBoard,
-          level: context.set.level,
-        },
-      });
+      const build = await runTutorBuild(ctx, userId, text, previousReply);
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
       // whether the student stopped while the build was running.
@@ -9425,17 +9228,7 @@ export const askCourseTutor = action({
     );
 
     try {
-      const build = await runTutorBuild(ctx, userId, text, {
-        currentCourseId: courseId,
-        unitTitle,
-        previousReply,
-        conversation: {
-          notes: tutorConversationNotes(context.messages, previousReply, text),
-          course: context.course,
-          examBoard: context.examBoard,
-          level: context.level,
-        },
-      });
+      const build = await runTutorBuild(ctx, userId, text, previousReply);
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
       // whether the student stopped while the build was running.
@@ -9563,14 +9356,7 @@ export const askLibraryTutor = action({
     );
 
     try {
-      // The planner reads every course too, so "build a Spanish quiz" works from
-      // a home question without a selected course.
-      const build = await runTutorBuild(ctx, userId, text, {
-        previousReply,
-        conversation: {
-          notes: tutorConversationNotes(context.messages, previousReply, text),
-        },
-      });
+      const build = await runTutorBuild(ctx, userId, text, previousReply);
       // The sets exist before the answer is written. Save their links now, so a
       // stopped or failed reply still leaves something to open, and learn
       // whether the student stopped while the build was running.

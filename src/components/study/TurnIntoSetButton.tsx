@@ -1,6 +1,7 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { readableError } from "@/lib/errors";
+import { tutorReplyCounts } from "@/lib/tutorMaterial";
 import { useMutation } from "convex/react";
 import { ArrowRight, Layers3, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -32,6 +33,7 @@ export function TurnIntoSetButton({
     setBusy(true);
     setError(null);
     try {
+      const counts = tutorReplyCounts(notes);
       const setId = await createSet({
         title: "",
         titleSource: "auto",
@@ -39,6 +41,9 @@ export function TurnIntoSetButton({
         sourceType: "text",
         sourceLabel: "Tutor chat",
         sourceImageIds: [],
+        targetCardCount: counts.cards,
+        targetQuizCount: counts.quiz,
+        targetExamCount: counts.exam,
       });
       // The set exists even if the link write fails, so a failure here must not
       // report a failed build; it only means the reply still shows the offer.

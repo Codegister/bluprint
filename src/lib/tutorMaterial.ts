@@ -8,6 +8,8 @@
  * here, next to the answer, so the set, course and home tutors all agree.
  */
 
+import { materialLimits } from "@/convex/lib/buildCapacity";
+import { BUILD_DEFAULTS } from "@/convex/lib/buildDefaults";
 import { MIN_NOTE_CHARS } from "@/convex/lib/noteLimits";
 import { isStudyMaterialOffer } from "@/convex/lib/tutorAgent";
 
@@ -41,4 +43,26 @@ export function offersStudySet(
   if (reply.content.trim().length < MIN_NOTE_CHARS) return false;
   const question = questionForReply(turns, index);
   return question !== null && isStudyMaterialOffer(question);
+}
+
+/**
+ * The counts a reply should build.
+ *
+ * The tutor writes as much material as the question needs, so the fixed 10/5/3
+ * defaults dropped most of a longer reply. Flashcards and quiz questions are
+ * equal, one per fact the reply can support, and the same material ceiling the
+ * generator applies is used here so the two sections stay equal after the
+ * build is capped.
+ */
+export function tutorReplyCounts(notes: string): {
+  cards: number;
+  quiz: number;
+  exam: number;
+} {
+  const limits = materialLimits(notes);
+  return {
+    cards: limits.quiz,
+    quiz: limits.quiz,
+    exam: Math.min(BUILD_DEFAULTS.exam, limits.exam),
+  };
 }

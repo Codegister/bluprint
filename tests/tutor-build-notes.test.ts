@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   NO_MATERIAL_IN_CHAT,
   multiBuildNote,
-  tutorBuildNote,
   type TutorBuildOutcome,
 } from "../src/convex/lib/tutorBuildNotes";
 import type { TutorBuildPlan } from "../src/convex/lib/tutorAgent";
@@ -111,26 +110,5 @@ describe("multi-course build notes", () => {
   test("every multi-course note tells the model not to write set content", () => {
     const notes = multiBuildNote([started("Biology", "Topic 1", "set-bio")]);
     expect(notes.note).toContain(NO_MATERIAL_IN_CHAT);
-  });
-});
-
-describe("single build notes", () => {
-  test("a started build says it is building, not ready", () => {
-    const note = tutorBuildNote(started("Biology", "Topic 1", "set-bio"));
-    expect(note).toContain("background build has started");
-    expect(note).toContain("Say it is building now, not ready");
-  });
-
-  test("a failed build says nothing was built and forbids material in chat", () => {
-    const note = tutorBuildNote({
-      plan: plan("Biology", "Topic 1"),
-      created: false,
-      cached: false,
-      started: false,
-      failure: "That topic selection is too large for one set.",
-    });
-    expect(note).toContain("the build did not start");
-    expect(note).toContain("That topic selection is too large for one set.");
-    expect(note).toContain(NO_MATERIAL_IN_CHAT);
   });
 });

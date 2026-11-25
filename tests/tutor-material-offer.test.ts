@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { offersStudySet, questionForReply } from "../src/lib/tutorMaterial";
+import {
+  offersStudySet,
+  questionForReply,
+  tutorReplyCounts,
+} from "../src/lib/tutorMaterial";
 
 type Turn = { role: string; content: string; streaming?: boolean };
 
@@ -40,13 +44,13 @@ describe("turn a tutor reply into a study set", () => {
     expect(offersStudySet(turns("Turn these notes into a set", "Sure."), 1)).toBe(false);
   });
 
-  test("does not offer when the tutor already built from the conversation", () => {
+  test("offers a set when the tutor is asked to use its own earlier material", () => {
     expect(
       offersStudySet(
         turns("can you generate a set using all the quotes you've given me?"),
         1,
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   test("finds the question a reply answered across assistant turns", () => {
@@ -57,5 +61,37 @@ describe("turn a tutor reply into a study set", () => {
     ];
     expect(questionForReply(thread, 2)).toBe("Turn these notes into a set");
     expect(questionForReply(thread, 0)).toBeNull();
+  });
+});
+
+describe("counts for a reply's set", () => {
+  test("matches the reply: one card and one quiz question per point", () => {
+    // The fixed 10/5/3 defaults built three quiz questions from a reply that
+    // only made three points, and dropped most of a longer one. Cards and quiz
+    // questions now each follow what the tutor actually wrote.
+    expect(tutorReplyCounts(NOTE)).toEqual({ cards: 3, quiz: 3, exam: 1 });
+  });
+
+  test("grows past the old 10/5 defaults when the reply has more content", () => {
+    const longer = [
+      "Mitochondria release energy from glucose during aerobic respiration.",
+      "Ribosomes assemble amino acids into proteins for the growing cell.",
+      "The nucleus stores genetic material and controls the activities of the cell.",
+      "Chloroplasts absorb light energy so plants can make their own food.",
+      "The cell membrane controls which substances enter and leave the cell.",
+      "A vacuole stores cell sap and helps keep the plant cell firm.",
+      "Cell walls are made of cellulose and give plant cells their shape.",
+      "Diffusion moves particles from high to low concentration without energy.",
+      "Osmosis is the movement of water through a partially permeable membrane.",
+      "Active transport moves substances against a concentration gradient using energy.",
+      "Enzymes are proteins that speed up reactions without being used up.",
+      "DNA carries the genetic instructions needed for growth and repair.",
+    ]
+      .map((point) => `- ${point}`)
+      .join("\n");
+    const counts = tutorReplyCounts(longer);
+    expect(counts.cards).toBeGreaterThan(10);
+    expect(counts.quiz).toBe(counts.cards);
+    expect(counts.exam).toBe(3);
   });
 });
